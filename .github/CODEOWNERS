@@ -1,0 +1,14 @@
+# PR 리뷰어 자동 배정 (last-match-wins)
+# 역할(A 프론트엔드 / B 백엔드·인프라 / C 채점·AI·데이터)이 정해지면
+# 아래 주석을 풀고 @아이디를 채운다. 그 전까지는 core 팀 전체가 배정된다.
+
+*               @codari-capstone/core
+
+# /web/         @A
+# /api/         @B
+# /infra/       @B
+# /judge/       @C
+# /api/src/main/resources/prompts/  @C
+
+# API 계약은 세 명 모두 리뷰한다
+# /contracts/   @A @B @C
