@@ -1,6 +1,7 @@
-# 팀원마다 core.autocrlf 설정이 달라도 저장소에는 항상 LF로 저장한다.
-# 줄바꿈 때문에 PR diff가 더러워지는 것을 막는다. (.editorconfig와 같은 방침)
-* text=auto
+# 저장소에는 항상 LF로 저장하고, 작업 트리에도 LF로 꺼낸다.
+# eol=lf가 없으면 Windows에서 CRLF로 체크아웃돼 npm run format:check가
+# 전 파일에서 실패한다 (Prettier 기본값 endOfLine: lf, .editorconfig도 lf).
+* text=auto eol=lf
 
 # 줄바꿈을 건드리면 깨지는 파일
 *.png binary
@@ -10,6 +11,7 @@
 *.woff2 binary
 *.jar binary
 
-# 자동 생성 파일은 리뷰 diff에서 접어 둔다
-package-lock.json -diff linguist-generated
-web/src/api/schema.d.ts -diff linguist-generated
+# 자동 생성 파일. GitHub 리뷰에서 접히게 하되, 로컬 git diff는 살려 둔다.
+# -diff를 주면 "Binary files differ"로만 나와 gen:api 뒤 타입 변화를 볼 수 없다.
+package-lock.json linguist-generated
+web/src/api/schema.d.ts linguist-generated

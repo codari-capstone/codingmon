@@ -35,7 +35,7 @@ build/
 out/
 
 # 개인 작업 기록 (팀 작업 추적은 GitHub Issues·Projects가 맡는다)
-tasks/
+/tasks/
 
 # 로그
 *.log
