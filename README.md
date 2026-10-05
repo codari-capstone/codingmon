@@ -10,7 +10,7 @@
 
 | 폴더 | 내용 |
 |---|---|
-| `web/` | 프론트엔드 · Next.js 16, TypeScript |
+| `web/` | 프론트엔드 · React 19, Vite, TypeScript |
 | `api/` | 백엔드 · Spring Boot 4, Java 21, PostgreSQL 16 |
 | `judge/` | 채점 서버 · Judge0 자체 호스팅 설정 |
 | `infra/` | Docker Compose, AWS 배포 |
