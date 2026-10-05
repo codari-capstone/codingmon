@@ -47,7 +47,7 @@ Oct 3, 2026 · @찬우
 
 ### TypeScript를 쓰는 이유
 
-이 서비스는 판정 종류 10가지, AI 응답의 evidenceType(FACT/INFERENCE), 힌트 단계(1\~3)처럼 정해진 값이 많다. TypeScript로 이 값들을 타입으로 정해 두면, 오타나 빠뜨린 판정 처리를 실행 전에 에디터가 알려 준다. 또 백엔드 OpenAPI 명세에서 타입을 자동 생성하면, 백엔드가 응답 필드를 바꿨을 때 프론트엔드에서 고쳐야 할 곳이 컴파일 오류로 바로 드러난다. 처음에는 strict 모드를 켜되, 모르는 타입은 에디터의 추론에 맡기며 점진적으로 익힌다.
+이 서비스는 판정 종류 9가지, AI 응답의 evidenceType(FACT/INFERENCE), 힌트 단계(1\~3)처럼 정해진 값이 많다. TypeScript로 이 값들을 타입으로 정해 두면, 오타나 빠뜨린 판정 처리를 실행 전에 에디터가 알려 준다. 또 백엔드 OpenAPI 명세에서 타입을 자동 생성하면, 백엔드가 응답 필드를 바꿨을 때 프론트엔드에서 고쳐야 할 곳이 컴파일 오류로 바로 드러난다. 처음에는 strict 모드를 켜되, 모르는 타입은 에디터의 추론에 맡기며 점진적으로 익힌다.
 
 ## 3. 라이브러리별 선정 이유
 
@@ -216,7 +216,7 @@ export default defineConfig({
 | 명령                | 하는 일                                                 |
 | ------------------- | ------------------------------------------------------- |
 | `npm run dev`       | 개발 서버 실행                                          |
-| `npm run dev:mock`  | MSW 가짜 응답으로 개발 서버 실행 (`VITE_USE_MOCK=true`) |
+| `npm run dev:mock`  | MSW 가짜 응답으로 개발 서버 실행 (`vite --mode mock`)   |
 | `npm run gen:api`   | 백엔드 OpenAPI 명세로 `src/api/schema.d.ts` 생성        |
 | `npm run typecheck` | TypeScript 타입 검사                                    |
 | `npm run lint`      | ESLint 검사                                             |
@@ -230,7 +230,6 @@ Vite는 `VITE_`로 시작하는 변수만 화면 코드에 넣는다. 이 값은
 
 | 변수                    | 예시   | 설명                    |
 | ----------------------- | ------ | ----------------------- |
-| `VITE_USE_MOCK`         | `true` | MSW 가짜 응답 사용 여부 |
 | `VITE_POLL_INTERVAL_MS` | `1000` | 채점 진행률 폴링 간격   |
 
 ## 6. 배포와 CI
@@ -296,7 +295,7 @@ PR을 올리면 아래 검사가 자동으로 돌고, 모두 통과해야 병합
 
 ## 7. 남은 결정 사항
 
-- [ ] 스타일링: Tailwind CSS + shadcn/ui로 확정 (2026-10-03)
+- [x] 스타일링: Tailwind CSS + shadcn/ui로 확정 (2026-10-03)
 - [ ] 프론트엔드 배포 위치를 인프라 담당과 결정 (6장 선택지)
-- [ ] 백엔드 OpenAPI 명세 파일 위치·공유 방법 합의 (1주차 API 명세 확정 때)
+- [x] 백엔드 OpenAPI 명세 파일 위치: `contracts/openapi.yaml`. CODEOWNERS가 세 명 공동 리뷰로 잡아 두었고 `npm run gen:api`가 이 경로를 읽는다
 - [ ] 계획서 6.5·7.2절의 Next.js 기술을 React + Vite로 고칠지, 지도교수님께 변경 공유
