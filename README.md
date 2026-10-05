@@ -15,7 +15,7 @@
 | `judge/` | 채점 서버 · Judge0 자체 호스팅 설정 |
 | `infra/` | Docker Compose, AWS 배포 |
 | `contracts/` | OpenAPI 명세 · 프론트엔드와 백엔드의 계약 |
-| `docs/` | 설계 문서 |
+| `docs/` | 설계 문서 · 기능명세서, 기술 스택, 협업 규칙, AI 기능 정의 |
 
 문제 지문, 정답 코드, 비공개 테스트는 비공개 저장소 `problems`에 따로 둔다.
 

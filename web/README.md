@@ -1,7 +1,7 @@
 # web
 
 프론트엔드. React 19 + Vite + TypeScript SPA이며, 빌드한 정적 파일을 Nginx로 배포하고
-Spring Boot API와 HTTP(JSON)로 통신한다. 자세한 선정 근거는 [frontend-stack.md](./frontend-stack.md)에 있다.
+Spring Boot API와 HTTP(JSON)로 통신한다. 자세한 선정 근거는 [docs/frontend-stack.md](../docs/frontend-stack.md)에 있다.
 
 ## 시작하기
 
