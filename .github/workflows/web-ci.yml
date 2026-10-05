@@ -1,0 +1,63 @@
+# 프론트엔드 자동 검사. 기술스택 문서 §6의 6단계를 그대로 옮겼다.
+# 협업규칙 §6의 병합 조건 1번(CI 통과)이 이 워크플로를 가리킨다.
+name: web CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+# 경로 필터를 걸지 않는 이유: 필수 검사로 지정했을 때 경로가 안 맞아 건너뛰면
+# GitHub가 '대기 중'으로 보아 병합이 막힌다. web 검사는 몇 분이면 끝나므로
+# 모든 PR에서 돌린다. 백엔드 CI가 생기면 그때 함께 정리한다.
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # lock 파일 기준으로 설치해 팀원·CI가 같은 버전을 쓴다
+      - run: npm ci
+
+      - name: 타입 검사
+        run: npm run typecheck
+
+      - name: 린트
+        run: npm run lint
+
+      - name: 코드 형식
+        run: npm run format:check
+
+      - name: 단위·컴포넌트 테스트
+        run: npm run test
+
+      - name: 빌드
+        run: npm run build
+
+      - name: Playwright 브라우저 설치
+        run: npx playwright install --with-deps chromium
+
+      # MSW 목 모드로 돌기 때문에 백엔드 없이 검사된다
+      - name: E2E
+        run: npm run e2e
+
+      - name: 실패 시 E2E 리포트 올리기
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
