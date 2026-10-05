@@ -9,21 +9,33 @@
 .env
 .env.*
 !.env.example
+# MSW 목 모드 설정. 비밀값이 아니고 dev:mock·E2E에 필요하므로 공유한다
+!.env.mock
 
-# Node / Next.js
+# Node
 node_modules/
-.next/
-out/
 coverage/
 *.tsbuildinfo
 npm-debug.log*
 pnpm-debug.log*
+
+# Vite / Playwright 산출물
+dist/
+dist-e2e/
+.vite/
+test-results/
+playwright-report/
 
 # Java / Gradle
 .gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
 *.class
+# IntelliJ 컴파일 출력
+out/
+
+# 개인 작업 기록 (팀 작업 추적은 GitHub Issues·Projects가 맡는다)
+tasks/
 
 # 로그
 *.log
