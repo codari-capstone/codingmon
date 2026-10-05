@@ -1,12 +1,15 @@
 import { createBrowserRouter, redirect } from 'react-router'
 
 import { RootLayout } from './RootLayout'
+import { RouteErrorBoundary } from './RouteErrorBoundary'
 
 // 스택 문서 §4의 주소 설계. 각 화면은 담당 이슈에서 features/ 아래 컴포넌트로 채운다.
 export const router = createBrowserRouter([
   {
     path: '/',
     Component: RootLayout,
+    // 모든 화면이 lazy 청크다. 배포 후 옛 청크가 404가 되는 경우를 여기서 받는다.
+    ErrorBoundary: RouteErrorBoundary,
     children: [
       { index: true, loader: () => redirect('/problems') },
       { path: 'problems', lazy: () => import('@/features/problems/ProblemListPage') },

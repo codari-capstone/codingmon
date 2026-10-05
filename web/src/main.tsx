@@ -12,10 +12,18 @@ async function enableMocking() {
   await worker.start({ onUnhandledRequest: 'bypass' })
 }
 
-enableMocking().then(() => {
+function render() {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />
     </StrictMode>,
   )
-})
+}
+
+// 목 설정이 실패해도 화면은 띄운다. 그러지 않으면 빈 화면만 남아
+// 원인을 알 수 없다. 목 응답이 없다는 것은 콘솔로 알린다.
+enableMocking()
+  .catch((error: unknown) => {
+    console.error('[MSW] 목 API 시작 실패. 실제 API로 요청이 나갑니다.', error)
+  })
+  .finally(render)
