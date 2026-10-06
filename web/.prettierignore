@@ -1,0 +1,15 @@
+dist
+dist-e2e
+coverage
+playwright-report
+test-results
+package-lock.json
+
+# gen:api가 자동 생성한다
+src/api/schema.d.ts
+
+# msw init이 생성한다
+public/mockServiceWorker.js
+
+# 팀 문서는 사람이 쓴 문서다. 코드 포맷터가 표 여백을 바꾸면 리뷰 diff만 지저분해진다.
+*.md
