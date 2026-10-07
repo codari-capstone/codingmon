@@ -2,7 +2,7 @@ CREATE TABLE users (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     email VARCHAR(320),
     password_hash VARCHAR(255),
-    nickname VARCHAR(100) NOT NULL UNIQUE,
+    nickname VARCHAR(100) NOT NULL,
     avatar_url TEXT,
     role VARCHAR(16) NOT NULL DEFAULT 'USER'
         CHECK (role IN ('USER', 'ADMIN')),
@@ -10,6 +10,7 @@ CREATE TABLE users (
 );
 
 CREATE UNIQUE INDEX users_email_lower_idx ON users (lower(email)) WHERE email IS NOT NULL;
+CREATE UNIQUE INDEX users_nickname_lower_idx ON users (lower(nickname));
 
 CREATE TABLE oauth_accounts (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -28,12 +29,27 @@ CREATE TABLE refresh_tokens (
     family_id UUID NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     revoked_at TIMESTAMPTZ,
-    replaced_by_token_id BIGINT UNIQUE REFERENCES refresh_tokens(id),
+    replaced_by_token_id BIGINT UNIQUE REFERENCES refresh_tokens(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX refresh_tokens_user_idx ON refresh_tokens (user_id, expires_at DESC);
 CREATE INDEX refresh_tokens_family_idx ON refresh_tokens (family_id);
+
+CREATE TABLE email_tokens (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    email VARCHAR(320) NOT NULL,
+    purpose VARCHAR(24) NOT NULL CHECK (purpose IN ('VERIFY_EMAIL')),
+    token_hash VARCHAR(128) NOT NULL,
+    attempt_count SMALLINT NOT NULL DEFAULT 0 CHECK (attempt_count BETWEEN 0 AND 5),
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX email_tokens_email_purpose_idx ON email_tokens (lower(email), purpose, created_at DESC);
+CREATE UNIQUE INDEX email_tokens_one_active_idx ON email_tokens (lower(email), purpose)
+    WHERE used_at IS NULL;
 
 CREATE TABLE problems (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -59,7 +75,8 @@ CREATE TABLE problem_versions (
     published_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (problem_id, version_no),
-    UNIQUE (id, problem_id)
+    UNIQUE (id, problem_id),
+    CHECK ((status <> 'PUBLISHED') OR published_at IS NOT NULL)
 );
 
 CREATE INDEX problem_versions_published_idx
@@ -117,13 +134,12 @@ CREATE TABLE reference_solutions (
 
 CREATE TABLE submissions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id),
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     problem_version_id BIGINT NOT NULL REFERENCES problem_versions(id),
     submission_kind VARCHAR(16) NOT NULL DEFAULT 'SUBMIT'
         CHECK (submission_kind IN ('SAMPLE_RUN', 'SUBMIT')),
     language VARCHAR(16) NOT NULL CHECK (language IN ('PYTHON', 'CPP')),
     source_code TEXT NOT NULL,
-    judge_job_id VARCHAR(120),
     job_status VARCHAR(16) NOT NULL DEFAULT 'QUEUED'
         CHECK (job_status IN ('QUEUED', 'COMPILING', 'RUNNING', 'COMPLETED', 'JUDGE_ERROR')),
     progress SMALLINT NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
@@ -137,27 +153,27 @@ CREATE TABLE submissions (
     memory_used_kb INTEGER CHECK (memory_used_kb IS NULL OR memory_used_kb >= 0),
     submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     judged_at TIMESTAMPTZ,
-    UNIQUE (id, user_id),
     UNIQUE (id, problem_version_id),
     CHECK ((job_status <> 'COMPLETED') OR verdict IS NOT NULL)
 );
 
 CREATE INDEX submissions_user_history_idx ON submissions (user_id, submitted_at DESC, id DESC);
 CREATE INDEX submissions_problem_user_idx ON submissions (problem_version_id, user_id, job_status);
-CREATE UNIQUE INDEX submissions_judge_job_idx ON submissions (judge_job_id)
-    WHERE judge_job_id IS NOT NULL;
 
 CREATE TABLE submission_test_results (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     submission_id BIGINT NOT NULL,
     problem_version_id BIGINT NOT NULL,
     test_case_id BIGINT NOT NULL,
-    verdict VARCHAR(24) NOT NULL CHECK (verdict IN (
+    judge_token VARCHAR(120) UNIQUE,
+    verdict VARCHAR(24) CHECK (verdict IN (
         'ACCEPTED', 'PRESENTATION_ERROR', 'WRONG_ANSWER', 'TIME_LIMIT_EXCEEDED',
         'MEMORY_LIMIT_EXCEEDED', 'OUTPUT_LIMIT_EXCEEDED', 'RUNTIME_ERROR'
     )),
     execution_time_ms INTEGER CHECK (execution_time_ms IS NULL OR execution_time_ms >= 0),
     memory_used_kb INTEGER CHECK (memory_used_kb IS NULL OR memory_used_kb >= 0),
+    stdout VARCHAR(65536),
+    stderr VARCHAR(65536),
     UNIQUE (submission_id, test_case_id),
     FOREIGN KEY (submission_id, problem_version_id)
         REFERENCES submissions(id, problem_version_id) ON DELETE CASCADE,
@@ -212,14 +228,13 @@ CREATE TABLE learning_reports (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     report_date DATE NOT NULL,
-    status VARCHAR(16) NOT NULL DEFAULT 'COMPLETED'
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING'
         CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED')),
     statistics JSONB NOT NULL,
     content JSONB,
     model VARCHAR(120),
     generated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (user_id, report_date),
-    UNIQUE (id, user_id),
     CHECK ((status <> 'COMPLETED') OR content IS NOT NULL)
 );
 
@@ -237,41 +252,4 @@ CREATE TABLE learning_report_recommendations (
     FOREIGN KEY (problem_version_id, problem_id) REFERENCES problem_versions(id, problem_id),
     FOREIGN KEY (problem_version_id, concept_tag_id)
         REFERENCES problem_version_tags(problem_version_id, concept_tag_id)
-);
-
-CREATE TABLE ai_usage_events (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    request_type VARCHAR(16) NOT NULL CHECK (request_type IN ('ANALYSIS', 'CODE_REVIEW', 'REPORT')),
-    submission_id BIGINT,
-    learning_report_id BIGINT,
-    outcome VARCHAR(16) NOT NULL CHECK (outcome IN ('SUCCEEDED', 'FAILED')),
-    provider_request_id VARCHAR(160),
-    input_tokens INTEGER CHECK (input_tokens IS NULL OR input_tokens >= 0),
-    output_tokens INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0),
-    cost_usd NUMERIC(12, 6) CHECK (cost_usd IS NULL OR cost_usd >= 0),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    FOREIGN KEY (submission_id, user_id) REFERENCES submissions(id, user_id),
-    CHECK ((submission_id IS NOT NULL) <> (learning_report_id IS NOT NULL)),
-    CHECK ((request_type = 'REPORT') = (learning_report_id IS NOT NULL)),
-    FOREIGN KEY (learning_report_id, user_id) REFERENCES learning_reports(id, user_id)
-);
-
-CREATE INDEX ai_usage_events_user_type_date_idx
-    ON ai_usage_events (user_id, request_type, created_at DESC);
-
-CREATE TABLE invite_codes (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    code_hash VARCHAR(128) NOT NULL UNIQUE,
-    created_by BIGINT REFERENCES users(id),
-    max_uses INTEGER NOT NULL DEFAULT 1 CHECK (max_uses > 0),
-    expires_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE invite_code_redemptions (
-    invite_code_id BIGINT NOT NULL REFERENCES invite_codes(id) ON DELETE CASCADE,
-    user_id BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    redeemed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (invite_code_id, user_id)
 );
