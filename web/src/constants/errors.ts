@@ -78,18 +78,18 @@ function asProblemDetail(value: unknown): ProblemDetail | null {
 
 export function toUserMessage(problem: unknown): UserMessage {
   const detail = asProblemDetail(problem)
-  if (!detail) return FALLBACK
+  if (!detail) return { ...FALLBACK }
 
-  if (detail.type && BY_TYPE[detail.type]) {
-    return BY_TYPE[detail.type]
+  if (detail.type && Object.hasOwn(BY_TYPE, detail.type)) {
+    return { ...BY_TYPE[detail.type] }
   }
 
   if (typeof detail.status === 'number') {
     const byStatus = BY_STATUS[detail.status]
-    if (byStatus) return byStatus
+    if (byStatus) return { ...byStatus }
     // 표에 없는 코드는 5xx만 다시 시도할 수 있다고 본다.
     return { ...FALLBACK, retryable: detail.status >= 500 }
   }
 
-  return FALLBACK
+  return { ...FALLBACK }
 }

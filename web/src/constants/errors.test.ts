@@ -33,6 +33,25 @@ describe('toUserMessage', () => {
   it('4xx는 다시 시도해도 같다고 본다', () => {
     expect(toUserMessage({ status: 400 }).retryable).toBe(false)
     expect(toUserMessage({ status: 404 }).retryable).toBe(false)
+    expect(toUserMessage({ status: 418 }).retryable).toBe(false)
+  })
+
+  // 서버가 보내는 type은 외부 입력이다. 프로토타입 상속 키가 표에 적중한 것처럼
+  // 동작하면 title·description이 undefined인 빈 오류 화면이 된다.
+  it('프로토타입 상속 키를 type으로 받아도 폴백으로 간다', () => {
+    for (const type of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      const msg = toUserMessage({ type, status: 500 })
+      expect(msg.title).toBe('문제가 발생했습니다')
+      expect(msg.retryable).toBe(true)
+    }
+  })
+
+  it('반환한 객체를 고쳐도 표가 오염되지 않는다', () => {
+    const first = toUserMessage({ type: '/problems/judge-unavailable' })
+    first.title = '바뀐 제목'
+    expect(toUserMessage({ type: '/problems/judge-unavailable' }).title).toBe(
+      '지금은 제출할 수 없습니다',
+    )
   })
 
   // 네트워크가 끊기면 JSON이 아니라 Error나 undefined가 올라온다
@@ -41,6 +60,12 @@ describe('toUserMessage', () => {
     expect(toUserMessage(new Error('Failed to fetch')).title).toBe('문제가 발생했습니다')
     expect(toUserMessage('그냥 문자열').title).toBe('문제가 발생했습니다')
     expect(toUserMessage(undefined).retryable).toBe(true)
+  })
+
+  it('입력이 ProblemDetail이 아닐 때 돌려준 객체를 고쳐도 FALLBACK이 오염되지 않는다', () => {
+    const first = toUserMessage(undefined)
+    first.title = '바뀐 제목'
+    expect(toUserMessage(undefined).title).toBe('문제가 발생했습니다')
   })
 
   // 서버 detail을 그대로 보여 주면 사용자가 읽을 수 없는 영어 기술 문장이 노출된다
