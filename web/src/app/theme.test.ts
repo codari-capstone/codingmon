@@ -1,6 +1,12 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { applyTheme, readStoredTheme, resolveInitialTheme, THEME_STORAGE_KEY } from './theme'
+import {
+  applyTheme,
+  readStoredTheme,
+  resolveInitialTheme,
+  storeTheme,
+  THEME_STORAGE_KEY,
+} from './theme'
 
 describe('resolveInitialTheme', () => {
   it('저장된 값이 있으면 그것을 쓴다', () => {
@@ -32,6 +38,32 @@ describe('readStoredTheme', () => {
   it('모르는 값은 null로 본다', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'solarized')
     expect(readStoredTheme()).toBeNull()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // 사생활 보호 모드 등에서 localStorage 접근 자체가 던지는 경우의 폴백
+  it('localStorage 접근이 던지면 null로 본다', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied')
+    })
+    expect(readStoredTheme()).toBeNull()
+  })
+})
+
+describe('storeTheme', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // 저장이 막혀도(사생활 보호 모드 등) 화면은 계속 동작해야 한다
+  it('localStorage 접근이 던져도 예외를 전파하지 않는다', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('denied')
+    })
+    expect(() => storeTheme('dark')).not.toThrow()
   })
 })
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useLayoutEffect, useState } from 'react'
 
 import { applyTheme, readStoredTheme, resolveInitialTheme, storeTheme, type Theme } from './theme'
 import { ThemeContext } from './useTheme'
@@ -13,7 +13,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     resolveInitialTheme(readStoredTheme(), prefersDark()),
   )
 
-  useEffect(() => {
+  // useLayoutEffect로 commit 뒤 paint 전에 동기로 클래스를 붙여 깜빡임을 없앤다.
+  useLayoutEffect(() => {
     applyTheme(theme)
   }, [theme])
 
@@ -23,12 +24,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const toggle = useCallback(() => {
-    setThemeState((current) => {
-      const next = current === 'dark' ? 'light' : 'dark'
-      storeTheme(next)
-      return next
-    })
-  }, [])
+    setTheme(theme === 'dark' ? 'light' : 'dark')
+  }, [theme, setTheme])
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggle }}>{children}</ThemeContext.Provider>
