@@ -17,6 +17,7 @@ export const router = createBrowserRouter([
       { path: 'submissions', lazy: () => import('@/features/history/SubmissionHistoryPage') },
       { path: 'submissions/:id', lazy: () => import('@/features/result/SubmissionResultPage') },
       { path: 'me/report', lazy: () => import('@/features/report/ReportPage') },
+      { path: 'forbidden', lazy: () => import('@/app/ForbiddenPage') },
       { path: 'admin/*', lazy: () => import('@/features/admin/AdminPage') },
       { path: '*', lazy: () => import('@/app/NotFoundPage') },
     ],
