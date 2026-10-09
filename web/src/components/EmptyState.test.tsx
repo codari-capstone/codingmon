@@ -39,4 +39,26 @@ describe('EmptyState', () => {
 
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
+
+  // 화면 일부가 비었을 때가 기본이라 h2여야 한다. 그 화면의 h1은 따로 있다.
+  it('기본 제목은 h2다', () => {
+    render(
+      <MemoryRouter>
+        <EmptyState title="결과가 없습니다" description="조건을 바꿔 보세요." />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('heading', { level: 2, name: '결과가 없습니다' })).toBeInTheDocument()
+  })
+
+  // 화면 전체가 빈 상태면 이 제목이 h1이어야 한다. 아니면 h1 없는 화면이 된다.
+  it('headingLevel 1이면 제목이 h1이 된다', () => {
+    render(
+      <MemoryRouter>
+        <EmptyState title="결과가 없습니다" description="조건을 바꿔 보세요." headingLevel={1} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('heading', { level: 1, name: '결과가 없습니다' })).toBeInTheDocument()
+  })
 })

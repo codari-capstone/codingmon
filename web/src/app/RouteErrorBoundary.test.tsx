@@ -78,7 +78,10 @@ describe('LoginPage', () => {
     const router = createMemoryRouter([{ path: '/', Component: LoginPage }])
     render(<RouterProvider router={router} />)
 
-    expect(screen.getByRole('heading', { name: '로그인 준비 중입니다' })).toBeInTheDocument()
+    // 이 화면의 제목은 EmptyState가 그리는 것뿐이다. h2로 두면 h1 없는 화면이 된다.
+    expect(
+      screen.getByRole('heading', { level: 1, name: '로그인 준비 중입니다' }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '문제 보러 가기' })).toHaveAttribute(
       'href',
       '/problems',

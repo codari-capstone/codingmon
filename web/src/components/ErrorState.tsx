@@ -44,9 +44,9 @@ export function ErrorState({ problem, onRetry, headingLevel = 2 }: ErrorStatePro
       >
         <AlertCircle className="text-destructive mt-0.5 size-5 shrink-0" aria-hidden="true" />
         <div>
-          <Heading
-            className={headingLevel === 1 ? 'text-base font-semibold' : 'text-sm font-medium'}
-          >
+          {/* h1은 404·403 화면의 제목과 같은 크기여야 한다. 전체 화면 오류인데
+              16px이면 다른 화면 제목(24px)보다 작아 위계가 뒤집힌다. */}
+          <Heading className={headingLevel === 1 ? 'text-xl font-semibold' : 'text-sm font-medium'}>
             {message.title}
           </Heading>
           <p className="text-muted-foreground mt-1 text-sm">{message.description}</p>

@@ -87,6 +87,7 @@ test('헤더의 로그인 버튼이 404로 떨어지지 않는다', async ({ pag
   await page.getByRole('link', { name: '로그인' }).click()
 
   await expect(page).toHaveURL(/\/login$/)
-  await expect(page.getByRole('heading', { name: '로그인 준비 중입니다' })).toBeVisible()
+  // 다른 모든 라우트 화면은 h1을 가진다. 이 화면만 예외가 되면 안 된다.
+  await expect(page.getByRole('heading', { level: 1, name: '로그인 준비 중입니다' })).toBeVisible()
   await expect(page.getByRole('link', { name: '문제 보러 가기' })).toBeVisible()
 })

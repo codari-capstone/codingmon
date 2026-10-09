@@ -12,6 +12,8 @@ export function Component() {
   return (
     <EmptyState
       icon={LogIn}
+      // 이 화면의 제목이 이것뿐이다. 기본값(h2)으로 두면 h1 없는 화면이 된다.
+      headingLevel={1}
       title="로그인 준비 중입니다"
       description="인증 방식이 정해지면 이 화면에서 로그인할 수 있습니다. 그때까지는 로그인 없이 문제를 둘러볼 수 있습니다."
       action={{ label: '문제 보러 가기', to: '/problems' }}
