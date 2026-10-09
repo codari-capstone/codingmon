@@ -87,8 +87,8 @@ export function toUserMessage(problem: unknown): UserMessage {
   if (typeof detail.status === 'number') {
     const byStatus = BY_STATUS[detail.status]
     if (byStatus) return { ...byStatus }
-    // 표에 없는 코드는 5xx만 다시 시도할 수 있다고 본다.
-    return { ...FALLBACK, retryable: detail.status >= 500 }
+    // 표에 없는 코드는 5xx만 다시 시도할 수 있다고 본다. status 0은 네트워크 실패(fetch 래퍼가 올림)라 재시도할 수 있다.
+    return { ...FALLBACK, retryable: detail.status >= 500 || detail.status === 0 }
   }
 
   return { ...FALLBACK }

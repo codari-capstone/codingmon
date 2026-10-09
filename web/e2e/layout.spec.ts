@@ -40,4 +40,14 @@ test('모바일 폭에서도 내비게이션이 보인다', async ({ page }) => 
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   )
   expect(overflows).toBe(false)
+
+  // h-14(56px 고정)와 flex-wrap이 함께 있으면 내용이 박스 밖으로 넘친다.
+  // boundingBox()는 레이아웃 박스만 돌려줘 넘친 콘텐츠를 보지 못하고,
+  // 문서 scrollWidth 검사는 가로만 본다. 세로 오버플로를 직접 측정한다.
+  const headerOverflows = await page.evaluate(() => {
+    const el = document.querySelector('header > div')
+    if (!el) return null
+    return el.scrollHeight > el.clientHeight
+  })
+  expect(headerOverflows).toBe(false)
 })

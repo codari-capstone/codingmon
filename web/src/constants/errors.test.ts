@@ -30,6 +30,11 @@ describe('toUserMessage', () => {
     expect(toUserMessage({ status: 502 }).retryable).toBe(true)
   })
 
+  // status 0은 일부 fetch 래퍼가 네트워크 실패를 올릴 때 쓴다. 재시도가 가장 적절한 경우다.
+  it('status 0(네트워크 실패)도 다시 시도할 수 있다고 본다', () => {
+    expect(toUserMessage({ status: 0 }).retryable).toBe(true)
+  })
+
   it('4xx는 다시 시도해도 같다고 본다', () => {
     expect(toUserMessage({ status: 400 }).retryable).toBe(false)
     expect(toUserMessage({ status: 404 }).retryable).toBe(false)

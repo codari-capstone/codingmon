@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 export function Component() {
   return (
     <section className="flex flex-col items-center py-20 text-center">
-      <p className="text-muted-foreground/50 font-mono text-4xl font-medium">403</p>
+      <p className="text-muted-foreground font-mono text-4xl font-medium">403</p>
       <h1 className="mt-3 text-xl font-semibold">권한이 없습니다</h1>
       <p className="text-muted-foreground mt-2 text-sm">
         이 화면을 볼 수 있는 권한이 없습니다. 로그인 계정을 확인해 주세요.

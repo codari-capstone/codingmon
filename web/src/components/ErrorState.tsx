@@ -12,6 +12,9 @@ interface ErrorStateProps {
 /** 원문을 보여 줄 값이 있는지. 네트워크 오류는 보여 줄 것이 없다. */
 function rawText(problem: unknown): string | null {
   if (typeof problem !== 'object' || problem === null) return null
+  // Error 인스턴스는 열거 가능한 속성이 없어 JSON.stringify가 "{}"를 준다.
+  // 그것을 보여 주면 "서버 응답 원문"에 빈 객체만 뜬다.
+  if (Object.keys(problem).length === 0) return null
   try {
     return JSON.stringify(problem, null, 2)
   } catch {

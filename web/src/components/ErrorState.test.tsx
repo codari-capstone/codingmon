@@ -48,4 +48,11 @@ describe('ErrorState', () => {
 
     expect(screen.queryByText('서버 응답 원문')).not.toBeInTheDocument()
   })
+
+  // JSON.stringify(new Error(...))는 "{}"다. 그것을 원문으로 보여 주면 안 된다.
+  it('Error 인스턴스는 원문 영역을 만들지 않는다', () => {
+    render(<ErrorState problem={new Error('Failed to fetch')} />)
+
+    expect(screen.queryByText('서버 응답 원문')).not.toBeInTheDocument()
+  })
 })

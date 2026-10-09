@@ -24,8 +24,8 @@ export function AppHeader() {
 
   return (
     <header className="border-border border-b">
-      <div className="mx-auto flex h-14 max-w-7xl flex-wrap items-center gap-7 px-6">
-        <Link to="/problems" className="flex items-center gap-2 font-bold tracking-tight">
+      <div className="mx-auto flex min-h-14 max-w-7xl flex-wrap items-center gap-7 px-6">
+        <Link to="/problems" className="flex shrink-0 items-center gap-2 font-bold tracking-tight">
           <span
             aria-hidden="true"
             className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md text-xs font-bold"
@@ -35,7 +35,10 @@ export function AppHeader() {
           Codari
         </Link>
 
-        <nav aria-label="주요 메뉴" className="flex flex-1 gap-5 text-sm">
+        <nav
+          aria-label="주요 메뉴"
+          className="flex min-w-0 flex-1 gap-5 overflow-x-auto text-sm whitespace-nowrap"
+        >
           {MENU.map((item) => (
             <NavLink
               key={item.to}
