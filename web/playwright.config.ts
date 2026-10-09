@@ -9,7 +9,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: 'html',
+  // html 리포터의 open 기본값은 'on-failure'다. 실패가 나면 리포트 서버를 띄우고
+  // 사람이 Ctrl+C를 누를 때까지 기다리므로, 사람이 없는 실행(CI·에이전트)에서는
+  // 그대로 멈춘 것처럼 보인다. open: 'never'로 막고, 터미널 요약은 list가 맡는다.
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     // 4173(vite preview 기본값)을 쓰면 안 된다. 로컬에서 reuseExistingServer가 켜져 있어,
     // npm run preview(운영 빌드)를 띄워 둔 채 e2e를 돌리면 목 빌드를 만들지 않고

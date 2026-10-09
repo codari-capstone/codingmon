@@ -17,6 +17,9 @@ export const router = createBrowserRouter([
       { path: 'submissions', lazy: () => import('@/features/history/SubmissionHistoryPage') },
       { path: 'submissions/:id', lazy: () => import('@/features/result/SubmissionResultPage') },
       { path: 'me/report', lazy: () => import('@/features/report/ReportPage') },
+      // 헤더의 로그인 버튼이 가는 곳. 인증 방식(#18)이 정해지면 내용을 채운다.
+      { path: 'login', lazy: () => import('@/app/LoginPage') },
+      { path: 'forbidden', lazy: () => import('@/app/ForbiddenPage') },
       { path: 'admin/*', lazy: () => import('@/features/admin/AdminPage') },
       { path: '*', lazy: () => import('@/app/NotFoundPage') },
     ],

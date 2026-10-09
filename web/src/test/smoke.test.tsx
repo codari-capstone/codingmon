@@ -22,10 +22,7 @@ describe('개발환경', () => {
         <NotFoundPage />
       </MemoryRouter>,
     )
-    expect(screen.getByRole('link', { name: '문제 목록으로 가기' })).toHaveAttribute(
-      'href',
-      '/problems',
-    )
+    expect(screen.getByRole('link', { name: '문제 목록으로' })).toHaveAttribute('href', '/problems')
   })
 
   it('QueryClient에 프로젝트 기본값이 적용된다', () => {
