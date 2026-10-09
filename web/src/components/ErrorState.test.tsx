@@ -35,8 +35,22 @@ describe('ErrorState', () => {
     expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument()
   })
 
+  // 운영에서 펼쳐 볼 수 있으면 예외 클래스명·SQL 조각·내부 호스트명이 새어 나간다
+  it('운영 빌드에서는 서버 응답 원문을 아예 만들지 않는다', () => {
+    vi.stubEnv('DEV', false)
+
+    render(<ErrorState problem={judgeDown} />)
+
+    expect(screen.queryByText('서버 응답 원문')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Judge0 queue is not reachable/)).not.toBeInTheDocument()
+    // 사용자 문구는 그대로 나온다
+    expect(screen.getByRole('heading', { name: '지금은 제출할 수 없습니다' })).toBeInTheDocument()
+
+    vi.unstubAllEnvs()
+  })
+
   // 영어 기술 문장이 본문에 노출되면 안 되지만, 팀이 원인을 보려면 접근은 돼야 한다
-  it('서버 응답 원문을 접어서 보여 준다', () => {
+  it('개발 모드에서는 서버 응답 원문을 접어서 보여 준다', () => {
     render(<ErrorState problem={judgeDown} />)
 
     expect(screen.getByText('서버 응답 원문')).toBeInTheDocument()

@@ -21,6 +21,46 @@ test('테마를 바꾸면 새로고침해도 유지된다', async ({ page }) => 
   await expect(page.locator('html')).toHaveClass(/dark/)
 })
 
+/**
+ * 번들 로드 전 깜빡임 (index.html의 인라인 스크립트).
+ *
+ * ThemeProvider의 useLayoutEffect는 React가 렌더를 시작한 뒤만 덮는다. main.tsx가
+ * App을 동적 import하는 동안에는 아무 JS도 테마를 정하지 않으므로, 그 구간을
+ * index.html의 인라인 스크립트가 맡는다. 앱 번들을 막아 그 구간을 고정시켜 검사한다.
+ */
+test('앱 번들이 오지 않아도 저장된 다크 테마가 적용된다', async ({ page }) => {
+  await page.goto('/problems')
+  await page.getByRole('button', { name: '다크 모드로 전환' }).click()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+
+  await page.route('**/assets/*.js', (route) => route.abort())
+  await page.reload()
+
+  // 번들이 실제로 막혔는지부터 확인한다. 막히지 않았다면 이 테스트는 아무것도 증명하지 않는다
+  await expect(page.getByRole('banner')).toHaveCount(0)
+  await expect(page.locator('html')).toHaveClass(/dark/)
+})
+
+/**
+ * 글꼴 CDN이 응답하지 않아도 화면이 뜨는지.
+ *
+ * 글꼴 CSS를 일반 stylesheet로 두면 렌더 차단 자원이 되어, cdn.jsdelivr.net이
+ * 막힌 사내망이나 CI에서 응답을 기다리는 동안 첫 페인트가 밀린다. abort가 아니라
+ * "응답하지 않는" 상태를 만들어야 이 차이가 드러난다 — abort는 즉시 실패해
+ * 차단이든 아니든 빨리 끝난다.
+ */
+test('글꼴 CDN이 응답하지 않아도 화면이 뜬다', async ({ page }) => {
+  await page.route('**cdn.jsdelivr.net/**', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 15_000))
+    await route.abort()
+  })
+
+  // load를 기다리면 위 15초를 그대로 기다리게 된다
+  await page.goto('/problems', { waitUntil: 'commit' })
+
+  await expect(page.getByRole('heading', { name: '문제 목록' })).toBeVisible({ timeout: 8_000 })
+})
+
 test('권한 없음 화면이 뜬다', async ({ page }) => {
   await page.goto('/forbidden')
 

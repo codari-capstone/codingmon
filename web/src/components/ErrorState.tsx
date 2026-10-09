@@ -14,8 +14,16 @@ interface ErrorStateProps {
   headingLevel?: 1 | 2
 }
 
-/** 원문을 보여 줄 값이 있는지. 네트워크 오류는 보여 줄 것이 없다. */
+/**
+ * 원문을 보여 줄 값이 있는지. 네트워크 오류는 보여 줄 것이 없다.
+ *
+ * 개발 모드에서만 돌려준다. 500 응답의 detail에는 예외 클래스명·SQL 조각·내부
+ * 호스트명이 담겨 올 수 있고, RouteErrorBoundary는 로더가 던진 임의의 객체를
+ * 그대로 넘긴다. 운영에서 그것을 펼쳐 볼 수 있으면 내부 구조가 새어 나간다.
+ * 운영의 원인 추적은 서버 로그로 한다.
+ */
 function rawText(problem: unknown): string | null {
+  if (!import.meta.env.DEV) return null
   if (typeof problem !== 'object' || problem === null) return null
   // Error 인스턴스는 열거 가능한 속성이 없어 JSON.stringify가 "{}"를 준다.
   // 그것을 보여 주면 "서버 응답 원문"에 빈 객체만 뜬다.

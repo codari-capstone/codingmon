@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { THEME_STORAGE_KEY } from './theme'
 import { ThemeProvider } from './ThemeProvider'
@@ -68,6 +68,7 @@ describe('ThemeProvider', () => {
   afterEach(() => {
     media?.restore()
     media = null
+    vi.restoreAllMocks()
   })
 
   it('기본값은 라이트이고 html에 dark 클래스가 없다', () => {
@@ -140,6 +141,32 @@ describe('ThemeProvider', () => {
 
     expect(screen.getByRole('button')).toHaveTextContent('dark')
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark')
+  })
+
+  // storeTheme이 저장 실패를 삼키므로, 저장 여부로만 판단하면 사이트 데이터가
+  // 차단된 브라우저에서 사용자가 고른 테마가 OS 변경에 덮인다
+  it('저장이 막힌 브라우저에서도 사용자 선택이 OS 변경보다 우선한다', async () => {
+    media = stubMatchMedia(false)
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('사이트 데이터가 차단됨')
+    })
+    const user = userEvent.setup()
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    )
+
+    await user.click(screen.getByRole('button'))
+    expect(screen.getByRole('button')).toHaveTextContent('dark')
+    // 저장은 실제로 실패했다
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBeNull()
+
+    // OS가 라이트로 바뀌어도 사용자가 고른 다크를 유지해야 한다
+    media.changeTo(false)
+
+    expect(screen.getByRole('button')).toHaveTextContent('dark')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 
   it('언마운트하면 OS 설정 리스너를 떼어낸다', () => {
