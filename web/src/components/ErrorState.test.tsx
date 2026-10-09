@@ -55,4 +55,28 @@ describe('ErrorState', () => {
 
     expect(screen.queryByText('서버 응답 원문')).not.toBeInTheDocument()
   })
+
+  // 스켈레톤이 오류로 바뀌는 순간 스크린 리더가 알아야 한다
+  it('라이브 영역으로 알린다', () => {
+    render(<ErrorState problem={judgeDown} />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('지금은 제출할 수 없습니다')
+  })
+
+  it('기본 제목은 h2다', () => {
+    render(<ErrorState problem={judgeDown} />)
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: '지금은 제출할 수 없습니다' }),
+    ).toBeInTheDocument()
+  })
+
+  // 화면 전체가 오류면 그 화면의 h1이 이 제목이어야 한다
+  it('headingLevel 1이면 제목이 h1이 된다', () => {
+    render(<ErrorState problem={judgeDown} headingLevel={1} />)
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: '지금은 제출할 수 없습니다' }),
+    ).toBeInTheDocument()
+  })
 })

@@ -7,6 +7,11 @@ interface ErrorStateProps {
   /** 서버 응답(RFC 9457)이나 throw된 값. 어떤 모양이어도 문구가 나온다. */
   problem: unknown
   onRetry?: () => void
+  /**
+   * 화면 전체가 오류일 때만 1. 그 화면의 h1이 이 제목이어야 한다.
+   * 기본값 2는 화면 일부(표 영역 등)가 오류일 때를 가정한다.
+   */
+  headingLevel?: 1 | 2
 }
 
 /** 원문을 보여 줄 값이 있는지. 네트워크 오류는 보여 줄 것이 없다. */
@@ -22,16 +27,28 @@ function rawText(problem: unknown): string | null {
   }
 }
 
-export function ErrorState({ problem, onRetry }: ErrorStateProps) {
+export function ErrorState({ problem, onRetry, headingLevel = 2 }: ErrorStateProps) {
   const message = toUserMessage(problem)
   const raw = rawText(problem)
+  const Heading = headingLevel === 1 ? 'h1' : 'h2'
 
   return (
     <div>
-      <div className="border-destructive/30 bg-destructive/5 flex gap-3 rounded-xl border p-4">
+      {/*
+        role="alert"이 있어야 스켈레톤이 오류로 바뀌는 순간 스크린 리더가 알린다.
+        제목과 설명이 이 영역 안에 있어 삽입될 때 함께 읽힌다.
+      */}
+      <div
+        role="alert"
+        className="border-destructive/30 bg-destructive/5 flex gap-3 rounded-xl border p-4"
+      >
         <AlertCircle className="text-destructive mt-0.5 size-5 shrink-0" aria-hidden="true" />
         <div>
-          <h2 className="text-sm font-medium">{message.title}</h2>
+          <Heading
+            className={headingLevel === 1 ? 'text-base font-semibold' : 'text-sm font-medium'}
+          >
+            {message.title}
+          </Heading>
           <p className="text-muted-foreground mt-1 text-sm">{message.description}</p>
           {onRetry && message.retryable ? (
             <Button variant="outline" onClick={onRetry} className="mt-3 min-h-11">

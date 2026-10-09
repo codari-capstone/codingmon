@@ -24,7 +24,11 @@ export function AppHeader() {
 
   return (
     <header className="border-border border-b">
-      <div className="mx-auto flex min-h-14 max-w-7xl flex-wrap items-center gap-7 px-6">
+      {/*
+        py-2는 줄이 넘어갔을 때만 필요하다. 한 줄로 들어가는 폭(sm 이상)에서는
+        로그인 버튼의 44px 터치 영역과 더해져 헤더를 min-h-14보다 두껍게 만든다.
+      */}
+      <div className="mx-auto flex min-h-14 max-w-7xl flex-wrap items-center gap-x-7 gap-y-2 px-6 py-2 sm:py-0">
         <Link to="/problems" className="flex shrink-0 items-center gap-2 font-bold tracking-tight">
           <span
             aria-hidden="true"
@@ -35,10 +39,13 @@ export function AppHeader() {
           Codari
         </Link>
 
-        <nav
-          aria-label="주요 메뉴"
-          className="flex min-w-0 flex-1 gap-5 overflow-x-auto text-sm whitespace-nowrap"
-        >
+        {/*
+          flex-auto(= flex: 1 1 auto)여야 한다. flex-1은 basis가 0%라 줄바꿈 계산에서
+          폭이 0으로 취급돼 줄을 넘기지 않고, min-w-0이나 overflow-x-auto가 붙으면
+          좁은 화면에서 메뉴가 조용히 잘린다. basis가 auto면 들어갈 자리가 없을 때
+          nav 전체가 둘째 줄로 내려간다 (UX-05).
+        */}
+        <nav aria-label="주요 메뉴" className="flex flex-auto gap-5 text-sm whitespace-nowrap">
           {MENU.map((item) => (
             <NavLink
               key={item.to}

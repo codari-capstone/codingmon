@@ -7,12 +7,14 @@ interface ListSkeletonProps {
 /**
  * 목록을 기다리는 동안 보여 주는 모양 (UX-01).
  *
- * role="status"로 감싸 스크린 리더가 "불러오는 중"으로 읽게 한다. 안쪽 네모는
- * aria-hidden이라 빈 요소가 읽히지 않는다.
+ * 라이브 영역의 안내는 영역 안 "텍스트"가 바뀔 때 나온다. 네모는 모두 aria-hidden이라
+ * aria-label만 두면 접근 가능한 이름은 생기지만 읽을 내용이 없어 아무 안내도 나오지
+ * 않는다. 그래서 sr-only 문구를 영역 안에 둔다.
  */
 export function ListSkeleton({ rows = 5 }: ListSkeletonProps) {
   return (
-    <div role="status" aria-label="불러오는 중" aria-live="polite">
+    <div role="status" aria-live="polite">
+      <span className="sr-only">불러오는 중</span>
       {Array.from({ length: rows }, (_, i) => (
         <div
           key={i}

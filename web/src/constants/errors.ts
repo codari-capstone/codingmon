@@ -67,7 +67,8 @@ const BY_STATUS: Record<number, UserMessage> = {
 
 const FALLBACK: UserMessage = {
   title: '문제가 발생했습니다',
-  description: '잠시 후 다시 시도해 주세요. 계속되면 팀에 알려 주세요.',
+  // 라우트 오류(청크 로드 실패)도 이 문구로 떨어진다. 네트워크 안내를 같이 둔다.
+  description: '잠시 후 다시 시도해 주세요. 계속되면 네트워크 연결을 확인하고 팀에 알려 주세요.',
   retryable: true,
 }
 
