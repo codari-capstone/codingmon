@@ -126,7 +126,7 @@
 - `problem_version_id` (FK): 실행한 문제 버전.
 - `submission_kind`: `SAMPLE_RUN`은 공개 예제 실행, `SUBMIT`은 실제 채점 제출이다.
 - `language`: 제출 코드 언어. `PYTHON`, `CPP` 중 하나다.
-- `source_code`: 실행한 코드.
+- `source_code`: 실행한 코드. UTF-8 기준 최대 64KB이며 NUL을 포함할 수 없다(서비스에서 검사).
 - `job_status`: 처리 단계. `QUEUED`, `COMPILING`, `RUNNING`, `COMPLETED`, `JUDGE_ERROR` 중 하나다.
 - `progress`: 채점 진행률(0~100).
 - `verdict` (비어도 됨): 최종 판정. `ACCEPTED`, `PRESENTATION_ERROR`, `WRONG_ANSWER`, `TIME_LIMIT_EXCEEDED`, `MEMORY_LIMIT_EXCEEDED`, `OUTPUT_LIMIT_EXCEEDED`, `RUNTIME_ERROR`, `COMPILE_ERROR` 중 하나다. 아직 판정 전이거나 채점 서버 오류면 비어 있을 수 있다.
@@ -148,7 +148,7 @@
 - `verdict` (비어도 됨): 해당 케이스의 판정. 채점 중이거나, 컴파일 에러·채점 서버 오류로 제출이 끝나 실행되지 않았으면 비어 있다. 컴파일 오류는 제출 단위로 기록하므로 포함하지 않는다.
 - `execution_time_ms` (비어도 됨): 해당 케이스의 실행 시간.
 - `memory_used_kb` (비어도 됨): 해당 케이스의 메모리 사용량.
-- `stdout`, `stderr` (비어도 됨): 프로그램의 실제 출력과 에러 원문. `SAMPLE` 케이스에만 저장하며 최대 65,536자다.
+- `stdout`, `stderr` (비어도 됨): 프로그램의 실제 출력과 에러 원문. `SAMPLE` 케이스에만 저장하며 최대 65,536자다. 깨진 바이트와 NUL은 `U+FFFD`로 바꿔 저장한다.
 - `(submission_id, test_case_id)` 중복 불가: 같은 케이스의 결과를 같은 제출에 두 번 기록하지 못하게 한다.
 - 복합 FK 두 개: 제출과 테스트 케이스가 같은 문제 버전에 속하는지 확인한다.
 
@@ -199,7 +199,7 @@
 - `statistics`: 서버가 계산한 통계 JSON.
 - `content` (비어도 됨): AI가 작성한 리포트 내용 JSON. 완료 전에는 비어 있을 수 있다.
 - `model` (비어도 됨): 리포트를 만든 AI 모델.
-- `generated_at`: 리포트 생성 요청 행을 만든 시각.
+- `generated_at`: 리포트 생성 요청 행을 만들거나 마지막으로 재시도한 시각.
 - `(user_id, report_date)` 중복 불가: 사용자별 하루 한 건만 허용한다.
 
 ## `learning_report_recommendations` — 리포트 추천 문제
@@ -217,6 +217,7 @@
 ## 아직 정할 정책
 
 - 비밀번호 재설정 흐름과 재설정 토큰 저장 방식. `email_tokens`에 `RESET_PASSWORD` 용도를 추가하는 방안을 검토한다.
+- AI 결과 통계(성공한 분석 수 등)가 필요해지면, `content`의 차단 표시 대신 `ai_reviews.status`에 `BLOCKED`를 추가하는 마이그레이션을 검토한다. 지금은 `COMPLETED` 중 `content->>'blocked'`가 참인 행이 차단 건이다.
 - 평균 힌트 단계를 계산할 때 힌트를 열지 않은 제출을 0단계로 포함할지.
 - 리포트의 하루 기준 날짜에 사용할 시간대.
 - 문제 공개 조건, 태그 1~3개, 언어별 설정 존재 여부처럼 여러 행을 봐야 하는 조건은 DB 제약이 아니라 게시·관리 서비스가 확인한다.
