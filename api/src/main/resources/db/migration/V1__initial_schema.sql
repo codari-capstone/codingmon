@@ -178,7 +178,7 @@ CREATE TABLE submission_test_results (
     FOREIGN KEY (submission_id, problem_version_id)
         REFERENCES submissions(id, problem_version_id) ON DELETE CASCADE,
     FOREIGN KEY (test_case_id, problem_version_id)
-        REFERENCES test_cases(id, problem_version_id) ON DELETE CASCADE
+        REFERENCES test_cases(id, problem_version_id) ON DELETE RESTRICT
 );
 
 CREATE TABLE ai_reviews (
@@ -219,7 +219,8 @@ CREATE TABLE user_problem_stats (
     revealed_hint_level_sum INTEGER NOT NULL DEFAULT 0 CHECK (revealed_hint_level_sum >= 0),
     hinted_submission_count INTEGER NOT NULL DEFAULT 0 CHECK (hinted_submission_count >= 0),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (user_id, problem_id)
+    PRIMARY KEY (user_id, problem_id),
+    CHECK (solved = (first_solved_at IS NOT NULL))
 );
 
 CREATE INDEX user_problem_stats_problem_idx ON user_problem_stats (problem_id, user_id);
