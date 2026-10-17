@@ -1,20 +1,16 @@
 import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import {
-  provisionalApi,
-  type Page,
-  type ProblemListQuery,
-  type ProblemSummary,
-} from '@/api/provisional'
 import { api } from '@/api/client'
+import { provisionalApi } from '@/api/provisional'
+import type { ProblemListQuery, ProblemPage } from '@/api/types'
 import { MOCK_CODE, resetEmailCodes } from './fixtures/emailCodes'
 import { conceptTags, problems } from './fixtures/problems'
 import { mockAccounts, SESSION_COOKIE } from './fixtures/users'
 import { server } from './server'
 
-async function fetchProblems(query: ProblemListQuery): Promise<Page<ProblemSummary>> {
-  const { data, error } = await provisionalApi.GET('/api/problems', { params: { query } })
+async function fetchProblems(query: ProblemListQuery): Promise<ProblemPage> {
+  const { data, error } = await api.GET('/api/problems', { params: { query } })
   if (error || !data) throw new Error('핸들러가 응답하지 않았다')
   return data
 }
@@ -117,7 +113,7 @@ describe('MSW 문제 목록 핸들러', () => {
   // 서버는 size가 1~20이 아니면 400이다(ProblemController.MAX_PAGE_SIZE). 목이 받아 주면
   // size=100으로 한 번에 전체를 받는 테스트가 목에서만 통과한다.
   it.each([100, 0, Number.NaN])('size가 1~20이 아니면 400이다: %s', async (size) => {
-    const { response } = await provisionalApi.GET('/api/problems', { params: { query: { size } } })
+    const { response } = await api.GET('/api/problems', { params: { query: { size } } })
 
     expect(response.status).toBe(400)
   })
@@ -139,7 +135,7 @@ describe('MSW 문제 목록 핸들러', () => {
   })
 
   it('개념 태그 목록을 돌려준다', async () => {
-    const { data } = await provisionalApi.GET('/api/concept-tags')
+    const { data } = await api.GET('/api/concept-tags')
 
     expect(data).toEqual(conceptTags)
   })
@@ -155,13 +151,44 @@ describe('MSW 문제 목록 핸들러', () => {
       }),
     )
 
-    await provisionalApi.GET('/api/problems', {
+    await api.GET('/api/problems', {
       params: { query: { difficulty: ['EASY', 'HARD'] } },
     })
 
     expect(captured).toContain('difficulty=EASY')
     expect(captured).toContain('difficulty=HARD')
     expect(captured).not.toContain('EASY%2CHARD')
+  })
+})
+
+describe('MSW 문제 상세 핸들러', () => {
+  it('목록과 같은 제목·난이도·태그를 준다', async () => {
+    const { data } = await api.GET('/api/problems/{id}', { params: { path: { id: 1 } } })
+
+    const summary = problems.find((item) => item.id === 1)
+    expect(data).toMatchObject({
+      id: 1,
+      title: summary?.title,
+      difficulty: summary?.difficulty,
+      tags: summary?.tags,
+    })
+  })
+
+  it('없는 번호는 404 PROBLEM_NOT_FOUND다', async () => {
+    const { response, error } = await api.GET('/api/problems/{id}', {
+      params: { path: { id: 9999 } },
+    })
+
+    expect(response.status).toBe(404)
+    expect(error).toMatchObject({ code: 'PROBLEM_NOT_FOUND' })
+  })
+
+  // 서버는 `long id`가 바인딩에 실패해 400을 준다. 타입이 붙은 클라이언트로는 보낼 수
+  // 없는 요청이라 주소를 직접 만든다 — 주소는 사용자가 손으로 고칠 수 있다.
+  it('정수가 아닌 id는 400이다', async () => {
+    const response = await fetch(`${window.location.origin}/api/problems/abc`)
+
+    expect(response.status).toBe(400)
   })
 })
 
