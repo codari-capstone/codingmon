@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import org.junit.jupiter.api.AfterEach;
@@ -173,6 +176,55 @@ class AiWorkerTest {
         stopped.stop();
 
         assertThatThrownBy(() -> stopped.submit(1, REQUEST).get(1, TimeUnit.SECONDS))
+                .isInstanceOf(ExecutionException.class)
+                .cause().isInstanceOfSatisfying(LlmException.class,
+                        e -> assertThat(e.kind()).isEqualTo(LlmException.Kind.UNAVAILABLE));
+    }
+
+    @Test
+    void 큐에_넣은_직후_내려가도_요청을_장애로_끝낸다() {
+        AtomicReference<AiWorker> self = new AtomicReference<>();
+        // 작업을 받자마자 서버가 내려가 작업을 버린다. submit이 pending에 등록하기 전에 stop()이 끝난다.
+        ExecutorService racing = new AbstractExecutorService() {
+            private volatile boolean shutdown;
+
+            @Override
+            public void execute(Runnable task) {
+                self.get().stop();
+            }
+
+            @Override
+            public void shutdown() {
+                shutdown = true;
+            }
+
+            @Override
+            public List<Runnable> shutdownNow() {
+                shutdown = true;
+                return List.of();
+            }
+
+            @Override
+            public boolean isShutdown() {
+                return shutdown;
+            }
+
+            @Override
+            public boolean isTerminated() {
+                return shutdown;
+            }
+
+            @Override
+            public boolean awaitTermination(long timeout, TimeUnit unit) {
+                return true;
+            }
+        };
+        worker = new AiWorker(new FakeLlm(() -> answer(LlmUsage.NONE)), new RecordingRepository(), racing);
+        self.set(worker);
+
+        CompletableFuture<LlmResponse<String>> result = worker.submit(1, REQUEST);
+
+        assertThatThrownBy(() -> result.get(1, TimeUnit.SECONDS))
                 .isInstanceOf(ExecutionException.class)
                 .cause().isInstanceOfSatisfying(LlmException.class,
                         e -> assertThat(e.kind()).isEqualTo(LlmException.Kind.UNAVAILABLE));

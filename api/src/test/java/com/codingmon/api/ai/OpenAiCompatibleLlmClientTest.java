@@ -19,6 +19,11 @@ import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -33,11 +38,19 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import tools.jackson.databind.json.JsonMapper;
 
+@ExtendWith(OutputCaptureExtension.class)
 class OpenAiCompatibleLlmClientTest {
 
     private static final String COMPLETIONS = "http://llm.test/v1/chat/completions";
     private static final String VALID = "{\"summary\":\"경계값을 놓쳤다\",\"lines\":[3]}";
-    private static final Map<String, Object> SCHEMA = Map.of("type", "object", "required", List.of("summary", "lines"));
+    // 빈 값은 스키마가 아니라 Answer의 Bean Validation이 거른다.
+    private static final Map<String, Object> SCHEMA = Map.of(
+            "type", "object",
+            "additionalProperties", false,
+            "required", List.of("summary", "lines"),
+            "properties", Map.of(
+                    "summary", Map.of("type", "string"),
+                    "lines", Map.of("type", "array", "items", Map.of("type", "integer"))));
     private static final LlmRequest<Answer> REQUEST = new LlmRequest<>("시스템 지시", "제출 코드", "answer", SCHEMA, Answer.class);
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
@@ -156,9 +169,21 @@ class OpenAiCompatibleLlmClientTest {
                 });
     }
 
-    @Test
-    void 실수를_정수로_바꿔_받지_않고_다시_요청한다() {
-        server.expect(once(), requestTo(COMPLETIONS)).andRespond(chat("{\"summary\":\"요약\",\"lines\":[3.7]}", 100, 10));
+    // Jackson이 형을 바꿔 읽어 Answer로는 멀쩡해 보이는 응답들이다.
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"summary\":123,\"lines\":[3]}",
+            "{\"summary\":true,\"lines\":[3]}",
+            "{\"summary\":\"요약\",\"lines\":[null]}",
+            "{\"summary\":\"요약\",\"lines\":[3.7]}",
+            "{\"summary\":\"요약\",\"lines\":[\"3\"]}",
+            "{\"summary\":\"요약\",\"lines\":3}",
+            "{\"summary\":\"요약\",\"lines\":[3],\"extra\":true}",
+            "{\"lines\":[3]}",
+            "[\"요약\",[3]]",
+            "{\"summary\":\"요약\",\"lines\":[3]} 끝"})
+    void 스키마를_어긴_응답은_다시_요청한다(String invalid) {
+        server.expect(once(), requestTo(COMPLETIONS)).andRespond(chat(invalid, 100, 10));
         server.expect(once(), requestTo(COMPLETIONS)).andRespond(chat(VALID, 100, 20));
 
         assertThat(client.complete(REQUEST).json()).isEqualTo(VALID);
@@ -166,21 +191,15 @@ class OpenAiCompatibleLlmClientTest {
     }
 
     @Test
-    void 문자열을_숫자로_바꿔_받지_않고_다시_요청한다() {
-        server.expect(once(), requestTo(COMPLETIONS)).andRespond(chat("{\"summary\":\"요약\",\"lines\":[\"3\"]}", 100, 10));
-        server.expect(once(), requestTo(COMPLETIONS)).andRespond(chat(VALID, 100, 20));
+    void 스키마_위반을_알릴_때_응답_값을_옮기지_않는다() {
+        server.expect(twice(), requestTo(COMPLETIONS))
+                .andRespond(chat("{\"summary\":\"요약\",\"lines\":[\"print(secret)\"],\"print(secret)\":1}", 100, 10));
 
-        assertThat(client.complete(REQUEST).json()).isEqualTo(VALID);
-        server.verify();
-    }
-
-    @Test
-    void 스키마에_없는_칸이_있으면_다시_요청한다() {
-        server.expect(once(), requestTo(COMPLETIONS)).andRespond(chat("{\"summary\":\"요약\",\"lines\":[3],\"extra\":true}", 100, 10));
-        server.expect(once(), requestTo(COMPLETIONS)).andRespond(chat(VALID, 100, 20));
-
-        assertThat(client.complete(REQUEST).json()).isEqualTo(VALID);
-        server.verify();
+        assertThatThrownBy(() -> client.complete(REQUEST))
+                .isInstanceOfSatisfying(LlmException.class, e -> {
+                    assertThat(e.kind()).isEqualTo(LlmException.Kind.INVALID_RESPONSE);
+                    assertThat(e.getMessage()).contains("lines").doesNotContain("secret");
+                });
     }
 
     @Test
@@ -220,6 +239,17 @@ class OpenAiCompatibleLlmClientTest {
         assertThatThrownBy(() -> client.complete(REQUEST))
                 .isInstanceOfSatisfying(LlmException.class,
                         e -> assertThat(e.kind()).isEqualTo(LlmException.Kind.RATE_LIMITED));
+    }
+
+    @Test
+    void 설정_오류로_거절되면_상태_코드만_로그에_남긴다(CapturedOutput output) {
+        server.expect(once(), requestTo(COMPLETIONS))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED).body("{\"error\":\"제출 코드 print(secret)\"}"));
+
+        assertThatThrownBy(() -> client.complete(REQUEST))
+                .isInstanceOfSatisfying(LlmException.class,
+                        e -> assertThat(e.kind()).isEqualTo(LlmException.Kind.UNAVAILABLE));
+        assertThat(output).contains("LLM 서버가 401로 응답했다").doesNotContain("secret");
     }
 
     @Test

@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -30,12 +31,17 @@ class AiWorker {
     // 서버가 내려갈 때 끝내 줄 요청. 대기열에서 버려지는 작업의 future는 스스로 끝나지 않는다.
     private final Set<CompletableFuture<?>> pending = ConcurrentHashMap.newKeySet();
 
+    @Autowired
     AiWorker(LlmClient llm, AiReviewRepository reviews, @Value("${app.llm.workers}") int threads,
             @Value("${app.llm.queue-capacity}") int queueCapacity) {
+        this(llm, reviews, new ThreadPoolExecutor(threads, threads, 0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(queueCapacity), Thread.ofPlatform().name("ai-", 1).daemon(true).factory()));
+    }
+
+    AiWorker(LlmClient llm, AiReviewRepository reviews, ExecutorService workers) {
         this.llm = llm;
         this.reviews = reviews;
-        this.workers = new ThreadPoolExecutor(threads, threads, 0L, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(queueCapacity), Thread.ofPlatform().name("ai-", 1).daemon(true).factory());
+        this.workers = workers;
     }
 
     <T> CompletableFuture<LlmResponse<T>> submit(long reviewId, LlmRequest<T> request) {
@@ -48,6 +54,10 @@ class AiWorker {
         }
         pending.add(result);
         result.whenComplete((response, failure) -> pending.remove(result));
+        // 큐에 넣고 등록하기 전에 stop()이 지나갔으면 버려진 작업을 끝내 줄 곳이 없다.
+        if (workers.isShutdown()) {
+            result.completeExceptionally(stopping());
+        }
         return result;
     }
 
@@ -77,7 +87,11 @@ class AiWorker {
     @PreDestroy
     void stop() {
         workers.shutdownNow();
-        LlmException stopped = new LlmException(LlmException.Kind.UNAVAILABLE, "서버가 내려가는 중이다", null, LlmUsage.NONE);
+        LlmException stopped = stopping();
         pending.forEach(task -> task.completeExceptionally(stopped));
+    }
+
+    private static LlmException stopping() {
+        return new LlmException(LlmException.Kind.UNAVAILABLE, "서버가 내려가는 중이다", null, LlmUsage.NONE);
     }
 }

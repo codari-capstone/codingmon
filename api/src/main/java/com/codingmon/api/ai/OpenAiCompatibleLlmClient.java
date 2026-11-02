@@ -20,12 +20,14 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.networknt.schema.Schema;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SpecificationVersion;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import tools.jackson.core.JacksonException;
-import tools.jackson.databind.DeserializationFeature;
-import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 // 팀 서버의 오픈 웨이트 모델을 OpenAI 호환 API(/v1/chat/completions)로 부른다.
@@ -40,6 +42,9 @@ class OpenAiCompatibleLlmClient implements LlmClient {
 
     // 처음 요청과 스키마를 어겼을 때의 재요청 1회
     private static final int MAX_ATTEMPTS = 2;
+
+    // 스키마에 $schema가 없으면 이 판으로 읽는다.
+    private static final SchemaRegistry SCHEMAS = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12);
 
     private final RestClient rest;
     private final boolean configured;
@@ -69,12 +74,7 @@ class OpenAiCompatibleLlmClient implements LlmClient {
         this.model = model;
         this.promptVersions = promptVersions;
         this.maxOutputTokens = maxOutputTokens;
-        // 값을 바꿔 가며 받아 주면 저장하는 원문은 스키마를 어긴 채로 남는다. 어긴 응답은 그대로 거절해 다시 요청한다.
-        this.json = json.rebuild()
-                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
-                .disable(MapperFeature.ALLOW_COERCION_OF_SCALARS)
-                .build();
+        this.json = json;
         this.validator = validator;
     }
 
@@ -106,6 +106,7 @@ class OpenAiCompatibleLlmClient implements LlmClient {
             throw new LlmException(LlmException.Kind.UNAVAILABLE, "LLM_URL이나 LLM_MODEL이 비어 있다", null, LlmUsage.NONE);
         }
         Map<String, Object> body = body(request);
+        Schema schema = SCHEMAS.getSchema(json.<JsonNode>valueToTree(request.schema()));
         LlmUsage usage = LlmUsage.NONE;
         String problem = "";
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -113,7 +114,7 @@ class OpenAiCompatibleLlmClient implements LlmClient {
             usage = usage.plus(response.tokens());
             String content = response.content();
             try {
-                return new LlmResponse<>(read(content, request.responseType()), content, usage);
+                return new LlmResponse<>(read(content, schema, request.responseType()), content, usage);
             } catch (InvalidOutput e) {
                 problem = e.getMessage();
                 log.warn("LLM 응답이 스키마를 어겼다({}번째): {}", attempt, problem);
@@ -137,8 +138,13 @@ class OpenAiCompatibleLlmClient implements LlmClient {
                     .body(ChatResponse.class);
         } catch (RestClientResponseException e) {
             int status = e.getStatusCode().value();
-            LlmException.Kind kind = status == 429 ? LlmException.Kind.RATE_LIMITED : LlmException.Kind.UNAVAILABLE;
-            throw new LlmException(kind, "LLM 서버가 " + status + "로 응답했다", e, usedSoFar);
+            String message = "LLM 서버가 " + status + "로 응답했다";
+            if (status == 429) {
+                throw new LlmException(LlmException.Kind.RATE_LIMITED, message, e, usedSoFar);
+            }
+            // 키, 모델 이름, 요청 형식이 틀리면 모든 호출이 같은 이유로 실패한다. 본문에는 요청 내용이 섞일 수 있어 상태 코드만 남긴다.
+            log.warn(message);
+            throw new LlmException(LlmException.Kind.UNAVAILABLE, message, e, usedSoFar);
         } catch (RestClientException e) {
             // 타임아웃, 연결 실패, 해석할 수 없는 응답
             throw new LlmException(LlmException.Kind.UNAVAILABLE, "LLM 서버를 호출하지 못했다", e, usedSoFar);
@@ -149,16 +155,28 @@ class OpenAiCompatibleLlmClient implements LlmClient {
         return response;
     }
 
-    private <T> T read(String content, Class<T> type) {
+    // 응답 원문을 요청한 스키마로 먼저 검증한다. Jackson이 형을 바꿔 읽으면 저장하는 원문이 스키마를 어긴 채로 남는다.
+    // 예외 메시지에는 응답 값이 들어갈 수 있어 어긴 스키마 위치만 옮긴다.
+    private <T> T read(String content, Schema schema, Class<T> type) {
         if (content == null || content.isBlank()) {
             throw new InvalidOutput("응답이 비어 있다");
         }
+        JsonNode tree;
+        try {
+            tree = json.readTree(content);
+        } catch (JacksonException e) {
+            throw new InvalidOutput("JSON으로 읽을 수 없다");
+        }
+        List<com.networknt.schema.Error> errors = schema.validate(tree);
+        if (!errors.isEmpty()) {
+            throw new InvalidOutput(errors.stream().map(e -> e.getEvaluationPath().toString()).distinct().sorted()
+                    .collect(Collectors.joining(", ", "스키마를 어긴 곳: ", "")));
+        }
         T value;
         try {
-            value = json.readValue(content, type);
+            value = json.treeToValue(tree, type);
         } catch (JacksonException e) {
-            // 예외 메시지에 응답 일부가 들어갈 수 있어 옮기지 않는다.
-            throw new InvalidOutput("JSON으로 읽을 수 없다");
+            throw new InvalidOutput("응답을 " + type.getSimpleName() + "으로 옮길 수 없다");
         }
         if (value == null) {
             throw new InvalidOutput("JSON 값이 null이다");
