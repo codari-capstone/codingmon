@@ -137,14 +137,15 @@ class OpenAiCompatibleLlmClient implements LlmClient {
             response = rest.post().uri(COMPLETIONS).contentType(MediaType.APPLICATION_JSON).body(body).retrieve()
                     .body(ChatResponse.class);
         } catch (RestClientResponseException e) {
+            // 본문에는 요청 내용이 섞일 수 있어 상태 코드만 남긴다. e의 메시지에 본문이 들어 있어 cause로도 넘기지 않는다.
             int status = e.getStatusCode().value();
             String message = "LLM 서버가 " + status + "로 응답했다";
             if (status == 429) {
-                throw new LlmException(LlmException.Kind.RATE_LIMITED, message, e, usedSoFar);
+                throw new LlmException(LlmException.Kind.RATE_LIMITED, message, null, usedSoFar);
             }
-            // 키, 모델 이름, 요청 형식이 틀리면 모든 호출이 같은 이유로 실패한다. 본문에는 요청 내용이 섞일 수 있어 상태 코드만 남긴다.
+            // 키, 모델 이름, 요청 형식이 틀리면 모든 호출이 같은 이유로 실패한다.
             log.warn(message);
-            throw new LlmException(LlmException.Kind.UNAVAILABLE, message, e, usedSoFar);
+            throw new LlmException(LlmException.Kind.UNAVAILABLE, message, null, usedSoFar);
         } catch (RestClientException e) {
             // 타임아웃, 연결 실패, 해석할 수 없는 응답
             throw new LlmException(LlmException.Kind.UNAVAILABLE, "LLM 서버를 호출하지 못했다", e, usedSoFar);

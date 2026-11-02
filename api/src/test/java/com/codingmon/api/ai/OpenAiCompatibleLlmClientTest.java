@@ -234,21 +234,27 @@ class OpenAiCompatibleLlmClientTest {
 
     @Test
     void 요청_한도는_장애와_구분한다() {
-        server.expect(once(), requestTo(COMPLETIONS)).andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+        server.expect(once(), requestTo(COMPLETIONS))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).body("{\"error\":\"print(secret)\"}"));
 
         assertThatThrownBy(() -> client.complete(REQUEST))
-                .isInstanceOfSatisfying(LlmException.class,
-                        e -> assertThat(e.kind()).isEqualTo(LlmException.Kind.RATE_LIMITED));
+                .isInstanceOfSatisfying(LlmException.class, e -> {
+                    assertThat(e.kind()).isEqualTo(LlmException.Kind.RATE_LIMITED);
+                    assertThat(e).hasNoCause();
+                });
     }
 
     @Test
-    void 설정_오류로_거절되면_상태_코드만_로그에_남긴다(CapturedOutput output) {
+    void 설정_오류로_거절되면_상태_코드만_로그와_예외에_남긴다(CapturedOutput output) {
         server.expect(once(), requestTo(COMPLETIONS))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED).body("{\"error\":\"제출 코드 print(secret)\"}"));
 
         assertThatThrownBy(() -> client.complete(REQUEST))
-                .isInstanceOfSatisfying(LlmException.class,
-                        e -> assertThat(e.kind()).isEqualTo(LlmException.Kind.UNAVAILABLE));
+                .isInstanceOfSatisfying(LlmException.class, e -> {
+                    assertThat(e.kind()).isEqualTo(LlmException.Kind.UNAVAILABLE);
+                    // 호출하는 쪽이 예외를 스택과 함께 남겨도 본문이 찍히지 않는다.
+                    assertThat(e).hasMessage("LLM 서버가 401로 응답했다").hasNoCause();
+                });
         assertThat(output).contains("LLM 서버가 401로 응답했다").doesNotContain("secret");
     }
 
