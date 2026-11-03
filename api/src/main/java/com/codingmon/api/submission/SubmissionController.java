@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -26,6 +27,9 @@ class SubmissionController {
 
     // database-tables.md: source_code는 UTF-8 기준 최대 64KB.
     static final int MAX_SOURCE_BYTES = 64 * 1024;
+
+    // 문제 목록(ProblemController)과 같은 페이지 크기.
+    static final int MAX_PAGE_SIZE = 20;
 
     // 모르는 언어는 JSON을 읽는 단계에서 code 없는 400이 된다.
     record SubmitRequest(Long problemId, Language language, String sourceCode) {
@@ -87,10 +91,42 @@ class SubmissionController {
                 .orElseThrow(() -> ApiErrors.error(HttpStatus.NOT_FOUND, "SUBMISSION_NOT_FOUND", "제출을 찾을 수 없어요"));
     }
 
+    // 제출 기록 문제별 목록(HIST-01). 마지막으로 제출한 순이다.
+    @GetMapping("/api/users/me/problem-history")
+    SubmissionRepository.Page<SubmissionRepository.ProblemHistory> problemHistories(
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "" + MAX_PAGE_SIZE) int size,
+            @AuthenticationPrincipal Jwt jwt) {
+        checkPage(page, size);
+        return submissions.findProblemHistories(Long.parseLong(jwt.getSubject()), page, size);
+    }
+
+    // 한 문제의 제출 목록 화면 위쪽(HIST-02). 새로고침해도 목록을 다시 부르지 않고 채운다.
+    @GetMapping("/api/users/me/problem-history/{problemId}")
+    SubmissionRepository.ProblemHistory problemHistory(@PathVariable long problemId, @AuthenticationPrincipal Jwt jwt) {
+        return submissions.findProblemHistory(Long.parseLong(jwt.getSubject()), problemId)
+                .orElseThrow(() -> ApiErrors.error(HttpStatus.NOT_FOUND, "PROBLEM_HISTORY_NOT_FOUND", "이 문제의 제출 기록이 없어요"));
+    }
+
+    // 한 문제의 내 제출 목록(HIST-02). 줄마다 문제 정보가 없어 problemId는 필수다(빠지면 Spring이 400).
+    @GetMapping("/api/submissions")
+    SubmissionRepository.Page<SubmissionRepository.SubmissionSummary> list(@RequestParam long problemId,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "" + MAX_PAGE_SIZE) int size,
+            @AuthenticationPrincipal Jwt jwt) {
+        checkPage(page, size);
+        return submissions.findFinishedSubmissions(Long.parseLong(jwt.getSubject()), problemId, page, size);
+    }
+
     // 예제 실행 상태·예제별 결과(SOLVE-08). 화면이 끝날 때까지 주기적으로 부른다.
     @GetMapping("/api/sample-runs/{id}")
     SubmissionRepository.SampleRunResult sampleRun(@PathVariable long id, @AuthenticationPrincipal Jwt jwt) {
         return submissions.findSampleRun(Long.parseLong(jwt.getSubject()), id)
                 .orElseThrow(() -> ApiErrors.error(HttpStatus.NOT_FOUND, "SAMPLE_RUN_NOT_FOUND", "예제 실행을 찾을 수 없어요"));
+    }
+
+    // 마지막 페이지보다 큰 page는 빈 content를 준다(문제 목록과 같다).
+    private static void checkPage(int page, int size) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page는 0 이상, size는 1~" + MAX_PAGE_SIZE + "이다");
+        }
     }
 }
