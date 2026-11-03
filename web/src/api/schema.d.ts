@@ -370,7 +370,7 @@ export interface paths {
          * 제출 기록 문제 하나 (HIST-02)
          * @description 문제별 목록의 한 줄과 같은 값을 문제 하나만큼 준다. 제출 목록 화면 위쪽의 문제 정보에 쓴다.
          *     새로고침하거나 주소로 바로 들어와도 목록을 다시 부르지 않고 채울 수 있다. 공개가 내려간 문제도 기록이 있으면 준다.
-         *     오류 `code`: `PROBLEM_HISTORY_NOT_FOUND`(없는 문제, 제출한 적 없는 문제, 첫 제출이 아직 채점 중인 문제. 셋을 구분하지 않는다).
+         *     오류 `code`: `PROBLEM_HISTORY_NOT_FOUND`(없는 문제, 제출한 적 없는 문제, 판정이 난 제출이 없는 문제(채점 중이거나 채점 불가뿐). 셋을 구분하지 않는다).
          */
         get: operations["getMyProblemHistory"];
         put?: never;
@@ -436,9 +436,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 내 제출 목록 (HIST-02)
-         * @description 로그인한 본인의 채점 제출을 최신순으로 준다. 예제 실행은 넣지 않는다. 채점 중인 제출도 상태와 함께 넣는다.
-         *     `problemId`를 주면 그 문제의 제출만 준다. 제출 기록에서 문제를 눌렀을 때 쓴다. 맞는 제출이 없으면 빈 `content`다.
+         * 한 문제의 내 제출 목록 (HIST-02)
+         * @description 로그인한 본인이 그 문제에 낸 채점 제출을 최신순으로 준다. 예제 실행은 넣지 않는다.
+         *     채점이 끝난 제출(`COMPLETED`·`JUDGE_ERROR`)만 넣는다. 채점 중인 제출은 결과 화면에서 보고, 끝나면 여기에 나타난다.
+         *     제출 기록에서 원하는 문제를 눌렀을 때 쓴다. 맞는 제출이 없으면 빈 `content`다.
+         *     줄마다 문제 정보를 담지 않아 `problemId`는 필수다. 화면 위쪽의 문제 정보는 `GET /api/users/me/problem-history/{problemId}`로 받는다.
          *     코드는 담지 않는다. 원하는 제출 기록을 누르면 결과 조회(`GET /api/submissions/{id}`)로 코드와 판정을 받는다.
          *     저장된 AI 분석과 연 힌트는 #77의 API로 받는다.
          */
@@ -1030,10 +1032,10 @@ export interface components {
             id: number;
             language: components["schemas"]["Language"];
             /**
-             * @description `SubmissionResult.status`와 같다
+             * @description `COMPLETED` 판정이 남, `JUDGE_ERROR` 채점 불가. 채점 중인 제출은 목록에 없다
              * @enum {string}
              */
-            status: "QUEUED" | "COMPILING" | "RUNNING" | "COMPLETED" | "JUDGE_ERROR";
+            status: "COMPLETED" | "JUDGE_ERROR";
             /**
              * @description `COMPLETED`일 때만 있다
              * @enum {string|null}
@@ -1065,8 +1067,11 @@ export interface components {
             /** @description 제출한 버전의 제목. 제목 수정은 버전을 늘리지 않아 그 뒤 고친 제목일 수 있다 */
             problemTitle: string;
             language: components["schemas"]["Language"];
-            /** @description 제출한 코드. 제출 기록 상세(HIST-02)에서 읽기 전용으로 보여 준다 */
-            sourceCode: string;
+            /**
+             * @description 제출한 코드. 제출 기록 상세(HIST-02)에서 읽기 전용으로 보여 준다. 학생이 쓴 문자열이라 글자 그대로 보여 준다(HTML로 렌더링하지 않는다).
+             *     채점이 끝나기 전(`QUEUED`·`COMPILING`·`RUNNING`)에는 null이다. 폴링 응답마다 바뀌지 않는 코드를 싣지 않으려는 것이다.
+             */
+            sourceCode: string | null;
             /**
              * @description `QUEUED` 기다리는 중, `COMPILING` 채점 준비 중, `RUNNING` 채점 중(`progress` %), `COMPLETED` 판정이 남, `JUDGE_ERROR` 채점 불가.
              *     채점 불가는 서버 문제라 `verdict`가 null이고 시도 횟수에 넣지 않는다(RES-06).
@@ -1919,9 +1924,9 @@ export interface operations {
     };
     listMySubmissions: {
         parameters: {
-            query?: {
+            query: {
                 /** @description 문제별 목록의 `problemId` */
-                problemId?: number;
+                problemId: number;
                 /** @description 0부터 센다 */
                 page?: number;
                 size?: number;
@@ -1941,7 +1946,7 @@ export interface operations {
                     "application/json": components["schemas"]["SubmissionSummaryPage"];
                 };
             };
-            /** @description `problemId`가 정수가 아님, `page`·`size` 범위 밖 */
+            /** @description `problemId`가 없거나 정수가 아님, `page`·`size` 범위 밖 */
             400: {
                 headers: {
                     [name: string]: unknown;
