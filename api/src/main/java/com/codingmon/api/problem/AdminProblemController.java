@@ -32,6 +32,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.codingmon.api.ApiErrors;
 import com.codingmon.api.Language;
+import com.codingmon.api.Page;
 import com.codingmon.api.problem.AdminProblemRepository.DeleteResult;
 import com.codingmon.api.problem.AdminProblemRepository.Detail;
 import com.codingmon.api.problem.AdminProblemRepository.LanguageInput;
@@ -47,7 +48,6 @@ import com.codingmon.api.problem.AdminProblemRepository.TestCaseInput;
 import com.codingmon.api.problem.AdminProblemRepository.ValidateResult;
 import com.codingmon.api.problem.AdminProblemRepository.Version;
 import com.codingmon.api.problem.AdminProblemRepository.VersionSummary;
-import com.codingmon.api.problem.ProblemRepository.Page;
 import com.codingmon.api.submission.SubmissionQueued;
 
 // 관리자 문제 관리(ADM-01~03·06·07, #33), 테스트케이스(ADM-04, #34), 정답 코드·검증(ADM-05, #35). ADMIN 검사는 SecurityConfig의 /api/admin/**가 한다.
@@ -85,10 +85,8 @@ class AdminProblemController {
 
     @GetMapping
     Page<Summary> list(@RequestParam(required = false) String keyword, @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "" + ProblemController.MAX_PAGE_SIZE) int size) {
-        if (page < 0 || size < 1 || size > ProblemController.MAX_PAGE_SIZE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page는 0 이상, size는 1~" + ProblemController.MAX_PAGE_SIZE + "이다");
-        }
+            @RequestParam(defaultValue = "" + Page.MAX_SIZE) int size) {
+        Page.check(page, size);
         return problems.list(keyword == null || keyword.isBlank() ? null : keyword.strip(), page, size);
     }
 

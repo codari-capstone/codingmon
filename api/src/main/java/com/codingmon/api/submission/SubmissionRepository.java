@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.codingmon.api.Language;
+import com.codingmon.api.Page;
 import com.codingmon.api.judge.StoredText;
 
 // 제출 저장과 결과 조회. 예제 실행(SAMPLE_RUN, #28)도 같은 버전 조회와 저장을 쓰고, 결과는 findSampleRun으로 읽는다.
@@ -52,9 +53,6 @@ class SubmissionRepository {
     // 한 문제의 제출 목록 한 줄(HIST-02). 코드는 결과 조회로 따로 받는다.
     record SubmissionSummary(long id, Language language, String status, String verdict, Integer executionTimeMs,
             Integer memoryUsedKb, Instant submittedAt) {
-    }
-
-    record Page<T>(List<T> content, long totalElements) {
     }
 
     // 제목·난이도와 정렬의 기준인 '마지막 제출'. 채점이 끝난 제출 중 가장 최근 것으로, 제출 목록 맨 위 줄과 같다.

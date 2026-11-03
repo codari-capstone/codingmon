@@ -20,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.codingmon.api.ApiErrors;
 import com.codingmon.api.Language;
+import com.codingmon.api.Page;
 
 // 코드 제출(SOLVE-09)과 예제 실행(SOLVE-08). QUEUED로 저장하는 데까지만 하고, 이후 상태·판정은 채점 처리기(#71)가 갱신한다.
 @RestController
@@ -27,9 +28,6 @@ class SubmissionController {
 
     // database-tables.md: source_code는 UTF-8 기준 최대 64KB.
     static final int MAX_SOURCE_BYTES = 64 * 1024;
-
-    // 문제 목록(ProblemController)과 같은 페이지 크기.
-    static final int MAX_PAGE_SIZE = 20;
 
     // 모르는 언어는 JSON을 읽는 단계에서 code 없는 400이 된다.
     record SubmitRequest(Long problemId, Language language, String sourceCode) {
@@ -93,10 +91,10 @@ class SubmissionController {
 
     // 제출 기록 문제별 목록(HIST-01). 마지막으로 제출한 순이다.
     @GetMapping("/api/users/me/problem-history")
-    SubmissionRepository.Page<SubmissionRepository.ProblemHistory> problemHistories(
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "" + MAX_PAGE_SIZE) int size,
+    Page<SubmissionRepository.ProblemHistory> problemHistories(
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "" + Page.MAX_SIZE) int size,
             @AuthenticationPrincipal Jwt jwt) {
-        checkPage(page, size);
+        Page.check(page, size);
         return submissions.findProblemHistories(Long.parseLong(jwt.getSubject()), page, size);
     }
 
@@ -109,10 +107,10 @@ class SubmissionController {
 
     // 한 문제의 내 제출 목록(HIST-02). 줄마다 문제 정보가 없어 problemId는 필수다(빠지면 Spring이 400).
     @GetMapping("/api/submissions")
-    SubmissionRepository.Page<SubmissionRepository.SubmissionSummary> list(@RequestParam long problemId,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "" + MAX_PAGE_SIZE) int size,
+    Page<SubmissionRepository.SubmissionSummary> list(@RequestParam long problemId,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "" + Page.MAX_SIZE) int size,
             @AuthenticationPrincipal Jwt jwt) {
-        checkPage(page, size);
+        Page.check(page, size);
         return submissions.findFinishedSubmissions(Long.parseLong(jwt.getSubject()), problemId, page, size);
     }
 
@@ -121,12 +119,5 @@ class SubmissionController {
     SubmissionRepository.SampleRunResult sampleRun(@PathVariable long id, @AuthenticationPrincipal Jwt jwt) {
         return submissions.findSampleRun(Long.parseLong(jwt.getSubject()), id)
                 .orElseThrow(() -> ApiErrors.error(HttpStatus.NOT_FOUND, "SAMPLE_RUN_NOT_FOUND", "예제 실행을 찾을 수 없어요"));
-    }
-
-    // 마지막 페이지보다 큰 page는 빈 content를 준다(문제 목록과 같다).
-    private static void checkPage(int page, int size) {
-        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page는 0 이상, size는 1~" + MAX_PAGE_SIZE + "이다");
-        }
     }
 }
