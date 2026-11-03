@@ -1005,7 +1005,7 @@ export interface components {
         ProblemHistory: {
             /** Format: int64 */
             problemId: number;
-            /** @description 이 문제에 마지막으로 제출한 버전의 제목 */
+            /** @description 이 문제에 마지막으로 제출한 버전의 제목. 제목 수정은 버전을 늘리지 않아 그 뒤 고친 제목일 수 있다(`SubmissionResult.problemTitle`과 같다) */
             title: string;
             /** @description 이 문제에 마지막으로 제출한 버전의 난이도 */
             difficulty: components["schemas"]["Difficulty"];
