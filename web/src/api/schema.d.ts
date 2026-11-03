@@ -349,6 +349,7 @@ export interface paths {
          * @description 채점 제출을 한 문제마다 한 줄씩, 마지막으로 제출한 순으로 준다. 문제를 누르면 그 문제의 제출 목록(`GET /api/submissions?problemId=`)을 부른다.
          *     판정이 난 제출이 있는 문제만 나온다. 첫 제출이 채점 중이거나 채점 불가면 아직 나오지 않는다. 예제 실행은 세지 않는다.
          *     제목·난이도는 그 문제에 마지막으로 제출한 버전의 값이다.
+         *     '마지막 제출'은 채점이 끝난 제출(`COMPLETED`·`JUDGE_ERROR`) 중 가장 최근 것이다. 제출 목록 맨 위 줄과 같다. 채점 중인 제출은 치지 않는다.
          */
         get: operations["listMyProblemHistory"];
         put?: never;
