@@ -337,6 +337,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/me/problem-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 제출 기록 문제별 목록 (HIST-01)
+         * @description 채점 제출을 한 문제마다 한 줄씩, 마지막으로 제출한 순으로 준다. 문제를 누르면 그 문제의 제출 목록(`GET /api/submissions?problemId=`)을 부른다.
+         *     판정이 난 제출이 있는 문제만 나온다. 첫 제출이 채점 중이거나 채점 불가면 아직 나오지 않는다. 예제 실행은 세지 않는다.
+         *     제목·난이도는 그 문제에 마지막으로 제출한 버전의 값이다.
+         *     '마지막 제출'은 채점이 끝난 제출(`COMPLETED`·`JUDGE_ERROR`) 중 가장 최근 것이다. 제출 목록 맨 위 줄과 같다. 채점 중인 제출은 치지 않는다.
+         */
+        get: operations["listMyProblemHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/me/problem-history/{problemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 제출 기록 문제 하나 (HIST-02)
+         * @description 문제별 목록의 한 줄과 같은 값을 문제 하나만큼 준다. 제출 목록 화면 위쪽의 문제 정보에 쓴다.
+         *     새로고침하거나 주소로 바로 들어와도 목록을 다시 부르지 않고 채울 수 있다. 공개가 내려간 문제도 기록이 있으면 준다.
+         *     이 API가 404면 화면은 제출 목록(`GET /api/submissions?problemId=`) 응답과 관계없이 '기록 없음'을 보여 준다.
+         *     판정이 난 제출 없이 채점 불가 제출만 있는 문제가 이 경우다. 문제별 목록에 나오지 않아 주소로 바로 들어올 때만 생긴다.
+         *     오류 `code`: `PROBLEM_HISTORY_NOT_FOUND`(없는 문제, 제출한 적 없는 문제, 판정이 난 제출이 없는 문제(채점 중이거나 채점 불가뿐). 셋을 구분하지 않는다).
+         */
+        get: operations["getMyProblemHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/problems": {
         parameters: {
             query?: never;
@@ -391,7 +438,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * 한 문제의 내 제출 목록 (HIST-02)
+         * @description 로그인한 본인이 그 문제에 낸 채점 제출을 최신순으로 준다. 예제 실행은 넣지 않는다.
+         *     채점이 끝난 제출(`COMPLETED`·`JUDGE_ERROR`)만 넣는다. 채점 중인 제출은 결과 화면에서 보고, 끝나면 여기에 나타난다.
+         *     제출 기록에서 원하는 문제를 눌렀을 때 쓴다. 맞는 제출이 없으면 빈 `content`다.
+         *     줄마다 문제 정보를 담지 않아 `problemId`는 필수다. 화면 위쪽의 문제 정보는 `GET /api/users/me/problem-history/{problemId}`로 받는다.
+         *     코드는 담지 않는다. 원하는 제출 기록을 누르면 결과 조회(`GET /api/submissions/{id}`)로 코드와 판정을 받는다.
+         *     저장된 AI 분석과 연 힌트는 #77의 API로 받는다.
+         */
+        get: operations["listMySubmissions"];
         put?: never;
         /**
          * 코드 제출 (SOLVE-09)
@@ -418,8 +474,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 채점 상태·결과 (RES-01~06)
+         * 채점 상태·결과 (RES-01~06, HIST-02)
          * @description 화면은 `status`가 `COMPLETED`나 `JUDGE_ERROR`가 될 때까지 주기적으로 부른다(폴링).
+         *     제출 기록에서 원하는 제출 기록을 눌렀을 때도 쓴다. 저장된 AI 분석과 연 힌트는 #77의 API로 받는다.
          *     로그인한 본인의 채점 제출만 볼 수 있다. 남의 제출·없는 제출·예제 실행은 모두 404 `SUBMISSION_NOT_FOUND`다. 번호를 바꿔 물어도 그 번호의 제출이 있는지 드러나지 않는다.
          *     비공개 테스트의 입력·출력과 몇 번째 테스트에서 틀렸는지는 주지 않는다. 진행률만 준다.
          *     판정과 런타임 에러 종류의 쉬운 설명은 화면이 가진다(`docs/AI_FEATURES.md` 10절).
@@ -945,6 +1002,63 @@ export interface components {
              */
             totalElements: number;
         };
+        ProblemHistory: {
+            /** Format: int64 */
+            problemId: number;
+            /** @description 이 문제에 마지막으로 제출한 버전의 제목. 제목 수정은 버전을 늘리지 않아 그 뒤 고친 제목일 수 있다(`SubmissionResult.problemTitle`과 같다) */
+            title: string;
+            /** @description 이 문제에 마지막으로 제출한 버전의 난이도 */
+            difficulty: components["schemas"]["Difficulty"];
+            /** @description 맞힌 적이 있는지 */
+            solved: boolean;
+            /**
+             * @description 처음 맞힐 때까지 낸 채점 제출 수(맞힌 제출 포함). 못 맞혔으면 지금까지 낸 수다.
+             *     맞힌 뒤 제출과 채점 불가는 세지 않아 제출 목록의 개수와 다를 수 있다. 학습 통계의 평균 시도와 같은 기준이다.
+             */
+            attemptCount: number;
+            /** @description 처음 맞힐 때까지 연 힌트 중 가장 높은 단계. 열지 않았으면 0 */
+            maxRevealedHintLevel: number;
+        };
+        ProblemHistoryPage: {
+            content: components["schemas"]["ProblemHistory"][];
+            /**
+             * Format: int64
+             * @description 페이지와 상관없이 기록이 있는 문제 수
+             */
+            totalElements: number;
+        };
+        SubmissionSummary: {
+            /**
+             * Format: int64
+             * @description 제출 번호. 결과 조회(`GET /api/submissions/{id}`)에 쓴다
+             */
+            id: number;
+            language: components["schemas"]["Language"];
+            /**
+             * @description `COMPLETED` 판정이 남, `JUDGE_ERROR` 채점 불가. 채점 중인 제출은 목록에 없다
+             * @enum {string}
+             */
+            status: "COMPLETED" | "JUDGE_ERROR";
+            /**
+             * @description `COMPLETED`일 때만 있다
+             * @enum {string|null}
+             */
+            verdict: "ACCEPTED" | "PRESENTATION_ERROR" | "WRONG_ANSWER" | "TIME_LIMIT_EXCEEDED" | "MEMORY_LIMIT_EXCEEDED" | "OUTPUT_LIMIT_EXCEEDED" | "RUNTIME_ERROR" | "COMPILE_ERROR" | null;
+            /** @description `SubmissionResult.executionTimeMs`와 같다 */
+            executionTimeMs: number | null;
+            /** @description `SubmissionResult.memoryUsedKb`와 같다 */
+            memoryUsedKb: number | null;
+            /** Format: date-time */
+            submittedAt: string;
+        };
+        SubmissionSummaryPage: {
+            content: components["schemas"]["SubmissionSummary"][];
+            /**
+             * Format: int64
+             * @description 페이지와 상관없이 조건에 맞는 제출 수
+             */
+            totalElements: number;
+        };
         SubmissionResult: {
             /**
              * Format: int64
@@ -956,6 +1070,11 @@ export interface components {
             /** @description 제출한 버전의 제목. 제목 수정은 버전을 늘리지 않아 그 뒤 고친 제목일 수 있다 */
             problemTitle: string;
             language: components["schemas"]["Language"];
+            /**
+             * @description 제출한 코드. 제출 기록 상세(HIST-02)에서 읽기 전용으로 보여 준다. 학생이 쓴 문자열이라 글자 그대로 보여 준다(HTML로 렌더링하지 않는다).
+             *     채점이 끝나기 전(`QUEUED`·`COMPILING`·`RUNNING`)에는 null이다. 폴링 응답마다 바뀌지 않는 코드를 싣지 않으려는 것이다.
+             */
+            sourceCode: string | null;
             /**
              * @description `QUEUED` 기다리는 중, `COMPILING` 채점 준비 중, `RUNNING` 채점 중(`progress` %), `COMPLETED` 판정이 남, `JUDGE_ERROR` 채점 불가.
              *     채점 불가는 서버 문제라 `verdict`가 null이고 시도 횟수에 넣지 않는다(RES-06).
@@ -1657,6 +1776,74 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    listMyProblemHistory: {
+        parameters: {
+            query?: {
+                /** @description 0부터 센다 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 문제별 기록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemHistoryPage"];
+                };
+            };
+            /** @description `page`·`size` 범위 밖 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getMyProblemHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 문제별 목록의 `problemId` */
+                problemId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 문제 하나의 기록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemHistory"];
+                };
+            };
+            /** @description `problemId`가 정수가 아님 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["Problem"];
+        };
+    };
     listProblems: {
         parameters: {
             query?: {
@@ -1736,6 +1923,42 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listMySubmissions: {
+        parameters: {
+            query: {
+                /** @description 문제별 목록의 `problemId` */
+                problemId: number;
+                /** @description 0부터 센다 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 제출 목록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionSummaryPage"];
+                };
+            };
+            /** @description `problemId`가 없거나 정수가 아님, `page`·`size` 범위 밖 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     submitCode: {
