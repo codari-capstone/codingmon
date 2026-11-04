@@ -57,15 +57,15 @@ class SubmissionRepository {
 
     // 제목·난이도와 정렬의 기준인 '마지막 제출'. 채점이 끝난 제출 중 가장 최근 것으로, 제출 목록 맨 위 줄과 같다.
     // 통계 행은 COMPLETED 제출이 있어야 생기므로 이 lateral은 늘 한 줄을 찾는다.
-    private static final String PROBLEM_HISTORY = "select st.problem_id, v.title, v.difficulty, st.solved, st.attempt_count,"
+    // ponytail: 페이지마다 시도한 문제 수만큼 lateral을 돈다. 제출이 많아져 느려지면 마지막 제출 시각을 저장해 정렬한다(#176).
+    private static final String PROBLEM_HISTORY = "select st.problem_id, last.title, last.difficulty, st.solved, st.attempt_count,"
             + " st.max_revealed_hint_level"
             + " from user_problem_stats st"
-            + " join lateral (select s.id, s.problem_version_id, s.submitted_at"
+            + " join lateral (select s.id, s.submitted_at, pv.title, pv.difficulty"
             + "   from submissions s join problem_versions pv on pv.id = s.problem_version_id"
             + "   where s.user_id = st.user_id and pv.problem_id = st.problem_id and s.submission_kind = 'SUBMIT'"
             + "     and s.job_status in ('COMPLETED', 'JUDGE_ERROR')"
             + "   order by s.submitted_at desc, s.id desc limit 1) last on true"
-            + " join problem_versions v on v.id = last.problem_version_id"
             + " where st.user_id = :userId";
 
     // 채점 중인 제출은 결과 화면에서 보고, 끝나면 목록에 나타난다.
