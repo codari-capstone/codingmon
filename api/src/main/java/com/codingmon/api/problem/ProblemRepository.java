@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.codingmon.api.Language;
+import com.codingmon.api.Page;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 // 사용자 화면용 문제 조회. 공개(PUBLISHED) 버전만 보고, 제목·난이도·태그는 그 버전에서 읽는다.
@@ -33,9 +34,6 @@ class ProblemRepository {
     // 비로그인이면 solveStatus를 아예 싣지 않는다. 비로그인(모름)과 UNSOLVED(안 품)는 다른 뜻이다.
     record ProblemSummary(Long id, String slug, String title, Difficulty difficulty, List<ConceptTag> tags,
             @JsonInclude(JsonInclude.Include.NON_NULL) SolveStatus solveStatus) {
-    }
-
-    record Page<T>(List<T> content, long totalElements) {
     }
 
     record Sample(String input, String output) {

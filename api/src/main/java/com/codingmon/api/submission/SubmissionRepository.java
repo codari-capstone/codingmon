@@ -1,5 +1,7 @@
 package com.codingmon.api.submission;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -11,6 +13,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.codingmon.api.Language;
+import com.codingmon.api.Page;
 import com.codingmon.api.judge.StoredText;
 
 // 제출 저장과 결과 조회. 예제 실행(SAMPLE_RUN, #28)도 같은 버전 조회와 저장을 쓰고, 결과는 findSampleRun으로 읽는다.
@@ -25,7 +28,8 @@ class SubmissionRepository {
 
     // 채점 결과 화면(RES-01~06). 비공개 케이스의 입력·출력과 몇 번째 케이스인지는 담지 않는다(AI_FEATURES 원칙 1).
     // 판정·런타임 에러 종류의 쉬운 설명은 화면이 가진다(AI_FEATURES 10절).
-    record SubmissionResult(long id, long problemId, String problemTitle, Language language, String status,
+    // sourceCode는 채점이 끝난 뒤에만 준다. 폴링마다 바뀌지 않는 코드를 싣지 않으려는 것이다.
+    record SubmissionResult(long id, long problemId, String problemTitle, Language language, String sourceCode, String status,
             int progress, String verdict, String runtimeErrorType, String runtimeErrorMessage, String compilerMessage,
             Integer executionTimeMs, Integer memoryUsedKb, Instant submittedAt, Instant judgedAt) {
     }
@@ -40,6 +44,34 @@ class SubmissionRepository {
     record SampleCaseResult(int ordinal, String actualOutput, String verdict, String errorMessage,
             Integer executionTimeMs, Integer memoryUsedKb) {
     }
+
+    // 제출 기록 문제별 한 줄(HIST-01). 시도·맞힘·힌트는 user_problem_stats 값이라 판정이 난 제출이 있는 문제만 나온다.
+    record ProblemHistory(long problemId, String title, String difficulty, boolean solved, int attemptCount,
+            int maxRevealedHintLevel) {
+    }
+
+    // 한 문제의 제출 목록 한 줄(HIST-02). 코드는 결과 조회로 따로 받는다.
+    record SubmissionSummary(long id, Language language, String status, String verdict, Integer executionTimeMs,
+            Integer memoryUsedKb, Instant submittedAt) {
+    }
+
+    // 제목·난이도와 정렬의 기준인 '마지막 제출'. 채점이 끝난 제출 중 가장 최근 것으로, 제출 목록 맨 위 줄과 같다.
+    // 통계 행은 COMPLETED 제출이 있어야 생기므로 이 lateral은 늘 한 줄을 찾는다.
+    // ponytail: 페이지마다 시도한 문제 수만큼 lateral을 돈다. 제출이 많아져 느려지면 마지막 제출 시각을 저장해 정렬한다(#176).
+    private static final String PROBLEM_HISTORY = "select st.problem_id, last.title, last.difficulty, st.solved, st.attempt_count,"
+            + " st.max_revealed_hint_level"
+            + " from user_problem_stats st"
+            + " join lateral (select s.id, s.submitted_at, pv.title, pv.difficulty"
+            + "   from submissions s join problem_versions pv on pv.id = s.problem_version_id"
+            + "   where s.user_id = st.user_id and pv.problem_id = st.problem_id and s.submission_kind = 'SUBMIT'"
+            + "     and s.job_status in ('COMPLETED', 'JUDGE_ERROR')"
+            + "   order by s.submitted_at desc, s.id desc limit 1) last on true"
+            + " where st.user_id = :userId";
+
+    // 채점 중인 제출은 결과 화면에서 보고, 끝나면 목록에 나타난다.
+    private static final String FINISHED_SUBMISSIONS = " from submissions s join problem_versions v on v.id = s.problem_version_id"
+            + " where s.user_id = :userId and v.problem_id = :problemId and s.submission_kind = 'SUBMIT'"
+            + " and s.job_status in ('COMPLETED', 'JUDGE_ERROR')";
 
     private final JdbcClient jdbc;
 
@@ -62,7 +94,9 @@ class SubmissionRepository {
     // 케이스는 SAMPLE부터 ordinal 순으로 채점하고 처음 틀린 케이스가 판정을 낸다(judge-verdict-mapping.md 제출 판정 합치기).
     // 그래서 틀린 SAMPLE 케이스가 있으면 그게 판정을 낸 케이스고, 런타임 에러면 그 원문을 보여 준다(RES-04).
     Optional<SubmissionResult> findResult(long userId, long submissionId) {
-        return jdbc.sql("select s.id, v.problem_id, v.title, s.language, s.job_status, s.progress, s.verdict,"
+        return jdbc.sql("select s.id, v.problem_id, v.title, s.language,"
+                + " case when s.job_status in ('COMPLETED', 'JUDGE_ERROR') then s.source_code end as source_code,"
+                + " s.job_status, s.progress, s.verdict,"
                 + " s.runtime_error_type, s.compiler_message, s.execution_time_ms, s.memory_used_kb, s.submitted_at, s.judged_at,"
                 + " case when s.verdict = 'RUNTIME_ERROR' then (select case when r.verdict = 'RUNTIME_ERROR' then r.stderr end"
                 + "   from submission_test_results r join test_cases c on c.id = r.test_case_id"
@@ -73,12 +107,59 @@ class SubmissionRepository {
                 .param("id", submissionId)
                 .param("userId", userId)
                 .query((rs, n) -> new SubmissionResult(rs.getLong("id"), rs.getLong("problem_id"), rs.getString("title"),
-                        Language.valueOf(rs.getString("language")), rs.getString("job_status"), rs.getInt("progress"),
-                        rs.getString("verdict"), rs.getString("runtime_error_type"), cleanStderr(rs.getString("sample_stderr")),
+                        Language.valueOf(rs.getString("language")), rs.getString("source_code"), rs.getString("job_status"),
+                        rs.getInt("progress"), rs.getString("verdict"), rs.getString("runtime_error_type"),
+                        cleanStderr(rs.getString("sample_stderr")),
                         rs.getString("compiler_message"), rs.getObject("execution_time_ms", Integer.class),
                         rs.getObject("memory_used_kb", Integer.class), instant(rs.getObject("submitted_at", OffsetDateTime.class)),
                         instant(rs.getObject("judged_at", OffsetDateTime.class))))
                 .optional();
+    }
+
+    // count와 목록이 같은 시점을 보게 묶는다(ProblemRepository.findPublished와 같다).
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    Page<ProblemHistory> findProblemHistories(long userId, int page, int size) {
+        long total = jdbc.sql("select count(*) from user_problem_stats where user_id = :userId")
+                .param("userId", userId)
+                .query(Long.class)
+                .single();
+        List<ProblemHistory> content = jdbc.sql(PROBLEM_HISTORY
+                + " order by last.submitted_at desc, last.id desc limit :limit offset :offset")
+                .param("userId", userId)
+                .param("limit", size)
+                .param("offset", (long) page * size)
+                .query(SubmissionRepository::problemHistory)
+                .list();
+        return new Page<>(content, total);
+    }
+
+    Optional<ProblemHistory> findProblemHistory(long userId, long problemId) {
+        return jdbc.sql(PROBLEM_HISTORY + " and st.problem_id = :problemId")
+                .param("userId", userId)
+                .param("problemId", problemId)
+                .query(SubmissionRepository::problemHistory)
+                .optional();
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    Page<SubmissionSummary> findFinishedSubmissions(long userId, long problemId, int page, int size) {
+        long total = jdbc.sql("select count(*)" + FINISHED_SUBMISSIONS)
+                .param("userId", userId)
+                .param("problemId", problemId)
+                .query(Long.class)
+                .single();
+        List<SubmissionSummary> content = jdbc.sql("select s.id, s.language, s.job_status, s.verdict, s.execution_time_ms,"
+                + " s.memory_used_kb, s.submitted_at" + FINISHED_SUBMISSIONS
+                + " order by s.submitted_at desc, s.id desc limit :limit offset :offset")
+                .param("userId", userId)
+                .param("problemId", problemId)
+                .param("limit", size)
+                .param("offset", (long) page * size)
+                .query((rs, n) -> new SubmissionSummary(rs.getLong("id"), Language.valueOf(rs.getString("language")),
+                        rs.getString("job_status"), rs.getString("verdict"), rs.getObject("execution_time_ms", Integer.class),
+                        rs.getObject("memory_used_kb", Integer.class), instant(rs.getObject("submitted_at", OffsetDateTime.class))))
+                .list();
+        return new Page<>(content, total);
     }
 
     // 본인의 SAMPLE_RUN만 찾는다. 남의 것도 비어 있게 답한다(findResult와 같다).
@@ -125,6 +206,11 @@ class SubmissionRepository {
                 .param("source", source)
                 .query(Long.class)
                 .single();
+    }
+
+    private static ProblemHistory problemHistory(ResultSet rs, int n) throws SQLException {
+        return new ProblemHistory(rs.getLong("problem_id"), rs.getString("title"), rs.getString("difficulty"),
+                rs.getBoolean("solved"), rs.getInt("attempt_count"), rs.getInt("max_revealed_hint_level"));
     }
 
     // C++ Segfault처럼 Judge0 줄만 남으면 비운다. 화면은 종류만 보여 준다.

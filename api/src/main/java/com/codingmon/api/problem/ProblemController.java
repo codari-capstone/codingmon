@@ -13,10 +13,10 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.codingmon.api.ApiErrors;
+import com.codingmon.api.Page;
 import com.codingmon.api.problem.ProblemRepository.ConceptTag;
 import com.codingmon.api.problem.ProblemRepository.Difficulty;
 import com.codingmon.api.problem.ProblemRepository.ListQuery;
-import com.codingmon.api.problem.ProblemRepository.Page;
 import com.codingmon.api.problem.ProblemRepository.ProblemSummary;
 import com.codingmon.api.problem.ProblemRepository.PublishedProblem;
 import com.codingmon.api.problem.ProblemRepository.SolveStatus;
@@ -25,8 +25,6 @@ import com.codingmon.api.problem.ProblemRepository.SortField;
 @RestController
 @RequestMapping("/api")
 class ProblemController {
-
-    static final int MAX_PAGE_SIZE = 20;
 
     private final ProblemRepository problems;
 
@@ -42,7 +40,7 @@ class ProblemController {
             @RequestParam(required = false) List<SolveStatus> status,
             @RequestParam(defaultValue = "id,asc") String sort,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "" + MAX_PAGE_SIZE) int size,
+            @RequestParam(defaultValue = "" + Page.MAX_SIZE) int size,
             @AuthenticationPrincipal Jwt jwt) {
         String[] sortParts = sort.split(",", -1);
         if (sortParts.length != 2) {
@@ -58,10 +56,7 @@ class ProblemController {
             case "desc" -> false;
             default -> throw badRequest("sort 방향은 asc 또는 desc다");
         };
-        // 마지막 페이지보다 큰 page는 빈 content를 준다. 마지막 페이지로 옮기는 건 프런트가 totalElements로 한다.
-        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
-            throw badRequest("page는 0 이상, size는 1~" + MAX_PAGE_SIZE + "이다");
-        }
+        Page.check(page, size);
         String trimmed = keyword == null || keyword.isBlank() ? null : keyword.strip();
         Long userId = jwt == null ? null : Long.valueOf(jwt.getSubject());
         return problems.findPublished(new ListQuery(userId, trimmed, orEmpty(difficulty), orEmpty(tag), orEmpty(status),

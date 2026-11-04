@@ -17,8 +17,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.codingmon.api.Language;
+import com.codingmon.api.Page;
 import com.codingmon.api.problem.ProblemRepository.Difficulty;
-import com.codingmon.api.problem.ProblemRepository.Page;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 
