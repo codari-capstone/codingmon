@@ -1,4 +1,4 @@
-import type { ProblemHistory, SubmissionSummary } from '@/api/types'
+import type { ProblemHistory, SubmissionResult, SubmissionSummary } from '@/api/types'
 
 /**
  * 제출 기록 목 데이터 (HIST-01·02).
@@ -76,4 +76,39 @@ export function submissionsOf(problemId: number): SubmissionSummary[] {
     submittedAt: new Date(Date.UTC(2026, 10, 3, 13)).toISOString(),
   }
   return [judgeError, ...judged]
+}
+
+/**
+ * 제출 하나의 결과 (HIST-02). 제출 번호는 `submissionsOf`의 `문제 번호 × 10 + 순번`이라 번호에서
+ * 문제를 거꾸로 알아낸다. 없는 번호는 null이다.
+ *
+ * 코드에 `<`와 `&`를 일부러 넣었다 — 글자 그대로 보여야 하는 값이다(계약).
+ */
+export function pastSubmission(id: number): SubmissionResult | null {
+  const problemId = Math.floor(id / 10)
+  const summary = submissionsOf(problemId).find((item) => item.id === id)
+  const history = problemHistories.find((item) => item.problemId === problemId)
+  if (!summary || !history) return null
+
+  const runtime = summary.verdict === 'RUNTIME_ERROR'
+  return {
+    id,
+    problemId,
+    problemTitle: history.title,
+    language: summary.language,
+    sourceCode:
+      summary.language === 'PYTHON'
+        ? 'n = int(input())\nfor i in range(n):\n    if i < n & 1:\n        print("*" * i)\n'
+        : '#include <iostream>\nint main() {\n  int n;\n  std::cin >> n;\n  return 0;\n}\n',
+    status: summary.status,
+    progress: 100,
+    verdict: summary.verdict,
+    runtimeErrorType: runtime ? 'INDEX_ERROR' : null,
+    runtimeErrorMessage: runtime ? 'IndexError: list index out of range (line 3)' : null,
+    compilerMessage: null,
+    executionTimeMs: summary.executionTimeMs,
+    memoryUsedKb: summary.memoryUsedKb,
+    submittedAt: summary.submittedAt,
+    judgedAt: summary.submittedAt,
+  }
 }

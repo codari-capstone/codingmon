@@ -34,7 +34,7 @@ import {
   versionSummary,
   type MockProblemVersion,
 } from './fixtures/adminProblems'
-import { problemHistories, submissionsOf } from './fixtures/history'
+import { pastSubmission, problemHistories, submissionsOf } from './fixtures/history'
 import { problemDetails } from './fixtures/problemDetails'
 import { conceptTags, problems } from './fixtures/problems'
 import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from './fixtures/users'
@@ -199,6 +199,8 @@ interface MockSubmission {
   problemId: number
   problemTitle: string
   language: 'PYTHON' | 'CPP'
+  /** 제출한 코드. 끝난 제출에만 돌려준다 (계약: 채점이 끝나기 전에는 null). */
+  sourceCode: string
   submittedAt: string
   /** 몇 번 조회됐는지. 조회할 때마다 채점이 한 걸음씩 나아간다 — 아래 핸들러 주석. */
   polls: number
@@ -995,6 +997,7 @@ export const handlers: RequestHandler[] = [
       problemId: detail.id,
       problemTitle: detail.title,
       language,
+      sourceCode: source,
       submittedAt: new Date().toISOString(),
       polls: 0,
       // 시작 코드를 그대로 낸 제출은 아무것도 풀지 않았으니 틀린다. 손을 댔으면 맞는다 —
@@ -1066,7 +1069,14 @@ export const handlers: RequestHandler[] = [
     if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
 
     const found = mockSubmissions.get(id)
-    if (!found) return problem(404, 'SUBMISSION_NOT_FOUND', '제출을 찾을 수 없어요')
+    if (!found) {
+      // 제출 기록 목록(fixture)의 번호는 이미 끝난 제출이다. 방금 낸 제출이 먼저다 —
+      // 그쪽 번호는 1부터 센다.
+      const past = pastSubmission(id)
+      return past
+        ? HttpResponse.json(past)
+        : problem(404, 'SUBMISSION_NOT_FOUND', '제출을 찾을 수 없어요')
+    }
 
     const step = found.polls++
     const base = {
@@ -1078,6 +1088,7 @@ export const handlers: RequestHandler[] = [
       runtimeErrorType: null,
       runtimeErrorMessage: null,
       compilerMessage: null,
+      sourceCode: null,
     }
     if (step === 0) {
       return HttpResponse.json({
@@ -1114,6 +1125,7 @@ export const handlers: RequestHandler[] = [
     }
     return HttpResponse.json({
       ...base,
+      sourceCode: found.sourceCode,
       status: 'COMPLETED',
       progress: 100,
       verdict: found.verdict,
