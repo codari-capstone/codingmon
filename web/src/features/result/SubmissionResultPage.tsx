@@ -13,7 +13,8 @@ import { solvePath } from '@/features/solve/solvePath'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { parsePathId } from '@/lib/pathId'
 import { nextActions } from './nextActions'
-import { isDeadEnd, submissionResultQuery } from './resultQuery'
+import { problemSubmissionsPath } from '@/features/history/historyPath'
+import { isDeadEnd, isFinished, submissionResultQuery } from './resultQuery'
 
 /**
  * 지금 무슨 일이 일어나고 있는지 한 줄 (RES-01·02·05).
@@ -139,6 +140,23 @@ function RuntimeError({ result }: { result: SubmissionResult }) {
   )
 }
 
+/**
+ * 제출한 코드 (HIST-02). 읽기 전용이다.
+ *
+ * 코드는 채점이 끝난 제출에만 온다(계약). 폴링 중에는 null이라 이 구역 자체가 없다.
+ * 글자 그대로 보여 준다 — 학생이 쓴 `<`나 `&`가 해석되면 코드가 달라진다(`Raw`).
+ */
+function SubmittedCode({ result }: { result: SubmissionResult }) {
+  if (result.sourceCode === null) return null
+
+  return (
+    <section className="flex flex-col">
+      <h2 className="text-base font-medium">제출한 코드</h2>
+      <Raw text={result.sourceCode} />
+    </section>
+  )
+}
+
 /** 다음 행동 (RES-06·07). */
 function NextActions({ result }: { result: SubmissionResult }) {
   const actions = nextActions(result)
@@ -215,7 +233,18 @@ export function Component() {
 
       <Headline result={data} />
       <Explanation result={data} />
+      <SubmittedCode result={data} />
       <NextActions result={data} />
+
+      {/* 끝난 제출만 기록 목록에 있다(계약). 채점 중에는 갈 곳이 없다. */}
+      {isFinished(data.status) ? (
+        <Link
+          to={problemSubmissionsPath(data.problemId)}
+          className="text-primary text-sm underline"
+        >
+          이 문제의 제출 기록
+        </Link>
+      ) : null}
     </section>
   )
 }

@@ -55,6 +55,7 @@ function completed(over: Record<string, unknown> = {}) {
         status: 'COMPLETED',
         progress: 100,
         verdict: 'ACCEPTED',
+        sourceCode: 'print(1)',
         runtimeErrorType: null,
         runtimeErrorMessage: null,
         compilerMessage: null,
@@ -162,6 +163,47 @@ describe('SubmissionResultPage', () => {
       // '0ms'로 적으면 "아주 빨랐다"로 읽힌다.
       expect(screen.queryByText(/ms$/)).not.toBeInTheDocument()
       expect(screen.queryByText(/KB$/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('제출한 코드 (HIST-02)', () => {
+    const RUNNING = {
+      status: 'RUNNING',
+      progress: 60,
+      verdict: null,
+      executionTimeMs: null,
+      memoryUsedKb: null,
+      judgedAt: null,
+      sourceCode: null,
+    }
+
+    it('끝난 제출의 코드를 글자 그대로 보여 준다', async () => {
+      completed({ sourceCode: 'if a < b & c:\n  print("<script>x</script>")' })
+      renderResult()
+
+      expect(await screen.findByRole('heading', { name: '제출한 코드' })).toBeInTheDocument()
+      // 해석되지 않고 문자열로 남는다. HTML로 그렸다면 <script>는 사라지고 텍스트만 남는다.
+      expect(screen.getByText(/print\("<script>x<\/script>"\)/)).toBeInTheDocument()
+      expect(document.querySelector('script')).toBeNull()
+    })
+
+    it('채점 중에는 코드 구역도 기록 링크도 없다', async () => {
+      completed(RUNNING)
+      renderResult()
+
+      expect(await screen.findByText('채점 중 60%')).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: '제출한 코드' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: '이 문제의 제출 기록' })).not.toBeInTheDocument()
+    })
+
+    it('끝난 제출에서 그 문제의 제출 기록으로 돌아갈 수 있다', async () => {
+      completed()
+      renderResult()
+
+      expect(await screen.findByRole('link', { name: '이 문제의 제출 기록' })).toHaveAttribute(
+        'href',
+        '/submissions/problems/1',
+      )
     })
   })
 
@@ -444,7 +486,10 @@ describe('쉬운 설명과 에러 안내 (RES-03~06)', () => {
 
     expect(await screen.findByText('IndexError / Segfault')).toBeInTheDocument()
     // 비공개 테스트에서 났거나(계약) C++ Segfault처럼 원문 자체가 없는 경우다.
-    expect(document.querySelector('pre')).toBeNull()
+    // 에러 원문 상자가 없다는 뜻이다 — 남는 `pre`는 제출한 코드 하나뿐이다.
+    const blocks = document.querySelectorAll('pre')
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0]).toHaveTextContent('print(1)')
   })
 
   /**
