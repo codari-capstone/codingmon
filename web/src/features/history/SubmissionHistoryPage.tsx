@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { Link } from 'react-router'
 
 import { EmptyState } from '@/components/EmptyState'
@@ -12,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { pageCount, PAGE_SIZE } from '@/features/problems/problemListParams'
 import { ProblemPagination } from '@/features/problems/ProblemPagination'
@@ -22,8 +24,22 @@ import { useHealPage, usePage } from './usePage'
 /** 제출 기록 — 제출한 문제를 마지막으로 제출한 순으로 (HIST-01). */
 export function Component() {
   const [page, setPage] = usePage()
-  const { data, isPending, isFetching, error, refetch } = useQuery(problemHistoryListQuery(page))
-  const healing = useHealPage(page, data?.totalElements, setPage)
+  const { data, isPending, isFetching, isPlaceholderData, error, refetch } = useQuery(
+    problemHistoryListQuery(page),
+  )
+
+  // 세션이 끊겼으면 로그인 화면으로 보낸다 (session.ts). 문구만 띄우면 헤더가 계속 로그인
+  // 상태로 보이고 사용자가 주소를 직접 쳐야 한다.
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, error)
+  }, [queryClient, error])
+
+  // 되돌릴지는 지금 페이지의 응답으로만 가른다. 묵은 응답은 다른 조건의 값일 수 있다
+  // (ProblemListPage와 같은 이유).
+  const healing = useHealPage(page, isPlaceholderData ? undefined : data?.totalElements, setPage)
+  // 되돌린 직후 묵은 응답이 빈 표이면 빈 상태 안내가 잠깐 보인다. 로딩으로 본다.
+  const waiting = isPending || healing || (isPlaceholderData && data?.content.length === 0)
 
   const pages = data ? pageCount(data.totalElements) : 1
 
@@ -31,11 +47,11 @@ export function Component() {
     <section className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">제출 기록</h1>
 
-      {(isPending || healing) && !error ? <ListSkeleton rows={PAGE_SIZE} /> : null}
+      {waiting && !error ? <ListSkeleton rows={PAGE_SIZE} /> : null}
 
       {error ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
 
-      {data && !error && !healing ? (
+      {data && !error && !waiting ? (
         data.content.length === 0 ? (
           <EmptyState
             title="아직 제출한 문제가 없어요"

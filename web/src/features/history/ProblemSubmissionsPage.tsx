@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { Link, useParams } from 'react-router'
 
 import type { SubmissionSummary } from '@/api/types'
@@ -14,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { VERDICT_INFO } from '@/constants/verdicts'
+import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { pageCount } from '@/features/problems/problemListParams'
 import { ProblemPagination } from '@/features/problems/ProblemPagination'
@@ -38,7 +40,21 @@ export function Component() {
     ...problemSubmissionsQuery(problemId ?? 0, page),
     enabled: problemId !== null,
   })
-  const healing = useHealPage(page, list.data?.totalElements, setPage)
+
+  // 세션이 끊겼으면 로그인 화면으로 보낸다 (session.ts). 두 쿼리 어느 쪽의 401이든 같다.
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, info.error ?? list.error)
+  }, [queryClient, info.error, list.error])
+
+  // 되돌릴지는 지금 페이지의 응답으로만 가른다 (SubmissionHistoryPage와 같은 이유).
+  const healing = useHealPage(
+    page,
+    list.isPlaceholderData ? undefined : list.data?.totalElements,
+    setPage,
+  )
+  const waiting =
+    list.isPending || healing || (list.isPlaceholderData && list.data?.content.length === 0)
 
   // 주소를 손으로 고친 경우다. 요청을 보내지 않고 없는 기록과 같은 문구로 끝낸다.
   const infoStatus = (info.error as { status?: number } | null)?.status
@@ -83,11 +99,11 @@ export function Component() {
         <h1 className="text-2xl font-semibold">제출 목록</h1>
       )}
 
-      {(list.isPending || healing) && !list.error ? <ListSkeleton rows={5} /> : null}
+      {waiting && !list.error ? <ListSkeleton rows={5} /> : null}
 
       {list.error ? <ErrorState problem={list.error} onRetry={() => void list.refetch()} /> : null}
 
-      {list.data && !list.error && !healing ? (
+      {list.data && !list.error && !waiting ? (
         list.data.content.length === 0 ? (
           <EmptyState
             title="채점이 끝난 제출이 없어요"
