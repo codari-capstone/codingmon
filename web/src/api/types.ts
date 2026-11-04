@@ -77,6 +77,14 @@ export type Verdict = NonNullable<SubmissionResult['verdict']>
 /** 런타임 에러 종류 여덟 가지. 판정이 RUNTIME_ERROR일 때만 있다(계약). */
 export type RuntimeErrorType = NonNullable<SubmissionResult['runtimeErrorType']>
 
+/** 제출 기록의 문제 한 줄 (HIST-01). 시도 횟수와 힌트 단계는 처음 맞힐 때까지의 값이다(계약). */
+export type ProblemHistory = components['schemas']['ProblemHistory']
+export type ProblemHistoryPage = components['schemas']['ProblemHistoryPage']
+
+/** 제출 목록의 한 줄 (HIST-02). 채점이 끝난 제출만 있다. */
+export type SubmissionSummary = components['schemas']['SubmissionSummary']
+export type SubmissionSummaryPage = components['schemas']['SubmissionSummaryPage']
+
 /** 목록 조회 쿼리. toQuery와 목 테스트가 이 타입에 맞춘다. */
 export type ProblemListQuery = NonNullable<operations['listProblems']['parameters']['query']>
 

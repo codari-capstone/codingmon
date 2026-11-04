@@ -34,6 +34,7 @@ import {
   versionSummary,
   type MockProblemVersion,
 } from './fixtures/adminProblems'
+import { problemHistories, submissionsOf } from './fixtures/history'
 import { problemDetails } from './fixtures/problemDetails'
 import { conceptTags, problems } from './fixtures/problems'
 import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from './fixtures/users'
@@ -60,6 +61,18 @@ function badRequest(detail: string) {
 
 /** 한 페이지의 최대 개수. 서버 ProblemController.MAX_PAGE_SIZE와 같은 값이다. */
 const MAX_PAGE_SIZE = 20
+
+/**
+ * `page`(0부터)·`size` 쿼리를 잘라 낼 구간으로 바꾼다. 범위 밖이면 null — 서버가 400을 주는
+ * 자리다. 받아 주면 목에서만 통과하는 테스트가 생긴다.
+ */
+function pageRange(query: URLSearchParams): { from: number; to: number } | null {
+  const page = Number(query.get('page') ?? 0)
+  const size = Number(query.get('size') ?? MAX_PAGE_SIZE)
+  if (!Number.isInteger(page) || page < 0) return null
+  if (!Number.isInteger(size) || size < 1 || size > MAX_PAGE_SIZE) return null
+  return { from: page * size, to: page * size + size }
+}
 
 /** 테스트케이스 한도 (ADM-04). 계약의 `replaceTestCases` 설명과 같은 값이다. */
 const MAX_CASES = 10
@@ -993,6 +1006,48 @@ export const handlers: RequestHandler[] = [
       { id },
       { status: 202, headers: { Location: `/api/submissions/${id}` } },
     )
+  }),
+
+  /**
+   * 제출 기록 (HIST-01·02). 읽기뿐이라 상태가 없다 — 세션은 보지 않는다(RequireAuth 뒤의 화면).
+   * 목은 실제로 제출한 기록을 쌓지 않고 fixture를 보여 준다.
+   */
+  http.get('*/api/users/me/problem-history', ({ request }) => {
+    const range = pageRange(new URL(request.url).searchParams)
+    if (range === null) return badRequest(`page는 0 이상, size는 1~${MAX_PAGE_SIZE}이다`)
+    return HttpResponse.json({
+      content: problemHistories.slice(range.from, range.to),
+      totalElements: problemHistories.length,
+    })
+  }),
+
+  http.get('*/api/users/me/problem-history/:problemId', ({ params }) => {
+    const problemId = Number(params.problemId)
+    if (!Number.isSafeInteger(problemId)) return badRequest('problemId는 정수여야 한다')
+    const found = problemHistories.find((item) => item.problemId === problemId)
+    // 계약: 없는 문제·제출한 적 없는 문제·판정이 난 제출이 없는 문제를 구분하지 않는다.
+    return found
+      ? HttpResponse.json(found)
+      : problem(404, 'PROBLEM_HISTORY_NOT_FOUND', '제출 기록을 찾을 수 없어요')
+  }),
+
+  http.get('*/api/submissions', ({ request }) => {
+    const query = new URL(request.url).searchParams
+    const problemId = Number(query.get('problemId'))
+    if (!Number.isSafeInteger(problemId) || query.get('problemId') === null) {
+      return badRequest('problemId는 정수여야 한다')
+    }
+    const range = pageRange(query)
+    if (range === null) return badRequest(`page는 0 이상, size는 1~${MAX_PAGE_SIZE}이다`)
+
+    // 기록이 있는 문제만 제출을 준다. 없으면 계약대로 빈 content다.
+    const all = problemHistories.some((item) => item.problemId === problemId)
+      ? submissionsOf(problemId)
+      : []
+    return HttpResponse.json({
+      content: all.slice(range.from, range.to),
+      totalElements: all.length,
+    })
   }),
 
   /**
