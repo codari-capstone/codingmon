@@ -31,12 +31,15 @@ function guardsOf(path: string): string[] {
 }
 
 describe('라우터 보호 구조', () => {
-  it.each(['problems/:id', 'submissions', 'submissions/:id', 'me/report'])(
-    '%s는 RequireAuth 아래에 있다',
-    (path) => {
-      expect(guardsOf(path)).toContain('RequireAuth')
-    },
-  )
+  it.each([
+    'problems/:id',
+    'submissions',
+    'submissions/problems/:problemId',
+    'submissions/:id',
+    'me/report',
+  ])('%s는 RequireAuth 아래에 있다', (path) => {
+    expect(guardsOf(path)).toContain('RequireAuth')
+  })
 
   it('admin은 RequireAuth와 RequireAdmin 둘 다 아래에 있다', () => {
     expect(guardsOf('admin')).toContain('RequireAuth')

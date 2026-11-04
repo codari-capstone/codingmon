@@ -36,6 +36,11 @@ export const router = createBrowserRouter([
                 lazy: () => import('@/features/history/SubmissionHistoryPage'),
               },
               {
+                // 'submissions/:id'와 겹치지 않는다 — 구간 수가 다르다.
+                path: 'submissions/problems/:problemId',
+                lazy: () => import('@/features/history/ProblemSubmissionsPage'),
+              },
+              {
                 path: 'submissions/:id',
                 lazy: () => import('@/features/result/SubmissionResultPage'),
               },

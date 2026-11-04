@@ -74,7 +74,7 @@ export function parseParams(search: URLSearchParams): ProblemListParams {
  */
 const MAX_PAGE = 2_147_483_647
 
-function parsePage(value: string | null): number {
+export function parsePage(value: string | null): number {
   if (value === null) return DEFAULT_PARAMS.page
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_PAGE) return DEFAULT_PARAMS.page

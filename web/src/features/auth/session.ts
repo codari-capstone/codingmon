@@ -49,4 +49,8 @@ export async function adoptSession(client: QueryClient, user: CurrentUser): Prom
   // 끊긴 뒤 B가 로그인해 기록으로 A의 /submissions/5를 열 때, gcTime 안에서는 A의
   // 판정이 그대로 그려진다.
   client.removeQueries({ queryKey: ['submission'] })
+  // 제출 기록(HIST-01·02)도 본인 것만 온다. 같은 이유로 지운다. 키가 'submission'과
+  // 한 글자 차이라 위 줄이 이 키들을 지워 주지 않는다.
+  client.removeQueries({ queryKey: ['problem-history'] })
+  client.removeQueries({ queryKey: ['submissions'] })
 }
