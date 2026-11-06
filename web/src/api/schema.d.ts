@@ -322,7 +322,7 @@ export interface paths {
         /**
          * 닉네임 변경 (MY-02)
          * @description 횟수 제한은 없다. 오류는 가입 API와 같다. 규칙 위반은 400 `INVALID_NICKNAME`, 그 사이 선점됐으면 409 `NICKNAME_TAKEN`이다.
-         *     대소문자만 바꿀 수 있다(`alice` → `Alice`). 자기 행은 충돌로 치지 않는다.
+         *     대소문자만 바꾸는 변경도 허용한다(`alice` → `Alice`). 자기 행은 충돌로 치지 않는다.
          *     `GET /api/auth/nickname-availability`는 로그인 사용자를 모르므로 이때 '사용 중'으로 답한다. 화면은 대소문자만 바뀌면 이 확인을 건너뛴다.
          */
         patch: operations["updateMyNickname"];
@@ -362,7 +362,7 @@ export interface paths {
          * 풀이 요약·활동 기록 (MY-05)
          * @description 요약과 잔디를 한 번에 준다. 세는 기준이 다르다.
          *     - 맞힌·틀린 문제 수는 판정이 나온 제출만 센다(`LIST-01`과 같다).
-         *     - 잔디는 제출이면 판정과 관계없이 센다(틀림, 채점 중, 채점 불가 포함). 예제 실행은 세지 않는다.
+         *     - 잔디는 사용자 제출(`SUBMIT`)이면 판정과 관계없이 센다(틀림, 채점 중, 채점 불가 포함). 예제 실행과 관리자의 정답 코드 검증은 세지 않는다.
          *     잔디의 날짜는 한국 시각 자정으로 나눈다. 범위는 오늘을 포함한 최근 365일(`from`~`to`)이다.
          */
         get: operations["getMyActivity"];
@@ -977,7 +977,7 @@ export interface components {
         UserActivity: {
             /** @description 맞힌 서로 다른 문제 수. 공개가 내려간 문제도 센다 */
             solvedCount: number;
-            /** @description 틀린 문제 수. 제출했지만 맞은 적이 없는 문제다(`LIST-01`의 `WRONG`) */
+            /** @description 틀린 문제 수. 제출했지만 맞은 적이 없는 문제다(`LIST-01`의 `WRONG`). 공개가 내려간 문제도 센다 */
             wrongCount: number;
             /** @description 난이도별 맞힌 문제 수. 공개 중인 버전의 난이도로 세고, 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다. 합은 `solvedCount`다 */
             solvedByDifficulty: {
