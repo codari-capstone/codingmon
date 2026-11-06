@@ -211,7 +211,7 @@ export interface paths {
         /**
          * 새 비밀번호 설정 (COM-08)
          * @description 비밀번호를 바꾸고 모든 기기에서 로그아웃시킨다(발급된 access·refresh token 모두 무효). 로그인은 다시 해야 한다.
-         *     그 이메일에 걸린 로그인 잠금(`LOGIN_LOCKED`)도 풀려 새 비밀번호로 바로 로그인할 수 있다.
+         *     그 이메일에 걸린 로그인 잠금(`LOGIN_LOCKED`)도 풀려 새 비밀번호로 바로 로그인할 수 있다. 비밀번호 변경 잠금(`PASSWORD_LOCKED`)도 함께 풀린다.
          *     오류 `code`: `RESET_EXPIRED`(인증 후 10분 지남 또는 이미 쓴 resetToken), `INVALID_PASSWORD`, `PASSWORD_MISMATCH`.
          *     `INVALID_PASSWORD`·`PASSWORD_MISMATCH`는 resetToken을 쓰지 않으므로 비밀번호만 고쳐 같은 resetToken으로 다시 보낼 수 있다.
          */
@@ -301,10 +301,72 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 로그인한 사용자 정보 (COM-01, COM-05)
-         * @description 상단의 사용자 메뉴(닉네임)와 관리자 메뉴(`role`)에 쓴다. 닉네임은 바뀔 수 있어 토큰이 아니라 이 API로 받는다.
+         * 로그인한 사용자 정보 (COM-01, COM-05, MY-01)
+         * @description 서버는 `email`·`loginMethod`·`githubUsername`을 항상 준다(값이 없으면 null).
+         *     상단의 사용자 메뉴(닉네임)와 관리자 메뉴(`role`), 마이페이지의 계정 정보에 쓴다. 닉네임은 바뀔 수 있어 토큰이 아니라 이 API로 받는다.
          */
         get: operations["getCurrentUser"];
+        put?: never;
+        post?: never;
+        /**
+         * 회원 탈퇴 (MY-04)
+         * @description 계정과 딸린 데이터(OAuth 연결, 토큰, 제출, 케이스 결과, AI 결과·피드백, 통계, 리포트)를 바로 삭제한다. 되돌릴 수 없다.
+         *     그 이메일의 인증번호 기록(`email_tokens`)도 함께 지운다. 탈퇴한 날 바로 다시 가입할 수 있다.
+         *     채점 중인 제출도 바로 지운다. 채점 서버에 이미 보낸 코드는 끝까지 실행되지만 결과는 버린다.
+         *     응답에서 refresh 쿠키를 지운다. 발급된 access token도 사용자가 없어져 무효가 된다.
+         *     확인 문구(`닉네임/탈퇴하겠습니다`)는 화면이 검사한다. 실수를 막는 장치라 서버로 보내지 않는다.
+         *     관리자는 탈퇴할 수 없다. 403 `ADMIN_CANNOT_WITHDRAW`.
+         */
+        delete: operations["withdraw"];
+        options?: never;
+        head?: never;
+        /**
+         * 닉네임 변경 (MY-02)
+         * @description 횟수 제한은 없다. 오류는 가입 API와 같다. 규칙 위반은 400 `INVALID_NICKNAME`, 그 사이 선점됐으면 409 `NICKNAME_TAKEN`이다.
+         *     대소문자만 바꾸는 변경도 허용한다(`alice` → `Alice`). 자기 행은 충돌로 치지 않는다.
+         *     `GET /api/auth/nickname-availability`는 로그인 사용자를 모르므로 이때 '사용 중'으로 답한다. 화면은 대소문자만 바뀌면 이 확인을 건너뛴다.
+         */
+        patch: operations["updateMyNickname"];
+        trace?: never;
+    };
+    "/api/users/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 비밀번호 변경 (MY-03)
+         * @description 비밀번호를 바꾸고 모든 기기에서 로그아웃시킨다(발급된 access·refresh token 모두 무효). 응답에서 refresh 쿠키를 지운다. 로그인은 다시 해야 한다.
+         *     현재 비밀번호를 틀려도 401이 아니라 400 `WRONG_PASSWORD`다. 웹 클라이언트는 401을 세션 만료로 보고 로그인 화면으로 보내기 때문이다.
+         *     오류 `code`: `WRONG_PASSWORD`, `INVALID_PASSWORD`, `PASSWORD_MISMATCH`, `PASSWORD_NOT_SET`(403, GitHub 가입자), `PASSWORD_LOCKED`(429).
+         *     같은 사용자가 현재 비밀번호를 5회 연속 틀리면 5분 동안 429 `PASSWORD_LOCKED`다. 로그인 잠금(`LOGIN_LOCKED`)과 따로 세므로 로그인은 막히지 않는다. 비밀번호를 재설정(COM-08)하면 이 잠금도 풀린다.
+         */
+        put: operations["changeMyPassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/me/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 풀이 요약·활동 기록 (MY-05)
+         * @description 요약과 잔디를 한 번에 준다. 세는 기준이 다르다.
+         *     - 맞힌·틀린 문제 수는 판정이 나온 제출만 센다(`LIST-01`과 같다).
+         *     - 잔디는 사용자 제출(`SUBMIT`)이면 판정과 관계없이 센다(틀림, 채점 중, 채점 불가 포함). 예제 실행과 관리자의 정답 코드 검증은 세지 않는다.
+         *     잔디의 날짜는 한국 시각 자정으로 나눈다. 범위는 오늘을 포함한 최근 365일(`from`~`to`)이다.
+         */
+        get: operations["getMyActivity"];
         put?: never;
         post?: never;
         delete?: never;
@@ -900,6 +962,49 @@ export interface components {
             role: "USER" | "ADMIN";
             /** @description GitHub 가입 계정의 프로필 이미지. 없으면 null */
             avatarUrl?: string | null;
+            /**
+             * @description 가린 이메일. 앞부분이 3자 이상이면 앞 2자만(`ab***@gmail.com`), 그보다 짧으면 첫 글자만(`a***@x.com`) 보여 준다. 도메인은 그대로다.
+             *     GitHub 가입 계정은 null
+             */
+            email?: string | null;
+            /**
+             * @description `GITHUB`이면 비밀번호 변경(MY-03)을 비활성화해 보여 준다
+             * @enum {string}
+             */
+            loginMethod?: "EMAIL" | "GITHUB";
+            /** @description 연결된 GitHub 아이디. 이메일 가입 계정은 null */
+            githubUsername?: string | null;
+        };
+        UserActivity: {
+            /** @description 맞힌 서로 다른 문제 수. 공개가 내려간 문제도 센다 */
+            solvedCount: number;
+            /** @description 틀린 문제 수. 제출했지만 맞은 적이 없는 문제다(`LIST-01`의 `WRONG`). 공개가 내려간 문제도 센다 */
+            wrongCount: number;
+            /** @description 난이도별 맞힌 문제 수. 공개 중인 버전의 난이도로 세고, 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다. 합은 `solvedCount`다 */
+            solvedByDifficulty: {
+                EASY: number;
+                MEDIUM: number;
+                HARD: number;
+            };
+            /**
+             * Format: date
+             * @description 잔디의 첫날(한국 시각). `to`의 364일 전
+             */
+            from: string;
+            /**
+             * Format: date
+             * @description 잔디의 마지막 날. 한국 시각으로 오늘
+             */
+            to: string;
+            /** @description 제출이 있는 날만 날짜순으로 준다. 없는 날은 빈 칸으로 그린다 */
+            days: {
+                /** Format: date */
+                date: string;
+                /** @description 그날의 제출 수 */
+                count: number;
+            }[];
+            /** @description `from`~`to` 중 제출이 있는 날 수 */
+            totalActiveDays: number;
         };
         /** @enum {string} */
         Difficulty: "EASY" | "MEDIUM" | "HARD";
@@ -1750,6 +1855,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CurrentUser"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    withdraw: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 탈퇴됨. refresh 쿠키를 지운다 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    updateMyNickname: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 2~16자, 한글·영문·숫자 */
+                    nickname: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 변경됨. 바뀐 사용자 정보를 준다 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentUser"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    changeMyPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    currentPassword: string;
+                    /** @description 10~20자, 영문 대문자·소문자·숫자·특수문자 각 1개 이상 */
+                    newPassword: string;
+                    newPasswordConfirm: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 변경됨. refresh 쿠키를 지운다 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+        };
+    };
+    getMyActivity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 풀이 요약과 활동 기록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserActivity"];
                 };
             };
             401: components["responses"]["Unauthorized"];
