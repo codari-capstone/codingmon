@@ -311,6 +311,7 @@ export interface paths {
         /**
          * 회원 탈퇴 (MY-04)
          * @description 계정과 딸린 데이터(OAuth 연결, 토큰, 제출, 케이스 결과, AI 결과·피드백, 통계, 리포트)를 바로 삭제한다. 되돌릴 수 없다.
+         *     그 이메일의 인증번호 기록(`email_tokens`)도 함께 지운다. 탈퇴한 날 바로 다시 가입할 수 있다.
          *     응답에서 refresh 쿠키를 지운다. 발급된 access token도 사용자가 없어져 무효가 된다.
          *     확인 문구(`닉네임/탈퇴하겠습니다`)는 화면이 검사한다. 실수를 막는 장치라 서버로 보내지 않는다.
          *     관리자는 탈퇴할 수 없다. 403 `ADMIN_CANNOT_WITHDRAW`.
@@ -361,7 +362,7 @@ export interface paths {
          * 풀이 요약·활동 기록 (MY-05)
          * @description 요약과 잔디를 한 번에 준다. 세는 기준이 다르다.
          *     - 맞힌·틀린 문제 수는 판정이 나온 제출만 센다(`LIST-01`과 같다).
-         *     - 잔디와 연속 학습일은 제출이면 판정과 관계없이 센다(틀림, 채점 중, 채점 불가 포함). 예제 실행은 세지 않는다.
+         *     - 잔디는 제출이면 판정과 관계없이 센다(틀림, 채점 중, 채점 불가 포함). 예제 실행은 세지 않는다.
          *     잔디의 날짜는 한국 시각 자정으로 나눈다. 범위는 오늘을 포함한 최근 365일(`from`~`to`)이다.
          */
         get: operations["getMyActivity"];
@@ -966,7 +967,7 @@ export interface components {
              */
             email?: string | null;
             /**
-             * @description `EMAIL`이면 비밀번호 변경(MY-03)을 보여 준다
+             * @description `GITHUB`이면 비밀번호 변경(MY-03)을 비활성화해 보여 준다
              * @enum {string}
              */
             loginMethod?: "EMAIL" | "GITHUB";
@@ -1003,10 +1004,6 @@ export interface components {
             }[];
             /** @description `from`~`to` 중 제출이 있는 날 수 */
             totalActiveDays: number;
-            /** @description 오늘 또는 어제까지 이어진 연속 학습일. 어제도 오늘도 제출이 없으면 0 */
-            currentStreak: number;
-            /** @description `from`~`to` 안에서 가장 긴 연속 학습일 */
-            longestStreak: number;
         };
         /** @enum {string} */
         Difficulty: "EASY" | "MEDIUM" | "HARD";
