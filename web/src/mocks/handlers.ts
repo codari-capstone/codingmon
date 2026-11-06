@@ -36,6 +36,7 @@ import {
 } from './fixtures/adminProblems'
 import { pastSubmission, problemHistories, submissionsOf } from './fixtures/history'
 import { learningStatsReady } from './fixtures/learning'
+import { activityFor } from './fixtures/activity'
 import { problemDetails } from './fixtures/problemDetails'
 import { conceptTags, problems } from './fixtures/problems'
 import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from './fixtures/users'
@@ -1010,6 +1011,12 @@ export const handlers: RequestHandler[] = [
       { id },
       { status: 202, headers: { Location: `/api/submissions/${id}` } },
     )
+  }),
+
+  /** 풀이 요약·잔디 (MY-05). 사용자마다 다르다(1번은 기록 있음, 그 밖은 제출 없음). */
+  http.get('*/api/users/me/activity', ({ request }) => {
+    const id = userIdFromToken(bearer(request))
+    return id === null ? unauthorized() : HttpResponse.json(activityFor(id))
   }),
 
   /** 학습 통계 (REP-01·02). 읽기뿐이라 상태가 없다. 조건 미달 모양은 테스트가 `server.use`로 바꾼다. */

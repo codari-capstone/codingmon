@@ -1669,7 +1669,7 @@ components:
 
     CurrentUser:
       type: object
-      required: [id, nickname, role]
+      required: [id, nickname, role, email, loginMethod, githubUsername]
       properties:
         id:
           type: integer

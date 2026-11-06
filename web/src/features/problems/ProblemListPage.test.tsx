@@ -139,7 +139,14 @@ describe('ProblemListPage', () => {
     it('결과가 여러 페이지인 필터를 걸어도 1페이지로 돌아간다', async () => {
       // 풀이 상태 필터는 로그인한 사람에게만 보인다 (COM-05).
       vi.spyOn(useAuthModule, 'useAuth').mockReturnValue({
-        user: { id: 1, nickname: '코다리', role: 'USER' },
+        user: {
+          id: 1,
+          nickname: '코다리',
+          role: 'USER',
+          email: 'us***@codari.test',
+          loginMethod: 'EMAIL',
+          githubUsername: null,
+        },
         isAuthenticated: true,
         isLoading: false,
       })
@@ -535,7 +542,14 @@ describe('ProblemListPage', () => {
 
   it('로그인하면 안내가 사라지고 풀이 상태 열이 보인다', async () => {
     vi.spyOn(useAuthModule, 'useAuth').mockReturnValue({
-      user: { id: 1, nickname: '찬우', role: 'USER' },
+      user: {
+        id: 1,
+        nickname: '찬우',
+        role: 'USER',
+        email: 'ch***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
       isAuthenticated: true,
       isLoading: false,
     })

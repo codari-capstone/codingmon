@@ -26,7 +26,14 @@ function renderFilters(initialUrl = '/problems', queryClient = createQueryClient
 
 function asLoggedIn() {
   vi.spyOn(useAuthModule, 'useAuth').mockReturnValue({
-    user: { id: 1, nickname: '찬우', role: 'USER' },
+    user: {
+      id: 1,
+      nickname: '찬우',
+      role: 'USER',
+      email: 'ch***@codari.test',
+      loginMethod: 'EMAIL',
+      githubUsername: null,
+    },
     isAuthenticated: true,
     isLoading: false,
   })

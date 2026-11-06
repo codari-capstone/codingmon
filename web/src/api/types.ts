@@ -89,6 +89,9 @@ export type SubmissionSummaryPage = components['schemas']['SubmissionSummaryPage
 export type LearningStats = components['schemas']['LearningStats']
 export type ConceptStat = components['schemas']['ConceptStat']
 
+/** 풀이 요약·최근 1년 잔디 (MY-05). 잔디의 `days`는 제출이 있는 날만 온다. */
+export type UserActivity = components['schemas']['UserActivity']
+
 /** 목록 조회 쿼리. toQuery와 목 테스트가 이 타입에 맞춘다. */
 export type ProblemListQuery = NonNullable<operations['listProblems']['parameters']['query']>
 
