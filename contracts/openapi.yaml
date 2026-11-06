@@ -297,7 +297,7 @@ paths:
       summary: 새 비밀번호 설정 (COM-08)
       description: |
         비밀번호를 바꾸고 모든 기기에서 로그아웃시킨다(발급된 access·refresh token 모두 무효). 로그인은 다시 해야 한다.
-        그 이메일에 걸린 로그인 잠금(`LOGIN_LOCKED`)도 풀려 새 비밀번호로 바로 로그인할 수 있다.
+        그 이메일에 걸린 로그인 잠금(`LOGIN_LOCKED`)도 풀려 새 비밀번호로 바로 로그인할 수 있다. 비밀번호 변경 잠금(`PASSWORD_LOCKED`)도 함께 풀린다.
         오류 `code`: `RESET_EXPIRED`(인증 후 10분 지남 또는 이미 쓴 resetToken), `INVALID_PASSWORD`, `PASSWORD_MISMATCH`.
         `INVALID_PASSWORD`·`PASSWORD_MISMATCH`는 resetToken을 쓰지 않으므로 비밀번호만 고쳐 같은 resetToken으로 다시 보낼 수 있다.
       tags: [auth]
@@ -470,7 +470,7 @@ paths:
         비밀번호를 바꾸고 모든 기기에서 로그아웃시킨다(발급된 access·refresh token 모두 무효). 응답에서 refresh 쿠키를 지운다. 로그인은 다시 해야 한다.
         현재 비밀번호를 틀려도 401이 아니라 400 `WRONG_PASSWORD`다. 웹 클라이언트는 401을 세션 만료로 보고 로그인 화면으로 보내기 때문이다.
         오류 `code`: `WRONG_PASSWORD`, `INVALID_PASSWORD`, `PASSWORD_MISMATCH`, `PASSWORD_NOT_SET`(403, GitHub 가입자), `PASSWORD_LOCKED`(429).
-        같은 사용자가 현재 비밀번호를 5회 연속 틀리면 5분 동안 429 `PASSWORD_LOCKED`다. 로그인 잠금(`LOGIN_LOCKED`)과 따로 세므로 로그인은 막히지 않는다.
+        같은 사용자가 현재 비밀번호를 5회 연속 틀리면 5분 동안 429 `PASSWORD_LOCKED`다. 로그인 잠금(`LOGIN_LOCKED`)과 따로 세므로 로그인은 막히지 않는다. 비밀번호를 재설정(COM-08)하면 이 잠금도 풀린다.
       tags: [users]
       requestBody:
         required: true
