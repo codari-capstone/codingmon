@@ -35,6 +35,7 @@ import {
   type MockProblemVersion,
 } from './fixtures/adminProblems'
 import { pastSubmission, problemHistories, submissionsOf } from './fixtures/history'
+import { learningStatsReady } from './fixtures/learning'
 import { problemDetails } from './fixtures/problemDetails'
 import { conceptTags, problems } from './fixtures/problems'
 import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from './fixtures/users'
@@ -1010,6 +1011,9 @@ export const handlers: RequestHandler[] = [
       { status: 202, headers: { Location: `/api/submissions/${id}` } },
     )
   }),
+
+  /** 학습 통계 (REP-01·02). 읽기뿐이라 상태가 없다. 조건 미달 모양은 테스트가 `server.use`로 바꾼다. */
+  http.get('*/api/users/me/learning-stats', () => HttpResponse.json(learningStatsReady)),
 
   /**
    * 제출 기록 (HIST-01·02). 읽기뿐이라 상태가 없다 — 세션은 보지 않는다(RequireAuth 뒤의 화면).

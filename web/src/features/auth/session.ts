@@ -53,4 +53,6 @@ export async function adoptSession(client: QueryClient, user: CurrentUser): Prom
   // 한 글자 차이라 위 줄이 이 키들을 지워 주지 않는다.
   client.removeQueries({ queryKey: ['problem-history'] })
   client.removeQueries({ queryKey: ['submissions'] })
+  // 학습 통계(REP-01·02)도 본인 풀이로 계산한 값이라 같은 이유로 지운다.
+  client.removeQueries({ queryKey: ['learning-stats'] })
 }

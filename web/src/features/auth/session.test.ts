@@ -15,6 +15,7 @@ describe('adoptSession', () => {
     ['problem-history', ['problem-history', { page: 1 }]],
     ['problem-history (문제 하나)', ['problem-history', 'one', 3]],
     ['submissions', ['submissions', { problemId: 3, page: 1 }]],
+    ['learning-stats', ['learning-stats']],
   ])('이전 사용자의 %s 캐시를 지운다', async (_name, key) => {
     const client = new QueryClient()
     client.setQueryData(key, { owner: 'A' })

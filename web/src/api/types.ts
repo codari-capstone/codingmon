@@ -85,6 +85,10 @@ export type ProblemHistoryPage = components['schemas']['ProblemHistoryPage']
 export type SubmissionSummary = components['schemas']['SubmissionSummary']
 export type SubmissionSummaryPage = components['schemas']['SubmissionSummaryPage']
 
+/** 개념별 학습 통계 (REP-01·02). 값은 서버가 계산한 그대로 보여 준다. */
+export type LearningStats = components['schemas']['LearningStats']
+export type ConceptStat = components['schemas']['ConceptStat']
+
 /** 목록 조회 쿼리. toQuery와 목 테스트가 이 타입에 맞춘다. */
 export type ProblemListQuery = NonNullable<operations['listProblems']['parameters']['query']>
 
