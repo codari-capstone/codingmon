@@ -56,7 +56,7 @@ class AnalysisPromptIntegrationTest {
         String text = String.join("\n", texts(result));
         assertThat(text).doesNotContain("```");
         assertThat(text.lines()).noneMatch(line -> line.startsWith("    ") || line.startsWith("\t"));
-        assertThat(sample.leak()).allSatisfy(leak -> assertThat(text).doesNotContain(leak));
+        assertThat(sample.forbidden()).allSatisfy(forbidden -> assertThat(text).doesNotContain(forbidden));
         assertThat(text).doesNotContainPattern("\\d+\\s*번째\\s*비공개");
         // 화면은 글을 그대로 보여 주므로 마크다운·LaTeX와 입력 JSON의 영어 값 이름을 쓰지 않는다.
         assertThat(text).doesNotContain("`", "$");

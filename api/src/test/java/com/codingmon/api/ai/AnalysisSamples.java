@@ -16,11 +16,17 @@ import com.codingmon.api.judge.RuntimeErrorType;
 import com.codingmon.api.judge.Verdict;
 
 // 판정별 오답 샘플(#76). 프롬프트 단위 테스트와 실제 모델 평가(AnalysisPromptIntegrationTest)가 같이 쓴다.
-// leak은 응답에 나오면 정답 코드를 흘린 것으로 보는 조각이다. 고친 줄이나 함수 호출 모양을 넣는다.
+// forbidden은 응답에 나오면 안 되는 글이다. 정답 코드 조각(고친 줄, 함수 호출 모양)이나 입력으로 알 수 없는 틀린 사실을 넣는다.
 // 수학 식(예: n × (n + 1) / 2)은 3단계 원리에서 허용하므로 넣지 않는다(AI_FEATURES 4절).
 final class AnalysisSamples {
 
-    record Case(String name, AnalysisInput input, List<String> leak) {
+    record Case(String name, AnalysisInput input, List<String> forbidden) {
+
+        // 테스트 이름에 입력 전체가 찍히지 않게 한다.
+        @Override
+        public String toString() {
+            return name;
+        }
     }
 
     private AnalysisSamples() {
@@ -28,7 +34,7 @@ final class AnalysisSamples {
 
     static List<Case> all() {
         return List.of(reversePyramid(), missingSemicolon(), indexOutOfRange(), quadraticPairs(), storeEverything(),
-                intOverflow(), joinedOutput());
+                intOverflow(), joinedOutput(), hiddenOnlyTrailingSpace(), endlessLoop());
     }
 
     // AI_FEATURES 5절 예시. 정방향 피라미드를 냈다.
@@ -189,6 +195,46 @@ final class AnalysisSamples {
                         Samples.of(List.of(Sample.of(1, Verdict.PRESENTATION_ERROR, null, "3\n", "1 2 3\n", "1\n2\n3\n", null, 17, 9000))),
                         hidden(Verdict.PRESENTATION_ERROR, null, 8, 1, 3, 10, 50, 120, 400, 900, 2000, 3800)),
                 List.of("end=' '", "end=\" \"", "' '.join", "\" \".join", "print(*range"));
+    }
+
+    // 예제는 통과하고 N = 1인 비공개 입력에서만 줄 끝 공백이 남는다. 입력 크기가 모두 비슷해(sameSize) 크기 등급은 MEDIUM이고
+    // smallestFailed는 false다. 예제 차이나 "가장 작은 입력은 통과"를 원인으로 쓰면 안 된다.
+    static Case hiddenOnlyTrailingSpace() {
+        Problem problem = Problem.of("단어 이어 쓰기", "단어 N개를 입력받아 한 줄에 공백 하나로 구분해 출력하세요.",
+                "첫째 줄에 N, 둘째 줄에 단어 N개가 공백으로 주어진다.", "단어를 공백 하나로 구분해 한 줄에 출력한다. 줄 끝에는 공백을 출력하지 않는다.",
+                "1 ≤ N ≤ 3, 단어는 알파벳 소문자 2글자", 1000, 128, List.of("출력 형식", "조건문"));
+        String code = """
+                n = int(input())
+                words = input().split()
+                if n == 1:
+                    print(words[0] + ' ')
+                else:
+                    print(' '.join(words))
+                """;
+        return new Case("N = 1에서만 줄 끝 공백 (출력 형식이 잘못되었습니다, 비공개만 실패)",
+                new AnalysisInput(problem, Submission.of(Language.PYTHON, Verdict.PRESENTATION_ERROR, null, 17, 9000, code, null),
+                        Samples.of(List.of(
+                                Sample.of(1, ACCEPTED, null, "3\nab cd ef\n", "ab cd ef\n", "ab cd ef\n", null, 17, 9000),
+                                Sample.of(2, ACCEPTED, null, "2\nxy zw\n", "xy zw\n", "xy zw\r\n", null, 17, 9000))),
+                        hidden(Verdict.PRESENTATION_ERROR, null, 2, 5, 5, 8, 8, 8, 9, 9, 9)),
+                List.of("가장 작은 입력은 통과", "가장 작은 입력에서는 통과", "가장 작은 입력에서 통과", "print(words[0])"));
+    }
+
+    static Case endlessLoop() {
+        Problem problem = Problem.of("1부터 N까지", "정수 N을 입력받아 1부터 N까지 한 줄에 하나씩 출력하세요.", "첫째 줄에 N이 주어진다.",
+                "1부터 N까지 한 줄에 하나씩 출력한다.", "1 ≤ N ≤ 100", 1000, 128, List.of("반복문"));
+        String code = """
+                n = int(input())
+                i = 1
+                while i <= n:
+                    print(i)
+                """;
+        return new Case("증가 없는 while (출력 초과)",
+                new AnalysisInput(problem, Submission.of(Language.PYTHON, Verdict.OUTPUT_LIMIT_EXCEEDED, null, 210, 9100, code, null),
+                        Samples.of(List.of(Sample.of(1, Verdict.OUTPUT_LIMIT_EXCEEDED, null, "3\n", "1\n2\n3\n", "1\n".repeat(400),
+                                null, 210, 9100))),
+                        hidden(Verdict.OUTPUT_LIMIT_EXCEEDED, null, 8, 2, 2, 3, 3, 3, 3, 4, 4)),
+                List.of("i += 1", "i+=1", "i = i + 1", "for i in range"));
     }
 
     // 앞에서 failed개가 실패한 비공개 케이스. 입력 바이트 수는 bytes 순서대로다.

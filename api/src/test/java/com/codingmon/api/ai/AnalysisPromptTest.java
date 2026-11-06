@@ -2,6 +2,8 @@ package com.codingmon.api.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.List;
@@ -130,12 +132,40 @@ class AnalysisPromptTest {
     }
 
     @Test
+    void 스키마의_키_순서는_고정이다() {
+        // 모델은 properties 순서대로 쓴다. 원인과 사실을 먼저, 힌트를 마지막에 쓰게 한다.
+        String json = JSON.writeValueAsString(AnalysisResult.SCHEMA);
+
+        assertThat(json).containsSubsequence("\"summary\"", "\"suspectLines\"", "\"facts\"", "\"guesses\"", "\"hints\"",
+                "\"observation\"", "\"direction\"", "\"principle\"");
+        assertThat(json.indexOf("\"properties\"")).isGreaterThan(json.indexOf("\"required\""));
+    }
+
+    @Test
+    void 글자_수_상한은_스키마에도_있다() {
+        String tooLong = PYRAMID_ANSWER.replace("세어 보세요.", "가".repeat(AnalysisResult.HINT_MAX_CHARS));
+
+        assertThat(SCHEMA.validate(JSON.readTree(tooLong))).isNotEmpty();
+        assertThat(SCHEMA.validate(JSON.readTree(PYRAMID_ANSWER.replace("별 개수가 줄마다 줄어야 하는데 늘어나고 있어요.",
+                "가".repeat(AnalysisResult.SUMMARY_MAX_CHARS + 1))))).isNotEmpty();
+    }
+
+    @Test
+    void 버전은_LLM_클라이언트에서_받는다() {
+        LlmClient llm = mock(LlmClient.class);
+        when(llm.promptVersion(ReviewType.ANALYSIS)).thenReturn("v999");
+
+        assertThatThrownBy(() -> new AnalysisPrompt(llm)).hasMessageContaining("prompts/analysis-v999/");
+    }
+
+    @Test
     void 샘플마다_요청을_만들_수_있다() {
         assertThat(AnalysisSamples.all()).hasSizeGreaterThanOrEqualTo(5)
                 .allSatisfy(c -> assertThat(PROMPT.request(c.input()).user()).isEqualTo(c.input().toJson()));
         assertThat(AnalysisSamples.all()).extracting(c -> c.input().submission().verdict())
                 .contains(Verdict.COMPILE_ERROR, Verdict.RUNTIME_ERROR, Verdict.TIME_LIMIT_EXCEEDED,
-                        Verdict.MEMORY_LIMIT_EXCEEDED, Verdict.WRONG_ANSWER);
+                        Verdict.MEMORY_LIMIT_EXCEEDED, Verdict.WRONG_ANSWER, Verdict.PRESENTATION_ERROR,
+                        Verdict.OUTPUT_LIMIT_EXCEEDED);
     }
 
     private static AnalysisInput input(Verdict verdict) {
