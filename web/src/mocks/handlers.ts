@@ -1012,13 +1012,13 @@ export const handlers: RequestHandler[] = [
     )
   }),
 
+  /** 학습 통계 (REP-01·02). 읽기뿐이라 상태가 없다. 조건 미달 모양은 테스트가 `server.use`로 바꾼다. */
+  http.get('*/api/users/me/learning-stats', () => HttpResponse.json(learningStatsReady)),
+
   /**
    * 제출 기록 (HIST-01·02). 읽기뿐이라 상태가 없다 — 세션은 보지 않는다(RequireAuth 뒤의 화면).
    * 목은 실제로 제출한 기록을 쌓지 않고 fixture를 보여 준다.
    */
-  /** 학습 통계 (REP-01·02). 읽기뿐이라 상태가 없다. 조건 미달 모양은 테스트가 `server.use`로 바꾼다. */
-  http.get('*/api/users/me/learning-stats', () => HttpResponse.json(learningStatsReady)),
-
   http.get('*/api/users/me/problem-history', ({ request }) => {
     const range = pageRange(new URL(request.url).searchParams)
     if (range === null) return badRequest(`page는 0 이상, size는 1~${MAX_PAGE_SIZE}이다`)

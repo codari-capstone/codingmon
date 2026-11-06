@@ -10,7 +10,7 @@ export const learningStatsShort: LearningStats = {
 
 /**
  * 조건 충족. 계약의 정렬(취약 점수 높은 순 → 문제 수 많은 순 → slug 순)과 `weak`(상위 2개,
- * 점수 > 0)를 지킨 값이다. 마지막 줄은 점수가 0이라 상위 2개 안이어도 취약이 아니다.
+ * 점수 > 0)를 지킨 값이다. 취약은 위의 두 줄뿐이고, 마지막 줄은 점수 0인 개념이다.
  */
 export const learningStatsReady: LearningStats = {
   solvedProblemCount: 7,

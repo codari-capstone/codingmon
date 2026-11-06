@@ -64,7 +64,8 @@ describe('ReportPage (REP-01·02)', () => {
     expect(within(rows[1]).getAllByRole('cell')[1]).toHaveTextContent('33%(1/3)')
   })
 
-  it('점수가 0이면 취약 표시가 없다', async () => {
+  // 취약 여부는 서버의 `weak`만 따른다. 상위 2개·0점 규칙은 서버가 판단한다(계약).
+  it('weak가 false인 개념에는 취약 표시가 없다', async () => {
     renderReport()
     const math = (await screen.findByText('수학')).closest('tr')!
     expect(within(math).queryByText('취약')).not.toBeInTheDocument()

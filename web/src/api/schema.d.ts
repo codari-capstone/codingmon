@@ -928,7 +928,7 @@ export interface components {
              */
             concepts: components["schemas"]["ConceptStat"][];
         };
-        /** @description 개념 태그 하나의 통계. 소수는 서버가 소수 둘째 자리까지 사사오입한 값(예: 0.483 → 0.48, 0.485 → 0.49)이며, 화면은 그대로 표시한다 (REP-02). */
+        /** @description 개념 태그 하나의 통계. 소수는 서버가 소수 둘째 자리까지 사사오입한 값(예: 0.483 → 0.48, 0.485 → 0.49)이며, 화면은 그대로 표시한다. 다만 해결률(`solveRate`)은 100을 곱해 백분율로 표시한다(예: 0.49 → 49%) (REP-02). */
         ConceptStat: {
             slug: string;
             name: string;

@@ -17,11 +17,11 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { learningStatsQuery } from './reportQuery'
 
 /**
- * 해결률만 백분율로 바꾼다 (0.485 → 48.5%). 서버가 이미 소수 둘째 자리까지 반올림했으므로
- * ×100에서 정밀도를 잃지 않는다. 부동소수 오차(0.57 × 100)만 한 자리에서 정리한다.
+ * 해결률만 백분율로 바꾼다 (0.49 → 49%, 계약 `ConceptStat`). 서버가 소수 둘째 자리까지
+ * 반올림해 보내므로 ×100은 정수다. 반올림은 부동소수 오차(0.57 × 100 = 56.99…)만 정리한다.
  */
 function percent(rate: number): string {
-  return `${Number((rate * 100).toFixed(1))}%`
+  return `${Math.round(rate * 100)}%`
 }
 
 /** 취약 점수 칸: 숫자는 서버 값 그대로, 막대는 눈으로 비교하라고 곁들인 것이다 (REP-06). */
