@@ -24,3 +24,7 @@ DB_URL=... DB_USERNAME=... DB_PASSWORD=... JUDGE0_URL=http://127.0.0.1:2358 JUDG
 ```bash
 LLM_URL=http://127.0.0.1:11434 LLM_MODEL=gemma4:12b ./gradlew test --tests 'com.codingmon.api.ai.*'
 ```
+
+오답 분석(F1·F2) 프롬프트는 `src/main/resources/prompts/analysis-<버전>/`에 있고 `AnalysisPrompt`가 읽는다. 버전은 `LLM_PROMPT_VERSION_ANALYSIS`(기본 `v1`)이며 `ai_reviews.prompt_version`에 그대로 남는다. 프롬프트를 고치면 폴더를 새 버전으로 복사해 고치고 이 값을 올린다. 그래야 이전 프롬프트로 만든 결과를 재사용하지 않는다.
+
+`AnalysisPromptIntegrationTest`는 판정별 오답 샘플(`AnalysisSamples`)을 실제 모델에 보내 스키마, 줄 번호 범위, 코드·정답 조각 유출, 마크다운·영어 값 이름이 섞였는지 본다. 응답 원문과 걸린 시간은 `build/analysis-eval/`에 남으니 힌트 내용은 사람이 읽고 평가한다.
