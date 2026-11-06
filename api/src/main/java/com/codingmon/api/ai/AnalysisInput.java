@@ -21,8 +21,9 @@ import tools.jackson.databind.json.JsonMapper;
 // 비공개 테스트는 HiddenTests의 개수와 크기 등급만 담는다. 입력·기대 출력·stdout·stderr 원문과 몇 번째 케이스인지는
 // 담을 필드가 없다(8절 비공개 테스트 보호, ARCHITECTURE 5.2).
 // 글은 아래 상한까지만 넣고 뒤에 생략 표시를 붙인다. 모델 컨텍스트(OLLAMA_CONTEXT_LENGTH 16384토큰)에서 출력 4096토큰과
-// 지시문을 빼고 남는 만큼이다. 모든 항목이 상한에 닿아도 JSON이 2만 자를 넘지 않는다(AnalysisInputTest).
-record AnalysisInput(Problem problem, Submission submission, List<Sample> samples, HiddenTests hiddenTests) {
+// 지시문을 빼고 남는 만큼이다. 글자 수는 JSON에 쓰일 길이로 센다(jsonLength). 모든 항목이 상한에 닿아도 JSON이
+// 2만 자를 넘지 않는다(AnalysisInputTest).
+record AnalysisInput(Problem problem, Submission submission, Samples samples, HiddenTests hiddenTests) {
 
     static final int STATEMENT_MAX_CHARS = 3_000;
     // 입력 설명·출력 설명·제약 각각
@@ -66,6 +67,24 @@ record AnalysisInput(Problem problem, Submission submission, List<Sample> sample
         }
     }
 
+    // 실행한 공개 예제. total·failed는 전체 수이고, cases에는 상한까지 틀린 예제부터 골라 번호 순으로 싣는다.
+    record Samples(int total, int failed, List<Sample> cases) {
+
+        // 실행한 예제가 없으면 null이다.
+        static Samples of(List<Sample> samples) {
+            if (samples.isEmpty()) {
+                return null;
+            }
+            int failed = (int) samples.stream().filter(s -> s.verdict() != Verdict.ACCEPTED).count();
+            List<Sample> cases = samples.stream()
+                    .sorted(Comparator.comparing((Sample s) -> s.verdict() == Verdict.ACCEPTED).thenComparingInt(Sample::no))
+                    .limit(SAMPLE_MAX_COUNT)
+                    .sorted(Comparator.comparingInt(Sample::no))
+                    .toList();
+            return new Samples(samples.size(), failed, cases);
+        }
+    }
+
     // no는 문제 상세의 예제 번호(1부터)다. 공개 데이터라 원문을 넣는다.
     record Sample(int no, Verdict verdict, RuntimeErrorType runtimeErrorType, String input, String expectedOutput,
             String actualOutput, String errorMessage, Integer executionTimeMs, Integer memoryUsedKb) {
@@ -79,22 +98,13 @@ record AnalysisInput(Problem problem, Submission submission, List<Sample> sample
                     error == null || error.isBlank() ? null : clip(error, SAMPLE_ERROR_MAX_CHARS),
                     executionTimeMs, memoryUsedKb);
         }
-
-        // 예제가 상한보다 많으면 틀린 예제부터 고르고, 번호 순으로 돌려준다.
-        static List<Sample> pick(List<Sample> samples) {
-            return samples.stream()
-                    .sorted(Comparator.comparing((Sample s) -> s.verdict() == Verdict.ACCEPTED).thenComparingInt(Sample::no))
-                    .limit(SAMPLE_MAX_COUNT)
-                    .sorted(Comparator.comparingInt(Sample::no))
-                    .toList();
-        }
     }
 
     // 비공개 케이스 하나. 원문 대신 판정과 입력 바이트 수만 갖는다.
     record HiddenCase(Verdict verdict, RuntimeErrorType runtimeErrorType, int inputBytes) {
     }
 
-    // smallestFailed·largestFailed는 입력이 가장 작은·큰 케이스 중 실패한 것이 있는지다. 크기가 모두 같으면 false다.
+    // smallestFailed·largestFailed는 입력이 가장 작은·큰 케이스 중 실패한 것이 있는지다. 크기가 같다고 보면(sameSize) false다.
     record HiddenTests(int total, int passed, int failed, Map<Verdict, Integer> failedVerdicts,
             List<RuntimeErrorType> runtimeErrorTypes, List<SizeGroup> bySize, boolean smallestFailed,
             boolean largestFailed) {
@@ -107,6 +117,7 @@ record AnalysisInput(Problem problem, Submission submission, List<Sample> sample
             List<SizeGrade> grades = grades(cases.stream().map(HiddenCase::inputBytes).toList());
             int min = cases.stream().mapToInt(HiddenCase::inputBytes).min().getAsInt();
             int max = cases.stream().mapToInt(HiddenCase::inputBytes).max().getAsInt();
+            boolean spread = !sameSize(min, max);
             Map<Verdict, Integer> failedVerdicts = new EnumMap<>(Verdict.class);
             Set<RuntimeErrorType> errorTypes = EnumSet.noneOf(RuntimeErrorType.class);
             int[][] counts = new int[SizeGrade.values().length][2];
@@ -121,8 +132,8 @@ record AnalysisInput(Problem problem, Submission submission, List<Sample> sample
                     if (c.runtimeErrorType() != null) {
                         errorTypes.add(c.runtimeErrorType());
                     }
-                    smallestFailed |= min != max && c.inputBytes() == min;
-                    largestFailed |= min != max && c.inputBytes() == max;
+                    smallestFailed |= spread && c.inputBytes() == min;
+                    largestFailed |= spread && c.inputBytes() == max;
                 }
             }
             List<SizeGroup> bySize = new ArrayList<>();
@@ -148,16 +159,16 @@ record AnalysisInput(Problem problem, Submission submission, List<Sample> sample
         return JSON.writeValueAsString(this);
     }
 
-    // 코드 포인트 기준으로 자른다. 잘랐으면 남은 글자 수를 적는다.
+    // 앞에서부터 JSON 길이로 maxChars까지 자른다. 잘랐으면 남은 글자 수를 적는다.
     static String clip(String text, int maxChars) {
         if (text == null) {
             return null;
         }
-        int length = text.codePointCount(0, text.length());
-        if (length <= maxChars) {
+        int end = cut(text, maxChars);
+        if (end == text.length()) {
             return text;
         }
-        return text.substring(0, text.offsetByCodePoints(0, maxChars)) + "\n[…뒤 " + (length - maxChars) + "자 생략]";
+        return text.substring(0, end) + "\n[…뒤 " + text.codePointCount(end, text.length()) + "자 생략]";
     }
 
     // 줄마다 1부터 번호를 붙인다. 줄 수나 글자 수 상한에 닿으면 그 앞 줄까지만 넣는다.
@@ -167,12 +178,11 @@ record AnalysisInput(Problem problem, Submission submission, List<Sample> sample
         int chars = 0;
         int written = 0;
         for (String line : lines) {
-            int lineLength = line.codePointCount(0, line.length());
-            String text = lineLength <= CODE_LINE_MAX_CHARS ? line
-                    : line.substring(0, line.offsetByCodePoints(0, CODE_LINE_MAX_CHARS)) + " […뒤 "
-                            + (lineLength - CODE_LINE_MAX_CHARS) + "자 생략]";
+            int end = cut(line, CODE_LINE_MAX_CHARS);
+            String text = end == line.length() ? line
+                    : line.substring(0, end) + " […뒤 " + line.codePointCount(end, line.length()) + "자 생략]";
             String numbered = (written + 1) + "| " + text + "\n";
-            int length = numbered.codePointCount(0, numbered.length());
+            int length = jsonLength(numbered);
             if (written == CODE_MAX_LINES || chars + length > CODE_MAX_CHARS) {
                 break;
             }
@@ -186,16 +196,52 @@ record AnalysisInput(Problem problem, Submission submission, List<Sample> sample
         return out.toString();
     }
 
+    // JSON 길이가 maxChars를 넘지 않는 앞부분이 끝나는 위치(char 인덱스).
+    private static int cut(String text, int maxChars) {
+        int end = 0;
+        int length = 0;
+        while (end < text.length()) {
+            int codePoint = text.codePointAt(end);
+            length += jsonWidth(codePoint);
+            if (length > maxChars) {
+                break;
+            }
+            end += Character.charCount(codePoint);
+        }
+        return end;
+    }
+
+    // JSON 문자열 안에서 차지하는 길이(코드 포인트 수).
+    static int jsonLength(String text) {
+        return text.codePoints().map(AnalysisInput::jsonWidth).sum();
+    }
+
+    // Jackson은 따옴표·역슬래시와 \b \t \n \f \r을 두 자로, 나머지 제어 문자는 유니코드 이스케이프 여섯 자로 쓴다.
+    // 원문 글자 수로 세면 제어 문자로 채운 코드가 상한의 여섯 배가 된다.
+    private static int jsonWidth(int codePoint) {
+        return switch (codePoint) {
+            case '"', '\\', '\b', '\t', '\n', '\f', '\r' -> 2;
+            default -> codePoint < 0x20 ? 6 : 1;
+        };
+    }
+
     // 입력 크기는 몇 바이트부터 몇 MB까지 벌어지므로 로그 눈금에서 가장 작은 입력과 가장 큰 입력 사이를 셋으로 나눈다.
-    // 크기가 모두 같으면 모두 MEDIUM이다.
+    // 크기가 같다고 보면(sameSize) 모두 MEDIUM이다.
     static List<SizeGrade> grades(List<Integer> inputBytes) {
-        double min = inputBytes.stream().mapToDouble(Math::log1p).min().orElse(0);
-        double max = inputBytes.stream().mapToDouble(Math::log1p).max().orElse(0);
+        int min = inputBytes.stream().mapToInt(Integer::intValue).min().orElse(0);
+        int max = inputBytes.stream().mapToInt(Integer::intValue).max().orElse(0);
         List<SizeGrade> grades = new ArrayList<>();
         for (int bytes : inputBytes) {
-            double position = max == min ? 0.5 : (Math.log1p(bytes) - min) / (max - min);
+            double position = sameSize(min, max) ? 0.5
+                    : (Math.log1p(bytes) - Math.log1p(min)) / (Math.log1p(max) - Math.log1p(min));
             grades.add(position < 1.0 / 3 ? SizeGrade.SMALL : position > 2.0 / 3 ? SizeGrade.LARGE : SizeGrade.MEDIUM);
         }
         return grades;
+    }
+
+    // 가장 큰 입력이 가장 작은 입력의 2배가 안 되면 크기가 같다고 본다. 몇 바이트 차이로 SMALL·LARGE가 갈리지 않게 한다.
+    // 값의 자릿수 차이(예: "1 2"와 "1000000000 1000000000")는 2배를 넘어 그대로 나뉜다.
+    static boolean sameSize(int min, int max) {
+        return max == min || max < 2L * min;
     }
 }

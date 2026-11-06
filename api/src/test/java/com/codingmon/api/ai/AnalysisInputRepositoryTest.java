@@ -91,7 +91,9 @@ class AnalysisInputRepositoryTest {
         assertThat(json).contains("\"input\":\"5 7\\n\"", "\"actualOutput\":\"-2\\n\"", "2| print(a - b)",
                 "\"constraints\":\"1 ≤ a, b ≤ 10\"", "구현-" + suffix);
         assertThat(input.problem().timeLimitMs()).isEqualTo(1000);
-        assertThat(input.samples()).extracting(Sample::no).containsExactly(1, 2);
+        assertThat(input.samples().cases()).extracting(Sample::no).containsExactly(1, 2);
+        assertThat(input.samples().total()).isEqualTo(2);
+        assertThat(input.samples().failed()).isEqualTo(2);
         HiddenTests hidden = input.hiddenTests();
         assertThat(hidden.total()).isEqualTo(3);
         assertThat(hidden.passed()).isEqualTo(1);
@@ -114,7 +116,7 @@ class AnalysisInputRepositoryTest {
         AnalysisInput input = repository.find(id).orElseThrow();
 
         assertThat(input.submission().compilerMessage()).contains("line 2");
-        assertThat(input.samples()).isEmpty();
+        assertThat(input.samples()).isNull();
         assertThat(input.hiddenTests()).isNull();
         assertThat(input.toJson()).doesNotContain(HIDDEN_INPUT, HIDDEN_OUTPUT);
     }

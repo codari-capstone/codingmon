@@ -31,9 +31,9 @@ class AnalysisInputRepository {
     @Transactional(readOnly = true)
     Optional<AnalysisInput> find(long submissionId) {
         return findHead(submissionId).map(head -> head.submission().verdict() == Verdict.COMPILE_ERROR
-                ? new AnalysisInput(head.problem(), head.submission(), List.of(), null)
+                ? new AnalysisInput(head.problem(), head.submission(), null, null)
                 : new AnalysisInput(head.problem(), head.submission(),
-                        AnalysisInput.Sample.pick(findSamples(submissionId, head.versionId())),
+                        AnalysisInput.Samples.of(findSamples(submissionId, head.versionId())),
                         AnalysisInput.HiddenTests.of(findHiddenCases(submissionId, head.versionId()))));
     }
 
