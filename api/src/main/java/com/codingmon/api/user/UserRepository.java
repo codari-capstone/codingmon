@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -28,6 +29,17 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("update User u set u.passwordHash = :passwordHash, u.tokenVersion = u.tokenVersion + 1"
             + " where lower(u.email) = lower(:email) and u.tokenVersion = :tokenVersion and u.passwordHash is not null")
     int resetPassword(String email, int tokenVersion, String passwordHash);
+
+    // 비밀번호를 비교한 뒤 이미 바뀌었으면 token_version이 달라 갱신되지 않는다.
+    @Modifying
+    @Query("update User u set u.passwordHash = :passwordHash, u.tokenVersion = u.tokenVersion + 1"
+            + " where u.id = :id and u.tokenVersion = :tokenVersion")
+    int changePassword(Long id, int tokenVersion, String passwordHash);
+
+    @Transactional
+    @Modifying
+    @Query("update User u set u.nickname = :nickname where u.id = :id")
+    int updateNickname(Long id, String nickname);
 
     @Query("select u.tokenVersion from User u where u.id = :id")
     Optional<Integer> findTokenVersionById(Long id);

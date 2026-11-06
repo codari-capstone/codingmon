@@ -72,16 +72,18 @@ class PasswordResetService {
         String email = certificate.getClaimAsString(EMAIL_CLAIM);
         Number tokenVersion = certificate.getClaim(TOKEN_VERSION_CLAIM);
         String passwordHash = passwordEncoder.encode(password);
-        transactions.executeWithoutResult(status -> {
+        Long userId = transactions.execute(status -> {
             // UPDATE가 사용자 행을 잠그므로 refresh token 폐기와 갱신·로그인 발급이 겹치지 않는다.
             if (users.resetPassword(email, tokenVersion.intValue(), passwordHash) == 0) {
                 throw expired();
             }
-            Long userId = users.findByEmail(email).orElseThrow(PasswordResetService::expired).getId();
-            refreshTokens.revokeAllOfUser(userId, Instant.now());
+            Long id = users.findByEmail(email).orElseThrow(PasswordResetService::expired).getId();
+            refreshTokens.revokeAllOfUser(id, Instant.now());
+            return id;
         });
-        // 이메일 인증을 마친 본인이므로, 비밀번호를 잊어 걸린 로그인 잠금도 푼다.
+        // 이메일 인증을 마친 본인이므로, 비밀번호를 잊어 걸린 로그인·비밀번호 변경 잠금도 푼다.
         limiter.resetLoginFailures(email);
+        limiter.resetPasswordFailures(userId);
     }
 
     private static ErrorResponseException expired() {
