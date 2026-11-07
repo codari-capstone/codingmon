@@ -107,7 +107,6 @@ export function Component() {
                 onPageChange={(next) => {
                   if (next === page) return
                   setPage(next)
-                  window.scrollTo({ top: 0 })
                 }}
               />
             ) : null}

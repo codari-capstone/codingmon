@@ -67,8 +67,8 @@ export function Component() {
   function handlePageChange(next: number) {
     if (next === page) return
     setParams((prev) => ({ ...prev, page: next }))
-    // 표 아래 버튼을 눌렀으므로 그대로 두면 새 페이지의 첫 줄이 화면 위로 지나가 있다
-    // (ProblemListPage와 같은 처리).
+    // 표 아래 버튼을 눌렀으므로 그대로 두면 새 페이지의 첫 줄이 화면 위로 지나가 있다.
+    // 페이지가 주소가 아니라 상태라 ScrollRestoration이 모르므로 직접 올린다.
     window.scrollTo({ top: 0 })
   }
 

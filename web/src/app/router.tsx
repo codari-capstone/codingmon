@@ -5,14 +5,17 @@ import { RequireAdmin } from './RequireAdmin'
 import { RequireAuth } from './RequireAuth'
 import { RootLayout } from './RootLayout'
 import { RouteErrorBoundary } from './RouteErrorBoundary'
+import { ScrollRoot } from './ScrollRoot'
 
 // 스택 문서 §4의 주소 설계. 각 화면은 담당 이슈에서 features/ 아래 컴포넌트로 채운다.
 export const router = createBrowserRouter([
   {
     path: '/',
     // 모든 화면이 lazy 청크다. 배포 후 옛 청크가 404가 되는 경우를 여기서 받는다.
-    // Component를 두지 않으므로 기본값인 <Outlet/>이 렌더된다.
     ErrorBoundary: RouteErrorBoundary,
+    // 화면을 옮기면 맨 위에서, 뒤로 가기는 떠났던 위치에서 연다 (#190). RootLayout이 아니라
+    // 여기 둔다 — /problems는 형제인 ProblemsLayout 아래라 RootLayout에 두면 닿지 않는다.
+    Component: ScrollRoot,
     children: [
       {
         // 사이드바가 없는 화면들

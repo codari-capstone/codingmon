@@ -91,7 +91,7 @@ function Workspace({ problem }: { problem: ProblemDetailView }) {
         next_.set('language', next)
         return next_
       },
-      { replace: true },
+      { replace: true, preventScrollReset: true },
     )
   // 언어별로 따로 들고 있는다. C++로 갔다 돌아왔을 때 Python 코드가 그대로 있어야 한다.
   const [codeByLanguage, setCodeByLanguage] = useState<Partial<Record<Language, string>>>({})

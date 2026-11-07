@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/app/queryClient'
 import { ProblemsLayout } from '@/app/ProblemsLayout'
+import { ScrollRoot } from '@/app/ScrollRoot'
 import { ThemeProvider } from '@/app/ThemeProvider'
 import * as useAuthModule from '@/features/auth/useAuth'
 import { problems } from '@/mocks/fixtures/problems'
@@ -21,11 +22,17 @@ function renderPage(initialUrl = '/problems') {
   const router = createMemoryRouter(
     [
       {
-        Component: ProblemsLayout,
-        children: [{ path: '/problems', Component: ProblemListPage }],
+        // 페이지를 넘기면 맨 위로 올리는 일을 앱처럼 ScrollRestoration이 한다.
+        Component: ScrollRoot,
+        children: [
+          {
+            Component: ProblemsLayout,
+            children: [{ path: '/problems', Component: ProblemListPage }],
+          },
+          // 안내 링크를 눌러 보는 테스트가 있다. 라우트가 없으면 이동이 404로 떨어진다.
+          { path: '/login', element: <h1>로그인 화면</h1> },
+        ],
       },
-      // 안내 링크를 눌러 보는 테스트가 있다. 라우트가 없으면 이동이 404로 떨어진다.
-      { path: '/login', element: <h1>로그인 화면</h1> },
     ],
     { initialEntries: [initialUrl] },
   )
@@ -210,10 +217,11 @@ describe('ProblemListPage', () => {
     })
 
     it('지금 보고 있는 페이지 번호를 다시 눌러도 맨 위로 올리지 않는다', async () => {
-      const scrollTo = vi.spyOn(window, 'scrollTo')
       const user = userEvent.setup()
       renderPage('/problems?page=2')
       await screen.findByRole('link', { name: `연습 문제 ${PAGE_SIZE + 1}` })
+      // 처음 열 때 맨 위로 올리는 호출은 세지 않는다.
+      const scrollTo = vi.spyOn(window, 'scrollTo')
 
       await user.click(screen.getByRole('button', { name: '2페이지' }))
 
@@ -233,6 +241,19 @@ describe('ProblemListPage', () => {
       await user.click(screen.getByRole('button', { name: /난이도/ }))
 
       await waitFor(() => expect(router.state.location.search).not.toContain('page=2'))
+    })
+
+    // 표 머리를 누른 자리에서 결과만 바뀌어야 한다. 주소가 바뀌어도 맨 위로 튀지 않는다 (#190).
+    it('정렬을 바꿔도 맨 위로 올리지 않는다', async () => {
+      const user = userEvent.setup()
+      const router = renderPage('/problems?page=2')
+      await screen.findByRole('link', { name: `연습 문제 ${PAGE_SIZE + 1}` })
+      const scrollTo = vi.spyOn(window, 'scrollTo')
+
+      await user.click(screen.getByRole('button', { name: /난이도/ }))
+
+      await waitFor(() => expect(router.state.location.search).not.toContain('page=2'))
+      expect(scrollTo).not.toHaveBeenCalled()
     })
 
     // 손으로 고친 주소나, 문제가 지워진 뒤의 옛 링크다. 서버는 오류가 아니라 빈 표를
