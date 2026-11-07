@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { getAccessToken, setAccessToken } from '@/api/session'
+import { mockAccounts } from '@/mocks/fixtures/users'
 import { server } from '@/mocks/server'
 import { loginRequest, logoutRequest, meQuery } from './authQuery'
 
@@ -73,7 +74,7 @@ describe('loginRequest', () => {
   it('성공하면 사용자를 돌려준다', async () => {
     const user = await loginRequest({ email: 'user@codari.test', password: 'Codari!test1' })
 
-    expect(user).toEqual({ id: 1, nickname: '코다리', role: 'USER' })
+    expect(user).toEqual(mockAccounts[0]!.user)
 
     await logoutRequest()
   })

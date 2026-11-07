@@ -5,7 +5,14 @@ import type { CurrentUser } from '@/api/types'
 import { ME_QUERY_KEY } from './authQuery'
 import { adoptSession } from './session'
 
-const USER: CurrentUser = { id: 2, nickname: '새사용자', role: 'USER' }
+const USER: CurrentUser = {
+  id: 2,
+  nickname: '새사용자',
+  role: 'USER',
+  email: 'ne***@codari.test',
+  loginMethod: 'EMAIL',
+  githubUsername: null,
+}
 
 describe('adoptSession', () => {
   // 본인 것만 오는 응답이다. 지우지 않으면 다른 사람이 로그인해도 이전 사람의 것이 남는다.
@@ -16,6 +23,7 @@ describe('adoptSession', () => {
     ['problem-history (문제 하나)', ['problem-history', 'one', 3]],
     ['submissions', ['submissions', { problemId: 3, page: 1 }]],
     ['learning-stats', ['learning-stats']],
+    ['activity', ['activity']],
   ])('이전 사용자의 %s 캐시를 지운다', async (_name, key) => {
     const client = new QueryClient()
     client.setQueryData(key, { owner: 'A' })

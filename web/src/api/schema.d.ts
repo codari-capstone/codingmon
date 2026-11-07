@@ -1031,14 +1031,14 @@ export interface components {
              * @description 가린 이메일. 앞부분이 3자 이상이면 앞 2자만(`ab***@gmail.com`), 그보다 짧으면 첫 글자만(`a***@x.com`) 보여 준다. 도메인은 그대로다.
              *     GitHub 가입 계정은 null
              */
-            email?: string | null;
+            email: string | null;
             /**
              * @description `GITHUB`이면 비밀번호 변경(MY-03)을 비활성화해 보여 준다
              * @enum {string}
              */
-            loginMethod?: "EMAIL" | "GITHUB";
+            loginMethod: "EMAIL" | "GITHUB";
             /** @description 연결된 GitHub 아이디. 이메일 가입 계정은 null */
-            githubUsername?: string | null;
+            githubUsername: string | null;
         };
         UserActivity: {
             /** @description 맞힌 서로 다른 문제 수. 공개가 내려간 문제도 센다 */

@@ -90,6 +90,10 @@ export function AppHeader() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>{user.nickname}</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              {/* 순서는 명세 COM-01: 마이페이지·내 학습·로그아웃 */}
+              <DropdownMenuItem asChild>
+                <Link to="/me">마이페이지</Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link to="/me/report">내 학습</Link>
               </DropdownMenuItem>

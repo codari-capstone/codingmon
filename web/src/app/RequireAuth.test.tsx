@@ -73,7 +73,17 @@ describe('RequireAuth', () => {
   })
 
   it('로그인했으면 본문을 보여 준다', () => {
-    mockAuth({ user: { id: 1, nickname: '코다리', role: 'USER' }, isAuthenticated: true })
+    mockAuth({
+      user: {
+        id: 1,
+        nickname: '코다리',
+        role: 'USER',
+        email: 'us***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
+      isAuthenticated: true,
+    })
     renderAt('/submissions')
 
     expect(screen.getByRole('heading', { name: '제출 기록 본문' })).toBeInTheDocument()
@@ -82,7 +92,17 @@ describe('RequireAuth', () => {
 
 describe('RequireAdmin', () => {
   it('USER는 권한 없음 화면으로 보낸다', () => {
-    mockAuth({ user: { id: 1, nickname: '코다리', role: 'USER' }, isAuthenticated: true })
+    mockAuth({
+      user: {
+        id: 1,
+        nickname: '코다리',
+        role: 'USER',
+        email: 'us***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
+      isAuthenticated: true,
+    })
     const router = renderAt('/admin')
 
     expect(screen.getByRole('heading', { name: '권한 없음 화면' })).toBeInTheDocument()
@@ -90,7 +110,17 @@ describe('RequireAdmin', () => {
   })
 
   it('ADMIN은 통과시킨다', () => {
-    mockAuth({ user: { id: 2, nickname: '관리자', role: 'ADMIN' }, isAuthenticated: true })
+    mockAuth({
+      user: {
+        id: 2,
+        nickname: '관리자',
+        role: 'ADMIN',
+        email: 'ad***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
+      isAuthenticated: true,
+    })
     renderAt('/admin')
 
     expect(screen.getByRole('heading', { name: '관리자 본문' })).toBeInTheDocument()
