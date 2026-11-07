@@ -213,8 +213,23 @@ interface MockSubmission {
 
 const mockSubmissions = new Map<number, MockSubmission>()
 
-/** AI 오답 분석 (AI-02·03). 제출 번호별. 요청 응답만 `PENDING`이고 다음 조회부터 끝난다. */
-const mockAnalyses = new Map<number, { polls: number; createdAt: string }>()
+/**
+ * AI 오답 분석 (AI-02~04). 제출 번호별. 요청 응답만 `PENDING`이고 다음 조회부터 끝난다 —
+ * 로딩은 보이고 테스트는 폴링 한 번만 기다린다. `revealed`는 연 힌트 단계다.
+ */
+interface MockAnalysis {
+  createdAt: string
+  revealed: number
+}
+
+const mockAnalyses = new Map<number, MockAnalysis>()
+
+/** 힌트 3단계. AI_FEATURES 5절의 역방향 피라미드 예시다. */
+const MOCK_HINTS = [
+  '예제 출력의 첫 줄과 마지막 줄 별 개수를 세어 보세요. 내 출력과 순서가 어떻게 다른가요?',
+  '줄 번호 i가 커질 때 별 개수가 어떻게 변해야 하는지 식으로 적어 보세요. 반복 범위나 별 개수 식을 바꾸면 됩니다.',
+  '정방향의 i번째 줄은 역방향의 (n − i + 1)번째 줄과 같습니다. 별 개수 2i − 1의 i 자리에 n − i + 1을 넣어 보세요.',
+]
 
 /** 테스트 사이에 채점 진행이 새지 않게 비운다. 가입·재설정의 resetEmailCodes와 같은 쓰임이다. */
 export function resetSubmissions(): void {
@@ -223,10 +238,14 @@ export function resetSubmissions(): void {
   nextSubmissionId = 1
 }
 
-/** `polls`가 0이면 만드는 중, 그 밖에는 끝난 분석. 내용은 AI_FEATURES 5절의 역방향 피라미드 예시다. */
-function analysisView(submissionId: number, polls: number, createdAt: string): SubmissionAnalysis {
-  const base = { submissionId, blocked: false, revealedHintLevel: 0, hints: [], createdAt }
-  if (polls === 0) {
+/** 분석 응답. 내용은 AI_FEATURES 5절의 역방향 피라미드 예시다. 힌트는 연 단계까지만 준다(계약). */
+function analysisView(
+  submissionId: number,
+  { createdAt, revealed }: MockAnalysis,
+  pending = false,
+): SubmissionAnalysis {
+  const base = { submissionId, blocked: false, createdAt }
+  if (pending) {
     return {
       ...base,
       status: 'PENDING',
@@ -234,12 +253,16 @@ function analysisView(submissionId: number, polls: number, createdAt: string): S
       suspectLines: [],
       facts: [],
       guesses: [],
+      revealedHintLevel: 0,
+      hints: [],
       completedAt: null,
     }
   }
   return {
     ...base,
     status: 'COMPLETED',
+    revealedHintLevel: revealed,
+    hints: MOCK_HINTS.slice(0, revealed),
     summary: '별 개수가 줄마다 줄어야 하는데 늘어나고 있어요.',
     suspectLines: [2],
     facts: [
@@ -1278,11 +1301,10 @@ export const handlers: RequestHandler[] = [
     }
 
     const existing = mockAnalyses.get(id)
-    if (existing) return HttpResponse.json(analysisView(id, existing.polls, existing.createdAt))
-    const createdAt = new Date().toISOString()
-    // 요청이 첫 걸음이다. 다음 조회(폴링 한 번 뒤)에 끝난다 — 로딩은 보이고 테스트는 오래 기다리지 않는다.
-    mockAnalyses.set(id, { polls: 1, createdAt })
-    return HttpResponse.json(analysisView(id, 0, createdAt), { status: 202 })
+    if (existing) return HttpResponse.json(analysisView(id, existing))
+    const created = { createdAt: new Date().toISOString(), revealed: 0 }
+    mockAnalyses.set(id, created)
+    return HttpResponse.json(analysisView(id, created, true), { status: 202 })
   }),
 
   /** 저장된 AI 오답 분석 (AI-02·03). 요청한 적이 없으면 계약대로 404 `ANALYSIS_NOT_FOUND`다. */
@@ -1291,7 +1313,27 @@ export const handlers: RequestHandler[] = [
     if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
     const found = mockAnalyses.get(id)
     if (!found) return problem(404, 'ANALYSIS_NOT_FOUND', 'AI 분석을 찾을 수 없어요')
-    return HttpResponse.json(analysisView(id, found.polls++, found.createdAt))
+    return HttpResponse.json(analysisView(id, found))
+  }),
+
+  /**
+   * 힌트 한 단계 열기 (AI-04). 계약대로 다음 단계만 열고, 이미 연 단계는 그대로 200, 건너뛰면 409.
+   * 목의 분석은 요청 응답 뒤로는 늘 끝나 있어 `ANALYSIS_NOT_READY`는 생기지 않는다.
+   */
+  http.post('*/api/submissions/:id/analysis/hints', async ({ params, request }) => {
+    const id = Number(params.id)
+    if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
+    const level = ((await request.json()) as { level?: unknown }).level
+    if (typeof level !== 'number' || !Number.isInteger(level) || level < 1 || level > 3) {
+      return badRequest('level은 1~3이다')
+    }
+    const found = mockAnalyses.get(id)
+    if (!found) return problem(404, 'ANALYSIS_NOT_FOUND', 'AI 분석을 찾을 수 없어요')
+    if (level > found.revealed + 1) {
+      return problem(409, 'HINT_LEVEL_SKIPPED', '앞 단계 힌트를 먼저 열어 주세요')
+    }
+    found.revealed = Math.max(found.revealed, level)
+    return HttpResponse.json(analysisView(id, found))
   }),
 
   /**
