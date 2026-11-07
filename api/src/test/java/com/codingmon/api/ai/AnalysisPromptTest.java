@@ -120,15 +120,20 @@ class AnalysisPromptTest {
     }
 
     @Test
-    void 스키마로_못_거는_빈_글과_긴_글은_제약이_거른다() {
+    void 스키마로_못_거는_빈_글은_제약이_거른다() {
         AnalysisResult blank = JSON.readValue(PYRAMID_ANSWER.replace("\"별 개수가 줄마다 줄어야 하는데 늘어나고 있어요.\"", "\" \""),
                 AnalysisResult.class);
-        AnalysisResult longHint = JSON.readValue(PYRAMID_ANSWER.replace("세어 보세요.",
-                "가".repeat(AnalysisResult.HINT_MAX_CHARS)), AnalysisResult.class);
 
         assertThat(VALIDATOR.validate(blank)).extracting(v -> v.getPropertyPath().toString()).containsExactly("summary");
-        assertThat(VALIDATOR.validate(longHint)).extracting(v -> v.getPropertyPath().toString())
-                .containsExactly("hints.observation");
+    }
+
+    @Test
+    void 글자_수는_스키마와_제약이_같은_기준으로_센다() {
+        // 이모지는 UTF-16으로 두 칸이다. 스키마(코드 포인트)를 통과한 글을 제약이 다시 막으면 재요청도 같은 이유로 실패한다.
+        String emojiHint = PYRAMID_ANSWER.replace("세어 보세요.", "😀".repeat(AnalysisResult.HINT_MAX_CHARS - 100));
+
+        assertThat(SCHEMA.validate(JSON.readTree(emojiHint))).isEmpty();
+        assertThat(VALIDATOR.validate(JSON.readValue(emojiHint, AnalysisResult.class))).isEmpty();
     }
 
     @Test

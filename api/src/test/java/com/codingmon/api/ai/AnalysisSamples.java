@@ -182,6 +182,7 @@ final class AnalysisSamples {
                 List.of("long long sum", "long long sum = 0;", "int64_t sum"));
     }
 
+    // 줄마다 출력하므로 N = 1만 통과하고 N ≥ 2는 모두 형식 오류다. 입력은 "N\n"이라 2~5바이트이고, N = 1 입력(2바이트)이 통과한 하나다.
     static Case joinedOutput() {
         Problem problem = Problem.of("한 줄로 출력", "정수 N을 입력받아 1부터 N까지를 한 줄에 공백으로 구분해 출력하세요.", "첫째 줄에 N이 주어진다.",
                 "1부터 N까지를 한 줄에 공백 하나로 구분해 출력한다.", "1 ≤ N ≤ 1,000", 1000, 128, List.of("출력 형식"));
@@ -193,7 +194,7 @@ final class AnalysisSamples {
         return new Case("줄마다 출력 (출력 형식이 잘못되었습니다)",
                 new AnalysisInput(problem, Submission.of(Language.PYTHON, Verdict.PRESENTATION_ERROR, null, 17, 9000, code, null),
                         Samples.of(List.of(Sample.of(1, Verdict.PRESENTATION_ERROR, null, "3\n", "1 2 3\n", "1\n2\n3\n", null, 17, 9000))),
-                        hidden(Verdict.PRESENTATION_ERROR, null, 8, 1, 3, 10, 50, 120, 400, 900, 2000, 3800)),
+                        hidden(Verdict.PRESENTATION_ERROR, null, 9, 2, 2, 3, 3, 4, 4, 4, 5, 5, 2)),
                 List.of("end=' '", "end=\" \"", "' '.join", "\" \".join", "print(*range"));
     }
 
