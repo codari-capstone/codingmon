@@ -177,6 +177,19 @@ describe('비밀번호 재설정 화면', () => {
     expect(tokens[1]).toBe(tokens[0])
   })
 
+  it('기존과 같은 비밀번호면 서버 문구를 보여 주고 인증은 남긴다', async () => {
+    const user = userEvent.setup()
+    renderReset()
+
+    await verifyEmail(user, mockAccounts[0]!.email)
+    await typePasswords(user, mockAccounts[0]!.password)
+    await user.click(screen.getByRole('button', { name: '재설정' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('현재 비밀번호와 달라야 해요')
+    expect(screen.getByText('인증됐어요')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '재설정' })).toBeEnabled()
+  })
+
   it('RESET_EXPIRED면 인증 단계로 되돌린다', async () => {
     server.use(
       http.post('*/api/auth/password-reset', () =>

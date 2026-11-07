@@ -43,7 +43,7 @@ export function Component() {
     },
     onError: (error) => {
       // 증명서가 죽었거나 이미 쓰였다. 인증번호부터 다시 받아야 한다.
-      // 규칙 오류(INVALID_PASSWORD·PASSWORD_MISMATCH)는 계약이 "resetToken을 쓰지 않으므로
+      // 규칙 오류(INVALID_PASSWORD·PASSWORD_MISMATCH·SAME_PASSWORD)는 계약이 "resetToken을 쓰지 않으므로
       // 비밀번호만 고쳐 같은 resetToken으로 다시 보낼 수 있다"고 적는다. 그때는 버리지 않는다.
       if (problemCode(error) === 'RESET_EXPIRED') {
         setResetToken(null)

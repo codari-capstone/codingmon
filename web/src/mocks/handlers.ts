@@ -1518,7 +1518,8 @@ export const handlers: RequestHandler[] = [
       passwordConfirm?: string
     }
     const resetToken = body.resetToken
-    if (typeof resetToken !== 'string' || tokenEmail(resetToken, 'RESET') === null) {
+    const email = typeof resetToken === 'string' ? tokenEmail(resetToken, 'RESET') : null
+    if (typeof resetToken !== 'string' || email === null) {
       return problem(400, 'RESET_EXPIRED', '인증 시간이 지났어요. 인증번호를 다시 받아 주세요')
     }
     if (!isValidPassword(body.password ?? '')) {
@@ -1531,8 +1532,13 @@ export const handlers: RequestHandler[] = [
     if (body.password !== body.passwordConfirm) {
       return problem(400, 'PASSWORD_MISMATCH', '비밀번호가 일치하지 않아요')
     }
+    const account = mockAccounts.find((item) => item.email === email)
+    if (account && body.password === account.password) {
+      return problem(400, 'SAME_PASSWORD', '현재 비밀번호와 달라야 해요')
+    }
     // 필드 오류에서는 토큰이 남는다. 성공해야 닳는다(서버는 token_version을 올린다).
     invalidateToken(resetToken)
+    // shortcut: 새 비밀번호를 계정에 저장하지 않는다. mockAccounts는 테스트마다 되돌리지 않아 저장하면 테스트끼리 엮인다.
     return new HttpResponse(null, { status: 204 })
   }),
   // --- GitHub 로그인 (COM-02) ---
