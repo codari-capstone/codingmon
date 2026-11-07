@@ -219,7 +219,7 @@ describe('SubmissionResultPage', () => {
       expect(screen.queryByRole('link', { name: '다시 풀기' })).not.toBeInTheDocument()
     })
 
-    it('오답이면 다시 풀기와 AI 분석을 둔다', async () => {
+    it('오답이면 다시 풀기와 AI 분석 패널을 둔다', async () => {
       completed({ verdict: 'WRONG_ANSWER', problemId: 7, language: 'CPP' })
       renderResult()
       await screen.findByText('틀렸습니다')
@@ -230,7 +230,9 @@ describe('SubmissionResultPage', () => {
         'href',
         '/problems/7?language=CPP',
       )
-      expect(screen.getByRole('button', { name: 'AI 분석 (준비 중)' })).toBeDisabled()
+      // [AI 분석]은 다음 행동 목록이 아니라 AI 패널의 버튼이다 (AnalysisPanel.test.tsx).
+      expect(screen.getByRole('heading', { name: 'AI 분석' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'AI 분석 (준비 중)' })).not.toBeInTheDocument()
     })
 
     /**

@@ -42,7 +42,8 @@ test.describe('제출 결과 화면', () => {
     await page.getByRole('button', { name: '제출' }).click()
     await expect(page.getByText('틀렸습니다')).toBeVisible({ timeout: 15_000 })
 
-    await expect(page.getByRole('button', { name: 'AI 분석 (준비 중)' })).toBeDisabled()
+    // [AI 분석]은 결과 옆 AI 패널의 버튼이다(#41). 오답이라 누를 수 있다.
+    await expect(page.getByRole('button', { name: 'AI 분석' })).toBeEnabled()
     await page.getByRole('link', { name: '다시 풀기' }).click()
 
     // 제출한 언어가 주소에 담겨 온다.
@@ -81,4 +82,38 @@ test.describe('제출 결과 화면', () => {
       'ios::sync_with_stdio',
     )
   })
+
+  /**
+   * AI 문장의 공백 없는 긴 토큰이 패널 밖으로 넘치지 않는지 (#191 리뷰).
+   *
+   * 목의 분석에 별 120개짜리 출력값이 들어 있다(handlers.ts). 좁으면 문서가 가로로 넘치고,
+   * 넓으면 오른쪽 열 밖으로 삐져나온다 — 두 폭을 다 본다. 줄바꿈은 브라우저만 잴 수 있다.
+   */
+  for (const width of [390, 1280]) {
+    test(`${width}px에서 AI 분석의 긴 토큰이 패널 밖으로 넘치지 않는다`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await login(page)
+      // 지난 제출 23: 틀렸습니다 (fixtures/history.ts)
+      await page.goto('/submissions/23')
+      await page.getByRole('button', { name: 'AI 분석' }).click()
+      await expect(page.getByText(/별 120개로 나옵니다/)).toBeVisible({ timeout: 10_000 })
+
+      const sizes = await page.evaluate(() => {
+        const panel = document.querySelector('section[aria-labelledby="analysis-heading"]')
+        if (!panel) return null
+        return {
+          panelScroll: panel.scrollWidth,
+          panelClient: panel.clientWidth,
+          panelRight: panel.getBoundingClientRect().right,
+          documentWidth: document.documentElement.scrollWidth,
+          viewportWidth: window.innerWidth,
+        }
+      })
+
+      expect(sizes).not.toBeNull()
+      expect(sizes!.documentWidth).toBeLessThanOrEqual(sizes!.viewportWidth + 1)
+      expect(sizes!.panelScroll).toBeLessThanOrEqual(sizes!.panelClient + 1)
+      expect(sizes!.panelRight).toBeLessThanOrEqual(sizes!.viewportWidth + 1)
+    })
+  }
 })

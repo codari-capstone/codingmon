@@ -7,6 +7,7 @@ import type {
   LoginRequest,
   ProblemInput,
   SolutionInput,
+  SubmissionAnalysis,
   TestCaseInput,
 } from '@/api/types'
 import { DIFFICULTY_RANK, type Difficulty, type SolveStatus } from '@/api/types'
@@ -212,10 +213,44 @@ interface MockSubmission {
 
 const mockSubmissions = new Map<number, MockSubmission>()
 
+/** AI 오답 분석 (AI-02·03). 제출 번호별. 요청 응답만 `PENDING`이고 다음 조회부터 끝난다. */
+const mockAnalyses = new Map<number, { polls: number; createdAt: string }>()
+
 /** 테스트 사이에 채점 진행이 새지 않게 비운다. 가입·재설정의 resetEmailCodes와 같은 쓰임이다. */
 export function resetSubmissions(): void {
   mockSubmissions.clear()
+  mockAnalyses.clear()
   nextSubmissionId = 1
+}
+
+/** `polls`가 0이면 만드는 중, 그 밖에는 끝난 분석. 내용은 AI_FEATURES 5절의 역방향 피라미드 예시다. */
+function analysisView(submissionId: number, polls: number, createdAt: string): SubmissionAnalysis {
+  const base = { submissionId, blocked: false, revealedHintLevel: 0, hints: [], createdAt }
+  if (polls === 0) {
+    return {
+      ...base,
+      status: 'PENDING',
+      summary: null,
+      suspectLines: [],
+      facts: [],
+      guesses: [],
+      completedAt: null,
+    }
+  }
+  return {
+    ...base,
+    status: 'COMPLETED',
+    summary: '별 개수가 줄마다 줄어야 하는데 늘어나고 있어요.',
+    suspectLines: [2],
+    facts: [
+      '공개 예제 1의 기대 출력은 별이 5개, 3개, 1개로 줄어드는데, 제출 코드의 출력은 1개, 3개, 5개로 늘어납니다.',
+      // 공백 없는 긴 출력값. 모델이 실제로 인용할 수 있는 모양이고, 줄바꿈이 빠지면 패널이
+      // 넘친다(#191 리뷰). e2e가 이 문장으로 본다.
+      `큰 입력의 마지막 줄 출력이 ${'*'.repeat(120)}처럼 별 120개로 나옵니다.`,
+    ],
+    guesses: ['2번째 줄의 반복과 별 개수 식이 정방향 기준으로 작성된 것 같습니다.'],
+    completedAt: createdAt,
+  }
 }
 
 /**
@@ -1224,6 +1259,39 @@ export const handlers: RequestHandler[] = [
       memoryUsedKb: 31_204,
       judgedAt: new Date().toISOString(),
     })
+  }),
+
+  /**
+   * AI 오답 분석 요청 (AI-01·02). 검사 순서는 계약과 같다: 없는 제출 404 → 오답이 아니면 409.
+   * 이미 있으면 그대로 200, 새로 만들면 202 `PENDING`. 세션은 보지 않는다(제출 핸들러와 같은 선택).
+   */
+  http.post('*/api/submissions/:id/analysis', ({ params }) => {
+    const id = Number(params.id)
+    if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
+
+    const found = mockSubmissions.get(id)
+    // 방금 낸 제출은 네 번째 조회에서 채점이 끝난다(위 핸들러).
+    const verdict = found ? (found.polls > 3 ? found.verdict : null) : pastSubmission(id)?.verdict
+    if (verdict === undefined) return problem(404, 'SUBMISSION_NOT_FOUND', '제출을 찾을 수 없어요')
+    if (verdict === null || verdict === 'ACCEPTED') {
+      return problem(409, 'ANALYSIS_NOT_AVAILABLE', '틀린 제출만 AI 분석을 받을 수 있어요')
+    }
+
+    const existing = mockAnalyses.get(id)
+    if (existing) return HttpResponse.json(analysisView(id, existing.polls, existing.createdAt))
+    const createdAt = new Date().toISOString()
+    // 요청이 첫 걸음이다. 다음 조회(폴링 한 번 뒤)에 끝난다 — 로딩은 보이고 테스트는 오래 기다리지 않는다.
+    mockAnalyses.set(id, { polls: 1, createdAt })
+    return HttpResponse.json(analysisView(id, 0, createdAt), { status: 202 })
+  }),
+
+  /** 저장된 AI 오답 분석 (AI-02·03). 요청한 적이 없으면 계약대로 404 `ANALYSIS_NOT_FOUND`다. */
+  http.get('*/api/submissions/:id/analysis', ({ params }) => {
+    const id = Number(params.id)
+    if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
+    const found = mockAnalyses.get(id)
+    if (!found) return problem(404, 'ANALYSIS_NOT_FOUND', 'AI 분석을 찾을 수 없어요')
+    return HttpResponse.json(analysisView(id, found.polls++, found.createdAt))
   }),
 
   /**
