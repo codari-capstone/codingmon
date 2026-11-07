@@ -102,6 +102,7 @@ export function Component() {
       lastWritten.current = draft.trim()
       setSearchParams(serializeParams(withChanges(params, { keyword: draft.trim() })), {
         replace: true,
+        preventScrollReset: true,
       })
     }, SEARCH_DEBOUNCE_MS)
 
@@ -109,17 +110,17 @@ export function Component() {
   }, [draft, params, setSearchParams])
 
   function handleSort(field: SortField) {
-    setSearchParams(serializeParams(withChanges(params, nextSort(params, field))))
+    setSearchParams(serializeParams(withChanges(params, nextSort(params, field))), {
+      preventScrollReset: true,
+    })
   }
 
   function handlePageChange(page: number) {
-    // 지금 페이지의 번호 버튼을 누른 경우다. 그대로 올리면 내용은 그대로인데 scrollTo만 돌아
+    // 지금 페이지의 번호 버튼을 누른 경우다. 그대로 올리면 내용은 그대로인데 새 주소라
     // 화면이 맨 위로 튄다. 이전·다음은 disabled가 막으므로 막을 곳은 번호 버튼뿐이다.
     if (page === params.page) return
+    // 페이지를 넘기면 표의 처음부터 읽는다. 맨 위로 올리는 것은 ScrollRestoration이 한다.
     setSearchParams(serializeParams(withChanges(params, { page })))
-    // 페이지를 넘기면 표의 처음부터 읽는다. 아래쪽 버튼을 눌렀으므로 그대로 두면
-    // 새 페이지의 첫 줄이 화면 위로 지나가 있다.
-    window.scrollTo({ top: 0 })
   }
 
   const filtered = hasActiveFilter(params)
