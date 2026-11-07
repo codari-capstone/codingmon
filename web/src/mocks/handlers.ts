@@ -244,6 +244,9 @@ function analysisView(submissionId: number, polls: number, createdAt: string): S
     suspectLines: [2],
     facts: [
       '공개 예제 1의 기대 출력은 별이 5개, 3개, 1개로 줄어드는데, 제출 코드의 출력은 1개, 3개, 5개로 늘어납니다.',
+      // 공백 없는 긴 출력값. 모델이 실제로 인용할 수 있는 모양이고, 줄바꿈이 빠지면 패널이
+      // 넘친다(#191 리뷰). e2e가 이 문장으로 본다.
+      `큰 입력의 마지막 줄 출력이 ${'*'.repeat(120)}처럼 별 120개로 나옵니다.`,
     ],
     guesses: ['2번째 줄의 반복과 별 개수 식이 정방향 기준으로 작성된 것 같습니다.'],
     completedAt: createdAt,

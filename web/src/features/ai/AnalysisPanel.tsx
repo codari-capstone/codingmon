@@ -24,7 +24,7 @@ function Item({ badge, text }: { badge: '실행 결과' | '코드 분석'; text:
       >
         {badge}
       </span>
-      <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
+      <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{text}</p>
     </li>
   )
 }
@@ -42,7 +42,9 @@ function Explanation({ analysis, lineCount }: { analysis: SubmissionAnalysis; li
   return (
     <div className="flex flex-col gap-3">
       {analysis.summary !== null ? (
-        <p className="text-sm leading-relaxed whitespace-pre-wrap">{analysis.summary}</p>
+        <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {analysis.summary}
+        </p>
       ) : null}
       {lines.length > 0 ? (
         <p className="text-sm">
@@ -147,7 +149,7 @@ export function AnalysisPanel({
   return (
     <section
       aria-labelledby="analysis-heading"
-      className="border-border/60 flex flex-col gap-3 rounded-lg border p-4"
+      className="border-border/60 flex min-w-0 flex-col gap-3 rounded-lg border p-4"
     >
       <h2 id="analysis-heading" className="text-base font-medium">
         AI 분석
