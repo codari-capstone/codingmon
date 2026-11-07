@@ -88,7 +88,7 @@ class MyAccountService {
         }
         limiter.resetPasswordFailures(userId);
         AccountRules.password(newPassword, newPasswordConfirm);
-        if (passwordEncoder.matches(newPassword, hash)) {
+        if (newPassword.equals(currentPassword)) {
             throw AuthErrors.error(HttpStatus.BAD_REQUEST, "SAME_PASSWORD", "현재 비밀번호와 달라야 해요");
         }
         String newHash = passwordEncoder.encode(newPassword);
@@ -112,6 +112,8 @@ class MyAccountService {
             if (user.getEmail() != null) {
                 emailCodes.deleteByEmail(user.getEmail());
             }
+            // 채점 완료(JudgeRepository.complete)처럼 제출 행을 사용자 행보다 먼저 잠가 교착을 막는다.
+            users.deleteSubmissions(userId);
             users.deleteById(userId);
         });
     }

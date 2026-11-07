@@ -41,6 +41,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("update User u set u.nickname = :nickname where u.id = :id")
     int updateNickname(Long id, String nickname);
 
+    @Modifying
+    @Query(value = "delete from submissions where user_id = :id", nativeQuery = true)
+    void deleteSubmissions(Long id);
+
     @Query("select u.tokenVersion from User u where u.id = :id")
     Optional<Integer> findTokenVersionById(Long id);
 
