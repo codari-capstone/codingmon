@@ -62,7 +62,7 @@ function badRequest(detail: string) {
   return HttpResponse.json({ status: 400, title: 'Bad Request', detail }, { status: 400 })
 }
 
-/** 한 페이지의 최대 개수. 서버 ProblemController.MAX_PAGE_SIZE와 같은 값이다. */
+/** 한 페이지의 최대 개수. 서버 Page.MAX_SIZE와 같은 값이다. */
 const MAX_PAGE_SIZE = 20
 
 /**

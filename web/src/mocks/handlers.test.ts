@@ -110,7 +110,7 @@ describe('MSW 문제 목록 핸들러', () => {
     expect(second.totalElements).toBe(problems.length)
   })
 
-  // 서버는 size가 1~20이 아니면 400이다(ProblemController.MAX_PAGE_SIZE). 목이 받아 주면
+  // 서버는 size가 1~20이 아니면 400이다(Page.MAX_SIZE). 목이 받아 주면
   // size=100으로 한 번에 전체를 받는 테스트가 목에서만 통과한다.
   it.each([100, 0, Number.NaN])('size가 1~20이 아니면 400이다: %s', async (size) => {
     const { response } = await api.GET('/api/problems', { params: { query: { size } } })
