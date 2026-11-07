@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildWeeks, grassLevel, monthLabel } from './grass'
+import { buildWeeks, grassLevel, monthLabels } from './grass'
 
 describe('buildWeeks', () => {
   // 2026-11-01은 일요일이다.
@@ -46,11 +46,22 @@ describe('grassLevel', () => {
   })
 })
 
-describe('monthLabel', () => {
-  it('그달의 첫 주에만 달 이름을 붙이고, 맨 앞 주는 늘 붙인다', () => {
-    const weeks = buildWeeks({ from: '2026-10-20', to: '2026-11-14', days: [] })
-    const labels = weeks.map(monthLabel)
+describe('monthLabels', () => {
+  it('달이 바뀐 주에만 달 이름을 붙이고, 맨 앞 주는 범위의 첫 달이다', () => {
+    const labels = monthLabels(buildWeeks({ from: '2026-10-20', to: '2026-11-14', days: [] }))
     expect(labels[0]).toBe('10월')
     expect(labels.filter(Boolean)).toEqual(['10월', '11월'])
+  })
+
+  // 리뷰에서 나온 두 경우(#186). 글자가 칸보다 넓어 바로 옆 열의 이름과 포개진다.
+  it('from이 토요일이라 맨 앞 주가 하루뿐이어도 같은 달 이름을 두 번 붙이지 않는다', () => {
+    const labels = monthLabels(buildWeeks({ from: '2025-11-01', to: '2025-11-30', days: [] }))
+    expect(labels.filter(Boolean)).toEqual(['11월'])
+  })
+
+  it('맨 앞 주의 이름이 바로 다음 주 이름과 붙으면 앞 것을 뺀다', () => {
+    const labels = monthLabels(buildWeeks({ from: '2025-10-29', to: '2025-11-30', days: [] }))
+    expect(labels[0]).toBeNull()
+    expect(labels.filter(Boolean)).toEqual(['11월'])
   })
 })

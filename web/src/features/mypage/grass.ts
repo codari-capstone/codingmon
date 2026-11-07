@@ -56,11 +56,31 @@ export function grassLevel(count: number): 0 | 1 | 2 | 3 | 4 {
   return 4
 }
 
-/** 주의 첫 칸이 그달의 첫 주이면 그 달 이름. 맨 앞 주는 범위의 첫 달이다. */
-export function monthLabel(week: GrassCell[], index: number): string | null {
-  const first = week.find((cell) => cell.date !== null)?.date
-  if (!first) return null
-  const day = Number(first.slice(8, 10))
-  if (index !== 0 && day > 7) return null
-  return `${Number(first.slice(5, 7))}월`
+/**
+ * 달 이름이 다음 이름과 겹치지 않으려면 떨어져야 하는 주 수. 한 주는 14px(칸 11 + 간격 3)이고
+ * '12월'은 11px 글자로 24px쯤이라 두 주면 들어간다.
+ */
+const LABEL_GAP_WEEKS = 2
+
+/**
+ * 주마다 달 이름. 주의 첫 날짜가 앞 주와 다른 달이면 그 달 이름을 붙인다. 맨 앞 주는 범위의
+ * 첫 달이다.
+ *
+ * 맨 앞 주의 이름이 다음 이름과 가까우면 앞 것을 뺀다. 글자가 칸보다 넓어 바로 옆 열의
+ * 이름과 포개진다(`from`이 그달 말일 무렵이면 '10월'과 '11월'이 나란히 붙는다). `from`은
+ * 매일 바뀌므로 자주 생긴다.
+ */
+export function monthLabels(weeks: GrassCell[][]): (string | null)[] {
+  const monthOf = (week: GrassCell[]) => week.find((cell) => cell.date !== null)?.date?.slice(5, 7)
+
+  const labels = weeks.map((week, i) => {
+    const month = monthOf(week)
+    if (month === undefined) return null
+    if (i > 0 && monthOf(weeks[i - 1]!) === month) return null
+    return `${Number(month)}월`
+  })
+
+  const next = labels.findIndex((label, i) => i > 0 && label !== null)
+  if (labels[0] !== null && next !== -1 && next < LABEL_GAP_WEEKS) labels[0] = null
+  return labels
 }

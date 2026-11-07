@@ -74,7 +74,43 @@ describe('MyPage 계정 정보 (MY-01)', () => {
   })
 })
 
+describe('MyPage 계정 정보 — 서버가 새 필드를 아직 보내지 않을 때 (#185 전)', () => {
+  it('빠진 값은 없는 것으로 보고 빈 줄을 그리지 않는다', async () => {
+    // 지금 서버의 응답 모양: id·nickname·role·avatarUrl만 온다
+    const legacy = { id: 1, nickname: '코다리', role: 'USER', avatarUrl: null } as CurrentUser
+    renderMyPage(legacy)
+    const account = await screen.findByRole('region', { name: '계정 정보' })
+
+    expect(within(account).getByText('코다리')).toBeInTheDocument()
+    expect(within(account).queryByText('로그인 방식')).not.toBeInTheDocument()
+    expect(within(account).queryByText('이메일')).not.toBeInTheDocument()
+    expect(within(account).queryByText('GitHub 아이디')).not.toBeInTheDocument()
+  })
+})
+
 describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
+  it('최근 1년에는 제출이 없지만 전에 푼 문제가 있으면 기간을 밝혀 안내한다', async () => {
+    server.use(
+      http.get('*/api/users/me/activity', () =>
+        HttpResponse.json({ ...activityFor(1), days: [], totalActiveDays: 0 }),
+      ),
+    )
+    const client = createQueryClient()
+    client.setQueryData(ME_QUERY_KEY, EMAIL_USER)
+    const router = createMemoryRouter([{ path: '/me', Component: MyPage }], {
+      initialEntries: ['/me'],
+    })
+    render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('최근 1년 동안 제출한 날이 없어요.')).toBeInTheDocument()
+    expect(screen.queryByText('아직 제출한 문제가 없어요.')).not.toBeInTheDocument()
+    expect(screen.getByText('맞힌 문제').nextElementSibling).toHaveTextContent('7')
+  })
+
   it('맞힌·틀린 수, 난이도별 맞힌 수, 총 활동일과 잔디 요약을 보여 준다', async () => {
     renderMyPage(EMAIL_USER)
     const activity = activityFor(1)
