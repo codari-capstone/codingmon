@@ -57,7 +57,8 @@ class AiReviewRepository {
 
     private static final String STORED_COLUMNS = "r.id, r.submission_id, r.prompt_version,"
             + " case when %s then 'FAILED' else r.status end as status,"
-            + " r.content::text as content, r.revealed_hint_level, r.created_at, r.completed_at";
+            + " r.content::text as content, r.revealed_hint_level, r.created_at, r.completed_at,"
+            + " coalesce((r.content ->> 'blocked')::boolean, false) as blocked";
 
     private final JdbcClient jdbc;
 
@@ -94,15 +95,17 @@ class AiReviewRepository {
     }
 
     // 본인 제출에서 화면에 보여 줄 결과 하나(contracts의 GET /api/submissions/{id}/analysis). 요청·조회·힌트 열기가 모두 이것을 본다.
-    // 지금 버전의 결과가 FAILED가 아니면 그것, 아니면 이전 버전의 끝난 결과 중 마지막 것, 그다음 지금 버전의 FAILED, 그다음 마지막 행.
-    // 새 버전이 실패해도 이미 본 분석과 연 힌트가 가려지지 않는다.
+    // 지금 버전의 결과가 FAILED도 차단도 아니면 그것, 아니면 이전 버전의 차단되지 않은 끝난 결과 중 마지막 것,
+    // 그다음 지금 버전의 결과(FAILED·차단), 그다음 마지막 행. 새 버전이 실패하거나 차단돼도 이미 본 분석과 연 힌트가 가려지지 않고,
+    // 차단된 이전 결과가 지금 버전의 FAILED(다시 요청할 수 있다)를 가리지도 않는다.
     Optional<Stored> findShown(long userId, long submissionId, ReviewType type, String promptVersion,
             Abandoned abandoned) {
         return abandoned.bind(jdbc.sql("select * from (select " + STORED_COLUMNS.formatted(abandoned.condition("r"))
                 + "   from ai_reviews r join submissions s on s.id = r.submission_id"
                 + "   where r.submission_id = :submissionId and s.user_id = :userId and r.review_type = :type) x"
-                + " order by case when x.prompt_version = :promptVersion and x.status <> 'FAILED' then 0"
-                + "   when x.status = 'COMPLETED' then 1 when x.prompt_version = :promptVersion then 2 else 3 end,"
+                + " order by case when x.prompt_version = :promptVersion and x.status <> 'FAILED' and not x.blocked then 0"
+                + "   when x.status = 'COMPLETED' and not x.blocked then 1 when x.prompt_version = :promptVersion then 2"
+                + "   else 3 end,"
                 + " x.id desc limit 1"))
                 .param("submissionId", submissionId)
                 .param("userId", userId)

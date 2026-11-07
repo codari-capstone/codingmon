@@ -424,6 +424,45 @@ class AnalysisControllerTest {
     }
 
     @Test
+    void 새_프롬프트_버전이_차단돼도_이전_버전의_분석과_연_힌트를_보여_준다() throws Exception {
+        long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
+        jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, content,"
+                + " revealed_hint_level, completed_at)"
+                + " values (:id, 'ANALYSIS', 'v0', 'old-model', 'COMPLETED', cast(:content as jsonb), 2, now() - interval '1 day')")
+                .param("id", id).param("content", FakeLlm.ok().json()).update();
+        jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, content, completed_at)"
+                + " values (:id, 'ANALYSIS', 'v1', 'fake-model', 'COMPLETED', '{\"blocked\": true}', now())")
+                .param("id", id).update();
+
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.blocked").value(false))
+                .andExpect(jsonPath("$.hints", hasSize(2)));
+        hint(id, 3).andExpect(status().isOk()).andExpect(jsonPath("$.hints", hasSize(3)));
+        assertThat(llm.calls).hasValue(0);
+    }
+
+    @Test
+    void 차단된_이전_버전이_지금_버전의_실패를_가리지_않는다() throws Exception {
+        long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
+        jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, content, completed_at)"
+                + " values (:id, 'ANALYSIS', 'v0', 'old-model', 'COMPLETED', '{\"blocked\": true}', now())")
+                .param("id", id).update();
+        jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, completed_at)"
+                + " values (:id, 'ANALYSIS', 'v1', 'fake-model', 'FAILED', now())")
+                .param("id", id).update();
+
+        // 화면이 재시도 버튼을 보이도록 지금 버전의 FAILED를 준다.
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.blocked").value(false));
+        mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
+        awaitVersionStatus(id, "v1", "COMPLETED");
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.summary").value("두 수를 빼고 있어요"));
+    }
+
+    @Test
     void 결과를_저장하지_못하면_FAILED로_바꿔_다시_요청할_수_있게_한다() throws Exception {
         long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
         // JSON으로는 맞지만 PostgreSQL jsonb가 받지 않는 응답

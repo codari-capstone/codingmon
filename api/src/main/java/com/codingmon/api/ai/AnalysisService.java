@@ -141,14 +141,15 @@ class AnalysisService {
         fail(claim);
     }
 
+    // active에서 먼저 뺀다. FAILED를 커밋한 뒤에 빼면 그 사이 같은 행을 다시 잡은 새 시도의 등록까지 지운다.
+    // 빼고 커밋하기 전에 다른 요청이 행을 다시 잡으면 이 시도의 fail은 attempt가 달라 아무것도 바꾸지 않는다.
     // DB가 내려가 FAILED로도 못 바꾸면 행은 PENDING으로 남고, 처리기에서 빠졌으므로 pending-timeout 뒤에 버려진 것으로 보인다.
     private void fail(AiReviewRepository.Claim claim) {
+        active.remove(claim.id());
         try {
             reviews.fail(claim);
         } catch (RuntimeException e) {
             log.error("AI 분석 {}을 실패로 기록하지 못했다", claim.id(), e);
-        } finally {
-            active.remove(claim.id());
         }
     }
 
