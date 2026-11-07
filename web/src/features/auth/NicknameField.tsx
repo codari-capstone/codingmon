@@ -14,15 +14,19 @@ import type { NicknameCheck } from './useNicknameCheck'
  *
  * @param busy 제출 요청이 오가는 중. 그때는 확인도 끈다 — 응답 순서에 따라 화면이
  *   모순된 상태가 된다.
+ * @param skipReason 확인 없이 저장할 수 있는 까닭(마이페이지에서 대소문자만 바꿀 때, MY-02).
+ *   있으면 [중복 확인]을 끄고 이 문구를 보여 준다.
  */
 export function NicknameField({
   check,
   inputRef,
   busy,
+  skipReason = null,
 }: {
   check: NicknameCheck
   inputRef: RefObject<HTMLInputElement | null>
   busy: boolean
+  skipReason?: string | null
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -39,13 +43,14 @@ export function NicknameField({
         <Button
           type="button"
           className="shrink-0"
-          disabled={!isValidNickname(check.value) || check.pending || busy}
+          disabled={!isValidNickname(check.value) || check.pending || busy || skipReason !== null}
           onClick={() => check.check()}
         >
           중복 확인
         </Button>
       </div>
       <p className="text-muted-foreground text-sm">2~16자, 한글·영문·숫자</p>
+      {skipReason !== null ? <p className="text-sm">{skipReason}</p> : null}
       {check.ok ? <p className="text-sm">쓸 수 있어요</p> : null}
       {check.taken ? (
         <p role="alert" className="text-destructive text-sm">
