@@ -504,17 +504,20 @@ describe('가입 완료의 토큰·오류 규칙', () => {
 describe('비밀번호 재설정 목', () => {
   afterEach(() => resetEmailCodes())
 
+  // GOOD의 비밀번호는 mockAccounts[0]의 현재 비밀번호와 같아 SAME_PASSWORD로 거절된다.
+  const NEW = { password: 'Codari!new12', passwordConfirm: 'Codari!new12' }
+
   it('가입된 이메일로 번호를 받아 확인하고 재설정하면 204다 (RESET 키와 resetToken 필드를 묶는다)', async () => {
     const token = await resetToken()
-    const res = await api.POST('/api/auth/password-reset', { body: { resetToken: token, ...GOOD } })
+    const res = await api.POST('/api/auth/password-reset', { body: { resetToken: token, ...NEW } })
     expect(res.response.status).toBe(204)
   })
 
   it('같은 토큰으로 두 번 재설정하면 두 번째는 RESET_EXPIRED다', async () => {
     const token = await resetToken()
-    await api.POST('/api/auth/password-reset', { body: { resetToken: token, ...GOOD } })
+    await api.POST('/api/auth/password-reset', { body: { resetToken: token, ...NEW } })
     const again = await api.POST('/api/auth/password-reset', {
-      body: { resetToken: token, ...GOOD },
+      body: { resetToken: token, ...NEW },
     })
     expect(code(again)).toBe('RESET_EXPIRED')
   })
@@ -522,21 +525,30 @@ describe('비밀번호 재설정 목', () => {
   it('비밀번호 오류 뒤에도 같은 토큰으로 다시 재설정된다 (오류에 토큰이 닳으면 화면이 막힌다)', async () => {
     const token = await resetToken()
     const bad = await api.POST('/api/auth/password-reset', {
-      body: { resetToken: token, ...GOOD, passwordConfirm: 'Codari!other1' },
+      body: { resetToken: token, ...NEW, passwordConfirm: 'Codari!other1' },
     })
     expect(code(bad)).toBe('PASSWORD_MISMATCH')
     const weak = await api.POST('/api/auth/password-reset', {
       body: { resetToken: token, password: 'short', passwordConfirm: 'short' },
     })
     expect(code(weak)).toBe('INVALID_PASSWORD')
-    const ok = await api.POST('/api/auth/password-reset', { body: { resetToken: token, ...GOOD } })
+    const same = await api.POST('/api/auth/password-reset', {
+      body: {
+        resetToken: token,
+        password: mockAccounts[0]!.password,
+        passwordConfirm: mockAccounts[0]!.password,
+      },
+    })
+    expect(same.response.status).toBe(400)
+    expect(code(same)).toBe('SAME_PASSWORD')
+    const ok = await api.POST('/api/auth/password-reset', { body: { resetToken: token, ...NEW } })
     expect(ok.response.status).toBe(204)
   })
 
   it('가입 토큰으로는 재설정할 수 없다 (목적이 섞이면 RESET_EXPIRED여야 한다)', async () => {
     const verificationToken = await signupToken()
     const res = await api.POST('/api/auth/password-reset', {
-      body: { resetToken: verificationToken, ...GOOD },
+      body: { resetToken: verificationToken, ...NEW },
     })
     expect(code(res)).toBe('RESET_EXPIRED')
   })
