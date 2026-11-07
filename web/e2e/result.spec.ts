@@ -42,7 +42,8 @@ test.describe('제출 결과 화면', () => {
     await page.getByRole('button', { name: '제출' }).click()
     await expect(page.getByText('틀렸습니다')).toBeVisible({ timeout: 15_000 })
 
-    await expect(page.getByRole('button', { name: 'AI 분석 (준비 중)' })).toBeDisabled()
+    // [AI 분석]은 결과 옆 AI 패널의 버튼이다(#41). 오답이라 누를 수 있다.
+    await expect(page.getByRole('button', { name: 'AI 분석' })).toBeEnabled()
     await page.getByRole('link', { name: '다시 풀기' }).click()
 
     // 제출한 언어가 주소에 담겨 온다.
