@@ -259,7 +259,9 @@ export function Component() {
         </div>
 
         {analyzable ? (
-          <AnalysisPanel submissionId={data.id} sourceCode={data.sourceCode ?? ''} />
+          // key: 제출이 바뀌면 다른 패널이다. 이어 쓰면 진행 중인 요청의 응답이 새 제출의
+          // 캐시에 들어간다(mutation이 마지막 렌더의 onSuccess로 끝나서).
+          <AnalysisPanel key={data.id} submissionId={data.id} sourceCode={data.sourceCode ?? ''} />
         ) : null}
       </div>
     </section>

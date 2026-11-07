@@ -12,17 +12,33 @@ export function analysisQueryKey(submissionId: number) {
   return ['analysis', submissionId] as const
 }
 
+/** 이만큼 지나도록 만드는 중이면 덜 자주 묻는다. 보통은 이 안에 끝난다. */
+const ANALYSIS_SLOW_AFTER_MS = 10_000
+/** 이만큼 지나면 가장 뜸하게 묻는다. */
+const ANALYSIS_SLOWEST_AFTER_MS = 60_000
+
 /**
  * 만드는 중(`PENDING`)일 때만 다시 묻는다(계약: "`status`가 `PENDING`이면 바뀔 때까지 `GET`을
  * 주기적으로 부른다"). 실패가 이어지면 채점 결과 폴링과 같은 규칙으로 늦추거나 멈춘다.
+ *
+ * 채점과 달리 오래 걸릴수록 뜸하게 묻는다. 대기열에 있는 분석은 오래 걸려도 `PENDING`이고,
+ * 서버가 처리 중에 내려간 분석은 15분이 지나야 `FAILED`가 된다(계약). 1초 간격이면 그동안
+ * 분석 하나에 900번을 묻는다. 기준은 요청한 시각(`createdAt`)이다 — 서버 시계라 어긋날 수
+ * 있지만, 어긋나도 간격이 1배와 10배 사이에서 바뀔 뿐이다.
  */
 export function analysisPollingInterval(
   error: unknown,
   analysis: SubmissionAnalysis | null | undefined,
+  now = Date.now(),
 ): number | false {
   if (analysis?.status !== 'PENDING') return false
   if (isDeadEnd(error, true)) return false
-  return error === null || error === undefined ? POLL_INTERVAL_MS : FAILING_INTERVAL_MS
+  if (error !== null && error !== undefined) return FAILING_INTERVAL_MS
+
+  const elapsed = now - Date.parse(analysis.createdAt)
+  if (elapsed >= ANALYSIS_SLOWEST_AFTER_MS) return POLL_INTERVAL_MS * 10
+  if (elapsed >= ANALYSIS_SLOW_AFTER_MS) return POLL_INTERVAL_MS * 3
+  return POLL_INTERVAL_MS
 }
 
 /**

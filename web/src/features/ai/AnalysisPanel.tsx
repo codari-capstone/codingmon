@@ -7,6 +7,7 @@ import { ListSkeleton } from '@/components/ListSkeleton'
 import { Button } from '@/components/ui/button'
 import { problemMessage } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
+import { isDeadEnd } from '@/features/result/resultQuery'
 import { analysisQuery, useRequestAnalysis } from './analysisQuery'
 import { countLines } from './countLines'
 
@@ -31,11 +32,13 @@ function Item({ badge, text }: { badge: '실행 결과' | '코드 분석'; text:
 /**
  * 원인 설명 (AI-03).
  *
- * 줄 번호는 제출 코드의 줄 수를 넘으면 버린다. 계약: 서버가 아직 범위를 검사하지 않는다(#79).
- * 없는 줄을 짚으면 학생이 그 줄을 찾아 헤맨다.
+ * 줄 번호는 1부터 제출 코드의 줄 수까지만 남기고 겹치면 하나로 줄인다. 계약: 서버가 아직
+ * 범위를 검사하지 않는다(#79). 없는 줄을 짚으면 학생이 그 줄을 찾아 헤맨다.
  */
 function Explanation({ analysis, lineCount }: { analysis: SubmissionAnalysis; lineCount: number }) {
-  const lines = analysis.suspectLines.filter((line) => line <= lineCount)
+  const lines = [...new Set(analysis.suspectLines)].filter(
+    (line) => Number.isInteger(line) && line >= 1 && line <= lineCount,
+  )
   return (
     <div className="flex flex-col gap-3">
       {analysis.summary !== null ? (
@@ -102,10 +105,12 @@ export function AnalysisPanel({
   }, [queryClient, error])
 
   let body: React.ReactNode
-  if (isPending) {
-    body = <ListSkeleton rows={2} />
-  } else if (data === undefined) {
+  // 오류를 띄우는 때와 폴링을 멈추는 때가 같다 (resultQuery의 isDeadEnd). 데이터만 보면
+  // `PENDING`을 든 채 403이 와서 폴링이 멈춰도 '분석하고 있어요'에 갇힌다.
+  if (isDeadEnd(error, data !== undefined)) {
     body = <ErrorState problem={error} onRetry={() => void refetch()} />
+  } else if (isPending || data === undefined) {
+    body = <ListSkeleton rows={2} />
   } else {
     const working = request.isPending || data?.status === 'PENDING'
     const done = !working && data?.status === 'COMPLETED' && !data.blocked
