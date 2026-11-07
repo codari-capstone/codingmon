@@ -56,7 +56,7 @@ export function HintSteps({
                   <p
                     ref={level === justOpened ? openedRef : undefined}
                     tabIndex={-1}
-                    className="text-sm leading-relaxed whitespace-pre-wrap outline-none"
+                    className="text-sm leading-relaxed whitespace-pre-wrap outline-none [overflow-wrap:anywhere]"
                   >
                     {hint}
                   </p>
