@@ -16,6 +16,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -48,10 +49,11 @@ class AnalysisControllerTest {
     private static final String HINT_2 = "2번 줄의 연산자를 살펴보세요";
     private static final String HINT_3 = "두 수의 합은 a + b로 구합니다";
 
-    // 가짜 모델. answer가 정한 대로 답하고, 부른 횟수를 센다.
+    // 가짜 모델. answer가 정한 대로 답하고, 부른 횟수와 받은 시스템 지시를 남긴다.
     static class FakeLlm implements LlmClient {
 
         final AtomicInteger calls = new AtomicInteger();
+        final List<String> systems = new CopyOnWriteArrayList<>();
         volatile Supplier<LlmResponse<?>> answer = FakeLlm::ok;
 
         @Override
@@ -68,7 +70,15 @@ class AnalysisControllerTest {
         @SuppressWarnings("unchecked")
         public <T> LlmResponse<T> complete(LlmRequest<T> request) {
             calls.incrementAndGet();
+            systems.add(request.system());
             return (LlmResponse<T>) answer.get();
+        }
+
+        // 3단계 힌트에 코드를 섞은 응답
+        static LlmResponse<?> leaking(String principle) {
+            AnalysisResult result = new AnalysisResult("두 수를 빼고 있어요", List.of(2), List.of("예제 1에서 3 대신 -1을 출력했어요"),
+                    List.of("2번 줄에서 더하기 대신 빼기를 쓴 것 같아요"), new AnalysisResult.Hints(HINT_1, HINT_2, principle));
+            return new LlmResponse<>(result, "{\"leaked\": true}", new LlmUsage(100, 50));
         }
 
         static LlmResponse<?> ok() {
@@ -113,6 +123,7 @@ class AnalysisControllerTest {
     void setUp() {
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(SecurityMockMvcConfigurers.springSecurity()).build();
         llm.calls.set(0);
+        llm.systems.clear();
         llm.answer = FakeLlm::ok;
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         userId = user("an-" + suffix);
@@ -466,7 +477,7 @@ class AnalysisControllerTest {
     void 결과를_저장하지_못하면_FAILED로_바꿔_다시_요청할_수_있게_한다() throws Exception {
         long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
         // JSON으로는 맞지만 PostgreSQL jsonb가 받지 않는 응답
-        llm.answer = () -> new LlmResponse<>(null, "{\"summary\":\"a\\u0000b\"}", LlmUsage.NONE);
+        llm.answer = () -> new LlmResponse<>(FakeLlm.ok().value(), "{\"summary\":\"a\\u0000b\"}", LlmUsage.NONE);
 
         mvc.perform(post(analysis(id)).with(as(userId)));
         awaitStatus(id, "FAILED");
@@ -474,6 +485,62 @@ class AnalysisControllerTest {
         llm.answer = FakeLlm::ok;
         mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
         awaitStatus(id, "COMPLETED");
+    }
+
+    @Test
+    void 정답_코드가_섞이면_지시를_강화해_한_번_다시_만든다() throws Exception {
+        jdbc.sql("insert into reference_solutions (problem_version_id, language, solution_role, source_code)"
+                + " values (:versionId, 'PYTHON', 'REFERENCE', :code)")
+                .param("versionId", versionId)
+                .param("code", "a, b = map(int, input().split())\nif a > b: print(a + b)\nelse: print(b + a)\n").update();
+        long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
+        AtomicInteger answered = new AtomicInteger();
+        llm.answer = () -> answered.getAndIncrement() == 0 ? FakeLlm.leaking("if a > b: print(a + b) 처럼 고치세요")
+                : FakeLlm.ok();
+
+        mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().isAccepted());
+        awaitStatus(id, "COMPLETED");
+
+        // 다시 만든 결과를 저장하고 보여 준다. 두 호출의 토큰이 같은 행에 더해진다.
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.blocked").value(false))
+                .andExpect(jsonPath("$.summary").value("두 수를 빼고 있어요"));
+        hint(id, 1).andExpect(status().isOk());
+        assertThat(llm.calls).hasValue(2);
+        assertThat(jdbc.sql("select input_tokens from ai_reviews where submission_id = :id").param("id", id)
+                .query(Integer.class).single()).isEqualTo(200);
+        // 두 번째 요청에만 어긴 규칙과 강화한 지시가 붙는다. 정답 코드 자체는 모델에 보내지 않는다.
+        assertThat(llm.systems.getFirst()).doesNotContain("# 다시 쓰기");
+        assertThat(llm.systems.get(1)).startsWith(llm.systems.getFirst().strip())
+                .contains("# 다시 쓰기", AnswerGuard.Rule.CODE_PATTERN.description,
+                        AnswerGuard.Rule.REFERENCE_SIMILAR.description)
+                .doesNotContain("print(b + a)");
+    }
+
+    @Test
+    void 다시_만들어도_섞이면_차단하고_보여_주지_않는다() throws Exception {
+        jdbc.sql("insert into concept_tags (slug, name) values ('test-greedy', '그리디') on conflict do nothing").update();
+        long tagId = jdbc.sql("select id from concept_tags where name = '그리디'").query(Long.class).single();
+        jdbc.sql("insert into problem_version_tags (problem_version_id, concept_tag_id) values (:versionId, :tagId)")
+                .param("versionId", versionId).param("tagId", tagId).update();
+        long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
+        llm.answer = () -> FakeLlm.leaking("그리디하게 큰 수부터 고르면 됩니다");
+
+        mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().isAccepted());
+        awaitStatus(id, "COMPLETED");
+
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.blocked").value(true))
+                .andExpect(jsonPath("$.summary").isEmpty())
+                .andExpect(jsonPath("$.hints", hasSize(0)));
+        hint(id, 1).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ANALYSIS_BLOCKED"));
+        // 차단된 결과도 재사용한다. 다시 눌러도 모델을 부르지 않는다.
+        mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().isOk());
+        assertThat(llm.calls).hasValue(2);
+        assertThat(llm.systems.get(1)).contains(AnswerGuard.Rule.ALGORITHM_NAME.description + ": 그리디");
+        assertThat(jdbc.sql("select content::text from ai_reviews where submission_id = :id").param("id", id)
+                .query(String.class).single()).isEqualTo(AnalysisService.BLOCKED_CONTENT);
     }
 
     private long completedAnalysis() throws Exception {

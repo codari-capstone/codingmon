@@ -5,7 +5,9 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -20,8 +22,11 @@ import com.codingmon.api.judge.Verdict;
 class AnalysisPrompt {
 
     private static final String SYSTEM_FILE = "system.md";
+    // 정답 코드 검사(#78)에 걸려 다시 만들 때 시스템 지시 뒤에 붙인다. {{violations}}에 어긴 규칙이 들어간다.
+    private static final String RETRY_FILE = "retry.md";
 
     private final Map<Verdict, String> systems = new EnumMap<>(Verdict.class);
+    private final String retry;
 
     // 버전은 LlmClient에서 받는다. ai_reviews.prompt_version에 남는 값과 읽는 폴더가 어긋나지 않게 출처를 하나로 둔다.
     @Autowired
@@ -36,6 +41,18 @@ class AnalysisPrompt {
                 systems.put(verdict, common.strip() + "\n\n" + read(version, verdict.name() + ".md").strip() + "\n");
             }
         }
+        retry = read(version, RETRY_FILE).strip();
+    }
+
+    // 정답 코드 검사에 걸린 뒤 한 번 다시 만들 요청. 어긴 규칙을 알려 주고 지시를 강화한다. 응답 글은 다시 보내지 않는다.
+    LlmRequest<AnalysisResult> retry(AnalysisInput input, List<AnswerGuard.Violation> violations) {
+        LlmRequest<AnalysisResult> first = request(input);
+        String broken = violations.stream()
+                .map(v -> "- " + v.rule().description + (v.tag() == null ? "" : ": " + v.tag()))
+                .distinct()
+                .collect(Collectors.joining("\n"));
+        return new LlmRequest<>(first.system() + "\n" + retry.replace("{{violations}}", broken) + "\n", first.user(),
+                first.schemaName(), first.schema(), first.responseType());
     }
 
     // 맞았습니다는 분석하지 않는다(F3 코드 리뷰가 따로 있다).
