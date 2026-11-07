@@ -27,4 +27,6 @@ LLM_URL=http://127.0.0.1:11434 LLM_MODEL=gemma4:12b ./gradlew test --tests 'com.
 
 오답 분석(F1·F2) 프롬프트는 `src/main/resources/prompts/analysis-<버전>/`에 있고 `AnalysisPrompt`가 읽는다. 버전은 `LLM_PROMPT_VERSION_ANALYSIS`(기본 `v1`)이며 `ai_reviews.prompt_version`에 그대로 남는다. 프롬프트를 고치면 폴더를 새 버전으로 복사해 고치고 이 값을 올린다. 그래야 이전 프롬프트로 만든 결과를 재사용하지 않는다.
 
+오답 분석은 `AnalysisService`가 요청을 받으면 `ai_reviews`에 `PENDING` 행을 만들고 처리기에 넣는다. 끝나면 모델 응답을 `content`에 담아 `COMPLETED`로, 실패하면 `FAILED`로 바꾼다. 같은 제출·같은 프롬프트 버전의 결과는 다시 만들지 않는다. `FAILED`이거나 `LLM_PENDING_TIMEOUT`(기본 15분)이 지나도 `PENDING`인 행은 다시 요청하면 같은 행으로 재시도한다. 서버가 처리 중에 내려가면 행이 `PENDING`으로 남기 때문이다. 결과는 그 시도를 시작한 `created_at`이 그대로일 때만 저장해, 늦게 끝난 이전 시도가 새 시도를 덮어쓰지 못한다.
+
 `AnalysisPromptIntegrationTest`는 판정별 오답 샘플(`AnalysisSamples`)을 실제 모델에 보내 스키마, 줄 번호 범위, 코드·정답 조각 유출, 마크다운·영어 값 이름이 섞였는지 본다. 응답 원문과 걸린 시간은 `build/analysis-eval/`에 남으니 힌트 내용은 사람이 읽고 평가한다.
