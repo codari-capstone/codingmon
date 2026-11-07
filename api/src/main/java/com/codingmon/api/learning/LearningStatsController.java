@@ -11,14 +11,22 @@ import com.codingmon.api.learning.LearningStatsRepository.LearningStats;
 class LearningStatsController {
 
     private final LearningStatsRepository stats;
+    private final UserActivityRepository activity;
 
-    LearningStatsController(LearningStatsRepository stats) {
+    LearningStatsController(LearningStatsRepository stats, UserActivityRepository activity) {
         this.stats = stats;
+        this.activity = activity;
     }
 
     // REP-01·02. 요청할 때마다 다시 계산한다. 하루 1회 저장하는 리포트(#85)와 다르다.
     @GetMapping("/api/users/me/learning-stats")
     LearningStats get(@AuthenticationPrincipal Jwt jwt) {
         return stats.find(Long.parseLong(jwt.getSubject()));
+    }
+
+    // MY-05
+    @GetMapping("/api/users/me/activity")
+    UserActivityRepository.UserActivity activity(@AuthenticationPrincipal Jwt jwt) {
+        return activity.find(Long.parseLong(jwt.getSubject()));
     }
 }

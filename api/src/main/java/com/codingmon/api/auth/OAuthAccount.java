@@ -38,6 +38,10 @@ class OAuthAccount {
         return userId;
     }
 
+    String getProviderUsername() {
+        return providerUsername;
+    }
+
     // 사용자명은 바뀔 수 있어 로그인할 때마다 최신 값으로 남긴다(참고용).
     void updateUsername(String providerUsername) {
         this.providerUsername = providerUsername;

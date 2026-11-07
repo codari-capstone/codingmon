@@ -10,7 +10,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.stereotype.Component;
 
-// IP별 발송·가입 여부 조회 제한(하루 20회)과 로그인 연속 실패 잠금(같은 이메일 5회 실패 시 5분).
+// IP별 발송·가입 여부 조회 제한(하루 20회), 로그인 연속 실패 잠금(같은 이메일 5회 실패 시 5분),
+// 비밀번호 변경의 현재 비밀번호 연속 실패 잠금(같은 사용자 5회 실패 시 5분, 로그인과 따로 센다).
 // ponytail: DB 문서대로 서버 메모리에서 센다. 재시작하면 초기화되고 서버가 한 대일 때만 정확하다. 서버를 늘리면 공유 저장소로 옮긴다.
 @Component
 class AuthRateLimiter {
@@ -25,6 +26,7 @@ class AuthRateLimiter {
     private volatile LocalDate day = today();
     private final Map<String, AtomicInteger> ipCounts = new ConcurrentHashMap<>();
     private final Map<String, LoginFailures> loginFailures = new ConcurrentHashMap<>();
+    private final Map<Long, LoginFailures> passwordFailures = new ConcurrentHashMap<>();
 
     // 가입과 재설정은 따로 센다. 하루는 UTC 날짜 기준이다.
     boolean tryIp(EmailCode.Purpose purpose, String ip) {
@@ -33,34 +35,53 @@ class AuthRateLimiter {
     }
 
     boolean isLoginLocked(String email, Instant now) {
-        LoginFailures failures = loginFailures.get(key(email));
-        return failures != null && failures.lockedUntil() != null && now.isBefore(failures.lockedUntil());
+        return isLocked(loginFailures.get(key(email)), now);
     }
 
     void recordLoginFailure(String email, Instant now) {
         startNewDayIfNeeded();
-        loginFailures.compute(key(email), (key, current) -> {
-            // 동시에 들어와 잠금 검사를 먼저 통과한 요청이 걸려 있는 잠금을 지우지 않게 한다.
-            if (current != null && current.lockedUntil() != null && now.isBefore(current.lockedUntil())) {
-                return current;
-            }
-            // 잠금이 풀렸으면 처음부터 다시 센다.
-            int count = current == null || current.lockedUntil() != null ? 1 : current.count() + 1;
-            return count >= LOGIN_MAX_FAILURES ? new LoginFailures(count, now.plus(LOGIN_LOCK)) : new LoginFailures(count, null);
-        });
+        loginFailures.compute(key(email), (key, current) -> afterFailure(current, now));
     }
 
     void resetLoginFailures(String email) {
         loginFailures.remove(key(email));
     }
 
-    // 날짜가 바뀌면 두 기록을 모두 비운다. 아무 이메일로나 실패를 쌓아도 메모리가 계속 늘지 않게 한다.
-    // 그 순간 걸려 있던 로그인 잠금은 최대 5분 일찍 풀린다.
+    boolean isPasswordLocked(long userId, Instant now) {
+        return isLocked(passwordFailures.get(userId), now);
+    }
+
+    void recordPasswordFailure(long userId, Instant now) {
+        startNewDayIfNeeded();
+        passwordFailures.compute(userId, (key, current) -> afterFailure(current, now));
+    }
+
+    void resetPasswordFailures(long userId) {
+        passwordFailures.remove(userId);
+    }
+
+    private static boolean isLocked(LoginFailures failures, Instant now) {
+        return failures != null && failures.lockedUntil() != null && now.isBefore(failures.lockedUntil());
+    }
+
+    private static LoginFailures afterFailure(LoginFailures current, Instant now) {
+        // 동시에 들어와 잠금 검사를 먼저 통과한 요청이 걸려 있는 잠금을 지우지 않게 한다.
+        if (isLocked(current, now)) {
+            return current;
+        }
+        // 잠금이 풀렸으면 처음부터 다시 센다.
+        int count = current == null || current.lockedUntil() != null ? 1 : current.count() + 1;
+        return count >= LOGIN_MAX_FAILURES ? new LoginFailures(count, now.plus(LOGIN_LOCK)) : new LoginFailures(count, null);
+    }
+
+    // 날짜가 바뀌면 기록을 모두 비운다. 아무 이메일로나 실패를 쌓아도 메모리가 계속 늘지 않게 한다.
+    // 그 순간 걸려 있던 잠금은 최대 5분 일찍 풀린다.
     private void startNewDayIfNeeded() {
         LocalDate today = today();
         if (!today.equals(day)) {
             ipCounts.clear();
             loginFailures.clear();
+            passwordFailures.clear();
             day = today;
         }
     }

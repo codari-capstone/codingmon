@@ -28,6 +28,10 @@ interface EmailCodeRepository extends JpaRepository<EmailCode, Long> {
     void invalidateActive(String email, EmailCode.Purpose purpose, Instant now);
 
     @Modifying
+    @Query("delete from EmailCode c where lower(c.email) = lower(:email)")
+    void deleteByEmail(String email);
+
+    @Modifying
     @Query("delete from EmailCode c where c.createdAt < :before")
     void deleteCreatedBefore(Instant before);
 }

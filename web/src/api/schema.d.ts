@@ -341,7 +341,8 @@ export interface paths {
          * 비밀번호 변경 (MY-03)
          * @description 비밀번호를 바꾸고 모든 기기에서 로그아웃시킨다(발급된 access·refresh token 모두 무효). 응답에서 refresh 쿠키를 지운다. 로그인은 다시 해야 한다.
          *     현재 비밀번호를 틀려도 401이 아니라 400 `WRONG_PASSWORD`다. 웹 클라이언트는 401을 세션 만료로 보고 로그인 화면으로 보내기 때문이다.
-         *     오류 `code`: `WRONG_PASSWORD`, `INVALID_PASSWORD`, `PASSWORD_MISMATCH`, `PASSWORD_NOT_SET`(403, GitHub 가입자), `PASSWORD_LOCKED`(429).
+         *     오류 `code`: `WRONG_PASSWORD`, `INVALID_PASSWORD`, `PASSWORD_MISMATCH`, `SAME_PASSWORD`(새 비밀번호가 현재 비밀번호와 같음), `PASSWORD_NOT_SET`(403, GitHub 가입자), `PASSWORD_LOCKED`(429).
+         *     검사 순서: `PASSWORD_NOT_SET` → `PASSWORD_LOCKED` → `WRONG_PASSWORD` → `INVALID_PASSWORD` → `PASSWORD_MISMATCH` → `SAME_PASSWORD`.
          *     같은 사용자가 현재 비밀번호를 5회 연속 틀리면 5분 동안 429 `PASSWORD_LOCKED`다. 로그인 잠금(`LOGIN_LOCKED`)과 따로 세므로 로그인은 막히지 않는다. 비밀번호를 재설정(COM-08)하면 이 잠금도 풀린다.
          */
         put: operations["changeMyPassword"];
