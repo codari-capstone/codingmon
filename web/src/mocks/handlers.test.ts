@@ -6,7 +6,7 @@ import type { ProblemListQuery, ProblemPage } from '@/api/types'
 import { MOCK_CODE, resetEmailCodes } from './fixtures/emailCodes'
 import { conceptTags, problems } from './fixtures/problems'
 import { mockAccounts } from './fixtures/users'
-import { resetSessions } from './handlers'
+import { resetSessions, resetSubmissions } from './handlers'
 import { server } from './server'
 
 async function fetchProblems(query: ProblemListQuery): Promise<ProblemPage> {
@@ -679,5 +679,56 @@ describe('제출 목의 검사 순서', () => {
     })
 
     expect(code(res)).toBe('SOURCE_EMPTY')
+  })
+})
+
+describe('AI 오답 분석 목', () => {
+  afterEach(() => resetSubmissions())
+  const path = { params: { path: { id: 23 } } } // 지난 제출 23: 틀렸습니다 (fixtures/history.ts)
+
+  it('처음 요청은 202 PENDING이고 다음 조회에 끝난다', async () => {
+    const requested = await api.POST('/api/submissions/{id}/analysis', path)
+    expect(requested.response.status).toBe(202)
+    expect(requested.data?.status).toBe('PENDING')
+
+    const polled = await api.GET('/api/submissions/{id}/analysis', path)
+    expect(polled.data?.status).toBe('COMPLETED')
+    expect(polled.data?.summary).not.toBeNull()
+  })
+
+  it('이미 있으면 다시 만들지 않고 200으로 준다', async () => {
+    await api.POST('/api/submissions/{id}/analysis', path)
+    const again = await api.POST('/api/submissions/{id}/analysis', path)
+
+    expect(again.response.status).toBe(200)
+  })
+
+  it('요청한 적이 없으면 조회는 404 ANALYSIS_NOT_FOUND다', async () => {
+    const res = await api.GET('/api/submissions/{id}/analysis', path)
+
+    expect(res.response.status).toBe(404)
+    expect(code(res)).toBe('ANALYSIS_NOT_FOUND')
+  })
+
+  it('정답 제출은 409 ANALYSIS_NOT_AVAILABLE이다', async () => {
+    const res = await api.POST('/api/submissions/{id}/analysis', { params: { path: { id: 11 } } })
+
+    expect(res.response.status).toBe(409)
+    expect(code(res)).toBe('ANALYSIS_NOT_AVAILABLE')
+  })
+
+  it('채점이 끝나지 않은 제출은 409, 없는 제출은 404다', async () => {
+    const submitted = await api.POST('/api/submissions', {
+      body: { problemId: 1, language: 'PYTHON', sourceCode: 'print(1)' },
+    })
+    const pending = await api.POST('/api/submissions/{id}/analysis', {
+      params: { path: { id: submitted.data!.id } },
+    })
+    const missing = await api.POST('/api/submissions/{id}/analysis', {
+      params: { path: { id: 9999 } },
+    })
+
+    expect(code(pending)).toBe('ANALYSIS_NOT_AVAILABLE')
+    expect(code(missing)).toBe('SUBMISSION_NOT_FOUND')
   })
 })

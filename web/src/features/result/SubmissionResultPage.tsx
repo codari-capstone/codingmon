@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { RUNTIME_ERROR_INFO, STATUS_LABEL, VERDICT_INFO } from '@/constants/verdicts'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import { solvePath } from '@/features/solve/solvePath'
+import { AnalysisPanel } from '@/features/ai/AnalysisPanel'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { parsePathId } from '@/lib/pathId'
 import { nextActions } from './nextActions'
@@ -219,32 +220,48 @@ export function Component() {
     )
   }
 
+  // AI 분석은 판정이 난 오답에만 있다(계약: 정답·채점 중·채점 불가는 409). 코드는 끝난 제출에만 온다.
+  const analyzable =
+    data.status === 'COMPLETED' &&
+    data.verdict !== null &&
+    data.verdict !== 'ACCEPTED' &&
+    data.sourceCode !== null
+
   return (
     <section className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">제출 결과</h1>
 
-      {/* 다시 풀기와 같은 주소를 쓴다 (solvePath) */}
-      <Link
-        to={solvePath(data.problemId, data.language)}
-        className="text-primary text-sm underline"
-      >
-        {data.problemTitle}
-      </Link>
+      {/* 화면 2: 넓으면 왼쪽 결과, 오른쪽 AI 패널. 좁으면 아래로 쌓는다(UX-05). */}
+      <div className={analyzable ? 'grid items-start gap-6 lg:grid-cols-2' : undefined}>
+        <div className="flex min-w-0 flex-col gap-4">
+          {/* 다시 풀기와 같은 주소를 쓴다 (solvePath) */}
+          <Link
+            to={solvePath(data.problemId, data.language)}
+            className="text-primary text-sm underline"
+          >
+            {data.problemTitle}
+          </Link>
 
-      <Headline result={data} />
-      <Explanation result={data} />
-      <SubmittedCode result={data} />
-      <NextActions result={data} />
+          <Headline result={data} />
+          <Explanation result={data} />
+          <SubmittedCode result={data} />
+          <NextActions result={data} />
 
-      {/* 끝난 제출만 기록 목록에 있다(계약). 채점 중에는 갈 곳이 없다. */}
-      {isFinished(data.status) ? (
-        <Link
-          to={problemSubmissionsPath(data.problemId)}
-          className="text-primary text-sm underline"
-        >
-          이 문제의 제출 기록
-        </Link>
-      ) : null}
+          {/* 끝난 제출만 기록 목록에 있다(계약). 채점 중에는 갈 곳이 없다. */}
+          {isFinished(data.status) ? (
+            <Link
+              to={problemSubmissionsPath(data.problemId)}
+              className="text-primary text-sm underline"
+            >
+              이 문제의 제출 기록
+            </Link>
+          ) : null}
+        </div>
+
+        {analyzable ? (
+          <AnalysisPanel submissionId={data.id} sourceCode={data.sourceCode ?? ''} />
+        ) : null}
+      </div>
     </section>
   )
 }

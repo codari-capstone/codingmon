@@ -85,6 +85,9 @@ export type ProblemHistoryPage = components['schemas']['ProblemHistoryPage']
 export type SubmissionSummary = components['schemas']['SubmissionSummary']
 export type SubmissionSummaryPage = components['schemas']['SubmissionSummaryPage']
 
+/** AI 오답 분석과 연 힌트 (AI-02~04). 내용은 `COMPLETED`이고 `blocked`가 아닐 때만 있다(계약). */
+export type SubmissionAnalysis = components['schemas']['SubmissionAnalysis']
+
 /** 개념별 학습 통계 (REP-01·02). 값은 서버가 계산한 그대로 보여 준다. */
 export type LearningStats = components['schemas']['LearningStats']
 export type ConceptStat = components['schemas']['ConceptStat']

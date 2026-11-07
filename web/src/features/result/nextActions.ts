@@ -12,13 +12,15 @@ export interface NextAction {
 /**
  * 판정에 따른 다음 행동 (RES-07).
  *
- * 정답이면 [AI 리뷰]·[다음 문제], 오답이면 [다시 풀기]·[AI 분석]이다. `ACCEPTED`가
- * 아닌 판정은 모두 오답으로 본다 — 출력 형식이 틀린 것도 다시 풀어야 하는 것은 같다.
+ * 정답이면 [AI 리뷰]·[다음 문제], 오답이면 [다시 풀기]다. 오답의 [AI 분석]은 이 목록이
+ * 아니라 AI 패널(`AnalysisPanel`)의 버튼이다 — 이동이 아니라 그 자리에서 분석을 받기
+ * 때문이다. `ACCEPTED`가 아닌 판정은 모두 오답으로 본다 — 출력 형식이 틀린 것도 다시
+ * 풀어야 하는 것은 같다.
  *
- * **셋은 아직 열 곳이 없다.** AI 분석은 #41, AI 리뷰는 #42, 다음 문제 추천은 #44가
- * 만든다. 그래도 넷을 다 둔다 — RES-07의 핵심은 "판정에 따라 버튼이 달라진다"이고,
- * 되는 것만 넣으면 그 규칙을 지금 테스트로 고정할 수 없다. 그 이슈들이 끝나면 여기
- * `pendingIssue`를 `to`로 바꾸는 것이 연결의 전부다.
+ * **둘은 아직 열 곳이 없다.** AI 리뷰는 #42, 다음 문제 추천은 #44가 만든다. 그래도
+ * 둔다 — RES-07의 핵심은 "판정에 따라 버튼이 달라진다"이고, 되는 것만 넣으면 그 규칙을
+ * 지금 테스트로 고정할 수 없다. 그 이슈들이 끝나면 여기 `pendingIssue`를 `to`로 바꾸는
+ * 것이 연결의 전부다.
  *
  * 채점 불가는 서버 문제라 판정이 없다(계약: `verdict`가 null이고 시도 횟수에 넣지
  * 않는다). 다시 제출할 길만 준다 — 안내 문구는 `VERDICT_INFO.JUDGE_ERROR`가 가진다.
@@ -43,9 +45,6 @@ export function nextActions(result: SubmissionResult): NextAction[] {
     ]
   }
 
-  return [
-    // 결과 화면의 제목 링크와 같은 주소를 쓴다 (solvePath).
-    { label: '다시 풀기', to: solvePath(result.problemId, result.language) },
-    { label: 'AI 분석', pendingIssue: '#41' },
-  ]
+  // 결과 화면의 제목 링크와 같은 주소를 쓴다 (solvePath).
+  return [{ label: '다시 풀기', to: solvePath(result.problemId, result.language) }]
 }

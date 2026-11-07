@@ -30,7 +30,7 @@ export function isTransient(error: unknown): boolean {
  * 기다려도 포기하지 않는 것으로 잡았다. 연속 실패를 직접 세려면 상태를 하나 더 들고 있어야
  * 해서, 세는 대신 뜸하게 묻는 쪽으로 바꿨다.
  */
-const FAILING_INTERVAL_MS = POLL_INTERVAL_MS * 5
+export const FAILING_INTERVAL_MS = POLL_INTERVAL_MS * 5
 
 /**
  * 더 해 볼 것이 없는 상태인지 — **화면이 오류를 띄우는 때와 폴링을 멈추는 때가 같다.**
