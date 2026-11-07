@@ -97,6 +97,9 @@ test.describe('제출 결과 화면', () => {
       await page.goto('/submissions/23')
       await page.getByRole('button', { name: 'AI 분석' }).click()
       await expect(page.getByText(/별 120개로 나옵니다/)).toBeVisible({ timeout: 10_000 })
+      // 힌트도 모델이 만든 글이다. 1단계 힌트에도 긴 토큰이 있다(handlers.ts).
+      await page.getByRole('button', { name: '1단계 관찰 보기' }).click()
+      await expect(page.getByText(/한 줄이 길어집니다/)).toBeVisible()
 
       const sizes = await page.evaluate(() => {
         const panel = document.querySelector('section[aria-labelledby="analysis-heading"]')

@@ -731,4 +731,45 @@ describe('AI 오답 분석 목', () => {
     expect(code(pending)).toBe('ANALYSIS_NOT_AVAILABLE')
     expect(code(missing)).toBe('SUBMISSION_NOT_FOUND')
   })
+
+  describe('힌트 열기', () => {
+    const open = (level: number) =>
+      api.POST('/api/submissions/{id}/analysis/hints', { ...path, body: { level } })
+
+    it('다음 단계만 열고 연 단계까지만 힌트를 준다', async () => {
+      await api.POST('/api/submissions/{id}/analysis', path)
+      const first = await open(1)
+
+      expect(first.data?.revealedHintLevel).toBe(1)
+      expect(first.data?.hints).toHaveLength(1)
+    })
+
+    it('건너뛰면 409 HINT_LEVEL_SKIPPED다', async () => {
+      await api.POST('/api/submissions/{id}/analysis', path)
+      const res = await open(2)
+
+      expect(res.response.status).toBe(409)
+      expect(code(res)).toBe('HINT_LEVEL_SKIPPED')
+    })
+
+    it('이미 연 단계를 다시 보내면 바뀌지 않고 200이다', async () => {
+      await api.POST('/api/submissions/{id}/analysis', path)
+      await open(1)
+      await open(2)
+      const again = await open(1)
+
+      expect(again.response.status).toBe(200)
+      expect(again.data?.revealedHintLevel).toBe(2)
+    })
+
+    it('분석이 없으면 404, level이 1~3이 아니면 code 없는 400이다', async () => {
+      const missing = await open(1)
+      await api.POST('/api/submissions/{id}/analysis', path)
+      const outOfRange = await open(4)
+
+      expect(code(missing)).toBe('ANALYSIS_NOT_FOUND')
+      expect(outOfRange.response.status).toBe(400)
+      expect(code(outOfRange)).toBeUndefined()
+    })
+  })
 })

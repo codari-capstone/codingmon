@@ -88,3 +88,38 @@ export function useRequestAnalysis(submissionId: number) {
     onError: (error) => forgetSessionIfUnauthorized(queryClient, error),
   })
 }
+
+/**
+ * [n단계 보기] (AI-04). 다음 단계만 연다 — 계약이 건너뛰기를 409로 막는다.
+ *
+ * 연 힌트는 학습 통계의 평균 힌트 단계와 제출 기록의 힌트 단계에 들어간다(계약). 그
+ * 화면들이 캐시를 들고 있으면 옛 숫자가 보이므로 같이 무효화한다.
+ *
+ * 다른 탭에서 먼저 열었거나 분석이 바뀌었으면 409(`HINT_LEVEL_SKIPPED`·`ANALYSIS_NOT_READY`·
+ * `ANALYSIS_BLOCKED`)다. 화면이 든 상태가 낡은 것이니 분석을 다시 받아 지금 상태로 맞춘다.
+ */
+export function useRevealHint(submissionId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (level: number): Promise<SubmissionAnalysis> => {
+      const result = await api.POST('/api/submissions/{id}/analysis/hints', {
+        params: { path: { id: submissionId } },
+        body: { level },
+      })
+      if (result.data === undefined) fail(result)
+      return result.data
+    },
+    onSuccess: async (analysis) => {
+      await queryClient.cancelQueries({ queryKey: analysisQueryKey(submissionId) })
+      queryClient.setQueryData(analysisQueryKey(submissionId), analysis)
+      void queryClient.invalidateQueries({ queryKey: ['learning-stats'] })
+      void queryClient.invalidateQueries({ queryKey: ['problem-history'] })
+    },
+    onError: (error) => {
+      forgetSessionIfUnauthorized(queryClient, error)
+      if ((error as { status?: number }).status === 409) {
+        void queryClient.invalidateQueries({ queryKey: analysisQueryKey(submissionId) })
+      }
+    },
+  })
+}

@@ -10,6 +10,7 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { isDeadEnd } from '@/features/result/resultQuery'
 import { analysisQuery, useRequestAnalysis } from './analysisQuery'
 import { countLines } from './countLines'
+import { HintSteps } from './HintSteps'
 
 /** [실행 결과]/[코드 분석] 항목 하나 (AI-03). 모델이 만든 문장이라 글자 그대로 보여 준다(계약). */
 function Item({ badge, text }: { badge: '실행 결과' | '코드 분석'; text: string }) {
@@ -81,7 +82,7 @@ function statusText(working: boolean, analysis: SubmissionAnalysis | null): stri
 }
 
 /**
- * AI 오답 분석 (AI-01·02·03·06). 채점이 끝난 오답에서만 그린다(결과 화면이 고른다).
+ * AI 오답 분석 (AI-01·02·03·06)과 단계별 힌트 (AI-04). 채점이 끝난 오답에서만 그린다(결과 화면이 고른다).
  *
  * 들어오면 저장된 분석부터 묻는다 — 새로고침하거나 제출 기록에서 다시 와도 이미 받은
  * 설명이 그대로 보인다. 요청한 적이 없으면 [AI 분석] 버튼이다.
@@ -93,9 +94,12 @@ function statusText(working: boolean, analysis: SubmissionAnalysis | null): stri
 export function AnalysisPanel({
   submissionId,
   sourceCode,
+  retryPath,
 }: {
   submissionId: number
   sourceCode: string
+  /** [코드 고치러 가기]의 주소. 결과 화면의 [다시 풀기]와 같다 (solvePath). */
+  retryPath: string
 }) {
   const queryClient = useQueryClient()
   const { data, isPending, error, refetch } = useQuery(analysisQuery(submissionId))
@@ -129,7 +133,12 @@ export function AnalysisPanel({
             틀린 이유와 의심되는 줄을 AI가 짚어 줘요. 정답 코드는 알려 주지 않아요.
           </p>
         ) : null}
-        {done ? <Explanation analysis={data} lineCount={countLines(sourceCode)} /> : null}
+        {done ? (
+          <>
+            <Explanation analysis={data} lineCount={countLines(sourceCode)} />
+            <HintSteps submissionId={submissionId} analysis={data} retryPath={retryPath} />
+          </>
+        ) : null}
         {request.isError ? (
           <p role="alert" className="text-destructive text-sm">
             {problemMessage(request.error)}
