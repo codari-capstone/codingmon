@@ -82,7 +82,7 @@ class PasswordResetService {
         String passwordHash = passwordEncoder.encode(password);
         transactions.executeWithoutResult(status -> {
             // UPDATE가 사용자 행을 잠그므로 refresh token 폐기와 갱신·로그인 발급이 겹치지 않는다.
-            if (users.resetPassword(email, tokenVersion.intValue(), passwordHash) == 0) {
+            if (users.changePassword(user.getId(), tokenVersion.intValue(), passwordHash) == 0) {
                 throw expired();
             }
             refreshTokens.revokeAllOfUser(user.getId(), Instant.now());
