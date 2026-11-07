@@ -565,17 +565,17 @@ export interface paths {
         /**
          * 저장된 AI 오답 분석 (AI-02·03·04, HIST-02)
          * @description 분석을 만드는 동안의 폴링과, 제출 기록에서 그 제출의 분석을 다시 볼 때 쓴다.
-         *     힌트는 연 단계(`revealedHintLevel`)까지만 준다. 브라우저에 미리 내려보내지 않는다(`AI-002`).
+         *     힌트는 연 단계(`revealedHintLevel`)까지만 준다. 브라우저에 미리 내려보내지 않는다(기술명세서 `AI-002`).
          *     로그인한 본인 제출의 분석만 본다. 분석이 없거나 남의 제출이면 404 `ANALYSIS_NOT_FOUND`다. 분석을 요청하지 않은 제출이면 정상적으로 404다.
          *     프롬프트 버전이 바뀌어 분석이 여럿이면 다음 순서로 하나를 고른다. 요청·힌트 열기도 같은 분석을 대상으로 한다.
-         *     1. 지금 버전의 분석이 `FAILED`가 아니면 그것
-         *     2. 아니면 이전 버전의 끝난(`COMPLETED`) 분석 중 마지막 것. 새 버전이 실패해도 이미 본 분석과 연 힌트가 사라지지 않는다
-         *     3. 그것도 없으면 지금 버전의 `FAILED`, 그다음 이전 버전 중 마지막 것
+         *     1. 지금 버전의 분석이 `FAILED`도 차단(`blocked`)도 아니면 그것
+         *     2. 아니면 이전 버전의 차단되지 않은 끝난(`COMPLETED`) 분석 중 마지막 것. 새 버전이 실패하거나 차단돼도 이미 본 분석과 연 힌트가 사라지지 않는다
+         *     3. 그것도 없으면 지금 버전의 분석(`FAILED`면 다시 요청할 수 있다), 그다음 이전 버전 중 마지막 것
          */
         get: operations["getAnalysis"];
         put?: never;
         /**
-         * AI 오답 분석 요청 (AI-01·02, `AI-001`)
+         * AI 오답 분석 요청 (AI-01·02, 기술명세서 `AI-001`)
          * @description [AI 분석] 버튼. 원인 설명과 힌트 3단계를 한 번의 AI 호출로 만들어 서버에 저장한다(`docs/AI_FEATURES.md` 3절).
          *     로그인한 본인의 채점 제출 중 판정이 정답이 아닌 것만 분석한다.
          *     - 지금 프롬프트 버전의 분석이 끝났거나(`COMPLETED`) 만드는 중(`PENDING`)이면 AI를 다시 부르지 않는다.
@@ -602,7 +602,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 힌트 한 단계 열기 (AI-04, `AI-002`)
+         * 힌트 한 단계 열기 (AI-04, 기술명세서 `AI-002`)
          * @description [힌트 보기]. `GET`이 주는 분석의 힌트를 `level` 단계까지 연다. AI를 다시 부르지 않고 저장된 힌트를 준다.
          *     - 다음 단계(`revealedHintLevel + 1`)만 열 수 있다. 건너뛰면 409 `HINT_LEVEL_SKIPPED`다.
          *     - 이미 연 단계를 다시 보내면 바뀌지 않고 200이다. 버튼을 두 번 눌러도 한 단계만 열린다.
@@ -1301,7 +1301,10 @@ export interface components {
             blocked: boolean;
             /** @description 틀린 이유 요약 */
             summary: string | null;
-            /** @description 원인일 가능성이 높은 줄 번호(제출 코드 기준, 1부터) */
+            /**
+             * @description 원인일 가능성이 높은 줄 번호(제출 코드 기준, 1부터).
+             *     제출 코드의 줄 수 안인지는 아직 서버가 검사하지 않는다(#79). 그 전까지 화면은 줄 수를 넘는 번호를 무시한다.
+             */
             suspectLines: number[];
             /** @description [실행 결과] 배지 항목. 실행 결과로 확인된 사실 */
             facts: string[];
