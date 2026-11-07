@@ -10,10 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.Instant;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -39,7 +40,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 // 실제 PostgreSQL에서 분석 요청·저장·재사용과 힌트 공개를 API로 확인한다(#77). 모델은 가짜다.
-@SpringBootTest
+// 버려진 PENDING을 빨리 보려고 제한 시간을 1초로 둔다. 처리 중인 시도는 그래도 실패로 보이지 않아야 한다.
+@SpringBootTest(properties = "app.llm.pending-timeout=1s")
 class AnalysisControllerTest {
 
     private static final String HINT_1 = "예제 1의 출력과 기대 출력을 비교해 보세요";
@@ -287,8 +289,16 @@ class AnalysisControllerTest {
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.summary").isEmpty());
 
-        llm.answer = FakeLlm::ok;
-        mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().isAccepted());
+        CountDownLatch release = new CountDownLatch(1);
+        llm.answer = () -> {
+            await(release);
+            return FakeLlm.ok();
+        };
+        mvc.perform(post(analysis(id)).with(as(userId)))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.completedAt").isEmpty());
+        release.countDown();
         awaitStatus(id, "COMPLETED");
 
         assertThat(llm.calls).hasValue(2);
@@ -313,13 +323,13 @@ class AnalysisControllerTest {
     @Test
     void 다시_시작한_뒤_늦게_끝난_이전_시도는_결과를_덮어쓰지_못한다() {
         long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
-        Instant staleBefore = Instant.now().minusSeconds(900);
-        AiReviewRepository.Claim first = reviews.claim(id, ReviewType.ANALYSIS, "v1", "fake-model", staleBefore)
+        AiReviewRepository.Abandoned abandoned = new AiReviewRepository.Abandoned(Duration.ofMinutes(15), Set.of());
+        AiReviewRepository.Claim first = reviews.claim(id, ReviewType.ANALYSIS, "v1", "fake-model", abandoned)
                 .orElseThrow();
         // 첫 시도가 끝나지 않고 오래되어 다시 시작한 경우
         jdbc.sql("update ai_reviews set created_at = now() - interval '1 hour' where id = :id").param("id", first.id())
                 .update();
-        AiReviewRepository.Claim second = reviews.claim(id, ReviewType.ANALYSIS, "v1", "fake-model", staleBefore)
+        AiReviewRepository.Claim second = reviews.claim(id, ReviewType.ANALYSIS, "v1", "fake-model", abandoned)
                 .orElseThrow();
 
         assertThat(second.id()).isEqualTo(first.id());
@@ -327,9 +337,104 @@ class AnalysisControllerTest {
         assertThat(reviews.fail(first)).isFalse();
         assertThat(reviews.complete(second, "{\"summary\":\"새\"}")).isTrue();
         // 끝났거나 진행 중인 시도가 있으면 새로 시작하지 않는다.
-        assertThat(reviews.claim(id, ReviewType.ANALYSIS, "v1", "fake-model", staleBefore)).isEmpty();
+        assertThat(reviews.claim(id, ReviewType.ANALYSIS, "v1", "fake-model", abandoned)).isEmpty();
         assertThat(jdbc.sql("select content->>'summary' from ai_reviews where id = :id").param("id", first.id())
                 .query(String.class).single()).isEqualTo("새");
+    }
+
+    @Test
+    void 이_서버가_처리_중인_분석은_오래_걸려도_실패로_보지_않는다() throws Exception {
+        long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
+        CountDownLatch release = new CountDownLatch(1);
+        llm.answer = () -> {
+            await(release);
+            return FakeLlm.ok();
+        };
+        mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().isAccepted());
+        // 제한 시간(1초)이 지나도 처리기에 남아 있으면 PENDING이고, 다시 눌러도 또 부르지 않는다.
+        Thread.sleep(1_500);
+
+        mvc.perform(get(analysis(id)).with(as(userId))).andExpect(jsonPath("$.status").value("PENDING"));
+        mvc.perform(post(analysis(id)).with(as(userId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"));
+        release.countDown();
+        awaitStatus(id, "COMPLETED");
+
+        assertThat(llm.calls).hasValue(1);
+    }
+
+    @Test
+    void 새_프롬프트_버전이_실패해도_이전_버전의_분석과_연_힌트를_보여_준다() throws Exception {
+        long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
+        jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, content,"
+                + " revealed_hint_level, completed_at)"
+                + " values (:id, 'ANALYSIS', 'v0', 'old-model', 'COMPLETED', cast(:content as jsonb), 1, now())")
+                .param("id", id).param("content", FakeLlm.ok().json()).update();
+
+        // 지금 버전(v1)의 결과가 없으면 이전 버전을 보여 주고, 힌트도 그 결과에 연다.
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.hints", hasSize(1)));
+        hint(id, 2).andExpect(status().isOk()).andExpect(jsonPath("$.hints", hasSize(2)));
+
+        llm.answer = () -> {
+            throw new LlmException(LlmException.Kind.UNAVAILABLE, "연결 실패", null, LlmUsage.NONE);
+        };
+        mvc.perform(post(analysis(id)).with(as(userId)));
+        awaitVersionStatus(id, "v1", "FAILED");
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.revealedHintLevel").value(2));
+        // 실패한 새 버전 대신 이전 버전 결과를 돌려준다(새로 시작하지 못했으므로 200).
+        mvc.perform(post(analysis(id)).with(as(userId)));
+        awaitVersionStatus(id, "v1", "FAILED");
+
+        llm.answer = FakeLlm::ok;
+        mvc.perform(post(analysis(id)).with(as(userId)));
+        awaitVersionStatus(id, "v1", "COMPLETED");
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.revealedHintLevel").value(0));
+        hint(id, 1).andExpect(status().isOk());
+        assertThat(jdbc.sql("select string_agg(prompt_version || '=' || revealed_hint_level, ',' order by prompt_version)"
+                + " from ai_reviews where submission_id = :id").param("id", id).query(String.class).single())
+                .isEqualTo("v0=2,v1=1");
+    }
+
+    @Test
+    void 차단된_분석은_내용과_힌트_없이_보여_주고_다시_만들지_않는다() throws Exception {
+        long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
+        jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, content, completed_at)"
+                + " values (:id, 'ANALYSIS', 'v1', 'fake-model', 'COMPLETED', '{\"blocked\": true}', now())")
+                .param("id", id).update();
+
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.blocked").value(true))
+                .andExpect(jsonPath("$.summary").isEmpty())
+                .andExpect(jsonPath("$.hints", hasSize(0)));
+        hint(id, 1).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ANALYSIS_BLOCKED"));
+        mvc.perform(post(analysis(id)).with(as(userId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocked").value(true));
+
+        assertThat(llm.calls).hasValue(0);
+        assertThat(maxHintLevel()).isZero();
+    }
+
+    @Test
+    void 결과를_저장하지_못하면_FAILED로_바꿔_다시_요청할_수_있게_한다() throws Exception {
+        long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
+        // JSON으로는 맞지만 PostgreSQL jsonb가 받지 않는 응답
+        llm.answer = () -> new LlmResponse<>(null, "{\"summary\":\"a\\u0000b\"}", LlmUsage.NONE);
+
+        mvc.perform(post(analysis(id)).with(as(userId)));
+        awaitStatus(id, "FAILED");
+
+        llm.answer = FakeLlm::ok;
+        mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
+        awaitStatus(id, "COMPLETED");
     }
 
     private long completedAnalysis() throws Exception {
@@ -356,6 +461,20 @@ class AnalysisControllerTest {
             Thread.sleep(50);
         }
         throw new AssertionError("AI 분석 상태가 " + expected + "가 되지 않았다: " + status);
+    }
+
+    private void awaitVersionStatus(long submissionId, String version, String expected) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        String status = null;
+        while (System.nanoTime() < deadline) {
+            status = jdbc.sql("select status from ai_reviews where submission_id = :id and prompt_version = :version")
+                    .param("id", submissionId).param("version", version).query(String.class).optional().orElse(null);
+            if (expected.equals(status)) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("AI 분석(" + version + ") 상태가 " + expected + "가 되지 않았다: " + status);
     }
 
     private int maxHintLevel() {

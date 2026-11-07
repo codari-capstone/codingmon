@@ -39,7 +39,7 @@ public class UserProblemStatsRepository {
     @Transactional(propagation = Propagation.MANDATORY)
     public void recordHintRevealed(long submissionId, int level) {
         jdbc.sql("update user_problem_stats st set"
-                + "   max_revealed_hint_level = greatest(st.max_revealed_hint_level, :level), updated_at = now()"
+                + "   max_revealed_hint_level = :level, updated_at = now()"
                 + " from submissions s join problem_versions v on v.id = s.problem_version_id"
                 + " where s.id = :id and st.user_id = s.user_id and st.problem_id = v.problem_id"
                 + "   and not st.solved and st.max_revealed_hint_level < :level")
