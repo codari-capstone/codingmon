@@ -44,6 +44,7 @@ export const router = createBrowserRouter([
                 path: 'submissions/:id',
                 lazy: () => import('@/features/result/SubmissionResultPage'),
               },
+              { path: 'me', lazy: () => import('@/features/mypage/MyPage') },
               { path: 'me/report', lazy: () => import('@/features/report/ReportPage') },
               {
                 // RequireAdmin은 역할만 본다. 비로그인이 403을 보지 않도록 RequireAuth 안에 둔다.

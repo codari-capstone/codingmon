@@ -48,11 +48,25 @@ export const mockAccounts: MockAccount[] = [
   {
     email: 'user@codari.test',
     password: 'Codari!test1',
-    user: { id: 1, nickname: '코다리', role: 'USER' },
+    user: {
+      id: 1,
+      nickname: '코다리',
+      role: 'USER',
+      email: 'us***@codari.test',
+      loginMethod: 'EMAIL',
+      githubUsername: null,
+    },
   },
   {
     email: 'admin@codari.test',
     password: 'Codari!admin1',
-    user: { id: 2, nickname: '관리자', role: 'ADMIN' },
+    user: {
+      id: 2,
+      nickname: '관리자',
+      role: 'ADMIN',
+      email: 'ad***@codari.test',
+      loginMethod: 'EMAIL',
+      githubUsername: null,
+    },
   },
 ]

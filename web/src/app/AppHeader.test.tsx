@@ -108,7 +108,17 @@ describe('AppHeader', () => {
   })
 
   it('USER에게는 관리자 링크를 보여 주지 않는다', () => {
-    mockAuth({ user: { id: 1, nickname: '코다리', role: 'USER' }, isAuthenticated: true })
+    mockAuth({
+      user: {
+        id: 1,
+        nickname: '코다리',
+        role: 'USER',
+        email: 'us***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
+      isAuthenticated: true,
+    })
     renderHeader()
 
     expect(screen.getByRole('button', { name: /사용자 메뉴/ })).toBeInTheDocument()
@@ -116,7 +126,17 @@ describe('AppHeader', () => {
   })
 
   it('ADMIN에게만 관리자 링크를 보여 준다 (COM-05)', () => {
-    mockAuth({ user: { id: 2, nickname: '관리자', role: 'ADMIN' }, isAuthenticated: true })
+    mockAuth({
+      user: {
+        id: 2,
+        nickname: '관리자',
+        role: 'ADMIN',
+        email: 'ad***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
+      isAuthenticated: true,
+    })
     renderHeader()
 
     expect(screen.getByRole('link', { name: '관리자' })).toHaveAttribute('href', '/admin')
@@ -131,6 +151,27 @@ describe('AppHeader', () => {
     expect(screen.getByRole('link', { name: '내 학습' })).toBeInTheDocument()
   })
 
+  it('사용자 메뉴는 마이페이지·내 학습·로그아웃 순이다 (COM-01)', async () => {
+    mockAuth({
+      user: {
+        id: 1,
+        nickname: '코다리',
+        role: 'USER',
+        email: 'us***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
+      isAuthenticated: true,
+    })
+    const user = userEvent.setup()
+    renderHeader()
+
+    await user.click(screen.getByRole('button', { name: /사용자 메뉴/ }))
+    const items = await screen.findAllByRole('menuitem')
+    expect(items.map((item) => item.textContent)).toEqual(['마이페이지', '내 학습', '로그아웃'])
+    expect(items[0]).toHaveAttribute('href', '/me')
+  })
+
   it('사용자 메뉴의 로그아웃을 고르면 로그아웃을 요청한다 (COM-03)', async () => {
     let requested = false
     server.use(
@@ -139,7 +180,17 @@ describe('AppHeader', () => {
         return new HttpResponse(null, { status: 204 })
       }),
     )
-    mockAuth({ user: { id: 1, nickname: '코다리', role: 'USER' }, isAuthenticated: true })
+    mockAuth({
+      user: {
+        id: 1,
+        nickname: '코다리',
+        role: 'USER',
+        email: 'us***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
+      isAuthenticated: true,
+    })
     const user = userEvent.setup()
     renderHeader()
 

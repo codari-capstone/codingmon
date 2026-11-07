@@ -55,4 +55,6 @@ export async function adoptSession(client: QueryClient, user: CurrentUser): Prom
   client.removeQueries({ queryKey: ['submissions'] })
   // 학습 통계(REP-01·02)도 본인 풀이로 계산한 값이라 같은 이유로 지운다.
   client.removeQueries({ queryKey: ['learning-stats'] })
+  // 풀이 요약·잔디(MY-05)도 본인 제출로 센 값이다.
+  client.removeQueries({ queryKey: ['activity'] })
 }

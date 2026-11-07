@@ -236,7 +236,7 @@ describe('MSW 인증 핸들러', () => {
     expect(login.data).not.toHaveProperty('nickname')
 
     const me = await api.GET('/api/users/me', asUser(login.data!.accessToken))
-    expect(me.data).toEqual({ id: 1, nickname: '코다리', role: 'USER' })
+    expect(me.data).toEqual(mockAccounts[0]!.user)
   })
 
   it('자격 증명이 틀리면 401이고 토큰을 주지 않는다', async () => {
@@ -293,7 +293,7 @@ describe('MSW 인증 핸들러', () => {
     })
 
     const me = await api.GET('/api/users/me', asUser(login.data!.accessToken))
-    expect(me.data).toEqual({ id: 2, nickname: '관리자', role: 'ADMIN' })
+    expect(me.data).toEqual(mockAccounts[1]!.user)
   })
 })
 
