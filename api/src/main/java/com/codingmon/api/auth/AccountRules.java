@@ -3,6 +3,7 @@ package com.codingmon.api.auth;
 import java.util.regex.Pattern;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.web.ErrorResponseException;
 
 // 기능명세 '계정 규칙'. DB 제약이 아니라 서버에서 검사한다.
 final class AccountRules {
@@ -47,5 +48,10 @@ final class AccountRules {
             throw AuthErrors.error(HttpStatus.BAD_REQUEST, "PASSWORD_MISMATCH", "비밀번호가 일치하지 않아요");
         }
         return password;
+    }
+
+    // 비밀번호 변경(MY-03)과 재설정(COM-08)이 같은 문구로 답한다.
+    static ErrorResponseException samePassword() {
+        return AuthErrors.error(HttpStatus.BAD_REQUEST, "SAME_PASSWORD", "현재 비밀번호와 달라야 해요");
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.ErrorResponseException;
 
+import com.codingmon.api.user.User;
 import com.codingmon.api.user.UserRepository;
 
 // 비밀번호 재설정(COM-08). 일반 가입 계정(password_hash가 있는 계정)만 대상이다.
@@ -68,22 +69,27 @@ class PasswordResetService {
     void reset(String resetToken, String password, String passwordConfirm) {
         Jwt certificate = certificates.verify(resetToken, AuthCertificates.Purpose.PASSWORD_RESET)
                 .orElseThrow(PasswordResetService::expired);
-        AccountRules.password(password, passwordConfirm);
         String email = certificate.getClaimAsString(EMAIL_CLAIM);
         Number tokenVersion = certificate.getClaim(TOKEN_VERSION_CLAIM);
+        // 이미 쓴 증명서면 비밀번호 규칙을 보기 전에 만료로 답한다. 실제 변경은 아래 UPDATE가 다시 확인한다.
+        User user = users.findByEmail(email)
+                .filter(found -> found.getTokenVersion() == tokenVersion.intValue() && found.getPasswordHash() != null)
+                .orElseThrow(PasswordResetService::expired);
+        AccountRules.password(password, passwordConfirm);
+        if (passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw AccountRules.samePassword();
+        }
         String passwordHash = passwordEncoder.encode(password);
-        Long userId = transactions.execute(status -> {
+        transactions.executeWithoutResult(status -> {
             // UPDATE가 사용자 행을 잠그므로 refresh token 폐기와 갱신·로그인 발급이 겹치지 않는다.
-            if (users.resetPassword(email, tokenVersion.intValue(), passwordHash) == 0) {
+            if (users.changePassword(user.getId(), tokenVersion.intValue(), passwordHash) == 0) {
                 throw expired();
             }
-            Long id = users.findByEmail(email).orElseThrow(PasswordResetService::expired).getId();
-            refreshTokens.revokeAllOfUser(id, Instant.now());
-            return id;
+            refreshTokens.revokeAllOfUser(user.getId(), Instant.now());
         });
         // 이메일 인증을 마친 본인이므로, 비밀번호를 잊어 걸린 로그인·비밀번호 변경 잠금도 푼다.
         limiter.resetLoginFailures(email);
-        limiter.resetPasswordFailures(userId);
+        limiter.resetPasswordFailures(user.getId());
     }
 
     private static ErrorResponseException expired() {

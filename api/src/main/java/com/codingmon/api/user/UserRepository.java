@@ -24,13 +24,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("select count(u) > 0 from User u where lower(u.email) = lower(:email) and u.passwordHash is not null")
     boolean existsPasswordAccount(String email);
 
-    // 증명서를 받은 뒤 이미 재설정했으면 token_version이 달라 갱신되지 않는다.
-    @Modifying
-    @Query("update User u set u.passwordHash = :passwordHash, u.tokenVersion = u.tokenVersion + 1"
-            + " where lower(u.email) = lower(:email) and u.tokenVersion = :tokenVersion and u.passwordHash is not null")
-    int resetPassword(String email, int tokenVersion, String passwordHash);
-
-    // 비밀번호를 비교한 뒤 이미 바뀌었으면 token_version이 달라 갱신되지 않는다.
+    // 재설정 증명서를 받거나 비밀번호를 비교한 뒤 이미 바뀌었으면 token_version이 달라 갱신되지 않는다.
     @Modifying
     @Query("update User u set u.passwordHash = :passwordHash, u.tokenVersion = u.tokenVersion + 1"
             + " where u.id = :id and u.tokenVersion = :tokenVersion")
