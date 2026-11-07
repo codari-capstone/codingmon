@@ -33,4 +33,18 @@ public class UserProblemStatsRepository {
                 .param("id", submissionId)
                 .update();
     }
+
+    // 제출의 AI 분석에서 힌트를 level 단계까지 열었다(#77). 아직 못 푼 문제면 가장 높은 단계를 올린다.
+    // 정답 이후에 연 힌트는 세지 않는다(database-tables.md). 판정이 난 제출이라 행은 이미 있다.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordHintRevealed(long submissionId, int level) {
+        jdbc.sql("update user_problem_stats st set"
+                + "   max_revealed_hint_level = :level, updated_at = now()"
+                + " from submissions s join problem_versions v on v.id = s.problem_version_id"
+                + " where s.id = :id and st.user_id = s.user_id and st.problem_id = v.problem_id"
+                + "   and not st.solved and st.max_revealed_hint_level < :level")
+                .param("level", level)
+                .param("id", submissionId)
+                .update();
+    }
 }
