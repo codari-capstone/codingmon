@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 
-import { setAccessToken } from '@/api/session'
+import { endSession } from '@/api/session'
 import type { CurrentUser } from '@/api/types'
 import {
   AlertDialog,
@@ -38,13 +38,15 @@ import { changePassword, updateNickname, withdraw } from './myPageQuery'
 export function NicknameForm({ user }: { user: CurrentUser }) {
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
-  const check = useNicknameCheck(inputRef)
   const [saved, setSaved] = useState(false)
 
   const save = useMutation({
     mutationFn: () => updateNickname(check.value),
-    onSuccess: (updated) => {
+    onSuccess: async (updated) => {
       // 상단 닉네임도 바로 바뀐다(명세). /api/users/me를 다시 묻지 않는다 — 응답이 그 값이다.
+      // 떠 있던 /me 조회는 먼저 취소한다. 저장 전에 만든 옛 응답이 늦게 와 이 값을 덮으면
+      // 상단 닉네임과 탈퇴 확인 문구가 이전 닉네임으로 돌아간다(adoptSession과 같은 순서).
+      await queryClient.cancelQueries({ queryKey: ME_QUERY_KEY })
       queryClient.setQueryData(ME_QUERY_KEY, updated)
       check.change('')
       setSaved(true)
@@ -53,6 +55,13 @@ export function NicknameForm({ user }: { user: CurrentUser }) {
       forgetSessionIfUnauthorized(queryClient, error)
       if (problemCode(error) === 'NICKNAME_TAKEN') check.release()
     },
+  })
+
+  // save 뒤에 선언한다(가입 화면과 같은 순서) — 확인이 끝나면 지난 저장 실패 문구를 지운다.
+  // 남겨 두면 '쓸 수 있어요'와 '이미 사용 중'이 함께 보인다. 저장 요청이 오가는 중이면
+  // 지우지 않는다 — reset()은 '진행 중'까지 지워 [저장]이 다시 켜지고 두 번째 PATCH가 나간다.
+  const check = useNicknameCheck(inputRef, () => {
+    if (!save.isPending) save.reset()
   })
 
   const value = check.value
@@ -79,7 +88,7 @@ export function NicknameForm({ user }: { user: CurrentUser }) {
           ...check,
           change: (next) => {
             setSaved(false)
-            save.reset()
+            if (!save.isPending) save.reset()
             check.change(next)
           },
         }}
@@ -139,8 +148,10 @@ function PasswordInput({
 /**
  * 비밀번호 변경 (MY-03).
  *
- * 바꾸면 모든 기기에서 로그아웃된다(계약). 이 기기의 토큰과 캐시도 버리고 로그인 화면으로
- * 보내 재설정(COM-08)과 같은 안내를 띄운다. 저장한 풀이 코드는 지우지 않는다 — 같은
+ * 바꾸면 모든 기기에서 로그아웃된다(계약). 이 브라우저의 세션도 `endSession()`으로 끝낸다 —
+ * 세대를 올려 늦게 오는 토큰 갱신 응답이 세션을 되살리지 못하게 하고, 같은 브라우저의 다른
+ * 탭에도 알린다(로그아웃과 같은 길, authQuery.ts). 그리고 로그인 화면으로 보내
+ * 재설정(COM-08)과 같은 안내를 띄운다. 저장한 풀이 코드는 지우지 않는다 — 같은
  * 사람이 바로 다시 로그인한다(로그아웃·탈퇴와 다른 점).
  *
  * GitHub 가입자에게는 숨기지 않고 비활성 버튼과 이유를 보여 준다(#181).
@@ -155,7 +166,7 @@ export function PasswordForm({ user }: { user: CurrentUser }) {
   const submit = useMutation({
     mutationFn: () => changePassword({ currentPassword, newPassword, newPasswordConfirm }),
     onSuccess: () => {
-      setAccessToken(null)
+      endSession()
       void navigate('/login', { replace: true, state: { notice: PASSWORD_CHANGED_NOTICE } })
       queryClient.clear()
     },
@@ -248,6 +259,8 @@ export function PasswordForm({ user }: { user: CurrentUser }) {
  * 확인 문구를 띄어쓰기까지 정확히 입력해야 [탈퇴]가 켜진다. 이 검사는 화면만 한다(계약).
  * 탈퇴하면 브라우저에 저장한 풀이 코드도 지우고 문제 목록으로 간다 — 로그아웃과 같은
  * 정리를 하되 서버에 로그아웃을 따로 묻지 않는다(탈퇴 응답이 refresh 쿠키를 지운다).
+ * 세션은 로그아웃처럼 `endSession()`으로 끝내 다른 탭에도 알린다. 공용 PC에서 남은 탭이
+ * 탈퇴한 사람의 정보를 계속 보여 주지 않게 한다.
  */
 export function WithdrawSection({ user }: { user: CurrentUser }) {
   const queryClient = useQueryClient()
@@ -258,7 +271,7 @@ export function WithdrawSection({ user }: { user: CurrentUser }) {
   const submit = useMutation({
     mutationFn: withdraw,
     onSuccess: () => {
-      setAccessToken(null)
+      endSession()
       clearSavedCode()
       void navigate('/problems', { replace: true })
       queryClient.clear()

@@ -1067,8 +1067,9 @@ export const handlers: RequestHandler[] = [
       return problem(400, 'SAME_PASSWORD', '현재 비밀번호와 달라야 해요')
     }
     account.password = body.newPassword ?? ''
-    // 모든 기기에서 로그아웃된다(계약). 발급 기록을 지워 refresh도 막는다.
-    issued.delete(account.user.id)
+    // 모든 기기에서 로그아웃된다(계약). 목은 refresh 쿠키를 지우는 것까지만 한다 — 목의
+    // refresh 핸들러가 쿠키만 보므로 이 브라우저의 갱신은 막힌다. 이미 준 access token을
+    // 무효로 만들거나 다른 기기를 끊는 일은 흉내 내지 않는다(토큰에 세대가 없다).
     return new HttpResponse(null, {
       status: 204,
       headers: { 'Set-Cookie': `${REFRESH_COOKIE}=; Path=/; Max-Age=0` },
@@ -1077,7 +1078,7 @@ export const handlers: RequestHandler[] = [
 
   /**
    * 회원 탈퇴 (MY-04). 관리자는 403. 목은 계정을 지우지 않는다 — 가입이 계정을 늘리지 않는
-   * 것과 같은 선택이다. 세션만 끝낸다.
+   * 것과 같은 선택이다. refresh 쿠키만 지워 이 브라우저의 세션을 끝낸다(비밀번호 변경과 같다).
    */
   http.delete('*/api/users/me', ({ request }) => {
     const id = userIdFromToken(bearer(request))
@@ -1086,7 +1087,6 @@ export const handlers: RequestHandler[] = [
     if (account.user.role === 'ADMIN') {
       return problem(403, 'ADMIN_CANNOT_WITHDRAW', '관리자는 탈퇴할 수 없어요')
     }
-    issued.delete(account.user.id)
     return new HttpResponse(null, {
       status: 204,
       headers: { 'Set-Cookie': `${REFRESH_COOKIE}=; Path=/; Max-Age=0` },

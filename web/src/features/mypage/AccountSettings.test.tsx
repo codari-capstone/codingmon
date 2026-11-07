@@ -5,7 +5,7 @@ import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { getAccessToken, setAccessToken } from '@/api/session'
+import { getAccessToken, getGeneration, setAccessToken } from '@/api/session'
 import type { CurrentUser } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
 import { PASSWORD_CHANGED_NOTICE } from '@/features/auth/accountRules'
@@ -111,6 +111,62 @@ describe('닉네임 변경 (MY-02)', () => {
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled()
     expect(screen.getByLabelText('닉네임')).toHaveFocus()
   })
+
+  // #189 리뷰: 다시 확인해도 지난 저장 실패 문구가 남아 '쓸 수 있어요'와 함께 보였다
+  it('선점된 뒤 다시 중복 확인하면 지난 저장 실패 문구를 지운다', async () => {
+    let available = true
+    server.use(
+      http.get('*/api/auth/nickname-availability', () => HttpResponse.json({ available })),
+      http.patch('*/api/users/me', () =>
+        problem(409, 'NICKNAME_TAKEN', '이미 사용 중인 닉네임이에요'),
+      ),
+    )
+    const user = userEvent.setup()
+    renderWith(<NicknameForm user={ALICE} />)
+
+    await user.type(screen.getByLabelText('닉네임'), 'bob99')
+    await user.click(screen.getByRole('button', { name: '중복 확인' }))
+    await screen.findByText('쓸 수 있어요')
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    await screen.findByRole('alert')
+
+    available = false
+    await user.click(screen.getByRole('button', { name: '중복 확인' }))
+
+    // 확인 결과 문구 하나만 남는다(저장 실패 문구와 겹치지 않는다)
+    await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(1))
+    expect(screen.getByRole('alert')).toHaveTextContent('이미 사용 중인 닉네임이에요')
+  })
+
+  // #189 리뷰: 저장 중 입력을 고치면 reset()이 '진행 중'을 지워 두 번째 PATCH가 나갔다
+  it('저장 요청이 오가는 중에 입력을 고쳐도 다시 저장되지 않는다', async () => {
+    let patches = 0
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.patch('*/api/users/me', async () => {
+        patches += 1
+        await held
+        return HttpResponse.json({ ...ALICE, nickname: 'Alice' })
+      }),
+    )
+    const user = userEvent.setup()
+    renderWith(<NicknameForm user={ALICE} />)
+
+    const input = screen.getByLabelText('닉네임')
+    await user.type(input, 'Alice')
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() => expect(patches).toBe(1))
+
+    await user.clear(input)
+    await user.type(input, 'ALICE')
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: '저장' }))
+
+    release()
+    expect(await screen.findByText('닉네임을 바꿨어요')).toBeInTheDocument()
+    expect(patches).toBe(1)
+  })
 })
 
 describe('비밀번호 변경 (MY-03)', () => {
@@ -120,9 +176,10 @@ describe('비밀번호 변경 (MY-03)', () => {
     await user.type(screen.getByLabelText('새 비밀번호 확인'), next)
   }
 
-  it('바꾸면 이 기기의 토큰을 버리고 로그인 화면으로 가서 안내를 띄운다', async () => {
+  it('바꾸면 세션을 끝내고(다른 탭에도 알림) 로그인 화면으로 가서 안내를 띄운다', async () => {
     server.use(http.put('*/api/users/me/password', () => new HttpResponse(null, { status: 204 })))
     setAccessToken('old-token')
+    const before = getGeneration()
     const user = userEvent.setup()
     const { router } = renderWith(<PasswordForm user={ALICE} />)
 
@@ -132,6 +189,8 @@ describe('비밀번호 변경 (MY-03)', () => {
     expect(await screen.findByRole('heading', { name: '로그인 도착' })).toBeInTheDocument()
     expect(router.state.location.state).toEqual({ notice: PASSWORD_CHANGED_NOTICE })
     expect(getAccessToken()).toBeNull()
+    // endSession(): 세대가 올라 늦게 오는 갱신 응답이 세션을 되살리지 못한다
+    expect(getGeneration()).toBeGreaterThan(before)
   })
 
   it('현재 비밀번호가 틀리면 서버 문구를 보이고 화면에 남는다 (401이 아니다)', async () => {
@@ -185,6 +244,7 @@ describe('회원 탈퇴 (MY-04)', () => {
     server.use(http.delete('*/api/users/me', () => new HttpResponse(null, { status: 204 })))
     storeSavedCode(ALICE.id, 3, 'PYTHON', 'print(1)')
     setAccessToken('old-token')
+    const before = getGeneration()
     const user = userEvent.setup()
     renderWith(<WithdrawSection user={ALICE} />)
 
@@ -200,6 +260,7 @@ describe('회원 탈퇴 (MY-04)', () => {
     expect(await screen.findByRole('heading', { name: '문제 목록 도착' })).toBeInTheDocument()
     expect(readSavedCode(ALICE.id, 3, 'PYTHON')).toBeNull()
     expect(getAccessToken()).toBeNull()
+    expect(getGeneration()).toBeGreaterThan(before)
   })
 
   it('서버가 거절하면 팝업 안에 이유를 보이고 닫지 않는다', async () => {
