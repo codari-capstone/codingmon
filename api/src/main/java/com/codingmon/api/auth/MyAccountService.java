@@ -89,7 +89,7 @@ class MyAccountService {
         limiter.resetPasswordFailures(userId);
         AccountRules.password(newPassword, newPasswordConfirm);
         if (newPassword.equals(currentPassword)) {
-            throw AuthErrors.error(HttpStatus.BAD_REQUEST, "SAME_PASSWORD", "현재 비밀번호와 달라야 해요");
+            throw AccountRules.samePassword();
         }
         String newHash = passwordEncoder.encode(newPassword);
         transactions.executeWithoutResult(status -> {

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.ErrorResponseException;
 
+import com.codingmon.api.user.User;
 import com.codingmon.api.user.UserRepository;
 
 // 비밀번호 재설정(COM-08). 일반 가입 계정(password_hash가 있는 계정)만 대상이다.
@@ -71,6 +72,13 @@ class PasswordResetService {
         AccountRules.password(password, passwordConfirm);
         String email = certificate.getClaimAsString(EMAIL_CLAIM);
         Number tokenVersion = certificate.getClaim(TOKEN_VERSION_CLAIM);
+        // 이미 쓴 증명서면 같은 비밀번호여도 만료로 답한다. 실제 변경은 아래 UPDATE가 다시 확인한다.
+        User user = users.findByEmail(email)
+                .filter(found -> found.getTokenVersion() == tokenVersion.intValue() && found.getPasswordHash() != null)
+                .orElseThrow(PasswordResetService::expired);
+        if (passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw AccountRules.samePassword();
+        }
         String passwordHash = passwordEncoder.encode(password);
         Long userId = transactions.execute(status -> {
             // UPDATE가 사용자 행을 잠그므로 refresh token 폐기와 갱신·로그인 발급이 겹치지 않는다.
