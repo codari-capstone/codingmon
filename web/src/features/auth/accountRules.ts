@@ -42,6 +42,12 @@ const CODE_PATTERN = new RegExp(`^[0-9]{${CODE_LENGTH}}$`)
 // 특수문자는 ASCII 기호만 센다. 서버가 \p{Punct}로 세므로 공백·한글 기호는 들어가지 않는다.
 const SPECIAL_PATTERN = /[!-/:-@[-`{-~]/
 
+/**
+ * 비밀번호를 바꾼 뒤 로그인 화면에 띄우는 안내. 재설정(COM-08, #113)과 마이페이지의
+ * 비밀번호 변경(MY-03)이 같은 문구다(명세).
+ */
+export const PASSWORD_CHANGED_NOTICE = '비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요'
+
 export function isValidNickname(value: string): boolean {
   return NICKNAME_PATTERN.test(value)
 }

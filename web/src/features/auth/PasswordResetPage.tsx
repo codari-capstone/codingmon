@@ -5,14 +5,11 @@ import { Navigate, useLocation, useNavigate } from 'react-router'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { isValidPassword } from './accountRules'
+import { isValidPassword, PASSWORD_CHANGED_NOTICE } from './accountRules'
 import { EmailCodeStep } from './EmailCodeStep'
 import { problemCode, problemMessage } from './problemCode'
 import { resetPassword, sendResetCode, verifyResetCode } from './passwordResetQuery'
 import { useAuth } from './useAuth'
-
-/** 재설정 뒤 로그인 화면에 띄우는 안내. 명세 COM-08이 이 문구로 정했다 (#113). */
-const RESET_NOTICE = '비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요'
 
 /**
  * 비밀번호 재설정 (COM-08).
@@ -42,7 +39,7 @@ export function Component() {
   const submit = useMutation({
     mutationFn: () => resetPassword({ resetToken: resetToken ?? '', password, passwordConfirm }),
     onSuccess: () => {
-      void navigate('/login', { replace: true, state: { notice: RESET_NOTICE, from } })
+      void navigate('/login', { replace: true, state: { notice: PASSWORD_CHANGED_NOTICE, from } })
     },
     onError: (error) => {
       // 증명서가 죽었거나 이미 쓰였다. 인증번호부터 다시 받아야 한다.

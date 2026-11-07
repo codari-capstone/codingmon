@@ -9,6 +9,7 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { cn } from '@/lib/utils'
+import { NicknameForm, PasswordForm, WithdrawSection } from './AccountSettings'
 import { buildWeeks, grassLevel, monthLabels } from './grass'
 import { activityQuery } from './myPageQuery'
 
@@ -211,7 +212,7 @@ function Activity() {
   )
 }
 
-/** 마이페이지 (MY-01·05). 닉네임·비밀번호 변경과 탈퇴(MY-02~04)는 다음 PR에서 붙인다. */
+/** 마이페이지 (MY-01~05). 모든 내용을 한 화면에 둔다(명세). 탈퇴는 맨 아래다. */
 export function Component() {
   const { user } = useAuth()
 
@@ -219,8 +220,20 @@ export function Component() {
     <section className="flex flex-col gap-8">
       <h1 className="text-2xl font-semibold">마이페이지</h1>
       {/* RequireAuth 뒤라 user가 있다. 세션이 막 끊긴 순간만 비어 있을 수 있다. */}
-      {user ? <AccountInfo user={user} /> : null}
+      {user ? (
+        <>
+          <AccountInfo user={user} />
+          <section aria-labelledby="settings-heading" className="flex flex-col gap-6">
+            <h2 id="settings-heading" className="text-lg font-semibold">
+              계정 설정
+            </h2>
+            <NicknameForm user={user} />
+            <PasswordForm user={user} />
+          </section>
+        </>
+      ) : null}
       <Activity />
+      {user ? <WithdrawSection user={user} /> : null}
     </section>
   )
 }

@@ -1013,6 +1013,86 @@ export const handlers: RequestHandler[] = [
     )
   }),
 
+  /**
+   * 닉네임 변경 (MY-02). 검사 순서는 가입과 같다: 규칙 → 선점(대소문자 무시, 자기 자신 제외).
+   * 목 계정의 닉네임을 실제로 바꾼다 — 상단 메뉴가 바뀌는 것까지 dev:mock에서 보이게.
+   */
+  http.patch('*/api/users/me', async ({ request }) => {
+    const id = userIdFromToken(bearer(request))
+    const account = mockAccounts.find((item) => item.user.id === id)
+    if (!account) return unauthorized()
+    const nickname = ((await request.json()) as { nickname?: string }).nickname ?? ''
+    if (!isValidNickname(nickname)) {
+      return problem(400, 'INVALID_NICKNAME', '닉네임은 2~16자의 한글·영문·숫자만 쓸 수 있어요')
+    }
+    const taken = mockAccounts.some(
+      (item) => item !== account && item.user.nickname.toLowerCase() === nickname.toLowerCase(),
+    )
+    if (taken) return problem(409, 'NICKNAME_TAKEN', '이미 사용 중인 닉네임이에요')
+    account.user = { ...account.user, nickname }
+    return HttpResponse.json(account.user)
+  }),
+
+  /**
+   * 비밀번호 변경 (MY-03). 검사 순서는 계약과 같다:
+   * PASSWORD_NOT_SET → (잠금은 목에 없음) → WRONG_PASSWORD → INVALID_PASSWORD → PASSWORD_MISMATCH → SAME_PASSWORD.
+   * 5회 잠금(429)은 로그인 잠금처럼 목이 세지 않는다. 필요한 테스트는 server.use로 덮어쓴다.
+   */
+  http.put('*/api/users/me/password', async ({ request }) => {
+    const id = userIdFromToken(bearer(request))
+    const account = mockAccounts.find((item) => item.user.id === id)
+    if (!account) return unauthorized()
+    if (account.user.loginMethod === 'GITHUB') {
+      return problem(403, 'PASSWORD_NOT_SET', 'GitHub로 로그인한 계정은 비밀번호가 없어요')
+    }
+    const body = (await request.json()) as {
+      currentPassword?: string
+      newPassword?: string
+      newPasswordConfirm?: string
+    }
+    if (body.currentPassword !== account.password) {
+      return problem(400, 'WRONG_PASSWORD', '현재 비밀번호가 맞지 않아요')
+    }
+    if (!isValidPassword(body.newPassword ?? '')) {
+      return problem(
+        400,
+        'INVALID_PASSWORD',
+        '비밀번호는 10~20자이고 영문 대문자·소문자·숫자·특수문자를 각각 하나 이상 넣어야 해요',
+      )
+    }
+    if (body.newPassword !== body.newPasswordConfirm) {
+      return problem(400, 'PASSWORD_MISMATCH', '비밀번호가 일치하지 않아요')
+    }
+    if (body.newPassword === body.currentPassword) {
+      return problem(400, 'SAME_PASSWORD', '현재 비밀번호와 달라야 해요')
+    }
+    account.password = body.newPassword ?? ''
+    // 모든 기기에서 로그아웃된다(계약). 발급 기록을 지워 refresh도 막는다.
+    issued.delete(account.user.id)
+    return new HttpResponse(null, {
+      status: 204,
+      headers: { 'Set-Cookie': `${REFRESH_COOKIE}=; Path=/; Max-Age=0` },
+    })
+  }),
+
+  /**
+   * 회원 탈퇴 (MY-04). 관리자는 403. 목은 계정을 지우지 않는다 — 가입이 계정을 늘리지 않는
+   * 것과 같은 선택이다. 세션만 끝낸다.
+   */
+  http.delete('*/api/users/me', ({ request }) => {
+    const id = userIdFromToken(bearer(request))
+    const account = mockAccounts.find((item) => item.user.id === id)
+    if (!account) return unauthorized()
+    if (account.user.role === 'ADMIN') {
+      return problem(403, 'ADMIN_CANNOT_WITHDRAW', '관리자는 탈퇴할 수 없어요')
+    }
+    issued.delete(account.user.id)
+    return new HttpResponse(null, {
+      status: 204,
+      headers: { 'Set-Cookie': `${REFRESH_COOKIE}=; Path=/; Max-Age=0` },
+    })
+  }),
+
   /** 풀이 요약·잔디 (MY-05). 사용자마다 다르다(1번은 기록 있음, 그 밖은 제출 없음). */
   http.get('*/api/users/me/activity', ({ request }) => {
     const id = userIdFromToken(bearer(request))

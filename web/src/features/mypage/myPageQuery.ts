@@ -2,7 +2,7 @@ import { queryOptions } from '@tanstack/react-query'
 
 import { api } from '@/api/client'
 import { fail } from '@/api/fail'
-import type { UserActivity } from '@/api/types'
+import type { CurrentUser, UserActivity } from '@/api/types'
 
 /**
  * 풀이 요약·최근 1년 잔디 (MY-05). 제출하고 돌아오면 오늘 칸이 바로 늘어야 하므로 매번 새로
@@ -20,4 +20,27 @@ export function activityQuery() {
     },
     staleTime: 0,
   })
+}
+
+/** 닉네임 변경 (MY-02). 바뀐 사용자 정보를 돌려준다(계약). */
+export async function updateNickname(nickname: string): Promise<CurrentUser> {
+  const result = await api.PATCH('/api/users/me', { body: { nickname } })
+  if (result.data === undefined) fail(result)
+  return result.data
+}
+
+/** 비밀번호 변경 (MY-03). 성공하면 모든 기기에서 로그아웃된다(계약: 204, refresh 쿠키 삭제). */
+export async function changePassword(input: {
+  currentPassword: string
+  newPassword: string
+  newPasswordConfirm: string
+}): Promise<void> {
+  const result = await api.PUT('/api/users/me/password', { body: input })
+  if (!result.response.ok) fail(result)
+}
+
+/** 회원 탈퇴 (MY-04). 확인 문구는 화면만 검사하고 서버로 보내지 않는다(계약). */
+export async function withdraw(): Promise<void> {
+  const result = await api.DELETE('/api/users/me')
+  if (!result.response.ok) fail(result)
 }
