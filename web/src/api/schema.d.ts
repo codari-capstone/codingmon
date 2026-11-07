@@ -507,7 +507,7 @@ export interface paths {
          *     제출 기록에서 원하는 문제를 눌렀을 때 쓴다. 맞는 제출이 없으면 빈 `content`다.
          *     줄마다 문제 정보를 담지 않아 `problemId`는 필수다. 화면 위쪽의 문제 정보는 `GET /api/users/me/problem-history/{problemId}`로 받는다.
          *     코드는 담지 않는다. 원하는 제출 기록을 누르면 결과 조회(`GET /api/submissions/{id}`)로 코드와 판정을 받는다.
-         *     저장된 AI 분석과 연 힌트는 #77의 API로 받는다.
+         *     저장된 AI 분석과 연 힌트는 `GET /api/submissions/{id}/analysis`로 받는다.
          */
         get: operations["listMySubmissions"];
         put?: never;
@@ -538,7 +538,7 @@ export interface paths {
         /**
          * 채점 상태·결과 (RES-01~06, HIST-02)
          * @description 화면은 `status`가 `COMPLETED`나 `JUDGE_ERROR`가 될 때까지 주기적으로 부른다(폴링).
-         *     제출 기록에서 원하는 제출 기록을 눌렀을 때도 쓴다. 저장된 AI 분석과 연 힌트는 #77의 API로 받는다.
+         *     제출 기록에서 원하는 제출 기록을 눌렀을 때도 쓴다. 저장된 AI 분석과 연 힌트는 `GET /api/submissions/{id}/analysis`로 받는다.
          *     로그인한 본인의 채점 제출만 볼 수 있다. 남의 제출·없는 제출·예제 실행은 모두 404 `SUBMISSION_NOT_FOUND`다. 번호를 바꿔 물어도 그 번호의 제출이 있는지 드러나지 않는다.
          *     비공개 테스트의 입력·출력과 몇 번째 테스트에서 틀렸는지는 주지 않는다. 진행률만 준다.
          *     판정과 런타임 에러 종류의 쉬운 설명은 화면이 가진다(`docs/AI_FEATURES.md` 10절).
@@ -546,6 +546,70 @@ export interface paths {
         get: operations["getSubmissionResult"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/submissions/{id}/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 제출 번호 */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * 저장된 AI 오답 분석 (AI-02·03·04, HIST-02)
+         * @description 분석을 만드는 동안의 폴링과, 제출 기록에서 그 제출의 분석을 다시 볼 때 쓴다.
+         *     힌트는 연 단계(`revealedHintLevel`)까지만 준다. 브라우저에 미리 내려보내지 않는다(`AI-002`).
+         *     로그인한 본인 제출의 분석만 본다. 분석이 없거나 남의 제출이면 404 `ANALYSIS_NOT_FOUND`다.
+         *     프롬프트 버전이 바뀌어 분석이 여럿이면 마지막에 만든 것을 준다.
+         */
+        get: operations["getAnalysis"];
+        put?: never;
+        /**
+         * AI 오답 분석 요청 (AI-01·02, `AI-001`)
+         * @description [AI 분석] 버튼. 원인 설명과 힌트 3단계를 한 번의 AI 호출로 만들어 서버에 저장한다(`docs/AI_FEATURES.md` 3절).
+         *     로그인한 본인의 채점 제출 중 판정이 정답이 아닌 것만 분석한다.
+         *     - 이 제출의 분석이 이미 있으면 AI를 다시 부르지 않고 그 결과를 200으로 준다. 끝났으면 `COMPLETED`, 만드는 중이면 `PENDING`이다.
+         *       프롬프트 버전이 바뀐 뒤에는 새 버전으로 다시 만든다.
+         *     - 없거나 `FAILED`면 새로 만들기 시작하고 202 `PENDING`을 준다. 화면은 `status`가 바뀔 때까지 `GET`을 주기적으로 부른다(AI-02).
+         *       `FAILED`에서 다시 누르는 것이 재시도다.
+         *     - AI 대기열이 차 있으면 202 대신 200 `FAILED`가 올 수 있다. 실패 사유 구분과 하루 20회 한도는 #81·#80에서 더한다.
+         *
+         *     오류 `code`: `SUBMISSION_NOT_FOUND`(없는 제출, 남의 제출, 예제 실행), `ANALYSIS_NOT_AVAILABLE`(정답, 채점 중, 채점 불가).
+         */
+        post: operations["requestAnalysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/submissions/{id}/analysis/hints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 힌트 한 단계 열기 (AI-04, `AI-002`)
+         * @description [힌트 보기]. `GET`이 주는 분석의 힌트를 `level` 단계까지 연다. AI를 다시 부르지 않고 저장된 힌트를 준다.
+         *     - 다음 단계(`revealedHintLevel + 1`)만 열 수 있다. 건너뛰면 409 `HINT_LEVEL_SKIPPED`다.
+         *     - 이미 연 단계를 다시 보내면 바뀌지 않고 200이다. 버튼을 두 번 눌러도 한 단계만 열린다.
+         *     - 정답을 맞히기 전에 연 힌트는 학습 통계의 평균 힌트 단계(`max_revealed_hint_level`)에 들어간다.
+         *
+         *     오류 `code`: `ANALYSIS_NOT_FOUND`(분석이 없거나 남의 제출), `ANALYSIS_NOT_READY`(`COMPLETED`가 아님), `HINT_LEVEL_SKIPPED`.
+         *     `level`이 1~3이 아니면 `code` 없는 400이다.
+         */
+        post: operations["revealHint"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1212,6 +1276,42 @@ export interface components {
             submittedAt: string;
             /** Format: date-time */
             judgedAt: string | null;
+        };
+        /**
+         * @description AI 오답 분석(F1)과 연 힌트(F2). 분석 내용(`summary`·`suspectLines`·`facts`·`guesses`)은 `COMPLETED`일 때만 있고 그 밖에는 null·빈 배열이다.
+         *     모델이 만든 문장이라 글자 그대로 보여 준다(HTML로 렌더링하지 않는다).
+         */
+        SubmissionAnalysis: {
+            /** Format: int64 */
+            submissionId: number;
+            /**
+             * @description `PENDING` 만드는 중, `COMPLETED` 끝남, `FAILED` 만들지 못함(다시 요청할 수 있다).
+             *     만드는 중인 채로 오래 끝나지 않으면 서버가 `FAILED`로 준다.
+             * @enum {string}
+             */
+            status: "PENDING" | "COMPLETED" | "FAILED";
+            /** @description 틀린 이유 요약 */
+            summary: string | null;
+            /** @description 원인일 가능성이 높은 줄 번호(제출 코드 기준, 1부터) */
+            suspectLines: number[];
+            /** @description [실행 결과] 배지 항목. 실행 결과로 확인된 사실 */
+            facts: string[];
+            /** @description [코드 분석] 배지 항목. AI가 코드에서 짐작한 원인 */
+            guesses: string[];
+            /** @description 연 힌트 단계. 0이면 아직 열지 않았다 */
+            revealedHintLevel: number;
+            /** @description 연 힌트. 길이가 `revealedHintLevel`과 같고, 순서대로 1단계 관찰, 2단계 방향, 3단계 원리다 */
+            hints: string[];
+            /**
+             * Format: date-time
+             * @description 요청한 시각. 다시 시도하면 그 시각으로 바뀐다
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description `COMPLETED`·`FAILED`가 된 시각
+             */
+            completedAt: string | null;
         };
         SampleRunResult: {
             /**
@@ -2244,6 +2344,102 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getAnalysis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 제출 번호 */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 지금 상태 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionAnalysis"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    requestAnalysis: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 제출 번호 */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 이미 있는 분석 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionAnalysis"];
+                };
+            };
+            /** @description 분석을 만들기 시작함(`PENDING`) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionAnalysis"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    revealHint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 제출 번호 */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 열 단계. 1 관찰, 2 방향, 3 원리 */
+                    level: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 연 뒤의 분석 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionAnalysis"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     runSamples: {
