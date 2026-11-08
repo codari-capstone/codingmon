@@ -401,6 +401,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/me/ai-quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 오늘 남은 AI 분석·리뷰 횟수 (AI-01)
+         * @description [AI 분석]·[AI 리뷰] 버튼 옆에 남은 횟수를 보여 줄 때 쓴다. 분석 응답(`SubmissionAnalysis`의 `quota`)에도 같은 값이 있다.
+         *     조회해도 횟수는 줄지 않는다. 세는 기준은 `AiQuota`에 있다.
+         */
+        get: operations["getAiQuota"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/me/problem-history": {
         parameters: {
             query?: never;
@@ -585,7 +606,9 @@ export interface paths {
          *       프롬프트 버전이 바뀐 뒤 누르면 새 버전으로 다시 만든다.
          *     - 응답은 `GET`과 같은 규칙으로 고른 분석이다. 새로 만들기 시작했고 응답이 `PENDING`이면 202, 그 밖에는 200이다.
          *       화면은 `status`가 `PENDING`이면 바뀔 때까지 `GET`을 주기적으로 부른다(AI-02).
-         *     - AI 대기열이 차서 시작하지 못하면 200 `FAILED`다(이전 버전의 끝난 분석이 있으면 그 분석). 실패 사유 구분과 하루 20회 한도는 #81·#80에서 더한다.
+         *     - AI 대기열이 차서 시작하지 못하면 200 `FAILED`다(이전 버전의 끝난 분석이 있으면 그 분석). 실패 사유 구분은 #81에서 더한다.
+         *     - 새로 만들기 시작할 때만 하루 한도(`AiQuota`)에 1회로 센다. 오늘 한도를 다 썼으면 429 `AI_DAILY_LIMIT_EXCEEDED`이고 아무것도 만들지 않는다.
+         *       이미 있는 분석을 돌려줄 때(만드는 중 포함)는 한도를 다 썼어도 200이고 세지 않는다.
          */
         post: operations["requestAnalysis"];
         delete?: never;
@@ -1327,6 +1350,29 @@ export interface components {
              * @description `COMPLETED`·`FAILED`가 된 시각. `PENDING`이면 null이다(재시도하면 다시 null). 오래되어 `FAILED`로 주는 분석도 null이다
              */
             completedAt: string | null;
+            /** @description 응답한 시점의 오늘 남은 횟수. 분석을 만든 날이 아니라 오늘 기준이다. 요청·조회·힌트 열기 모두 준다 */
+            quota: components["schemas"]["AiQuota"];
+        };
+        /**
+         * @description 오늘 AI 분석(F1·F2)과 리뷰(F3)를 합쳐 쓸 수 있는 횟수(AI-01, `docs/AI_FEATURES.md` 8절). 하루는 UTC 날짜로 나눈다(한국 시각 오전 9시에 바뀐다).
+         *     - AI 결과를 새로 만들기 시작할 때만 1회로 센다. 저장된 결과를 다시 받거나, 만드는 중인 결과를 다시 요청하거나, 힌트를 열면 세지 않는다.
+         *     - 만들지 못한(`FAILED`) 결과는 세지 않는다. 그 결과를 다시 요청하면 그날 1회로 센다. 차단(`blocked`)된 결과는 1회로 센다.
+         *     - 서버가 처리 중에 내려가 시간이 지나 `FAILED`로 보이는 결과(`SubmissionAnalysis.status`)는 예외로, 다시 요청하기 전까지 1회로 남는다.
+         *       다시 요청해도 같은 결과라 1회 그대로다(한도를 다 썼어도 다시 요청할 수 있다).
+         *     - 실패한 호출을 세지 않으므로 실제 AI 호출 수는 한도보다 많을 수 있다.
+         */
+        AiQuota: {
+            /** @description 하루 한도. 지금은 20(서버 설정 `LLM_DAILY_LIMIT`) */
+            limit: number;
+            /** @description 오늘 쓴 횟수. 서버가 한도를 낮추면 `limit`보다 클 수 있다 */
+            used: number;
+            /** @description 오늘 남은 횟수. `limit - used`이고 0보다 작아지지 않는다 */
+            remaining: number;
+            /**
+             * Format: date-time
+             * @description 다음에 횟수가 초기화되는 시각(다음 UTC 자정, 한국 시각 오전 9시)
+             */
+            resetsAt: string;
         };
         SampleRunResult: {
             /**
@@ -2098,6 +2144,27 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    getAiQuota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 오늘 남은 횟수 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiQuota"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     listMyProblemHistory: {
         parameters: {
             query?: {
@@ -2459,6 +2526,18 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description 오류 `code`: `AI_DAILY_LIMIT_EXCEEDED`(오늘 AI 분석·리뷰 한도를 다 씀). `quota`로 초기화 시각을 준다 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"] & {
+                        /** @description 거절한 시점의 한도. `remaining`은 0이다 */
+                        quota: components["schemas"]["AiQuota"];
+                    };
                 };
             };
         };

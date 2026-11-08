@@ -88,6 +88,9 @@ export type SubmissionSummaryPage = components['schemas']['SubmissionSummaryPage
 /** AI 오답 분석과 연 힌트 (AI-02~04). 내용은 `COMPLETED`이고 `blocked`가 아닐 때만 있다(계약). */
 export type SubmissionAnalysis = components['schemas']['SubmissionAnalysis']
 
+/** 오늘 남은 AI 분석·리뷰 횟수 (AI-01). 분석 응답의 `quota`와 `GET /api/users/me/ai-quota`가 같은 모양으로 준다. */
+export type AiQuota = components['schemas']['AiQuota']
+
 /** 개념별 학습 통계 (REP-01·02). 값은 서버가 계산한 그대로 보여 준다. */
 export type LearningStats = components['schemas']['LearningStats']
 export type ConceptStat = components['schemas']['ConceptStat']
