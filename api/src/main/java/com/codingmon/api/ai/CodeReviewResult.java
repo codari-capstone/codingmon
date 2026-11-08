@@ -42,7 +42,8 @@ record CodeReviewResult(
             boolean meetsIntended) {
     }
 
-    // name은 짧은 개념 이름이다. 개념 태그(concept_tags)와 맞추는 것은 #83이 한다.
+    // name은 짧은 개념 이름이다. 개념 태그(concept_tags)와는 저장할 때 서버가 맞춘다(ConceptTagMatcher, #83).
+    // 맞는 태그가 없어도 원문을 그대로 남긴다(ai_review_next_concepts).
     record Concept(
             @NotBlank String name,
             @NotBlank String reason) {

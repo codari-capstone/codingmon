@@ -69,7 +69,7 @@ class CodeReviewPromptIntegrationTest {
         assertThat(text).doesNotContainPattern("[\\p{IsHan}\\p{IsHiragana}\\p{IsKatakana}\\p{IsCyrillic}\\p{IsThai}]");
         // 식은 일반 글자로 쓴다(곱셈은 ×).
         assertThat(text).doesNotContainPattern("\\w\\s?\\*\\s?[\\w(]|\\*\\*|\\s//\\s");
-        // 다음 개념은 함수·라이브러리 이름이 아니라 개념 이름이다(#83이 개념 태그와 맞춘다).
+        // 다음 개념은 함수·라이브러리 이름이 아니라 개념 이름이다(서버가 개념 태그와 맞춘다, ConceptTagMatcher).
         assertThat(result.nextConcepts()).extracting(CodeReviewResult.Concept::name)
                 .noneMatch(name -> name.matches(".*[A-Za-z_]\\w*\\.[A-Za-z_].*|.*\\(.*|.*[A-Za-z_]\\w*\\s*(함수|메서드).*"));
         // 복잡도는 O 표기만 쓴다.
