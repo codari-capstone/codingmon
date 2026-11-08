@@ -116,7 +116,8 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  /* 둥글기 기준 12px: 버튼·입력칸 rounded-lg 12px, 카드 rounded-2xl 약 22px, 작은 것 rounded-sm 약 7px */
+  /* 둥글기 기준 12px: 버튼 rounded-lg 12px, 카드 rounded-2xl 약 22px, 작은 것 rounded-sm 약 7px.
+   * 입력칸은 둥글기 없는 밑줄형(rounded-none)이다 */
   --radius: 0.75rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);

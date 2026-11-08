@@ -20,7 +20,8 @@ export function ListSkeleton({ rows = 5 }: ListSkeletonProps) {
           key={i}
           data-testid="skeleton-row"
           aria-hidden="true"
-          className="border-border/60 flex items-center gap-4 border-b py-3"
+          // 표(TableRow)와 같은 모양: 줄 사이 선 없이 여백으로 나눈다. 로딩 중과 데이터가 온 뒤 모양이 같아야 화면이 튀지 않는다
+          className="flex items-center gap-4 py-3"
         >
           <Skeleton className="h-3 w-8" />
           <Skeleton className="h-3.5 w-48" />

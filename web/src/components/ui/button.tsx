@@ -10,8 +10,9 @@ const buttonVariants = cva(
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary-hover',
         outline:
-          // 보조 버튼. 회색 바탕 위에 바로 놓이는 곳이 많아 흰 면 + 얇은 선으로 둔다 (회색 면 secondary는 흰 카드 위에서 쓴다)
-          'border-border bg-card hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground',
+          // 보조 버튼. 회색 바탕 위에 바로 놓이는 곳이 많아 흰 면 + 얇은 선으로 둔다 (회색 면 secondary는 흰 카드 위에서 쓴다).
+          // 다크 모드는 면과 바탕이 거의 같아(1.15:1) 선이 경계를 맡아야 해서, 선(--border 1.8:1) 대신 --input(3.2:1 이상)을 쓴다
+          'border-border bg-card hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input',
         secondary:
           'bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
         ghost:
