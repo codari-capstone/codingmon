@@ -13,6 +13,7 @@ import type {
 } from '@/api/types'
 import { DIFFICULTY_RANK, type Difficulty, type SolveStatus } from '@/api/types'
 import { EMAIL_PATTERN, isValidNickname, isValidPassword } from '@/features/auth/accountRules'
+import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import {
   invalidateToken,
   isSignedUp,
@@ -46,7 +47,7 @@ import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from '
 /** 인증번호 오류의 문구. 실제 서버(EmailCodeService.java)의 문구와 같게 맞춘다. */
 const CODE_DETAIL: Record<Extract<VerifyResult, { ok: false }>['code'], string> = {
   CODE_EXPIRED: '인증번호가 만료됐어요. 인증번호를 다시 받아 주세요',
-  CODE_MISMATCH: '인증번호가 맞지 않아요',
+  CODE_MISMATCH: '인증번호가 맞지 않아요. 메일로 받은 인증번호를 다시 확인해 주세요',
   CODE_ATTEMPTS_EXCEEDED: '입력 횟수를 초과했어요. 인증번호를 다시 받아 주세요',
 }
 
@@ -103,7 +104,7 @@ const ZIP_CASES: TestCaseInput[] = [
  */
 function checkTestCases(body: TestCaseInput[]) {
   if (body.length > MAX_CASES) {
-    return problem(400, 'TEST_CASE_LIMIT_EXCEEDED', `케이스는 ${MAX_CASES}개까지예요`)
+    return problem(400, 'TEST_CASE_LIMIT_EXCEEDED', `케이스는 ${MAX_CASES}개까지 넣을 수 있어요`)
   }
 
   let total = 0
@@ -111,15 +112,23 @@ function checkTestCases(body: TestCaseInput[]) {
     const inputBytes = utf8Bytes(item.input)
     const outputBytes = utf8Bytes(item.output)
     if (inputBytes > MAX_INPUT_BYTES) {
-      return problem(400, 'TEST_CASE_LIMIT_EXCEEDED', `${index + 1}번 입력이 2MiB를 넘어요`)
+      return problem(
+        400,
+        'TEST_CASE_LIMIT_EXCEEDED',
+        `${index + 1}번째 케이스의 입력이 2MB를 넘어요`,
+      )
     }
     if (outputBytes > MAX_OUTPUT_BYTES) {
-      return problem(400, 'TEST_CASE_LIMIT_EXCEEDED', `${index + 1}번 기대 출력이 1MiB를 넘어요`)
+      return problem(
+        400,
+        'TEST_CASE_LIMIT_EXCEEDED',
+        `${index + 1}번째 케이스의 기대 출력이 1MB를 넘어요`,
+      )
     }
     total += inputBytes + outputBytes
   }
   if (total > MAX_TOTAL_BYTES) {
-    return problem(400, 'TEST_CASE_LIMIT_EXCEEDED', '모든 케이스의 합이 10MiB를 넘어요')
+    return problem(400, 'TEST_CASE_LIMIT_EXCEEDED', '모든 케이스의 합이 10MB를 넘어요')
   }
 
   return null
@@ -355,7 +364,7 @@ function checkProblemInput(body: ProblemInput) {
 
   const unknown = body.tags.find((slug) => !conceptTags.some((tag) => tag.slug === slug))
   if (unknown !== undefined) {
-    return problem(400, 'TAG_NOT_FOUND', `없는 개념 태그예요: ${unknown}`)
+    return problem(400, 'TAG_NOT_FOUND', `'${unknown}' 태그가 없어요`)
   }
 
   return null
@@ -450,7 +459,7 @@ async function checkSourceBody(request: Request) {
   }
   // 64KB는 UTF-8 바이트 기준이다(계약). 글자 수로 재면 한글이 섞인 주석에서 어긋난다.
   if (new TextEncoder().encode(source).length > MAX_SOURCE_BYTES) {
-    return problem(400, 'SOURCE_TOO_LONG', '코드는 64KB까지 제출할 수 있어요')
+    return problem(400, 'SOURCE_TOO_LONG', '코드가 64KB를 넘어요. 64KB 이하로 줄여 주세요')
   }
   // 화면이 정상적으로는 보낼 수 없는 값이라 서버도 code 없이 답한다. problemId가 없는
   // 요청도 여기서 끝난다 — 아래 find로 흘려보내면 목만 404 PROBLEM_NOT_FOUND를 준다.
@@ -816,7 +825,11 @@ export const handlers: RequestHandler[] = [
     const body = (await request.json()) as SolutionInput[]
     const tooLong = body.find((item) => utf8Bytes(item.sourceCode) > MAX_SOLUTION_BYTES)
     if (tooLong) {
-      return problem(400, 'SOURCE_TOO_LONG', `${tooLong.language} 코드가 64KB를 넘어요`)
+      return problem(
+        400,
+        'SOURCE_TOO_LONG',
+        `${LANGUAGE_LABEL[tooLong.language]} 정답 코드가 64KB를 넘어요`,
+      )
     }
 
     const latest = latestVersion(found)
@@ -1137,10 +1150,18 @@ export const handlers: RequestHandler[] = [
       )
     }
     if (body.newPassword !== body.newPasswordConfirm) {
-      return problem(400, 'PASSWORD_MISMATCH', '비밀번호가 일치하지 않아요')
+      return problem(
+        400,
+        'PASSWORD_MISMATCH',
+        '비밀번호 확인이 일치하지 않아요. 같은 비밀번호를 입력해 주세요',
+      )
     }
     if (body.newPassword === body.currentPassword) {
-      return problem(400, 'SAME_PASSWORD', '현재 비밀번호와 달라야 해요')
+      return problem(
+        400,
+        'SAME_PASSWORD',
+        '지금 쓰는 비밀번호와 같아요. 다른 비밀번호를 입력해 주세요',
+      )
     }
     account.password = body.newPassword ?? ''
     // 모든 기기에서 로그아웃된다(계약). 목은 refresh 쿠키를 지우는 것까지만 한다 — 목의
@@ -1493,7 +1514,11 @@ export const handlers: RequestHandler[] = [
       )
     }
     if (body.password !== body.passwordConfirm) {
-      return problem(400, 'PASSWORD_MISMATCH', '비밀번호가 일치하지 않아요')
+      return problem(
+        400,
+        'PASSWORD_MISMATCH',
+        '비밀번호 확인이 일치하지 않아요. 같은 비밀번호를 입력해 주세요',
+      )
     }
     if (isSignedUp(signupEmail) || mockAccounts.some((item) => item.email === signupEmail)) {
       return problem(409, 'EMAIL_TAKEN', '이미 가입된 이메일이에요')
@@ -1552,11 +1577,19 @@ export const handlers: RequestHandler[] = [
       )
     }
     if (body.password !== body.passwordConfirm) {
-      return problem(400, 'PASSWORD_MISMATCH', '비밀번호가 일치하지 않아요')
+      return problem(
+        400,
+        'PASSWORD_MISMATCH',
+        '비밀번호 확인이 일치하지 않아요. 같은 비밀번호를 입력해 주세요',
+      )
     }
     const account = mockAccounts.find((item) => item.email === email)
     if (account && body.password === account.password) {
-      return problem(400, 'SAME_PASSWORD', '현재 비밀번호와 달라야 해요')
+      return problem(
+        400,
+        'SAME_PASSWORD',
+        '지금 쓰는 비밀번호와 같아요. 다른 비밀번호를 입력해 주세요',
+      )
     }
     // 필드 오류에서는 토큰이 남는다. 성공해야 닳는다(서버는 token_version을 올린다).
     invalidateToken(resetToken)

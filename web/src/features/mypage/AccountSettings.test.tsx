@@ -214,7 +214,9 @@ describe('비밀번호 변경 (MY-03)', () => {
     renderWith(<PasswordForm user={ALICE} />)
 
     await fill(user, 'Codari!test1', 'Codari!test1')
-    expect(screen.getByText('현재 비밀번호와 달라야 해요')).toBeInTheDocument()
+    expect(
+      screen.getByText('지금 쓰는 비밀번호와 같아요. 다른 비밀번호를 입력해 주세요'),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '비밀번호 변경' })).toBeDisabled()
   })
 

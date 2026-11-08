@@ -188,8 +188,8 @@ describe('TestCasesTab', () => {
     expect(screen.getByText(/공개 예제 2개 · 비공개 1개/)).toBeInTheDocument()
   })
 
-  /** 계약: "ZIP 파일 자체도 10MiB까지고 … 화면은 올리기 전에 파일 크기를 확인해 막는다." */
-  it('10MiB를 넘는 ZIP은 보내지 않는다', async () => {
+  /** 계약: "ZIP 파일 자체도 10MB까지고 … 화면은 올리기 전에 파일 크기를 확인해 막는다." */
+  it('10MB를 넘는 ZIP은 보내지 않는다', async () => {
     let requested = false
     server.use(
       http.post('*/api/admin/problems/:id/test-cases/zip', () => {
@@ -202,7 +202,7 @@ describe('TestCasesTab', () => {
 
     uploadZip(zipFile(10 * 1024 * 1024 + 1))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('10MiB까지예요')
+    expect(await screen.findByRole('alert')).toHaveTextContent('10MB까지예요')
     expect(requested).toBe(false)
   })
 
@@ -228,7 +228,11 @@ describe('TestCasesTab', () => {
     server.use(
       http.put('*/api/admin/problems/:id/test-cases', () =>
         HttpResponse.json(
-          { status: 400, code: 'TEST_CASE_LIMIT_EXCEEDED', detail: '3번 입력이 2MiB를 넘어요' },
+          {
+            status: 400,
+            code: 'TEST_CASE_LIMIT_EXCEEDED',
+            detail: '3번째 케이스의 입력이 2MB를 넘어요',
+          },
           { status: 400 },
         ),
       ),
@@ -239,7 +243,7 @@ describe('TestCasesTab', () => {
     await user.click(screen.getByRole('button', { name: '케이스 더하기' }))
     await user.click(screen.getByRole('button', { name: '케이스 저장' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('3번 입력이 2MiB를 넘어요')
+    expect(await screen.findByRole('alert')).toHaveTextContent('3번째 케이스의 입력이 2MB를 넘어요')
   })
 
   it('검증 중이면 저장도 ZIP도 할 수 없다', async () => {
@@ -455,7 +459,11 @@ describe('TestCasesTab', () => {
     server.use(
       http.put('*/api/admin/problems/:id/test-cases', () =>
         HttpResponse.json(
-          { status: 400, code: 'TEST_CASE_LIMIT_EXCEEDED', detail: '3번 입력이 2MiB를 넘어요' },
+          {
+            status: 400,
+            code: 'TEST_CASE_LIMIT_EXCEEDED',
+            detail: '3번째 케이스의 입력이 2MB를 넘어요',
+          },
           { status: 400 },
         ),
       ),
@@ -465,12 +473,12 @@ describe('TestCasesTab', () => {
 
     await user.click(screen.getByRole('button', { name: '케이스 더하기' }))
     await user.click(screen.getByRole('button', { name: '케이스 저장' }))
-    await screen.findByText('3번 입력이 2MiB를 넘어요')
+    await screen.findByText('3번째 케이스의 입력이 2MB를 넘어요')
 
     uploadZip(zipFile(100))
 
     await screen.findByText(/3개를 읽었어요/)
-    expect(screen.queryByText('3번 입력이 2MiB를 넘어요')).not.toBeInTheDocument()
+    expect(screen.queryByText('3번째 케이스의 입력이 2MB를 넘어요')).not.toBeInTheDocument()
   })
 
   it('저장이 성공하면 ZIP 크기 오류를 지운다', async () => {
@@ -479,13 +487,13 @@ describe('TestCasesTab', () => {
     await screen.findByText(/공개 예제 2개/)
 
     uploadZip(zipFile(10 * 1024 * 1024 + 1))
-    await screen.findByText(/ZIP 파일은 10MiB까지예요/)
+    await screen.findByText(/ZIP 파일은 10MB까지예요/)
 
     await user.click(screen.getByRole('button', { name: '케이스 더하기' }))
     await user.click(screen.getByRole('button', { name: '케이스 저장' }))
 
     await screen.findByText(/정답 코드를 다시 검증해야 해요/)
-    expect(screen.queryByText(/ZIP 파일은 10MiB까지예요/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ZIP 파일은 10MB까지예요/)).not.toBeInTheDocument()
   })
 
   // 2차 리뷰(minor): 행별 오류는 접힌 <details> 안에만 그려져, 저장을 눌러도 아무 일도
@@ -495,7 +503,7 @@ describe('TestCasesTab', () => {
     renderTab()
     await screen.findByText(/공개 예제 2개/)
 
-    // 2번 행의 기대 출력을 1MiB 넘게 만든다. 접은 채로 저장을 누른다.
+    // 2번 행의 기대 출력을 1MB 넘게 만든다. 접은 채로 저장을 누른다.
     await expand(user, '2. 공개 예제')
     fireEvent.change(screen.getByLabelText('2번 기대 출력'), {
       target: { value: 'a'.repeat(1024 * 1024 + 1) },
@@ -505,6 +513,6 @@ describe('TestCasesTab', () => {
 
     expect(await screen.findByText('2번 케이스를 고쳐 주세요')).toBeInTheDocument()
     // 그 행은 펼쳐져 오류 문구를 읽을 수 있어야 한다.
-    expect(screen.getByText('기대 출력이 1MiB를 넘어요')).toBeVisible()
+    expect(screen.getByText('기대 출력이 1MB를 넘어요')).toBeVisible()
   })
 })

@@ -248,7 +248,7 @@ export function SolutionsTab({
     const tooLong = tooLongLanguages(codes)
     if (tooLong.length > 0) {
       const names = tooLong.map((language) => LANGUAGE_LABEL[language]).join('·')
-      setSizeError(`${names} 코드가 ${MAX_SOURCE_BYTES / 1024}KB를 넘어요`)
+      setSizeError(`${names} 정답 코드가 ${MAX_SOURCE_BYTES / 1024}KB를 넘어요`)
       return
     }
     save.mutate({ body: toBody(codes), validate, changed: changed.length > 0 })
