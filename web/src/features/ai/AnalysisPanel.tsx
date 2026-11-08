@@ -33,8 +33,8 @@ function Item({ badge, text }: { badge: '실행 결과' | '코드 분석'; text:
 /**
  * 원인 설명 (AI-03).
  *
- * 줄 번호는 1부터 제출 코드의 줄 수까지만 남기고 겹치면 하나로 줄인다. 계약: 서버가 아직
- * 범위를 검사하지 않는다(#79). 없는 줄을 짚으면 학생이 그 줄을 찾아 헤맨다.
+ * 줄 번호는 1부터 제출 코드의 줄 수까지만 남기고 겹치면 하나로 줄인다. 계약: 서버가 범위 밖
+ * 번호를 지우고 저장하지만(#79) 그 전에 저장된 분석이 남아 있다. 없는 줄을 짚으면 학생이 그 줄을 찾아 헤맨다.
  */
 function Explanation({ analysis, lineCount }: { analysis: SubmissionAnalysis; lineCount: number }) {
   const lines = [...new Set(analysis.suspectLines)].filter(
