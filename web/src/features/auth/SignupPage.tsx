@@ -117,7 +117,7 @@ export function Component() {
           code === 'EMAIL_TAKEN' ? (
             // 가입 성공 뒤 이동과 같이 원래 가려던 화면을 싣는다. 안 실으면 /problems/42에서
             // 넘어온 사람이 로그인에 성공해도 문제 목록으로 간다 (값 검사는 로그인 화면이 한다).
-            <Link to="/login" state={{ from }} className="text-primary underline">
+            <Link to="/login" state={{ from }} className="text-primary-text underline">
               로그인하러 가기
             </Link>
           ) : null
@@ -166,7 +166,7 @@ export function Component() {
           {problemCode(submit.error) === 'EMAIL_TAKEN' ? (
             <>
               {' '}
-              <Link to="/login" state={{ from }} className="text-primary underline">
+              <Link to="/login" state={{ from }} className="text-primary-text underline">
                 로그인하러 가기
               </Link>
             </>

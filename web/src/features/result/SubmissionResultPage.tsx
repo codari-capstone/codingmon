@@ -237,7 +237,7 @@ export function Component() {
           {/* 다시 풀기와 같은 주소를 쓴다 (solvePath) */}
           <Link
             to={solvePath(data.problemId, data.language)}
-            className="text-primary text-sm underline"
+            className="text-primary-text text-sm underline"
           >
             {data.problemTitle}
           </Link>
@@ -251,7 +251,7 @@ export function Component() {
           {isFinished(data.status) ? (
             <Link
               to={problemSubmissionsPath(data.problemId)}
-              className="text-primary text-sm underline"
+              className="text-primary-text text-sm underline"
             >
               이 문제의 제출 기록
             </Link>

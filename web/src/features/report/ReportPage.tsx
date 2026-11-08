@@ -85,7 +85,7 @@ export function Component() {
                     <TableCell className="font-medium">
                       {concept.name}
                       {concept.weak ? (
-                        <span className="bg-destructive/10 text-destructive ml-2 rounded px-1.5 py-0.5 text-xs">
+                        <span className="bg-destructive/10 text-destructive-text ml-2 rounded px-1.5 py-0.5 text-xs">
                           취약
                         </span>
                       ) : null}

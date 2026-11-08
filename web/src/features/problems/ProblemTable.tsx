@@ -66,7 +66,10 @@ export function ProblemTable({
             <TableCell className="text-muted-foreground tabular-nums">{problem.id}</TableCell>
             <TableCell className="font-medium">
               {/* 터치 영역을 44px로 띄우기보다 셀 전체를 누를 수 있게 둔다 */}
-              <Link to={`/problems/${problem.id}`} className="hover:text-primary hover:underline">
+              <Link
+                to={`/problems/${problem.id}`}
+                className="hover:text-primary-text hover:underline"
+              >
                 {problem.title}
               </Link>
             </TableCell>

@@ -81,7 +81,7 @@ export function AppHeader() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" aria-label={`사용자 메뉴 · ${user.nickname}`}>
-                <span className="bg-primary/15 text-primary flex size-6 items-center justify-center rounded-full text-xs font-bold">
+                <span className="bg-primary/15 text-primary-text flex size-6 items-center justify-center rounded-full text-xs font-bold">
                   {user.nickname.slice(0, 1)}
                 </span>
                 <span className="hidden sm:inline">{user.nickname}</span>

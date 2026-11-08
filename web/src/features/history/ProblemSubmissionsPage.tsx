@@ -77,7 +77,7 @@ export function Component() {
 
   return (
     <section className="flex flex-col gap-4">
-      <Link to="/submissions" className="text-primary text-sm underline">
+      <Link to="/submissions" className="text-primary-text text-sm underline">
         ← 제출 기록
       </Link>
 
@@ -91,7 +91,10 @@ export function Component() {
               ? ` · 힌트 ${info.data.maxRevealedHintLevel}단계`
               : ''}
           </p>
-          <Link to={`/problems/${info.data.problemId}`} className="text-primary text-sm underline">
+          <Link
+            to={`/problems/${info.data.problemId}`}
+            className="text-primary-text text-sm underline"
+          >
             문제 보기
           </Link>
         </header>
@@ -127,7 +130,10 @@ export function Component() {
                   {list.data.content.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="tabular-nums">
-                        <Link to={`/submissions/${item.id}`} className="text-primary underline">
+                        <Link
+                          to={`/submissions/${item.id}`}
+                          className="text-primary-text underline"
+                        >
                           #{item.id}
                         </Link>
                       </TableCell>

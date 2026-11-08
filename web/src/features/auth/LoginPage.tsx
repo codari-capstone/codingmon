@@ -153,14 +153,14 @@ export function Component() {
         safeRedirect를 통과한 target이다.
       */}
       <p className="text-muted-foreground text-sm">
-        <Link to="/signup" state={{ from: target }} className="text-primary hover:underline">
+        <Link to="/signup" state={{ from: target }} className="text-primary-text hover:underline">
           회원가입
         </Link>
         {' · '}
         <Link
           to="/password-reset"
           state={{ from: target }}
-          className="text-primary hover:underline"
+          className="text-primary-text hover:underline"
         >
           비밀번호 찾기
         </Link>

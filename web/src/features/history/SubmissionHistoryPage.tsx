@@ -80,7 +80,7 @@ export function Component() {
                       <TableCell className="font-medium">
                         <Link
                           to={problemSubmissionsPath(item.problemId)}
-                          className="hover:text-primary hover:underline"
+                          className="hover:text-primary-text hover:underline"
                         >
                           {item.title}
                         </Link>

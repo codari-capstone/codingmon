@@ -178,7 +178,7 @@ export function Component() {
           <Link
             to="/login"
             state={{ from: `${location.pathname}${location.search}` }}
-            className="text-primary hover:underline"
+            className="text-primary-text hover:underline"
           >
             로그인
           </Link>

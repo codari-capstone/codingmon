@@ -214,7 +214,7 @@ function AdminProblemForm() {
         <h1 className="text-2xl font-semibold">
           {isNew ? '새 문제' : readOnly ? `v${versionNo} 보기` : '문제 수정'}
         </h1>
-        <Link to="/admin" className="text-primary text-sm hover:underline">
+        <Link to="/admin" className="text-primary-text text-sm hover:underline">
           문제 관리로
         </Link>
       </div>

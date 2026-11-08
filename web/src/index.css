@@ -47,6 +47,9 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
+  /* --primary는 채움 전용. 글자(링크·강조)는 -text, 주 버튼 올림 면은 -hover를 쓴다 */
+  --color-primary-text: var(--primary-text);
+  --color-primary-hover: var(--primary-hover);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
@@ -74,6 +77,10 @@
   --popover-foreground: #1c1e23;
   --primary: #586fc4;
   --primary-foreground: #ffffff;
+  /* #586fc4를 글자로 쓰면 회색 바탕 위 4.26:1이라, 링크·강조 글자는 한 단계 진한 색을 쓴다 */
+  --primary-text: #354589;
+  /* 흰 글자를 올린 채 면을 옅게(primary/80) 하면 3.2:1로 떨어져, 올림 면은 한 단계 진하게 한다 */
+  --primary-hover: #465aa9;
   --secondary: #e5e8ee;
   --secondary-foreground: #1c1e23;
   --muted: #e5e8ee;
@@ -127,6 +134,9 @@
   /* 주 버튼은 다크 모드에서도 같은 인디고 + 흰 글자 (4.5:1) */
   --primary: #586fc4;
   --primary-foreground: #ffffff;
+  /* 어두운 면 위 글자는 반대로 한 단계 밝은 색 (카드 위 #586fc4는 3.56:1) */
+  --primary-text: #91a3da;
+  --primary-hover: #465aa9;
   --secondary: #282a30;
   --secondary-foreground: #f2f4fb;
   --muted: #282a30;
