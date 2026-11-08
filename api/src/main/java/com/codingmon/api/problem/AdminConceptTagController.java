@@ -39,7 +39,7 @@ class AdminConceptTagController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         }
         if (!problems.createTag(input.slug(), name)) {
-            throw ApiErrors.error(HttpStatus.CONFLICT, "CONCEPT_TAG_EXISTS", "이미 있는 태그 이름이나 slug예요");
+            throw ApiErrors.error(HttpStatus.CONFLICT, "CONCEPT_TAG_EXISTS", "같은 이름이나 같은 영문 이름의 태그가 이미 있어요. 다른 이름을 입력해 주세요");
         }
         return ResponseEntity.status(HttpStatus.CREATED).body(new ConceptTag(input.slug(), name));
     }

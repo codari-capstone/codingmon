@@ -132,7 +132,7 @@ class AdminProblemController {
     @Transactional
     ResponseEntity<Void> validate(@PathVariable long id, @AuthenticationPrincipal Jwt jwt) {
         if (!judgeConfigured) {
-            throw ApiErrors.error(HttpStatus.SERVICE_UNAVAILABLE, "JUDGE_UNAVAILABLE", "지금은 검증할 수 없어요");
+            throw ApiErrors.error(HttpStatus.SERVICE_UNAVAILABLE, "JUDGE_UNAVAILABLE", "현재 채점할 수 없어요. 잠시 후 다시 시도해 주세요");
         }
         switch (problems.validate(id, Long.parseLong(jwt.getSubject())).orElseThrow(AdminProblemController::notFound)) {
             case ValidateResult.Started started -> started.submissionIds().forEach(s -> events.publishEvent(new SubmissionQueued(s)));
@@ -141,7 +141,7 @@ class AdminProblemController {
             case ValidateResult.NoSolution n -> throw conflict("NO_SOLUTION", "정답 코드를 먼저 저장해 주세요");
             case ValidateResult.NoTestCases n -> throw conflict("NO_TEST_CASES", "공개 예제를 먼저 저장해 주세요");
             case ValidateResult.LanguageNotConfigured n -> throw conflict("LANGUAGE_NOT_CONFIGURED",
-                    (n.language() == Language.PYTHON ? "Python" : "C++") + " 시간·메모리 제한을 먼저 정해 주세요");
+                    languageName(n.language()) + " 시간·메모리 제한을 먼저 정해 주세요");
         }
         return ResponseEntity.accepted().build();
     }
@@ -223,7 +223,7 @@ class AdminProblemController {
                 .map(slug -> {
                     Long tagId = ids.get(slug);
                     if (tagId == null) {
-                        throw ApiErrors.error(HttpStatus.BAD_REQUEST, "TAG_NOT_FOUND", "없는 태그예요: " + slug);
+                        throw ApiErrors.error(HttpStatus.BAD_REQUEST, "TAG_NOT_FOUND", "'" + slug + "' 태그가 없어요");
                     }
                     return tagId;
                 })
@@ -266,7 +266,7 @@ class AdminProblemController {
                 continue;
             }
             if (solution.sourceCode().getBytes(StandardCharsets.UTF_8).length > MAX_SOLUTION_BYTES) {
-                throw ApiErrors.error(HttpStatus.BAD_REQUEST, "SOURCE_TOO_LONG", "정답 코드는 64KB까지 넣을 수 있어요");
+                throw ApiErrors.error(HttpStatus.BAD_REQUEST, "SOURCE_TOO_LONG", languageName(solution.language()) + " 정답 코드가 64KB를 넘어요");
             }
             wanted.put(solution.language(), solution.sourceCode());
         }
@@ -287,10 +287,10 @@ class AdminProblemController {
             int inputBytes = cases.get(i).input().getBytes(StandardCharsets.UTF_8).length;
             int outputBytes = cases.get(i).output().getBytes(StandardCharsets.UTF_8).length;
             if (inputBytes > MAX_INPUT_BYTES) {
-                throw limitExceeded((i + 1) + "번째 케이스의 입력이 " + mib(MAX_INPUT_BYTES) + "를 넘어요");
+                throw limitExceeded((i + 1) + "번째 케이스의 입력이 " + mb(MAX_INPUT_BYTES) + "를 넘어요");
             }
             if (outputBytes > MAX_OUTPUT_BYTES) {
-                throw limitExceeded((i + 1) + "번째 케이스의 기대 출력이 " + mib(MAX_OUTPUT_BYTES) + "를 넘어요");
+                throw limitExceeded((i + 1) + "번째 케이스의 기대 출력이 " + mb(MAX_OUTPUT_BYTES) + "를 넘어요");
             }
             total += inputBytes + outputBytes;
         }
@@ -304,15 +304,19 @@ class AdminProblemController {
     }
 
     static ErrorResponseException totalTooLarge() {
-        return limitExceeded("케이스를 모두 합쳐 " + mib(MAX_TOTAL_BYTES) + "를 넘어요");
+        return limitExceeded("모든 케이스의 합이 " + mb(MAX_TOTAL_BYTES) + "를 넘어요");
     }
 
     static ErrorResponseException limitExceeded(String detail) {
         return ApiErrors.error(HttpStatus.BAD_REQUEST, "TEST_CASE_LIMIT_EXCEEDED", detail);
     }
 
-    static String mib(int bytes) {
-        return bytes / (1024 * 1024) + "MiB";
+    static String mb(int bytes) {
+        return bytes / (1024 * 1024) + "MB";
+    }
+
+    private static String languageName(Language language) {
+        return language == Language.PYTHON ? "Python" : "C++";
     }
 
     private static Saved saved(SaveResult result) {

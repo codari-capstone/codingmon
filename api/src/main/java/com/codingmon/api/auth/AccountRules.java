@@ -45,13 +45,13 @@ final class AccountRules {
                     "비밀번호는 10~20자이고 영문 대문자·소문자·숫자·특수문자를 각각 하나 이상 넣어야 해요");
         }
         if (!password.equals(confirm)) {
-            throw AuthErrors.error(HttpStatus.BAD_REQUEST, "PASSWORD_MISMATCH", "비밀번호가 일치하지 않아요");
+            throw AuthErrors.error(HttpStatus.BAD_REQUEST, "PASSWORD_MISMATCH", "비밀번호 확인이 일치하지 않아요. 같은 비밀번호를 입력해 주세요");
         }
         return password;
     }
 
     // 비밀번호 변경(MY-03)과 재설정(COM-08)이 같은 문구로 답한다.
     static ErrorResponseException samePassword() {
-        return AuthErrors.error(HttpStatus.BAD_REQUEST, "SAME_PASSWORD", "현재 비밀번호와 달라야 해요");
+        return AuthErrors.error(HttpStatus.BAD_REQUEST, "SAME_PASSWORD", "지금 쓰는 비밀번호와 같아요. 다른 비밀번호를 입력해 주세요");
     }
 }

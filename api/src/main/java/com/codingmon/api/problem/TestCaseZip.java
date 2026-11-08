@@ -79,13 +79,13 @@ final class TestCaseZip {
                 }
                 Matcher matcher = CASE_FILE.matcher(name);
                 if (!matcher.matches() || Integer.parseInt(matcher.group(2)) == 0) {
-                    throw invalid("규칙에 맞지 않는 파일이 있어요: " + name + ". sample/ 또는 hidden/ 폴더에 N.in·N.out 이름으로 넣어 주세요");
+                    throw invalid("'" + name + "' 파일 이름이 규칙에 맞지 않아요. sample/ 또는 hidden/ 폴더에 N.in·N.out 이름으로 넣어 주세요");
                 }
                 boolean input = matcher.group(3).equals("in");
                 int max = input ? MAX_INPUT_BYTES : MAX_OUTPUT_BYTES;
                 byte[] bytes = zip.readNBytes(max + 1);
                 if (bytes.length > max) {
-                    throw AdminProblemController.limitExceeded(name + "이 " + AdminProblemController.mib(max) + "를 넘어요");
+                    throw AdminProblemController.limitExceeded("'" + name + "' 파일이 " + AdminProblemController.mb(max) + "를 넘어요");
                 }
                 total += bytes.length;
                 if (total > MAX_TOTAL_BYTES) {
@@ -95,7 +95,7 @@ final class TestCaseZip {
                 CaseFile file = new CaseFile(name, utf8(name, bytes));
                 CaseFile before = (input ? inputs : outputs).putIfAbsent(key, file);
                 if (before != null) {
-                    throw invalid("번호가 같은 파일이 있어요: " + before.name() + ", " + name);
+                    throw invalid("'" + before.name() + "', '" + name + "' 파일의 번호가 같아요. 하나만 남겨 주세요");
                 }
             }
         } catch (IOException | IllegalArgumentException e) {
@@ -114,7 +114,7 @@ final class TestCaseZip {
             CaseFile input = inputs.get(key);
             CaseFile output = outputs.get(key);
             if (input == null || output == null) {
-                throw invalid("짝이 없는 파일이 있어요: " + (input == null ? output : input).name());
+                throw invalid("'" + (input == null ? output : input).name() + "' 파일의 짝이 없어요. N.in과 N.out을 함께 넣어 주세요");
             }
             cases.add(new TestCaseInput(key.type(), input.text(), output.text()));
         }
@@ -135,7 +135,7 @@ final class TestCaseZip {
         try {
             return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes, from, bytes.length - from)).toString();
         } catch (CharacterCodingException e) {
-            throw invalid("UTF-8이 아닌 파일이 있어요: " + name);
+            throw invalid("'" + name + "' 파일이 UTF-8이 아니에요. UTF-8로 저장해 다시 올려 주세요");
         }
     }
 
