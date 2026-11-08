@@ -262,6 +262,18 @@ class FactCheckTest {
         assertThat(blocked(sources, "1234567을 출력해 보세요.")).isFalse();
     }
 
+    @Test
+    void 한글_조사가_붙어_지문에_나온_값은_비공개_값으로_보지_않는다() {
+        FactCheck.Sources sources = new FactCheck.Sources(List.of("3\n", "No Solution\n", "2\n", "IMPOSSIBLE\n"),
+                List.of("해가 없으면 No Solution을 출력한다. 만들 수 없으면 IMPOSSIBLE을 출력한다."));
+
+        assertThat(blocked(sources, "No Solution을 출력하는 경우를 먼저 확인해 보세요.")).isFalse();
+        assertThat(blocked(sources, "IMPOSSIBLE을 출력해야 하는 조건을 떠올려 보세요.")).isFalse();
+        // 지문에 없으면 비공개 값이다
+        FactCheck.Sources secret = new FactCheck.Sources(List.of("IMPOSSIBLE\n"), List.of("답을 출력한다."));
+        assertThat(blocked(secret, "IMPOSSIBLE을 출력해야 하는 조건을 떠올려 보세요.")).isTrue();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             // 짧은 값, 1씩 느는 정수열, 같은 값의 되풀이

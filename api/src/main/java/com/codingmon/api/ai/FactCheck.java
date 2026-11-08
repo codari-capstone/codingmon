@@ -740,10 +740,15 @@ final class FactCheck {
     record Hidden(Set<String> values, Set<String> phrases) {
 
         static Hidden of(Sources sources) {
+            // 공개 글은 줄 그대로(한글이 섞인 후보용)와, 응답처럼 ASCII 밖 글자에서 끊은 구간으로(ASCII 후보용) 둘 다 색인한다.
+            // 끊지 않으면 "No Solution을 출력한다"가 "Solution을"로 남아 지문에 나온 "No Solution"을 공개 값으로 알아보지 못한다.
             StringBuilder open = new StringBuilder("\n");
             for (String text : sources.open()) {
                 for (String line : plain(text).split("\\R")) {
                     open.append(' ').append(String.join(" ", fields(line))).append(" \n");
+                    for (String segment : AnswerGuard.NON_ASCII.split(line)) {
+                        open.append(' ').append(String.join(" ", fields(segment))).append(" \n");
+                    }
                 }
             }
             String openIndex = open.toString();
