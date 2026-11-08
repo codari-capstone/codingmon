@@ -33,17 +33,19 @@ class AiQuotaService {
         return AiQuota.of(limit, reviews.usedToday(userId));
     }
 
-    // 사용자 행을 잠근 한 트랜잭션에서 시도를 잡고, 잡았으면 그 행까지 넣어 센다. 넘으면 429를 던져
+    // 본인 제출 행과 사용자 행을 이 순서로 잠근 한 트랜잭션에서 시도를 잡고, 잡았으면 그 행까지 넣어 센다. 넘으면 429를 던져
     // 잡은 것(새 행, 또는 FAILED·버려진 PENDING을 되돌린 것)을 롤백한다. 잡지 못했으면(재사용·진행 중) 세지 않는다.
-    // 같은 사용자의 요청은 잠금에서 줄을 서므로, 동시에 눌러도 뒤 요청이 앞 요청의 커밋된 행을 보고 센다.
+    // 제출 행을 먼저 잠그는 것은 탈퇴·채점 완료와 같은 순서라 교착을 막는다. 사용자 행 잠금에서 같은 사용자의 요청이 줄을 서므로,
+    // 동시에 눌러도 뒤 요청이 앞 요청의 커밋된 행을 보고 센다.
     // 기본 격리 수준(READ COMMITTED)이어야 한다. REPEATABLE READ면 잠금을 기다리기 전의 스냅샷으로 세어 앞 요청의 행을 못 본다.
     // 처리기에 넣는 일은 이 메서드가 돌아온(커밋한) 뒤에 부른 쪽이 한다. 커밋 전에 넣으면 처리기가 PENDING 행을 못 봐 결과를 버린다.
-    <T> Optional<T> claimWithin(long userId, Supplier<Optional<T>> claim) {
+    <T> Optional<T> claimWithin(long userId, long submissionId, Supplier<Optional<T>> claim) {
         return transactions.execute(status -> {
-            if (!reviews.lockUser(userId)) {
-                // 탈퇴와 겹쳤다. 사용자의 제출도 함께 지워졌다.
+            if (!reviews.lockSubmission(userId, submissionId)) {
+                // 탈퇴와 겹쳐 제출이 지워졌다.
                 throw ApiErrors.error(HttpStatus.NOT_FOUND, "SUBMISSION_NOT_FOUND", "제출을 찾을 수 없어요");
             }
+            reviews.lockUser(userId);
             Optional<T> claimed = claim.get();
             if (claimed.isPresent()) {
                 AiReviewRepository.Usage usage = reviews.usedToday(userId);

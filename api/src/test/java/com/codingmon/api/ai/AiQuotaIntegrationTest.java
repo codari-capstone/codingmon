@@ -36,6 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.context.WebApplicationContext;
 
@@ -103,6 +104,9 @@ class AiQuotaIntegrationTest {
 
     @Autowired
     AnalysisService analyses;
+
+    @Autowired
+    TransactionTemplate transactions;
 
     @Autowired
     WebApplicationContext context;
@@ -335,6 +339,49 @@ class AiQuotaIntegrationTest {
         awaitStatus(id, "COMPLETED");
         assertThat(llm.calls).hasValue(1);
         assertThat(quotaUsed()).isEqualTo(1);
+    }
+
+    @Test
+    void 탈퇴와_겹쳐도_교착하지_않고_404로_답한다() throws Exception {
+        long id = submission(userId);
+        CountDownLatch deleted = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // MyAccountService.withdraw와 같은 순서다. 제출을 먼저 지운 채 분석 요청이 기다리게 한 뒤 사용자를 지운다.
+            Future<?> withdraw = pool.submit(() -> transactions.executeWithoutResult(status -> {
+                jdbc.sql("delete from submissions where user_id = :id").param("id", userId).update();
+                deleted.countDown();
+                await(release);
+                jdbc.sql("delete from users where id = :id").param("id", userId).update();
+            }));
+            assertThat(deleted.await(10, TimeUnit.SECONDS)).isTrue();
+            Future<Object> request = pool.submit(() -> requestOrError(id));
+            awaitLockWait();
+            release.countDown();
+
+            withdraw.get(20, TimeUnit.SECONDS);
+            assertThat(request.get(20, TimeUnit.SECONDS)).isEqualTo("SUBMISSION_NOT_FOUND");
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+        assertThat(llm.calls).hasValue(0);
+    }
+
+    // 다른 연결이 행 잠금을 기다리기 시작할 때까지 기다린다.
+    private void awaitLockWait() throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            int waiting = jdbc.sql("select count(*) from pg_stat_activity"
+                    + " where datname = current_database() and wait_event_type = 'Lock'")
+                    .query(Integer.class).single();
+            if (waiting > 0) {
+                return;
+            }
+            Thread.sleep(20);
+        }
+        throw new AssertionError("분석 요청이 잠금을 기다리지 않았다");
     }
 
     // 요청을 한꺼번에 출발시켜 결과(성공이면 Requested, 오류면 code)를 모은다. 연결 풀(기본 10)을 넘지 않게 5개까지만 쓴다.

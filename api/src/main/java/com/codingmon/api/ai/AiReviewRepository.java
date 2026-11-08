@@ -79,14 +79,25 @@ class AiReviewRepository {
                 .optional();
     }
 
-    // 같은 사용자의 한도 검사를 한 줄로 세운다(AiQuotaService가 트랜잭션 안에서 부른다). 사용자가 없으면 false다.
-    // FOR NO KEY UPDATE라 제출을 새로 넣을 때의 외래 키 검사(FOR KEY SHARE)는 막지 않는다.
-    boolean lockUser(long userId) {
-        return jdbc.sql("select id from users where id = :userId for no key update")
+    // 시도를 잡는 동안 본인 제출이 지워지지 않게 잠근다(AiQuotaService가 트랜잭션 안에서 lockUser보다 먼저 부른다). 없으면 false다.
+    // 탈퇴(MyAccountService.withdraw)·채점 완료처럼 제출 행을 사용자 행보다 먼저 잠가야 교착이 생기지 않는다.
+    // FOR KEY SHARE라 채점이 제출 행의 판정을 고치는 것은 막지 않는다.
+    boolean lockSubmission(long userId, long submissionId) {
+        return jdbc.sql("select id from submissions where id = :id and user_id = :userId for key share")
+                .param("id", submissionId)
                 .param("userId", userId)
                 .query(Long.class)
                 .optional()
                 .isPresent();
+    }
+
+    // 같은 사용자의 한도 검사를 한 줄로 세운다(AiQuotaService가 트랜잭션 안에서 부른다).
+    // FOR NO KEY UPDATE라 제출을 새로 넣을 때의 외래 키 검사(FOR KEY SHARE)는 막지 않는다.
+    void lockUser(long userId) {
+        jdbc.sql("select id from users where id = :userId for no key update")
+                .param("userId", userId)
+                .query(Long.class)
+                .optional();
     }
 
     // 사용자의 채점 제출에 오늘 만들어졌거나 오늘 다시 시작한 FAILED가 아닌 행 수(database-schema.md). 분석과 리뷰를 합친다.
