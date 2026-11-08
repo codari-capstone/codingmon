@@ -606,7 +606,10 @@ export interface paths {
          *       프롬프트 버전이 바뀐 뒤 누르면 새 버전으로 다시 만든다.
          *     - 응답은 `GET`과 같은 규칙으로 고른 분석이다. 새로 만들기 시작했고 응답이 `PENDING`이면 202, 그 밖에는 200이다.
          *       화면은 `status`가 `PENDING`이면 바뀔 때까지 `GET`을 주기적으로 부른다(AI-02).
-         *     - AI 대기열이 차서 시작하지 못하면 200 `FAILED`다(이전 버전의 끝난 분석이 있으면 그 분석). 실패 사유 구분은 #81에서 더한다.
+         *     - AI 대기열이 차서 시작하지 못하면 200 `FAILED`, `failureReason` `BUSY`다(이전 버전의 끝난 분석이 있으면 그 분석). 한도는 쓰지 않는다.
+         *     - 만드는 중에 실패하면 `GET`이 `FAILED`와 그 이유(`failureReason`)를 준다. 어느 이유든 다시 누르면 새로 만든다(AI-02).
+         *       AI 서버의 장애·429에는 서버가 스스로 다시 부르지 않는다(AI가 아직 만들고 있을 수 있는 호출이라).
+         *       서버가 스스로 다시 부르는 것은 형식에 맞지 않는 응답 1회와 정답 코드가 섞인 응답 1회뿐이라, 요청 한 번에 AI 호출은 최대 4회다.
          *     - 새로 만들기 시작할 때만 하루 한도(`AiQuota`)에 1회로 센다. 오늘 한도를 다 썼으면 429 `AI_DAILY_LIMIT_EXCEEDED`이고 아무것도 만들지 않는다.
          *       이미 있는 분석을 돌려줄 때(만드는 중 포함)는 한도를 다 썼어도 200이고 세지 않는다.
          */
@@ -671,7 +674,8 @@ export interface paths {
          *       이미 있는 리뷰를 돌려줄 때(만드는 중 포함)는 한도를 다 썼어도 200이고 세지 않는다.
          *     - 응답은 `GET`과 같은 규칙으로 고른 리뷰다. 새로 만들기 시작했고 응답이 `PENDING`이면 202, 그 밖에는 200이다.
          *       화면은 `status`가 `PENDING`이면 바뀔 때까지 `GET`을 주기적으로 부른다.
-         *     - AI 대기열이 차서 시작하지 못하면 200 `FAILED`다(이전 버전의 끝난 리뷰가 있으면 그 리뷰). 한도는 쓰지 않는다. 실패 사유 구분은 #81에서 더한다.
+         *     - AI 대기열이 차서 시작하지 못하면 200 `FAILED`, `failureReason` `BUSY`다(이전 버전의 끝난 리뷰가 있으면 그 리뷰). 한도는 쓰지 않는다.
+         *     - 만드는 중에 실패하면 `GET`이 `FAILED`와 그 이유(`failureReason`)를 준다. 다시 부르는 규칙은 분석 요청과 같다.
          */
         post: operations["requestCodeReview"];
         delete?: never;
@@ -1351,12 +1355,24 @@ export interface components {
             /** Format: int64 */
             submissionId: number;
             /**
-             * @description `PENDING` 만드는 중, `COMPLETED` 끝남, `FAILED` 만들지 못함(다시 요청할 수 있다).
+             * @description `PENDING` 만드는 중, `COMPLETED` 끝남, `FAILED` 만들지 못함(다시 요청할 수 있다). 만들지 못한 이유는 `failureReason`이다.
              *     서버가 처리 중에 내려가 끝나지 못한 분석은 시작하고 15분(서버 설정 `LLM_PENDING_TIMEOUT`)이 지나면 `FAILED`로 준다.
              *     서버가 대기열에서 처리하고 있는 분석은 오래 걸려도 `PENDING`이다.
              * @enum {string}
              */
             status: "PENDING" | "COMPLETED" | "FAILED";
+            /**
+             * @description `status`가 `FAILED`일 때만 있다(AI-06, `docs/AI_FEATURES.md` 8절). 어느 것이든 같은 요청을 다시 보내면 새로 만든다.
+             *     - `UNAVAILABLE` AI 서버 장애: 타임아웃, 연결 실패, 5xx, 서버에 AI가 설정되지 않음. 처리 중에 서버가 내려가 `FAILED`로 주는 결과도 이것이다
+             *     - `RATE_LIMITED` AI 서버가 요청 한도로 거절함(429)
+             *     - `BUSY` 이 서비스의 AI 대기열이 차서 시작하지 못함
+             *     - `INVALID_RESPONSE` AI가 다시 요청해도 형식에 맞지 않는 응답을 줌
+             *     - `INTERNAL` 그 밖의 서버 오류(입력을 준비하거나 결과를 저장하지 못함)
+             *
+             *     오늘 한도를 다 쓴 것은 여기가 아니라 429 `AI_DAILY_LIMIT_EXCEEDED` 응답이다.
+             * @enum {string|null}
+             */
+            failureReason: "UNAVAILABLE" | "RATE_LIMITED" | "BUSY" | "INVALID_RESPONSE" | "INTERNAL" | null;
             /**
              * @description 정답 코드가 섞인 응답이 다시 만들어도 나와 결과를 보여 주지 않기로 한 분석(`docs/AI_FEATURES.md` 8절, #78).
              *     `COMPLETED`이지만 내용과 힌트가 없고 힌트를 열 수 없다(409 `ANALYSIS_BLOCKED`). 다시 요청해도 새로 만들지 않는다.
@@ -1421,12 +1437,17 @@ export interface components {
             /** Format: int64 */
             submissionId: number;
             /**
-             * @description `PENDING` 만드는 중, `COMPLETED` 끝남, `FAILED` 만들지 못함(다시 요청할 수 있다).
+             * @description `PENDING` 만드는 중, `COMPLETED` 끝남, `FAILED` 만들지 못함(다시 요청할 수 있다). 만들지 못한 이유는 `failureReason`이다.
              *     서버가 처리 중에 내려가 끝나지 못한 리뷰는 시작하고 15분(서버 설정 `LLM_PENDING_TIMEOUT`)이 지나면 `FAILED`로 준다.
              *     서버가 대기열에서 처리하고 있는 리뷰는 오래 걸려도 `PENDING`이다.
              * @enum {string}
              */
             status: "PENDING" | "COMPLETED" | "FAILED";
+            /**
+             * @description `status`가 `FAILED`일 때만 있다. 값의 뜻은 `SubmissionAnalysis.failureReason`과 같다
+             * @enum {string|null}
+             */
+            failureReason: "UNAVAILABLE" | "RATE_LIMITED" | "BUSY" | "INVALID_RESPONSE" | "INTERNAL" | null;
             /**
              * @description 정답 코드가 섞인 응답이 다시 만들어도 나와 결과를 보여 주지 않기로 한 리뷰(`docs/AI_FEATURES.md` 8절).
              *     `COMPLETED`이지만 내용이 없다. 다시 요청해도 새로 만들지 않는다. 화면은 AI 사용 불가 안내(AI-06)를 보여 준다.
@@ -2590,7 +2611,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 이미 있는 분석(만드는 중 포함), 또는 대기열이 차서 시작하지 못함(`FAILED`) */
+            /** @description 이미 있는 분석(만드는 중 포함), 또는 대기열이 차서 시작하지 못함(`FAILED`, `BUSY`) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2754,7 +2775,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 이미 있는 리뷰(만드는 중 포함), 또는 대기열이 차서 시작하지 못함(`FAILED`) */
+            /** @description 이미 있는 리뷰(만드는 중 포함), 또는 대기열이 차서 시작하지 못함(`FAILED`, `BUSY`) */
             200: {
                 headers: {
                     [name: string]: unknown;

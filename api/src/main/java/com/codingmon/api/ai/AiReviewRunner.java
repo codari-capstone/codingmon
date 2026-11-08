@@ -59,7 +59,7 @@ class AiReviewRunner {
                     .whenComplete((content, failure) -> finish(type, claim, content, failure));
         } catch (RuntimeException e) {
             log.error("{} {}을 시작하지 못했다", label(type), claim.id(), e);
-            fail(type, claim);
+            fail(type, claim, AiReviewRepository.FailureReason.INTERNAL);
         }
     }
 
@@ -68,7 +68,7 @@ class AiReviewRunner {
     }
 
     // 처리기 스레드에서 돈다. 저장할 content를 돌려준다. 다시 만드는 요청도 같은 처리기 대기열에 넣으므로 다른 요청을 앞지르지
-    // 않고, 대기열이 차 있으면 RATE_LIMITED로 실패한다. 다시 만드는 요청의 토큰도 같은 행에 더해진다(AiWorker).
+    // 않고, 대기열이 차 있으면 BUSY로 실패한다. 다시 만드는 요청의 토큰도 같은 행에 더해진다(AiWorker).
     private <T> CompletableFuture<String> guarded(ReviewType type, AiReviewRepository.Claim claim, Generation<T> request,
             LlmResponse<T> first) {
         List<AnswerGuard.Violation> violations = request.check().apply(first.value());
@@ -93,6 +93,7 @@ class AiReviewRunner {
 
     // 처리기 스레드에서 돈다(대기열이 차서 바로 거절되면 요청 스레드). 여기서 던지면 아무도 받지 않으므로 기록만 한다.
     private void finish(ReviewType type, AiReviewRepository.Claim claim, String content, Throwable failure) {
+        AiReviewRepository.FailureReason reason = AiReviewRepository.FailureReason.INTERNAL;
         if (failure == null) {
             try {
                 if (!reviews.complete(claim, content)) {
@@ -107,21 +108,33 @@ class AiReviewRunner {
         } else {
             Throwable cause = failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
             if (cause instanceof LlmException e) {
+                reason = reason(e.kind());
                 log.warn("{} {} 실패({}): {}", label(type), claim.id(), e.kind(), e.getMessage());
             } else {
                 log.error("{} {} 실패", label(type), claim.id(), cause);
             }
         }
-        fail(type, claim);
+        fail(type, claim, reason);
+    }
+
+    // 빠짐없는 switch라 Kind에 값이 늘면 컴파일이 깨진다. 이름으로 바꾸면(valueOf) 빠진 값이 콜백 안에서 예외가 되어
+    // fail()에 닿지 못하고, 그 행은 재시작할 때까지 PENDING으로 남는다.
+    private static AiReviewRepository.FailureReason reason(LlmException.Kind kind) {
+        return switch (kind) {
+            case UNAVAILABLE -> AiReviewRepository.FailureReason.UNAVAILABLE;
+            case RATE_LIMITED -> AiReviewRepository.FailureReason.RATE_LIMITED;
+            case BUSY -> AiReviewRepository.FailureReason.BUSY;
+            case INVALID_RESPONSE -> AiReviewRepository.FailureReason.INVALID_RESPONSE;
+        };
     }
 
     // active에서 먼저 뺀다. FAILED를 커밋한 뒤에 빼면 그 사이 같은 행을 다시 잡은 새 시도의 등록까지 지운다.
     // 빼고 커밋하기 전에 다른 요청이 행을 다시 잡으면 이 시도의 fail은 attempt가 달라 아무것도 바꾸지 않는다.
     // DB가 내려가 FAILED로도 못 바꾸면 행은 PENDING으로 남고, 처리기에서 빠졌으므로 pending-timeout 뒤에 버려진 것으로 보인다.
-    private void fail(ReviewType type, AiReviewRepository.Claim claim) {
+    private void fail(ReviewType type, AiReviewRepository.Claim claim, AiReviewRepository.FailureReason reason) {
         active.remove(claim.id());
         try {
-            reviews.fail(claim);
+            reviews.fail(claim, reason);
         } catch (RuntimeException e) {
             log.error("{} {}을 실패로 기록하지 못했다", label(type), claim.id(), e);
         }

@@ -578,8 +578,9 @@ class AiQuotaIntegrationTest {
 
     // createdAt은 SQL 식이다(날짜 경계를 DB 시계 기준으로 만든다).
     private long rowWith(long submissionId, String type, String status, String content, String createdAt) {
-        return jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, content,"
-                + " created_at, completed_at) values (:submissionId, :type, 'v1', 'fake-model', :status,"
+        return jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, failure_reason,"
+                + " content, created_at, completed_at) values (:submissionId, :type, 'v1', 'fake-model', :status,"
+                + " case when :status = 'FAILED' then 'UNAVAILABLE' end,"
                 + " cast(:content as jsonb), " + createdAt + ", case when :status = 'PENDING' then null else now() end)"
                 + " returning id")
                 .param("submissionId", submissionId).param("type", type).param("status", status)
