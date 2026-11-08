@@ -174,6 +174,15 @@
 - `completed_at` (비어도 됨): 처리가 끝난 시각.
 - `(submission_id, review_type, prompt_version)` 중복 불가: 같은 제출·기능·프롬프트 결과를 재사용하게 한다.
 
+## `ai_review_next_concepts` — 코드 리뷰의 다음에 배울 개념
+
+- `ai_review_id` (복합 PK의 일부, FK): 개념을 권한 코드 리뷰(`review_type = CODE_REVIEW`). 리뷰를 삭제하면 함께 삭제된다.
+- `ordinal` (복합 PK의 일부): 리뷰 응답 `nextConcepts` 배열의 순서(1~3).
+- `name`: 모델이 쓴 개념 이름 원문. 태그와 맞지 않아도 그대로 둔다.
+- `reason`: 그 개념을 권한 이유 원문.
+- `concept_tag_id` (비어도 됨, FK): 이름을 개념 태그와 맞춘 결과. 맞는 태그가 없으면 비어 있다. 태그를 삭제하면 비워지고 원문은 남는다.
+- 리뷰가 `COMPLETED`로 저장되는 트랜잭션에서 함께 쓴다. 차단된 결과에는 행이 없다. 맞추는 규칙은 [`AI_FEATURES.md`](AI_FEATURES.md) 6절에 있다.
+
 ## `review_feedback` — AI 결과 피드백
 
 - `id` (PK): 피드백 행의 내부 번호.
