@@ -104,10 +104,12 @@ class AnswerGuardTest {
     void 정답_코드와_같은_코드_조각을_찾는다() {
         AnalysisResult copied = withPrinciple("i번째 값은 dp[i] = (dp[i − 1] + dp[i − 2]) % 1000000007 로 구합니다.");
 
+        // 학습자 코드의 dp에 다른 값을 넣는 글이라 코드 모양 검사에도 걸린다.
         assertThat(rules(withReference(copied, FIBONACCI_CODE, List.of("반복문 범위"), FIBONACCI_REFERENCE)))
-                .containsExactly(Rule.REFERENCE_SIMILAR);
+                .containsExactly(Rule.CODE_PATTERN, Rule.REFERENCE_SIMILAR);
         // 정답 코드가 없으면 비교하지 않는다.
-        assertThat(withReference(copied, FIBONACCI_CODE, List.of("반복문 범위"))).isEmpty();
+        assertThat(rules(withReference(copied, FIBONACCI_CODE, List.of("반복문 범위"))))
+                .containsExactly(Rule.CODE_PATTERN);
     }
 
     @Test
@@ -376,6 +378,52 @@ class AnswerGuardTest {
     @Test
     void 들여_쓴_한글_목록의_숫자_괄호는_호출이_아니다() {
         assertThat(check(withPrinciple("규칙을 보세요.\n    1. 예제 1(입력 3)은 별 5개입니다."))).isEmpty();
+    }
+
+    @Test
+    void 파이썬_머리_뒤의_설명_낱말은_인용_문장에_넣지_않는다() {
+        assertThat(check(withGuess("4번 줄의 for i in range(1, n + 1): i가 1부터 커집니다."))).isEmpty();
+    }
+
+    @Test
+    void 들여_쓴_출력_모양은_코드가_아니다() {
+        assertThat(check(withPrinciple("n이 3일 때 기대 출력은\n    *****\n    ***\n    *\n입니다."))).isEmpty();
+    }
+
+    @Test
+    void 학습자_코드의_변수에_다른_값을_넣는_글을_찾는다() {
+        String code = """
+                a, b = map(int, input().split())
+                c = a - b
+                print(c)
+                """;
+
+        assertThat(rules(withReference(withPrinciple("2번 줄을 c = a + b 로 바꾸세요."), code, List.of("사칙연산"))))
+                .containsExactly(Rule.CODE_PATTERN);
+        // 학습자 코드를 짚은 글과 수 하나를 넣는 예시는 넘긴다.
+        assertThat(withReference(withGuess("2번 줄 c = a - b에서 빼고 있어요. c = 3이면 출력은 3입니다."), code,
+                List.of("사칙연산"))).isEmpty();
+    }
+
+    @Test
+    void 호출_앞의_대입_대상과_떨어진_호출_대상도_비교한다() {
+        String code = """
+                total = sum(a)
+                a.append(x)
+                """;
+
+        for (String text : List.of("answer = sum(a)로 바꾸세요.", "b .append(x)로 바꾸세요.")) {
+            assertThat(rules(withReference(withPrinciple(text), code, List.of("리스트")))).as(text)
+                    .containsExactly(Rule.CODE_PATTERN);
+        }
+        assertThat(withReference(withGuess("1번 줄 total = sum(a)는 맞아요."), code, List.of("리스트"))).isEmpty();
+    }
+
+    @Test
+    void 이스케이프된_따옴표와_긴_리터럴이_든_호출도_찾는다() {
+        for (String text : List.of("print(\"a\\\"b\")로 바꾸세요.", "print('" + "x".repeat(320) + "')로 바꾸세요.")) {
+            assertThat(rules(check(withPrinciple(text)))).as(text).containsExactly(Rule.CODE_PATTERN);
+        }
     }
 
     @Test

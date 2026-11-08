@@ -3,7 +3,9 @@ package com.codingmon.api.ai;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -111,13 +113,19 @@ final class AnswerGuard {
             Pattern.compile("\\.\\s*(?:append|add|extend|update|remove|discard|setdefault|sort|split|join|strip|rstrip"
                     + "|lower|upper|replace|pop|push_back|pop_back|insert|reverse|items|keys|values|get|count|index"
                     + "|find|substr|size|length|begin|end|readline)\\s*\\("));
-    private static final int CALL_MAX_CHARS = 300;
+
+    // 대입. ==, !=, <=, >=, += 같은 연산자는 뺀다.
+    private static final Pattern ASSIGNMENT = Pattern.compile(
+            "(?<![\\w.])([A-Za-z_]\\w*)\\s*(?:\\[[^\\]\\n]*\\])?\\s*=(?![=])");
+    private static final Pattern NUMBER = Pattern.compile("-?[0-9]+(?:\\.[0-9]+)?");
 
     // 들여 쓴 줄은 주석(#, //) 앞부분에 한글이 없거나 코드 기호가 있으면 코드 줄로 본다. "n = 3일 때"처럼 들여 쓴 설명 글은
     // 넘기고, "n = n - 1  # 한 줄 줄이기"처럼 한글 주석을 단 코드는 잡는다.
     private static final Pattern INDENTED = Pattern.compile("(?m)^(?: {4,}|\\t)\\S.*$");
     private static final Pattern HANGUL = Pattern.compile("\\p{IsHangul}");
     private static final Pattern CODE_SYMBOL = Pattern.compile("[;{}]|[A-Za-z_]\\w*\\(");
+    // 한글이 없는 들여 쓴 줄도 영문자나 코드 기호가 있어야 코드로 본다. 별 모양 출력("*****")이나 수 나열은 코드가 아니다.
+    private static final Pattern CODE_CHAR = Pattern.compile("[A-Za-z_=;{}()\\[\\]]");
     private static final Pattern LINE_COMMENT = Pattern.compile("#|//");
     // 인용 비교에서 문장을 넓힐 때 앞에 붙은 이름과 끝에서 뺄 문장 부호(statement)
     private static final Pattern STATEMENT_HEAD = Pattern.compile("[\\w.\\[\\]]");
@@ -185,6 +193,7 @@ final class AnswerGuard {
     static List<Violation> check(AnalysisResult result, Context context) {
         String source = normalize(context.sourceCode());
         String compactSource = compact(source);
+        Set<String> assigned = assignedNames(stripComments(source, context.sourceLanguage()));
         String sourceTokens = join(tokens(source));
         List<List<String>> references = context.referenceSolutions().stream()
                 .map(reference -> tokens(stripComments(normalize(reference.code()), reference.language())))
@@ -200,7 +209,7 @@ final class AnswerGuard {
             if (indentedCode(text)) {
                 violations.add(new Violation(Rule.INDENTED_CODE, field, null));
             }
-            if (codePattern(text, compactSource)) {
+            if (codePattern(text, compactSource, assigned)) {
                 violations.add(new Violation(Rule.CODE_PATTERN, field, null));
             }
             if (similar(text, references, sourceTokens)) {
@@ -239,7 +248,7 @@ final class AnswerGuard {
         while (lines.find()) {
             String line = lines.group();
             String code = LINE_COMMENT.split(line, 2)[0];
-            if ((!code.isBlank() && !HANGUL.matcher(code).find()) || CODE_SYMBOL.matcher(line).find()) {
+            if ((!HANGUL.matcher(code).find() && CODE_CHAR.matcher(code).find()) || CODE_SYMBOL.matcher(line).find()) {
                 return true;
             }
         }
@@ -248,7 +257,7 @@ final class AnswerGuard {
 
     // 맞은 글이 학습자 코드에 그대로 있으면 인용이다. 패턴은 문장의 앞부분(int sum =, .append(x))만 맞추기도 하므로
     // 그 문장 전체(statement)도 학습자 코드에 있어야 인용으로 본다. 초기값이나 호출 대상만 바꾼 글을 가리려는 것이다.
-    private static boolean codePattern(String text, String compactSource) {
+    private static boolean codePattern(String text, String compactSource, Set<String> assigned) {
         for (Pattern pattern : CODE_PATTERNS) {
             Matcher matcher = pattern.matcher(text);
             while (matcher.find()) {
@@ -266,7 +275,30 @@ final class AnswerGuard {
                 }
             }
         }
+        // 학습자 코드에서 값을 넣는 변수에 다른 값을 넣는 글(c = a + b). 수식 설명("S = n * (n + 1) / 2")의 S는 보통
+        // 학습자 코드의 변수가 아니다. 값이 수 하나인 것("n = 3이면")은 예시로 보고 넘긴다.
+        Matcher matcher = ASSIGNMENT.matcher(text);
+        while (matcher.find()) {
+            if (assigned.contains(matcher.group(1))) {
+                String statement = statement(text, matcher.start(), matcher.end());
+                String value = statement.substring(Math.min(statement.length(), statement.indexOf('=') + 1)).strip();
+                if (!value.isEmpty() && !NUMBER.matcher(value).matches()
+                        && !quoted(compactSource, compact(statement))) {
+                    return true;
+                }
+            }
+        }
         return false;
+    }
+
+    // 학습자 코드에서 = 로 값을 넣는 변수 이름(a[i] = 의 a 포함)
+    private static Set<String> assignedNames(String code) {
+        Set<String> names = new HashSet<>();
+        Matcher matcher = ASSIGNMENT.matcher(code);
+        while (matcher.find()) {
+            names.add(matcher.group(1));
+        }
+        return names;
     }
 
     private static boolean quotedStatement(String text, int start, int end, String compactSource) {
@@ -275,18 +307,20 @@ final class AnswerGuard {
     }
 
     // open 자리의 여는 괄호와 짝인 닫는 괄호 다음 자리. 따옴표 밖에 한글이 있거나("int(32비트 정수)") 줄이 바뀌거나
-    // 짝이 없으면 호출이 아니므로 -1이다. print('별')의 한글은 따옴표 안이라 호출이다.
+    // 짝이 없으면 호출이 아니므로 -1이다. print('별')의 한글은 따옴표 안이라 호출이다. 따옴표 안의 \\는 다음 글자를 건너뛴다.
+    // 길이는 제한하지 않는다(응답 필드 길이는 스키마가 막는다).
     private static int callEnd(String text, int open) {
         int depth = 0;
         char quote = 0;
-        int limit = Math.min(text.length(), open + CALL_MAX_CHARS);
-        for (int i = open; i < limit; i++) {
+        for (int i = open; i < text.length(); i++) {
             char c = text.charAt(i);
             if (c == '\n') {
                 return -1;
             }
             if (quote != 0) {
-                if (c == quote) {
+                if (c == '\\') {
+                    i++;
+                } else if (c == quote) {
                     quote = 0;
                 }
             } else if (c == '\'' || c == '"') {
@@ -328,9 +362,12 @@ final class AnswerGuard {
     // 마지막 ")")에서도 끊고, 끝에 붙은 문장 부호는 뺀다. 괄호 깊이는 맞은 부분에서 이어받는다(int a[ 뒤의 10]).
     // 한글에서 끊을 때 바로 앞 낱말이 "n번", "3개"처럼 수를 세는 말에 붙어 있으면 그 낱말은 설명 글로 보고 뺀다.
     // "0으로", "b가"처럼 조사가 붙은 낱말은 코드의 일부로 남긴다.
+    // 앞쪽은 대입 대상(answer = sum(a)의 answer)과 공백을 둔 호출 대상(b .append의 b)까지 넓힌다. 파이썬 머리처럼 맞은 부분이
+    // :로 끝났거나 넓히다가 괄호 밖 :(::는 빼고)를 만나면 거기서 끊는다("for i in range(n): i가"의 i는 설명 글이다).
     private static String statement(String text, int start, int end) {
-        while (start > 0 && STATEMENT_HEAD.matcher(text.substring(start - 1, start)).matches()) {
-            start--;
+        start = head(text, start);
+        if (text.substring(start, end).stripTrailing().endsWith(":")) {
+            return STATEMENT_TAIL.matcher(text.substring(start, end)).replaceAll("");
         }
         int depth = Math.max(0, depth(text.substring(start, end)));
         char quote = 0;
@@ -358,6 +395,10 @@ final class AnswerGuard {
             } else if (c == ';') {
                 end++;
                 break;
+            } else if (c == ':' && depth <= 0 && text.charAt(end - 1) != ':'
+                    && (end + 1 == text.length() || text.charAt(end + 1) != ':')) {
+                end++;
+                break;
             } else if (c == '\'' || c == '"') {
                 quote = c;
             } else if (c == '(' || c == '[' || c == '{') {
@@ -373,6 +414,36 @@ final class AnswerGuard {
         }
         String statement = text.substring(start, end);
         return statement.endsWith(";") ? statement : STATEMENT_TAIL.matcher(statement).replaceAll("");
+    }
+
+    private static int head(String text, int start) {
+        start = name(text, start);
+        int i = start;
+        while (i > 0 && text.charAt(i - 1) == ' ') {
+            i--;
+        }
+        if (text.charAt(start) == '.' && i < start && i > 0 && isWord(text.charAt(i - 1))) {
+            return name(text, i);
+        }
+        if (i > 0 && text.charAt(i - 1) == '=' && (i < 2 || "=!<>+-*/%&|^".indexOf(text.charAt(i - 2)) < 0)) {
+            int j = i - 1;
+            while (j > 0 && text.charAt(j - 1) == ' ') {
+                j--;
+            }
+            int k = name(text, j);
+            if (k < j) {
+                return k;
+            }
+        }
+        return start;
+    }
+
+    // start 앞에 붙어 있는 이름(a.b[i])의 시작 자리
+    private static int name(String text, int start) {
+        while (start > 0 && STATEMENT_HEAD.matcher(text.substring(start - 1, start)).matches()) {
+            start--;
+        }
+        return start;
     }
 
     // 따옴표 밖의 여는 괄호 수에서 닫는 괄호 수를 뺀다.
@@ -454,7 +525,7 @@ final class AnswerGuard {
             if (key.isEmpty() || GENERAL_CONCEPTS.contains(key)) {
                 continue;
             }
-            List<String> all = new ArrayList<>();
+            Set<String> all = new LinkedHashSet<>();
             all.add(tag);
             all.addAll(ALIAS_GROUPS.getOrDefault(aliasKey(tag), List.of()));
             for (String name : all) {
