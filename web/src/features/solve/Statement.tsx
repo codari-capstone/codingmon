@@ -29,7 +29,7 @@ function Source({ problem }: { problem: ProblemDetailView }) {
           출처:{' '}
           {href ? (
             // 출처는 외부 사이트다. 새 탭으로 열고 referrer를 보내지 않는다.
-            <a href={href} target="_blank" rel="noreferrer" className="text-primary underline">
+            <a href={href} target="_blank" rel="noreferrer" className="text-primary-text underline">
               {name ?? href}
             </a>
           ) : (

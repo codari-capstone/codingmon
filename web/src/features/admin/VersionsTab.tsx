@@ -60,7 +60,7 @@ export function VersionsTab({ problemId }: { problemId: number }) {
                 */}
                 <Link
                   to={`/admin/problems/${problemId}/versions/${version.versionNo}`}
-                  className="hover:text-primary hover:underline"
+                  className="hover:text-primary-text hover:underline"
                 >
                   {`v${version.versionNo}`}
                 </Link>

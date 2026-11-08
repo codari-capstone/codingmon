@@ -32,7 +32,7 @@ function AccountInfo({ user }: { user: CurrentUser }) {
           // GitHub 이미지가 없으면 기본 이미지 대신 첫 글자를 쓴다(상단 사용자 메뉴와 같은 모양).
           <span
             aria-hidden="true"
-            className="bg-primary/15 text-primary flex size-16 shrink-0 items-center justify-center rounded-full text-2xl font-bold"
+            className="bg-primary/15 text-primary-text flex size-16 shrink-0 items-center justify-center rounded-full text-2xl font-bold"
           >
             {user.nickname.slice(0, 1)}
           </span>
@@ -172,10 +172,10 @@ function Activity() {
           풀이 요약
         </h2>
         <div className="flex gap-4 text-sm">
-          <Link to="/me/report" className="text-primary underline">
+          <Link to="/me/report" className="text-primary-text underline">
             내 학습
           </Link>
-          <Link to="/submissions" className="text-primary underline">
+          <Link to="/submissions" className="text-primary-text underline">
             제출 기록
           </Link>
         </div>

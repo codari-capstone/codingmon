@@ -144,7 +144,7 @@ export function Component() {
                         {/* 셀 전체를 누를 수 있게 둔다 (ProblemTable과 같은 선택) */}
                         <Link
                           to={`/admin/problems/${problem.id}`}
-                          className="hover:text-primary hover:underline"
+                          className="hover:text-primary-text hover:underline"
                         >
                           {problem.title}
                         </Link>

@@ -62,7 +62,7 @@ export function Markdown({ children, className }: { children: string; className?
         // overflow-wrap:anywhere는 여기에 듣지 않는다(KaTeX가 표로 배치한다).
         '[&_.katex-display]:overflow-x-auto [&_.katex-display]:py-1',
         '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
-        '[&_a]:text-primary [&_a]:underline',
+        '[&_a]:text-primary-text [&_a]:underline',
         '[&_table]:my-3 [&_table]:w-full [&_table]:text-left',
         '[&_th]:border-border [&_th]:border-b [&_th]:py-1 [&_th]:font-medium',
         '[&_td]:border-border/60 [&_td]:border-b [&_td]:py-1',
