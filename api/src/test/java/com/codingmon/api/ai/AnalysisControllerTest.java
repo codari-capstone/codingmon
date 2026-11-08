@@ -304,6 +304,7 @@ class AnalysisControllerTest {
         awaitStatus(id, "FAILED");
         mvc.perform(get(analysis(id)).with(as(userId)))
                 .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.failureReason").value("UNAVAILABLE"))
                 .andExpect(jsonPath("$.summary").isEmpty());
 
         CountDownLatch release = new CountDownLatch(1);
@@ -311,12 +312,15 @@ class AnalysisControllerTest {
             await(release);
             return FakeLlm.ok();
         };
+        // 다시 시작하면 이전 실패의 이유는 지운다.
         mvc.perform(post(analysis(id)).with(as(userId)))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.failureReason").isEmpty())
                 .andExpect(jsonPath("$.completedAt").isEmpty());
         release.countDown();
         awaitStatus(id, "COMPLETED");
+        mvc.perform(get(analysis(id)).with(as(userId))).andExpect(jsonPath("$.failureReason").isEmpty());
 
         assertThat(llm.calls).hasValue(2);
         // 같은 행을 다시 썼고, 실패한 시도의 토큰도 더해져 있다.
@@ -330,11 +334,34 @@ class AnalysisControllerTest {
         jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, created_at)"
                 + " values (:id, 'ANALYSIS', 'v1', 'fake-model', now() - interval '1 hour')").param("id", id).update();
 
-        mvc.perform(get(analysis(id)).with(as(userId))).andExpect(jsonPath("$.status").value("FAILED"));
+        // 서버가 처리 중에 내려간 것이라 장애로 준다. 행에는 이유가 없다(PENDING 그대로).
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.failureReason").value("UNAVAILABLE"));
         mvc.perform(post(analysis(id)).with(as(userId)));
         awaitStatus(id, "COMPLETED");
 
         assertThat(llm.calls).hasValue(1);
+    }
+
+    @Test
+    void 만들지_못한_이유를_종류별로_준다() throws Exception {
+        for (LlmException.Kind kind : List.of(LlmException.Kind.RATE_LIMITED, LlmException.Kind.INVALID_RESPONSE)) {
+            long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
+            llm.answer = () -> {
+                throw new LlmException(kind, "거절", null, LlmUsage.NONE);
+            };
+            mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().isAccepted());
+            awaitStatus(id, "FAILED");
+
+            mvc.perform(get(analysis(id)).with(as(userId)))
+                    .andExpect(jsonPath("$.status").value("FAILED"))
+                    .andExpect(jsonPath("$.failureReason").value(kind.name()))
+                    // 실패는 하루 한도에 세지 않는다.
+                    .andExpect(jsonPath("$.quota.used").value(0));
+        }
+        // 서버는 장애·429에 스스로 다시 부르지 않는다(가짜 모델이므로 스키마 재요청도 없다).
+        assertThat(llm.calls).hasValue(2);
     }
 
     @Test
@@ -487,6 +514,7 @@ class AnalysisControllerTest {
 
         mvc.perform(post(analysis(id)).with(as(userId)));
         awaitStatus(id, "FAILED");
+        mvc.perform(get(analysis(id)).with(as(userId))).andExpect(jsonPath("$.failureReason").value("INTERNAL"));
 
         llm.answer = FakeLlm::ok;
         mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
