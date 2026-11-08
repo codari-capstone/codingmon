@@ -1,8 +1,14 @@
 import type { RuntimeErrorType, SubmissionStatus, Verdict } from '@/api/types'
+import type { StatusTone } from '@/components/StatusText'
 
 export interface VerdictInfo {
   /** 백준 표기를 따른 한글 이름 (RES-02). */
   label: string
+  /**
+   * 판정 색 묶음 (docs/design-system.md 3장): 맞음은 success, 틀림·형식·런타임·컴파일은
+   * danger, 시간·메모리·출력 초과는 warning. 채점 불가는 학습자 잘못이 아니라서 판정 색 없이 muted.
+   */
+  tone: StatusTone
   /** 무슨 일이 일어났는지 (RES-03). */
   description: string
   /** 무엇부터 봐야 하는지 (RES-03). */
@@ -28,23 +34,27 @@ export interface VerdictInfo {
 export const VERDICT_INFO: Record<Verdict | 'JUDGE_ERROR', VerdictInfo> = {
   ACCEPTED: {
     label: '맞았습니다!!',
+    tone: 'success',
     description: '모든 테스트에서 정답과 똑같이 출력했어요.',
     checkFirst: '[AI 리뷰]로 더 빠르거나 읽기 쉬운 방법이 있는지 확인해 보세요.',
   },
   PRESENTATION_ERROR: {
     label: '출력 형식이 잘못되었습니다',
+    tone: 'danger',
     description: '답의 내용은 맞았지만 띄어쓰기나 줄바꿈이 문제에서 요구한 모양과 달라요.',
     checkFirst:
       '줄 끝에 남은 공백, 빠지거나 더해진 빈 줄, 숫자 사이 구분 문자를 예제 출력과 한 글자씩 비교해 보세요.',
   },
   WRONG_ANSWER: {
     label: '틀렸습니다',
+    tone: 'danger',
     description: '프로그램은 끝까지 실행됐지만, 어떤 입력에서 정답과 다른 값을 출력했어요.',
     checkFirst:
       '가장 작은 입력과 가장 큰 입력, 빠뜨린 조건, 값이 자료형 범위를 넘는지 확인해 보세요.',
   },
   TIME_LIMIT_EXCEEDED: {
     label: '시간 초과',
+    tone: 'warning',
     description:
       '정해진 시간 안에 프로그램이 끝나지 않았어요. 답이 맞는지는 아직 확인하지 못했어요.',
     checkFirst:
@@ -52,21 +62,25 @@ export const VERDICT_INFO: Record<Verdict | 'JUDGE_ERROR', VerdictInfo> = {
   },
   MEMORY_LIMIT_EXCEEDED: {
     label: '메모리 초과',
+    tone: 'warning',
     description: '허용된 메모리보다 많이 사용했어요.',
     checkFirst: '배열·리스트의 크기와 재귀 호출의 깊이를 확인해 보세요.',
   },
   OUTPUT_LIMIT_EXCEEDED: {
     label: '출력 초과',
+    tone: 'warning',
     description: '정답보다 훨씬 많은 양을 출력했어요.',
     checkFirst: '출력하는 반복문이 제때 끝나는지, 디버깅용 출력이 남아 있지 않은지 확인해 보세요.',
   },
   RUNTIME_ERROR: {
     label: '런타임 에러',
+    tone: 'danger',
     description: '실행 도중 프로그램이 멈췄어요.',
     checkFirst: '아래 종류별 설명을 확인해 보세요.',
   },
   COMPILE_ERROR: {
     label: '컴파일 에러',
+    tone: 'danger',
     description:
       '실행하기 전 문법 검사에서 막혔어요. 결과를 누르면 몇 번째 줄에서 무엇이 문제인지 알려 주는 메시지를 볼 수 있어요.',
     checkFirst:
@@ -74,6 +88,7 @@ export const VERDICT_INFO: Record<Verdict | 'JUDGE_ERROR', VerdictInfo> = {
   },
   JUDGE_ERROR: {
     label: '채점 불가',
+    tone: 'muted',
     description: '서버 문제로 채점하지 못했어요. 내 코드의 문제가 아니에요.',
     checkFirst: '잠시 후 다시 제출해 주세요. 이 제출은 시도 횟수에 넣지 않아요.',
   },

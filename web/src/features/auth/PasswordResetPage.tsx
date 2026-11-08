@@ -66,7 +66,7 @@ export function Component() {
 
   return (
     <section className="mx-auto flex w-full max-w-sm flex-col gap-6 py-10">
-      <h1 className="text-2xl font-semibold">비밀번호 찾기</h1>
+      <h1 className="page-title">비밀번호 찾기</h1>
 
       <EmailCodeStep
         key={emailStepKey}

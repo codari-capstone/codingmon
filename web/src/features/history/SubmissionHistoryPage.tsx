@@ -5,6 +5,7 @@ import { Link } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { StatusText } from '@/components/StatusText'
 import {
   Table,
   TableBody,
@@ -17,6 +18,7 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { pageCount, PAGE_SIZE } from '@/features/problems/problemListParams'
 import { ProblemPagination } from '@/features/problems/ProblemPagination'
+import { cn } from '@/lib/utils'
 import { problemSubmissionsPath } from './historyPath'
 import { problemHistoryListQuery } from './historyQuery'
 import { useHealPage, usePage } from './usePage'
@@ -45,7 +47,7 @@ export function Component() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">제출 기록</h1>
+      <h1 className="page-title">제출 기록</h1>
 
       {waiting && !error ? <ListSkeleton rows={PAGE_SIZE} /> : null}
 
@@ -63,7 +65,10 @@ export function Component() {
             <p className="text-muted-foreground text-sm" aria-live="polite">
               제출한 문제 {data.totalElements}개
             </p>
-            <div aria-busy={isFetching} className={isFetching ? 'opacity-60' : undefined}>
+            <div
+              aria-busy={isFetching}
+              className={cn('bg-card rounded-2xl px-3 py-2', isFetching && 'opacity-60')}
+            >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -86,7 +91,13 @@ export function Component() {
                         </Link>
                       </TableCell>
                       <TableCell>{DIFFICULTY_LABEL[item.difficulty]}</TableCell>
-                      <TableCell>{item.solved ? '맞음' : '못 맞힘'}</TableCell>
+                      <TableCell>
+                        {item.solved ? (
+                          <StatusText tone="success">맞음</StatusText>
+                        ) : (
+                          <StatusText tone="danger">못 맞힘</StatusText>
+                        )}
+                      </TableCell>
                       <TableCell className="tabular-nums">{item.attemptCount}</TableCell>
                       <TableCell className="tabular-nums">
                         {item.maxRevealedHintLevel === 0 ? '—' : `${item.maxRevealedHintLevel}단계`}

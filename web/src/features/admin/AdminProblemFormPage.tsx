@@ -211,7 +211,7 @@ function AdminProblemForm() {
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">
+        <h1 className="page-title">
           {isNew ? '새 문제' : readOnly ? `v${versionNo} 보기` : '문제 수정'}
         </h1>
         <Link to="/admin" className="text-primary-text text-sm hover:underline">
