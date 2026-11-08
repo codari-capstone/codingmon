@@ -66,6 +66,15 @@ class FactCheckTest {
                 "메모리를 약 9MB 썼습니다.")).isEmpty();
         assertThat(fixes(AnalysisSamples.reversePyramid(), "실행 시간은 0.019초입니다."))
                 .containsExactly("UNMATCHED_VALUE@facts[0]");
+        // 9,272KB = 9.0546875MB
+        AnalysisInput memory = new AnalysisInput(AnalysisSamples.reversePyramid().input().problem(),
+                AnalysisInput.Submission.of(Language.PYTHON, Verdict.MEMORY_LIMIT_EXCEEDED, null, 18, 9272, "x = 1\n", null),
+                null, null);
+        assertThat(FactCheck.verify(analysis(List.of(), List.of("메모리를 9.05MB 썼습니다."), List.of()),
+                FactCheck.Context.of(memory, FactCheck.Sources.NONE)).fixes()).isEmpty();
+        assertThat(FactCheck.verify(analysis(List.of(), List.of("메모리를 9.06MB 썼습니다."), List.of()),
+                FactCheck.Context.of(memory, FactCheck.Sources.NONE)).fixes()).extracting(Fix::kind)
+                .containsExactly(Kind.UNMATCHED_VALUE);
         assertThat(fixes(AnalysisSamples.joinedOutput(), "예제 1의 기대 출력은 1 2 3인데 실제 출력은 줄마다 하나씩 3줄입니다.",
                 "출력 형식이 잘못되었습니다.")).isEmpty();
     }

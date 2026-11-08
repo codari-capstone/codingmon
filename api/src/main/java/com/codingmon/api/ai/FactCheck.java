@@ -729,7 +729,8 @@ final class FactCheck {
             }
             if (memoryKb != null) {
                 numbers.add(Integer.toString(memoryKb));
-                addRounded(numbers, BigDecimal.valueOf(memoryKb).divide(BigDecimal.valueOf(1024), 3, RoundingMode.HALF_UP));
+                // 1024로 나누면 나누어떨어진다. 먼저 자리를 정해 반올림하면 9,272KB(9.0546875MB)가 9.055를 거쳐 9.06이 된다.
+                addRounded(numbers, BigDecimal.valueOf(memoryKb).divide(BigDecimal.valueOf(1024)));
             }
         }
 
