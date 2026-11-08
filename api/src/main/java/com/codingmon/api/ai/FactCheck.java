@@ -41,6 +41,8 @@ final class FactCheck {
     // 긴 줄은 이 개수만큼 이어진 값 조각도 후보로 삼는다. 줄 일부만 옮긴 것을 잡는다.
     static final int HIDDEN_WINDOW_FIELDS = 4;
     static final int HIDDEN_MAX_CANDIDATES = 2_000;
+    // 후보를 뽑으려고 살펴보는 조각 수의 상한. 걸러진 조각도 센다. 비공개 원문이 커도 요청마다 하는 일이 이만큼으로 묶인다.
+    static final int HIDDEN_MAX_EXAMINED = 20_000;
     // 응답 글에서 후보와 맞춰 볼 이어진 값의 최대 개수. 이보다 긴 후보 줄은 조각으로만 맞춘다.
     private static final int MAX_MATCH_FIELDS = 64;
     private static final int MAX_SEGMENT_FIELDS = 300;
@@ -176,6 +178,9 @@ final class FactCheck {
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
     private static final Pattern FIELD_SEPARATOR = Pattern.compile("[\\s,]+");
     private static final String FIELD_PUNCTUATION = "\"'`()[]{}.:;!?";
+    // 값 토큰(valueTokens): 수, 영문 낱말, 쉼표 밖의 ASCII 기호 묶음
+    private static final Pattern VALUE_TOKEN = Pattern.compile(
+            "-?\\d+(?:\\.\\d+)?|[A-Za-z_][A-Za-z0-9_]*|[!\"#$%&'()*+\\-./:;<=>?@\\[\\\\\\]^`{|}~]+");
 
     // 판정마다 응답에 나올 만한 말. 근거로 넓게 본다.
     private static final Map<Verdict, Pattern> VERDICT_WORDS = Map.of(
@@ -738,87 +743,98 @@ final class FactCheck {
 
     // ===== 비공개 값 =====
 
-    // 비공개 케이스의 입력·기대 출력에서 뽑은 후보. 응답 글의 이어진 값과 하나라도 같으면 누출로 본다.
-    // Sources.hidden 순서대로 뽑다가 HIDDEN_MAX_CANDIDATES에 닿으면 멈춘다.
-    // values는 ASCII만 있는 후보(값 사이 공백 하나), phrases는 한글 같은 글자가 섞인 후보(글 안에 들어 있는지 본다).
+    // 비공개 케이스의 입력·기대 출력에서 뽑은 후보. 응답 글의 이어진 값 토큰과 하나라도 같으면 누출로 본다.
+    // 응답·공개 글·비공개 원문을 같은 값 토큰(valueTokens)으로 나눠 맞춘다. 그래야 "**IMPOSSIBLE**", "answer=6227020800;",
+    // "[100,200,300,400]"처럼 기호가 붙은 값도 같은 값으로 본다. 천 단위 쉼표는 지운 글과 지우지 않은 글을 둘 다 본다.
+    // values는 ASCII만 있는 줄에서 뽑은 후보(토큰 사이 공백 하나), phrases는 한글 같은 글자가 섞인 줄의 후보(글 안에 들어 있는지 본다).
     // 학습자가 이미 볼 수 있는 글(open)에 있는 값, 짧은 값, 같은 값의 되풀이, 1씩 늘거나 주는 정수열은 후보로 삼지 않는다.
+    // 공개 글은 토큰 n-gram 집합(OpenIndex)으로 색인해 후보마다 집합 조회로 거른다.
+    // Sources.hidden 순서대로 뽑다가 후보가 HIDDEN_MAX_CANDIDATES에, 살펴본 조각이 HIDDEN_MAX_EXAMINED에 닿으면 멈춘다.
     record Hidden(Set<String> values, Set<String> phrases) {
 
         static Hidden of(Sources sources) {
-            // 공개 글은 줄 그대로(한글이 섞인 후보용)와, 응답처럼 ASCII 밖 글자에서 끊은 구간으로(ASCII 후보용) 둘 다 색인한다.
-            // 끊지 않으면 "No Solution을 출력한다"가 "Solution을"로 남아 지문에 나온 "No Solution"을 공개 값으로 알아보지 못한다.
-            StringBuilder open = new StringBuilder("\n");
-            for (String text : sources.open()) {
-                for (String line : plain(text).split("\\R")) {
-                    open.append(' ').append(String.join(" ", fields(line))).append(" \n");
-                    for (String segment : AnswerGuard.NON_ASCII.split(line)) {
-                        open.append(' ').append(String.join(" ", fields(segment))).append(" \n");
-                    }
-                }
-            }
-            String openIndex = open.toString();
+            OpenIndex open = OpenIndex.of(sources.open());
             Set<String> values = new LinkedHashSet<>();
             Set<String> phrases = new LinkedHashSet<>();
+            int examined = 0;
             for (String text : sources.hidden()) {
-                for (String line : plain(text).split("\\R")) {
-                    List<String> fields = fields(line);
-                    if (fields.size() <= MAX_MATCH_FIELDS) {
-                        add(fields, openIndex, values, phrases);
-                    }
-                    for (int i = 0; fields.size() > HIDDEN_WINDOW_FIELDS && i + HIDDEN_WINDOW_FIELDS <= fields.size(); i++) {
-                        add(fields.subList(i, i + HIDDEN_WINDOW_FIELDS), openIndex, values, phrases);
-                    }
-                    if (values.size() + phrases.size() >= HIDDEN_MAX_CANDIDATES) {
-                        return new Hidden(Set.copyOf(values), Set.copyOf(phrases));
+                for (String variant : variants(plain(text))) {
+                    for (String line : variant.split("\\R")) {
+                        if (!ASCII_ONLY.matcher(line).matches()) {
+                            examined++;
+                            phrase(fields(line), open, phrases);
+                            continue;
+                        }
+                        List<String> tokens = valueTokens(line);
+                        if (tokens.size() <= MAX_MATCH_FIELDS) {
+                            examined++;
+                            value(tokens, open, values);
+                        }
+                        for (int i = 0; tokens.size() > HIDDEN_WINDOW_FIELDS && i + HIDDEN_WINDOW_FIELDS <= tokens.size(); i++) {
+                            examined++;
+                            value(tokens.subList(i, i + HIDDEN_WINDOW_FIELDS), open, values);
+                        }
+                        if (values.size() + phrases.size() >= HIDDEN_MAX_CANDIDATES || examined >= HIDDEN_MAX_EXAMINED) {
+                            return new Hidden(Set.copyOf(values), Set.copyOf(phrases));
+                        }
                     }
                 }
             }
             return new Hidden(Set.copyOf(values), Set.copyOf(phrases));
         }
 
-        private static void add(List<String> fields, String openIndex, Set<String> values, Set<String> phrases) {
-            if (fields.isEmpty()) {
-                return;
-            }
-            String joined = String.join(" ", fields);
-            int length = joined.codePointCount(0, joined.length());
-            // 같은 값의 되풀이("0 0 0 0")는 값이 둘 이상일 때만 본다. 값 하나짜리(정답 하나를 출력하는 기대 출력)는 길이로만 거른다.
-            boolean repeated = fields.size() > 1 && fields.stream().distinct().count() == 1;
-            if (length < HIDDEN_MIN_CHARS || (fields.size() == 1 && length < HIDDEN_SINGLE_MIN_CHARS)
-                    || repeated || consecutive(fields) || openIndex.contains(" " + joined + " ")) {
-                return;
-            }
-            if (ASCII_ONLY.matcher(joined).matches()) {
-                values.add(joined);
-            } else {
-                phrases.add(joined);
+        private static void value(List<String> tokens, OpenIndex open, Set<String> values) {
+            if (candidate(tokens) && !open.hasTokens(tokens)) {
+                values.add(String.join(" ", tokens));
             }
         }
 
-        // 1 2 3 4, 10 9 8 7처럼 1씩 늘거나 주는 정수열
-        private static boolean consecutive(List<String> fields) {
-            if (fields.size() < 2 || !fields.stream().allMatch(f -> INTEGER.matcher(f).matches() && f.length() <= 9)) {
+        private static void phrase(List<String> fields, OpenIndex open, Set<String> phrases) {
+            if (candidate(fields) && !open.hasPhrase(String.join(" ", fields))) {
+                phrases.add(String.join(" ", fields));
+            }
+        }
+
+        // 짧은 값, 같은 값의 되풀이, 1씩 늘거나 주는 정수열은 비공개 값으로 보지 않는다.
+        private static boolean candidate(List<String> parts) {
+            if (parts.isEmpty()) {
                 return false;
             }
-            long step = Long.parseLong(fields.get(1)) - Long.parseLong(fields.get(0));
+            String joined = String.join(" ", parts);
+            int length = joined.codePointCount(0, joined.length());
+            // 같은 값의 되풀이("0 0 0 0")는 값이 둘 이상일 때만 본다. 값 하나짜리(정답 하나를 출력하는 기대 출력)는 길이로만 거른다.
+            boolean repeated = parts.size() > 1 && parts.stream().distinct().count() == 1;
+            return length >= HIDDEN_MIN_CHARS && (parts.size() > 1 || length >= HIDDEN_SINGLE_MIN_CHARS) && !repeated
+                    && !consecutive(parts);
+        }
+
+        // 1 2 3 4, 10 9 8 7처럼 1씩 늘거나 주는 정수열
+        private static boolean consecutive(List<String> parts) {
+            if (parts.size() < 2 || !parts.stream().allMatch(f -> INTEGER.matcher(f).matches() && f.length() <= 9)) {
+                return false;
+            }
+            long step = Long.parseLong(parts.get(1)) - Long.parseLong(parts.get(0));
             if (Math.abs(step) != 1) {
                 return false;
             }
-            for (int i = 2; i < fields.size(); i++) {
-                if (Long.parseLong(fields.get(i)) - Long.parseLong(fields.get(i - 1)) != step) {
+            for (int i = 2; i < parts.size(); i++) {
+                if (Long.parseLong(parts.get(i)) - Long.parseLong(parts.get(i - 1)) != step) {
                     return false;
                 }
             }
             return true;
         }
 
-        // 천 단위 쉼표를 지운 글("1,000,000" → 1000000)과 지우지 않은 글("[100,200,300,400]" → 100 200 300 400)을 둘 다 본다.
         boolean leaks(String normalized) {
             if (values.isEmpty() && phrases.isEmpty()) {
                 return false;
             }
-            String withoutThousands = THOUSANDS.matcher(normalized).replaceAll("");
-            return matches(withoutThousands) || (!withoutThousands.equals(normalized) && matches(normalized));
+            for (String text : variants(plain(normalized))) {
+                if (matches(text)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private boolean matches(String text) {
@@ -828,16 +844,19 @@ final class FactCheck {
                     return true;
                 }
             }
+            if (values.isEmpty()) {
+                return false;
+            }
             for (String segment : AnswerGuard.NON_ASCII.split(text)) {
-                List<String> fields = fields(segment);
-                int size = Math.min(fields.size(), MAX_SEGMENT_FIELDS);
+                List<String> tokens = valueTokens(segment);
+                int size = Math.min(tokens.size(), MAX_SEGMENT_FIELDS);
                 for (int i = 0; i < size; i++) {
                     StringBuilder joined = new StringBuilder();
                     for (int j = i; j < Math.min(size, i + MAX_MATCH_FIELDS); j++) {
                         if (j > i) {
                             joined.append(' ');
                         }
-                        joined.append(fields.get(j));
+                        joined.append(tokens.get(j));
                         if (values.contains(joined.toString())) {
                             return true;
                         }
@@ -851,6 +870,69 @@ final class FactCheck {
         public String toString() {
             return "Hidden[" + (values.size() + phrases.size()) + " candidates]";
         }
+    }
+
+    // 학습자가 이미 볼 수 있는 글의 색인. grams는 ASCII 구간마다 이어진 값 토큰 1~HIDDEN_WINDOW_FIELDS개를 공백으로 이은 것,
+    // phrases는 줄마다 공백·쉼표로 나눈 값을 이은 것(한글이 섞인 후보용)이다.
+    private record OpenIndex(Set<String> grams, String phrases) {
+
+        static OpenIndex of(List<String> texts) {
+            Set<String> grams = new HashSet<>();
+            StringBuilder phrases = new StringBuilder("\n");
+            for (String raw : texts) {
+                for (String variant : variants(plain(raw))) {
+                    for (String line : variant.split("\\R")) {
+                        phrases.append(' ').append(String.join(" ", fields(line))).append(" \n");
+                        for (String segment : AnswerGuard.NON_ASCII.split(line)) {
+                            List<String> tokens = valueTokens(segment);
+                            for (int i = 0; i < tokens.size(); i++) {
+                                StringBuilder gram = new StringBuilder();
+                                for (int n = 0; n < HIDDEN_WINDOW_FIELDS && i + n < tokens.size(); n++) {
+                                    if (n > 0) {
+                                        gram.append(' ');
+                                    }
+                                    grams.add(gram.append(tokens.get(i + n)).toString());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return new OpenIndex(grams, phrases.toString());
+        }
+
+        // 토큰이 HIDDEN_WINDOW_FIELDS개보다 많으면 그 안의 조각이 모두 공개 글에 있을 때 공개 값으로 본다.
+        boolean hasTokens(List<String> tokens) {
+            if (tokens.size() <= HIDDEN_WINDOW_FIELDS) {
+                return grams.contains(String.join(" ", tokens));
+            }
+            for (int i = 0; i + HIDDEN_WINDOW_FIELDS <= tokens.size(); i++) {
+                if (!grams.contains(String.join(" ", tokens.subList(i, i + HIDDEN_WINDOW_FIELDS)))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        boolean hasPhrase(String phrase) {
+            return phrases.contains(" " + phrase + " ");
+        }
+    }
+
+    // 값 토큰: 부호·소수점이 붙은 수, 영문 낱말, 쉼표 밖의 ASCII 기호 묶음. 공백·쉼표와 ASCII 밖 글자는 경계다.
+    private static List<String> valueTokens(String text) {
+        List<String> tokens = new ArrayList<>();
+        Matcher matcher = VALUE_TOKEN.matcher(text);
+        while (matcher.find()) {
+            tokens.add(matcher.group());
+        }
+        return tokens;
+    }
+
+    // 천 단위 쉼표를 지운 글("1,000,000" → 1000000)과 지우지 않은 글("[100,200,300,400]" → 100 200 300 400)
+    private static List<String> variants(String text) {
+        String withoutThousands = THOUSANDS.matcher(text).replaceAll("");
+        return withoutThousands.equals(text) ? List.of(text) : List.of(withoutThousands, text);
     }
 
     // 공백·쉼표로 나눈 값. 값 앞뒤의 따옴표·괄호·문장 부호는 뗀다.
@@ -884,9 +966,9 @@ final class FactCheck {
         return THOUSANDS.matcher(normalize(text)).replaceAll("");
     }
 
-    // 비공개·공개 원문: 따옴표와 상관없이 NFKC로 바꾸고 천 단위 쉼표는 지운다
+    // 비공개·공개 원문과 비공개 값을 맞춰 볼 응답: 따옴표와 상관없이 NFKC로 바꾼다. 천 단위 쉼표는 variants가 두 형태로 본다.
     private static String plain(String text) {
-        return text == null ? "" : THOUSANDS.matcher(Normalizer.normalize(text, Normalizer.Form.NFKC)).replaceAll("");
+        return text == null ? "" : Normalizer.normalize(text, Normalizer.Form.NFKC).replace('−', '-');
     }
 
     private static String collapse(String text) {

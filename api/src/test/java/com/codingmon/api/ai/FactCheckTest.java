@@ -308,6 +308,43 @@ class FactCheckTest {
         assertThat(blocked(new FactCheck.Sources(answerLast, List.of()), "SECRET ANSWER-XYZ를 보세요.")).isFalse();
     }
 
+    @Test
+    void 지문의_굵은_글씨나_코드_상수로_나온_값은_비공개_값으로_보지_않는다() {
+        assertThat(blocked(new FactCheck.Sources(List.of("IMPOSSIBLE\n"), List.of("불가능하면 **IMPOSSIBLE**을 출력한다.")),
+                "IMPOSSIBLE을 출력해야 하는 조건을 떠올려 보세요.")).isFalse();
+        assertThat(blocked(new FactCheck.Sources(List.of("6227020800\n"), List.of("answer=6227020800; print(answer+1)")),
+                "6227020800에 1을 더하는 부분을 확인하세요.")).isFalse();
+        // 공개 글에 없으면 기호가 붙어 있어도 비공개 값이다
+        assertThat(blocked(new FactCheck.Sources(List.of("6227020800\n"), List.of("print(answer)")),
+                "'6227020800'이 나와야 해요.")).isTrue();
+    }
+
+    @Test
+    void 쉼표로_이은_목록은_공개_글과_비공개_원문에서도_두_형태로_본다() {
+        // 지문에 같은 목록이 있으면 공개 값이다
+        assertThat(blocked(new FactCheck.Sources(List.of("100 200 300 400\n"), List.of("예: [100,200,300,400]")),
+                "[100,200,300,400]를 넣어 보세요.")).isFalse();
+        // 쉼표로 이은 비공개 입력을 공백으로 풀어 써도 잡는다
+        assertThat(blocked(new FactCheck.Sources(List.of("100,200,300,400\n"), List.of()), "100 200 300 400을 넣어 보세요."))
+                .isTrue();
+    }
+
+    @Test
+    void 비공개_원문이_커도_후보를_살펴보는_양은_상한까지다() {
+        List<String> hidden = new ArrayList<>();
+        for (int c = 0; c < 50; c++) {
+            StringBuilder text = new StringBuilder();
+            for (int i = 0; text.length() < FactCheckRepository.HIDDEN_TEXT_MAX_CHARS; i++) {
+                text.append((i * 13 + c * 7) % 1000).append(' ');
+            }
+            hidden.add(text.toString());
+        }
+        hidden.add(0, "SECRET ANSWER-XYZ\n");
+
+        assertThat(blocked(new FactCheck.Sources(hidden, List.of("x = 1\n".repeat(10_000))), "SECRET ANSWER-XYZ를 보세요."))
+                .isTrue();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             // 짧은 값, 1씩 느는 정수열, 같은 값의 되풀이
