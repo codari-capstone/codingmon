@@ -27,7 +27,7 @@ Squash 병합이라 **PR 제목이 그대로 `develop`의 커밋 메시지가 �
 
 ruleset이 막아 주는 것은 PR 필수와 승인 1명까지다. 아래 둘은 **설정이 강제하지 않으므로 사람이 지킨다.**
 
-1. **CI 통과** — PR의 `verify` 검사가 초록일 때 병합한다. 지금 ruleset에 필수 상태 검사가 걸려 있지 않아, 실패한 채로도 병합이 가능하다 (7장 미결 항목)
+1. **CI 통과** — PR의 `verify` 검사가 초록일 때 병합한다. web CI는 `web/`을 바꾼 PR에서만 돌므로, 그 밖의 PR에는 이 검사가 붙지 않는다. 지금 ruleset에 필수 상태 검사가 걸려 있지 않아, 실패한 채로도 병합이 가능하다 (7장 미결 항목)
 2. **모든 리뷰 대화 해결(Resolve)** — `main`은 ruleset이 강제하지만 `develop`은 꺼져 있다
 
 조직 CONTRIBUTING에는 이 둘이 없다. 여기 적어 두는 이유다.
@@ -221,7 +221,7 @@ React는 대문자로 시작하는 이름을 컴포넌트로 취급하므로, �
 - [x] 저장소 구성: 모노레포로 간다 (web·api·judge·infra·contracts·docs를 한 저장소에). `contracts/openapi.yaml`을 상대 경로로 공유한다
 - [x] 리뷰 응답 목표 시간: 하루 안에 확인 (조직 CONTRIBUTING에 정해져 있다)
 - [x] `develop`·`main` 브랜치 보호: ruleset `develop 보호`·`main 보호 (릴리스)` 두 개가 적용돼 있다. 삭제 금지, 강제 푸시 금지, PR 필수, 승인 1명, 병합 방식 제한(develop은 squash만 / main은 merge commit만). 우회 가능한 계정은 없다
-- [ ] **필수 상태 검사(CI)를 ruleset에 걸지.** 지금 두 ruleset에 상태 검사 규칙이 없어서, web CI가 실패한 PR도 승인 1명만 받으면 Squash 병합된다. `develop`이 빌드되지 않는 상태가 될 수 있다. 저장소 admin 권한이 필요하다
+- [ ] **필수 상태 검사(CI)를 ruleset에 걸지.** 지금 두 ruleset에 상태 검사 규칙이 없어서, web CI가 실패한 PR도 승인 1명만 받으면 Squash 병합된다. `develop`이 빌드되지 않는 상태가 될 수 있다. 저장소 admin 권한이 필요하다. 걸기 전에 web CI의 경로 필터(`paths`)를 작업 안에서 단계를 건너뛰는 방식으로 바꾼다. 그대로 두면 `web/`을 안 바꾼 PR이 '대기 중'으로 남아 병합되지 않는다
 - [ ] **리뷰 대화 해결을 필수로 걸지.** `main`은 켜져 있지만 `develop`은 꺼져 있다 (`required_review_thread_resolution`). 같은 권한이 필요하다
 - [ ] 백엔드·채점·AI 코드 컨벤션 (5장)
 - [ ] 리뷰어 배정 방식: 작성자가 고를지, 순번제로 돌지. CODEOWNERS의 역할별 주석(`/web/ @A` 등)을 켤 시점도 함께 정한다
