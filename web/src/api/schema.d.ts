@@ -410,7 +410,7 @@ export interface paths {
         };
         /**
          * 오늘 남은 AI 분석·리뷰 횟수 (AI-01)
-         * @description [AI 분석]·[AI 리뷰] 버튼 옆에 남은 횟수를 보여 줄 때 쓴다. 분석 응답(`SubmissionAnalysis`의 `quota`)에도 같은 값이 있다.
+         * @description [AI 분석]·[AI 리뷰] 버튼 옆에 남은 횟수를 보여 줄 때 쓴다. 분석·리뷰 응답(`SubmissionAnalysis`·`SubmissionCodeReview`의 `quota`)에도 같은 값이 있다.
          *     조회해도 횟수는 줄지 않는다. 세는 기준은 `AiQuota`에 있다.
          */
         get: operations["getAiQuota"];
@@ -530,7 +530,7 @@ export interface paths {
          *     제출 기록에서 원하는 문제를 눌렀을 때 쓴다. 맞는 제출이 없으면 빈 `content`다.
          *     줄마다 문제 정보를 담지 않아 `problemId`는 필수다. 화면 위쪽의 문제 정보는 `GET /api/users/me/problem-history/{problemId}`로 받는다.
          *     코드는 담지 않는다. 원하는 제출 기록을 누르면 결과 조회(`GET /api/submissions/{id}`)로 코드와 판정을 받는다.
-         *     저장된 AI 분석과 연 힌트는 `GET /api/submissions/{id}/analysis`로 받는다.
+         *     저장된 AI 분석과 연 힌트는 `GET /api/submissions/{id}/analysis`로, AI 코드 리뷰는 `GET /api/submissions/{id}/code-review`로 받는다.
          */
         get: operations["listMySubmissions"];
         put?: never;
@@ -561,7 +561,7 @@ export interface paths {
         /**
          * 채점 상태·결과 (RES-01~06, HIST-02)
          * @description 화면은 `status`가 `COMPLETED`나 `JUDGE_ERROR`가 될 때까지 주기적으로 부른다(폴링).
-         *     제출 기록에서 원하는 제출 기록을 눌렀을 때도 쓴다. 저장된 AI 분석과 연 힌트는 `GET /api/submissions/{id}/analysis`로 받는다.
+         *     제출 기록에서 원하는 제출 기록을 눌렀을 때도 쓴다. 저장된 AI 분석과 연 힌트는 `GET /api/submissions/{id}/analysis`로, AI 코드 리뷰는 `GET /api/submissions/{id}/code-review`로 받는다.
          *     로그인한 본인의 채점 제출만 볼 수 있다. 남의 제출·없는 제출·예제 실행은 모두 404 `SUBMISSION_NOT_FOUND`다. 번호를 바꿔 물어도 그 번호의 제출이 있는지 드러나지 않는다.
          *     비공개 테스트의 입력·출력과 몇 번째 테스트에서 틀렸는지는 주지 않는다. 진행률만 준다.
          *     판정과 런타임 에러 종류의 쉬운 설명은 화면이 가진다(`docs/AI_FEATURES.md` 10절).
@@ -1712,6 +1712,18 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetail"];
             };
         };
+        /** @description 오류 `code`: `AI_DAILY_LIMIT_EXCEEDED`(오늘 AI 분석·리뷰 한도를 다 씀). `quota`로 초기화 시각을 준다. 분석·리뷰 요청이 같이 쓴다 */
+        AiDailyLimitExceeded: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetail"] & {
+                    /** @description 거절한 시점의 한도. `remaining`은 0이다 */
+                    quota: components["schemas"]["AiQuota"];
+                };
+            };
+        };
         /** @description 토큰이 없거나 유효하지 않음 */
         Unauthorized: {
             headers: {
@@ -2624,18 +2636,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description 오류 `code`: `AI_DAILY_LIMIT_EXCEEDED`(오늘 AI 분석·리뷰 한도를 다 씀). `quota`로 초기화 시각을 준다 */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"] & {
-                        /** @description 거절한 시점의 한도. `remaining`은 0이다 */
-                        quota: components["schemas"]["AiQuota"];
-                    };
-                };
-            };
+            429: components["responses"]["AiDailyLimitExceeded"];
         };
     };
     revealHint: {
@@ -2799,18 +2800,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description 오류 `code`: `AI_DAILY_LIMIT_EXCEEDED`(오늘 AI 분석·리뷰 한도를 다 씀). `quota`로 초기화 시각을 준다 */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"] & {
-                        /** @description 거절한 시점의 한도. `remaining`은 0이다 */
-                        quota: components["schemas"]["AiQuota"];
-                    };
-                };
-            };
+            429: components["responses"]["AiDailyLimitExceeded"];
         };
     };
     runSamples: {
