@@ -290,6 +290,30 @@ class AiQuotaIntegrationTest {
     }
 
     @Test
+    void 이미_센_결과를_다시_시작하면_한도를_낮춰_넘어도_막지_않는다() throws Exception {
+        // 한도를 낮춘 날처럼 오늘 이미 한도(3)보다 많이 썼다. 그중 하나는 서버가 처리 중에 내려가 버려진 PENDING이다.
+        for (int i = 0; i < 3; i++) {
+            row(submission(userId), "ANALYSIS", "COMPLETED", "now()");
+        }
+        long abandoned = submission(userId);
+        row(abandoned, "ANALYSIS", "PENDING", "greatest(date_trunc('day', now(), 'UTC'), now() - interval '5 seconds')");
+        assertThat(quotaUsed()).isEqualTo(4);
+
+        // 다시 시작해도 같은 행이라 횟수가 늘지 않으므로 막지 않는다.
+        mvc.perform(post(analysis(abandoned)).with(as(userId)))
+                .andExpect(jsonPath("$.quota.used").value(4))
+                .andExpect(jsonPath("$.quota.remaining").value(0));
+        awaitStatus(abandoned, "COMPLETED");
+        // 새 결과는 막고, 본문에는 롤백한 뒤의 횟수를 준다.
+        mvc.perform(post(analysis(submission(userId))).with(as(userId)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.quota.used").value(4))
+                .andExpect(jsonPath("$.quota.remaining").value(0));
+        assertThat(quotaUsed()).isEqualTo(4);
+        assertThat(llm.calls).hasValue(1);
+    }
+
+    @Test
     void 서로_다른_제출을_동시에_요청해도_한도를_넘지_않는다() throws Exception {
         row(submission(userId), "ANALYSIS", "COMPLETED", "now()");
         row(submission(userId), "ANALYSIS", "COMPLETED", "now()");

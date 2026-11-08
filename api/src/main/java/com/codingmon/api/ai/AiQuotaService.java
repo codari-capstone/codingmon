@@ -33,8 +33,9 @@ class AiQuotaService {
         return AiQuota.of(limit, reviews.usedToday(userId));
     }
 
-    // 본인 제출 행과 사용자 행을 이 순서로 잠근 한 트랜잭션에서 시도를 잡고, 잡았으면 그 행까지 넣어 센다. 넘으면 429를 던져
+    // 본인 제출 행과 사용자 행을 이 순서로 잠근 한 트랜잭션에서 시도를 잡고, 잡기 전후로 센다. 이 시도로 횟수가 늘어 한도를 넘으면 429를 던져
     // 잡은 것(새 행, 또는 FAILED·버려진 PENDING을 되돌린 것)을 롤백한다. 잡지 못했으면(재사용·진행 중) 세지 않는다.
+    // 오늘 시작한 버려진 PENDING은 이미 센 행이라 다시 잡아도 횟수가 늘지 않으므로, 한도를 낮춰 넘어 있어도 막지 않는다.
     // 제출 행을 먼저 잠그는 것은 탈퇴·채점 완료와 같은 순서라 교착을 막는다. 사용자 행 잠금에서 같은 사용자의 요청이 줄을 서므로,
     // 동시에 눌러도 뒤 요청이 앞 요청의 커밋된 행을 보고 센다.
     // 기본 격리 수준(READ COMMITTED)이어야 한다. REPEATABLE READ면 잠금을 기다리기 전의 스냅샷으로 세어 앞 요청의 행을 못 본다.
@@ -46,18 +47,19 @@ class AiQuotaService {
                 throw ApiErrors.error(HttpStatus.NOT_FOUND, "SUBMISSION_NOT_FOUND", "제출을 찾을 수 없어요");
             }
             reviews.lockUser(userId);
+            AiReviewRepository.Usage before = reviews.usedToday(userId);
             Optional<T> claimed = claim.get();
             if (claimed.isPresent()) {
-                AiReviewRepository.Usage usage = reviews.usedToday(userId);
-                if (usage.used() > limit) {
-                    throw exceeded(new AiReviewRepository.Usage(usage.used() - 1, usage.resetsAt()));
+                int after = reviews.usedToday(userId).used();
+                if (after > before.used() && after > limit) {
+                    throw exceeded(before);
                 }
             }
             return claimed;
         });
     }
 
-    // 롤백한 뒤의 횟수(방금 잡은 시도를 뺀 값)를 quota로 준다. remaining은 0이다.
+    // 롤백한 뒤의 횟수(시도를 잡기 전의 값)를 quota로 준다. remaining은 0이다.
     private ErrorResponseException exceeded(AiReviewRepository.Usage usage) {
         ErrorResponseException error = ApiErrors.error(HttpStatus.TOO_MANY_REQUESTS, "AI_DAILY_LIMIT_EXCEEDED",
                 "오늘 쓸 수 있는 AI 분석·리뷰 %d회를 모두 썼어요. 한국 시각 오전 9시에 다시 쓸 수 있어요".formatted(limit));
