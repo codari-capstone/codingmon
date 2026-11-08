@@ -12,7 +12,7 @@ import tools.jackson.databind.json.JsonMapper;
 // AI 오답 분석(F1)과 힌트 공개(F2). 분석은 요청할 때 한 번 만들어 ai_reviews에 저장하고, 힌트는 저장된 것을 연 단계까지만 준다
 // (AI_FEATURES 3·4절). 같은 제출·같은 프롬프트 버전의 결과는 다시 만들지 않는다(8절).
 // 만드는 흐름(처리기, 정답 코드 검사와 1회 재생성, 차단 저장, 사실 검증)은 AiReviewRunner가 맡는다(#78, #79).
-// 하루 한도는 AiQuotaService가 센다(#80). 실패 사유 구분(#81)은 아직 없다.
+// 하루 한도는 AiQuotaService가 센다(#80). 만들지 못한 이유는 ai_reviews.failure_reason으로 응답에 준다(#81).
 @Service
 class AnalysisService {
 
@@ -96,8 +96,7 @@ class AnalysisService {
         }
         reviews.revealHint(stored.id(), level);
         stats.recordHintRevealed(submissionId, level);
-        return view(userId, new AiReviewRepository.Stored(stored.id(), stored.submissionId(), stored.status(),
-                stored.content(), stored.blocked(), level, stored.createdAt(), stored.completedAt()));
+        return view(userId, stored.withRevealedHintLevel(level));
     }
 
     // 처리기에 넣을 요청. 입력과 정답 코드 검사·사실 검증 자료를 읽는다. 읽지 못하면 던지고, runner가 행을 FAILED로 바꾼다.

@@ -279,12 +279,14 @@ class CodeReviewControllerTest {
         // 실패는 하루 한도에 세지 않는다.
         mvc.perform(get(review(id)).with(as(userId)))
                 .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.failureReason").value("UNAVAILABLE"))
                 .andExpect(jsonPath("$.complexity").isEmpty())
                 .andExpect(jsonPath("$.quota.used").value(0));
 
         llm.answer = FakeLlm::ok;
         mvc.perform(post(review(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
         awaitStatus(id, "COMPLETED");
+        mvc.perform(get(review(id)).with(as(userId))).andExpect(jsonPath("$.failureReason").isEmpty());
 
         assertThat(llm.calls).hasValue(2);
         // 같은 행을 다시 썼고, 실패한 시도의 토큰도 더해져 있다.
@@ -298,7 +300,9 @@ class CodeReviewControllerTest {
         jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, created_at)"
                 + " values (:id, 'CODE_REVIEW', 'v1', 'fake-model', now() - interval '1 hour')").param("id", id).update();
 
-        mvc.perform(get(review(id)).with(as(userId))).andExpect(jsonPath("$.status").value("FAILED"));
+        mvc.perform(get(review(id)).with(as(userId)))
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.failureReason").value("UNAVAILABLE"));
         mvc.perform(post(review(id)).with(as(userId)));
         awaitStatus(id, "COMPLETED");
 

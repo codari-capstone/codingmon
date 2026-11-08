@@ -20,14 +20,24 @@ class AiReviewRepository {
 
     enum Status { PENDING, COMPLETED, FAILED }
 
+    // FAILED인 이유(#81, contracts의 failureReason). 앞의 네 값은 AiReviewRunner가 LlmException.Kind에서 바꾼다.
+    // INTERNAL은 모델과 상관없는 이 서버의 오류다(입력 준비·결과 저장 실패).
+    enum FailureReason { UNAVAILABLE, RATE_LIMITED, BUSY, INVALID_RESPONSE, INTERNAL }
+
     // 시도 하나. attempt는 그 시도를 시작한 created_at이다.
     record Claim(long id, OffsetDateTime attempt) {
     }
 
     // content는 COMPLETED일 때만 있다. status는 버려진 PENDING(Abandoned)을 FAILED로 바꿔 읽은 값이다.
+    // failureReason은 FAILED일 때만 있다. 버려진 PENDING은 행에 이유가 없어 UNAVAILABLE(서버가 내려감)로 읽는다.
     // blocked는 가드레일에 두 번 걸려 차단 표시({"blocked": true})만 담긴 결과다(#78). SQL이 content로 계산한다.
-    record Stored(long id, long submissionId, Status status, String content, boolean blocked, int revealedHintLevel,
-            Instant createdAt, Instant completedAt) {
+    record Stored(long id, long submissionId, Status status, FailureReason failureReason, String content, boolean blocked,
+            int revealedHintLevel, Instant createdAt, Instant completedAt) {
+
+        // 힌트를 연 뒤의 결과. 인자를 위치로 다시 늘어놓으면 같은 타입(Instant 둘)이 뒤바뀌어도 컴파일된다.
+        Stored withRevealedHintLevel(int level) {
+            return new Stored(id, submissionId, status, failureReason, content, blocked, level, createdAt, completedAt);
+        }
     }
 
     // 분석할 수 있는지 볼 제출 정보. 본인의 SUBMIT 제출만 찾는다.
@@ -60,8 +70,10 @@ class AiReviewRepository {
         }
     }
 
+    // %1$s는 버려진 PENDING 조건(Abandoned.condition)이다.
     private static final String STORED_COLUMNS = "r.id, r.submission_id, r.prompt_version,"
-            + " case when %s then 'FAILED' else r.status end as status,"
+            + " case when %1$s then 'FAILED' else r.status end as status,"
+            + " case when %1$s then 'UNAVAILABLE' else r.failure_reason end as failure_reason,"
             + " r.content::text as content, r.revealed_hint_level, r.created_at, r.completed_at,"
             + " coalesce((r.content ->> 'blocked')::boolean, false) as blocked";
 
@@ -122,8 +134,8 @@ class AiReviewRepository {
         return abandoned.bind(jdbc.sql("insert into ai_reviews as r (submission_id, review_type, prompt_version, model)"
                 + " values (:submissionId, :type, :promptVersion, :model)"
                 + " on conflict (submission_id, review_type, prompt_version) do update set"
-                + "   status = 'PENDING', model = excluded.model, content = null, revealed_hint_level = 0,"
-                + "   created_at = now(), completed_at = null"
+                + "   status = 'PENDING', failure_reason = null, model = excluded.model, content = null,"
+                + "   revealed_hint_level = 0, created_at = now(), completed_at = null"
                 + " where r.status = 'FAILED' or (" + abandoned.condition("r") + ")"
                 + " returning id, created_at"))
                 .param("submissionId", submissionId)
@@ -174,9 +186,11 @@ class AiReviewRepository {
                 .update() == 1;
     }
 
-    boolean fail(Claim claim) {
-        return jdbc.sql("update ai_reviews set status = 'FAILED', completed_at = now()"
+    // 그 시도가 아직 진행 중일 때만 실패로 바꾼다. 바꿨으면 true다.
+    boolean fail(Claim claim, FailureReason reason) {
+        return jdbc.sql("update ai_reviews set status = 'FAILED', failure_reason = :reason, completed_at = now()"
                 + " where id = :id and status = 'PENDING' and created_at = :attempt")
+                .param("reason", reason.name())
                 .param("id", claim.id())
                 .param("attempt", claim.attempt())
                 .update() == 1;
@@ -205,8 +219,9 @@ class AiReviewRepository {
 
     private static Stored stored(ResultSet rs, int n) throws SQLException {
         OffsetDateTime completedAt = rs.getObject("completed_at", OffsetDateTime.class);
+        String failureReason = rs.getString("failure_reason");
         return new Stored(rs.getLong("id"), rs.getLong("submission_id"), Status.valueOf(rs.getString("status")),
-                rs.getString("content"), rs.getBoolean("blocked"), rs.getInt("revealed_hint_level"),
+                failureReason == null ? null : FailureReason.valueOf(failureReason), rs.getString("content"), rs.getBoolean("blocked"), rs.getInt("revealed_hint_level"),
                 rs.getObject("created_at", OffsetDateTime.class).toInstant(),
                 completedAt == null ? null : completedAt.toInstant());
     }

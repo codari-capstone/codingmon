@@ -6,6 +6,7 @@ import type { SubmissionSummary } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { StatusText } from '@/components/StatusText'
 import {
   Table,
   TableBody,
@@ -21,13 +22,16 @@ import { pageCount } from '@/features/problems/problemListParams'
 import { ProblemPagination } from '@/features/problems/ProblemPagination'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import { parsePathId } from '@/lib/pathId'
+import { cn } from '@/lib/utils'
 import { problemHistoryQuery, problemSubmissionsQuery } from './historyQuery'
 import { useHealPage, usePage } from './usePage'
 
-/** 채점 불가는 판정이 아니라 상태다(계약). 결과 화면과 같은 표에서 이름을 가져온다. */
-function resultLabel(item: SubmissionSummary): string {
+/** 채점 불가는 판정이 아니라 상태다(계약). 결과 화면과 같은 표에서 이름과 판정 색을 가져온다. */
+function Result({ item }: { item: SubmissionSummary }) {
   const key = item.status === 'JUDGE_ERROR' ? 'JUDGE_ERROR' : item.verdict
-  return key === null ? '—' : VERDICT_INFO[key].label
+  if (key === null) return <span className="text-muted-foreground">—</span>
+  const info = VERDICT_INFO[key]
+  return <StatusText tone={info.tone}>{info.label}</StatusText>
 }
 
 /** 한 문제의 제출 목록 — 위에 문제 정보, 아래에 채점이 끝난 제출 (HIST-02). */
@@ -83,7 +87,7 @@ export function Component() {
 
       {info.data ? (
         <header className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold">{info.data.title}</h1>
+          <h1 className="page-title">{info.data.title}</h1>
           <p className="text-muted-foreground text-sm">
             {DIFFICULTY_LABEL[info.data.difficulty]} · {info.data.solved ? '맞음' : '못 맞힘'} ·
             시도 {info.data.attemptCount}회
@@ -99,7 +103,7 @@ export function Component() {
           </Link>
         </header>
       ) : (
-        <h1 className="text-2xl font-semibold">제출 목록</h1>
+        <h1 className="page-title">제출 목록</h1>
       )}
 
       {waiting && !list.error ? <ListSkeleton rows={5} /> : null}
@@ -114,7 +118,10 @@ export function Component() {
           />
         ) : (
           <>
-            <div aria-busy={list.isFetching} className={list.isFetching ? 'opacity-60' : undefined}>
+            <div
+              aria-busy={list.isFetching}
+              className={cn('bg-card rounded-2xl px-3 py-2', list.isFetching && 'opacity-60')}
+            >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -137,7 +144,9 @@ export function Component() {
                           #{item.id}
                         </Link>
                       </TableCell>
-                      <TableCell className="font-medium">{resultLabel(item)}</TableCell>
+                      <TableCell>
+                        <Result item={item} />
+                      </TableCell>
                       <TableCell>{LANGUAGE_LABEL[item.language]}</TableCell>
                       {/* 컴파일 에러와 채점 불가는 null이다. 0ms로 적으면 "아주 빨랐다"로 읽힌다. */}
                       <TableCell className="tabular-nums">

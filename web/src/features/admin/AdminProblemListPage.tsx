@@ -75,7 +75,7 @@ export function Component() {
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">문제 관리</h1>
+        <h1 className="page-title">문제 관리</h1>
         <Button asChild className="min-h-11">
           <Link to="/admin/problems/new">새 문제</Link>
         </Button>

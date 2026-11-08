@@ -214,7 +214,7 @@ export function Component() {
   if (isPending || !data) {
     return (
       <section className="flex flex-col gap-4">
-        <h1 className="text-2xl font-semibold">제출 결과</h1>
+        <h1 className="page-title">제출 결과</h1>
         <ListSkeleton rows={3} />
       </section>
     )
@@ -229,7 +229,7 @@ export function Component() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">제출 결과</h1>
+      <h1 className="page-title">제출 결과</h1>
 
       {/* 화면 2: 넓으면 왼쪽 결과, 오른쪽 AI 패널. 좁으면 아래로 쌓는다(UX-05). */}
       <div className={analyzable ? 'grid items-start gap-6 lg:grid-cols-2' : undefined}>
