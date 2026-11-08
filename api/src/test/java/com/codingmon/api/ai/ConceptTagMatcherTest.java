@@ -7,7 +7,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.codingmon.api.ai.ConceptTagMatcher.Matched;
-import com.codingmon.api.ai.ConceptTagMatcher.Tag;
+import com.codingmon.api.ai.NextConceptRepository.Tag;
 
 // 다음 개념과 개념 태그를 맞추는 규칙(AI_FEATURES 6절, #83). DB에 저장하는 것은 CodeReviewControllerTest와 NextConceptRepositoryTest가 본다.
 class ConceptTagMatcherTest {

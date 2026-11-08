@@ -29,6 +29,7 @@ public class NextConceptRepository {
             int ordinal, String name, String reason, Tag tag) {
     }
 
+    // 개념 태그. 다음 개념과 맞출 때(ConceptTagMatcher)와 읽을 때 같이 쓴다.
     // id는 학습 추천(RecommendationRepository.Recommendation.conceptTagId), slug는 개념별 통계(LearningStats.ConceptStat)와 맞출 때 쓴다.
     public record Tag(long id, String slug, String name) {
     }
@@ -76,9 +77,9 @@ public class NextConceptRepository {
     }
 
     // 맞출 대상인 모든 개념 태그. 표가 작아(수십 개) 리뷰마다 다 읽는다.
-    List<ConceptTagMatcher.Tag> findAllTags() {
+    List<Tag> findAllTags() {
         return jdbc.sql("select id, slug, name from concept_tags order by id")
-                .query((rs, n) -> new ConceptTagMatcher.Tag(rs.getLong("id"), rs.getString("slug"), rs.getString("name")))
+                .query((rs, n) -> new Tag(rs.getLong("id"), rs.getString("slug"), rs.getString("name")))
                 .list();
     }
 
