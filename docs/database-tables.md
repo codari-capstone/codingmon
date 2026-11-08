@@ -182,6 +182,7 @@
 - `reason`: 그 개념을 권한 이유 원문.
 - `concept_tag_id` (비어도 됨, FK): 이름을 개념 태그와 맞춘 결과. 맞는 태그가 없으면 비어 있다. 태그를 삭제하면 비워지고 원문은 남는다.
 - 리뷰가 `COMPLETED`로 저장되는 트랜잭션에서 함께 쓴다. 차단된 결과에는 행이 없다. 맞추는 규칙은 [`AI_FEATURES.md`](AI_FEATURES.md) 6절에 있다.
+- 이 표를 만들기 전에 끝난 리뷰는 마이그레이션(V4)이 `ai_reviews.content`에서 옮기고, `concept_tag_id`는 비워 둔다.
 
 ## `review_feedback` — AI 결과 피드백
 
