@@ -6,6 +6,8 @@ import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.ErrorResponseException;
 
@@ -21,10 +23,14 @@ class AiQuotaService {
     private final TransactionTemplate transactions;
     private final int limit;
 
-    AiQuotaService(AiReviewRepository reviews, TransactionTemplate transactions,
+    // 시도를 잡는 트랜잭션은 늘 새로 열고 READ COMMITTED로 둔다. 바깥 트랜잭션에 합류하면 그 커밋 전에 처리기에 넣게 되고,
+    // 바깥이 REPEATABLE READ(읽기 저장소 여러 곳이 쓴다)면 잠금을 기다리기 전의 스냅샷으로 세어 앞 요청의 행을 못 본다.
+    AiQuotaService(AiReviewRepository reviews, PlatformTransactionManager transactionManager,
             @Value("${app.llm.daily-limit}") int limit) {
         this.reviews = reviews;
-        this.transactions = transactions;
+        this.transactions = new TransactionTemplate(transactionManager);
+        this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.transactions.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
         this.limit = limit;
     }
 
@@ -38,7 +44,6 @@ class AiQuotaService {
     // 오늘 시작한 버려진 PENDING은 이미 센 행이라 다시 잡아도 횟수가 늘지 않으므로, 한도를 낮춰 넘어 있어도 막지 않는다.
     // 제출 행을 먼저 잠그는 것은 탈퇴·채점 완료와 같은 순서라 교착을 막는다. 사용자 행 잠금에서 같은 사용자의 요청이 줄을 서므로,
     // 동시에 눌러도 뒤 요청이 앞 요청의 커밋된 행을 보고 센다.
-    // 기본 격리 수준(READ COMMITTED)이어야 한다. REPEATABLE READ면 잠금을 기다리기 전의 스냅샷으로 세어 앞 요청의 행을 못 본다.
     // 처리기에 넣는 일은 이 메서드가 돌아온(커밋한) 뒤에 부른 쪽이 한다. 커밋 전에 넣으면 처리기가 PENDING 행을 못 봐 결과를 버린다.
     <T> Optional<T> claimWithin(long userId, long submissionId, Supplier<Optional<T>> claim) {
         return transactions.execute(status -> {

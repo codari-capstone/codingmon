@@ -6,12 +6,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -36,6 +40,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.context.WebApplicationContext;
@@ -107,6 +113,15 @@ class AiQuotaIntegrationTest {
 
     @Autowired
     TransactionTemplate transactions;
+
+    @Autowired
+    PlatformTransactionManager transactionManager;
+
+    @Autowired
+    AiQuotaService quota;
+
+    @Autowired
+    AiReviewRepository reviews;
 
     @Autowired
     WebApplicationContext context;
@@ -363,6 +378,69 @@ class AiQuotaIntegrationTest {
         awaitStatus(id, "COMPLETED");
         assertThat(llm.calls).hasValue(1);
         assertThat(quotaUsed()).isEqualTo(1);
+    }
+
+    @Test
+    void 바깥_트랜잭션_안에서_불러도_시도는_따로_커밋한다() throws Exception {
+        long id = submission(userId);
+        ExecutorService other = Executors.newSingleThreadExecutor();
+        try {
+            int visible = repeatableRead().execute(status -> {
+                assertThat(quota.claimWithin(userId, id, () -> claim(id))).isPresent();
+                // 다른 연결에서 보이면 바깥 트랜잭션과 따로 커밋한 것이다. 그래야 처리기가 PENDING 행을 본다.
+                return on(other, () -> rows(id));
+            });
+            assertThat(visible).isEqualTo(1);
+        } finally {
+            other.shutdownNow();
+        }
+    }
+
+    @Test
+    void 바깥이_REPEATABLE_READ여도_잠금_뒤의_최신_횟수로_센다() throws Exception {
+        long id = submission(userId);
+        ExecutorService other = Executors.newSingleThreadExecutor();
+        try {
+            Object result = repeatableRead().execute(status -> {
+                // 바깥 스냅샷을 먼저 잡은 뒤, 다른 연결이 오늘 행 3개(한도)를 커밋한다.
+                jdbc.sql("select count(*) from ai_reviews").query(Integer.class).single();
+                on(other, () -> {
+                    for (int i = 0; i < 3; i++) {
+                        row(submission(userId), "ANALYSIS", "COMPLETED", "now()");
+                    }
+                    return null;
+                });
+                try {
+                    return quota.claimWithin(userId, id, () -> claim(id));
+                } catch (ErrorResponseException e) {
+                    return e.getBody().getProperties().get("code");
+                }
+            });
+            assertThat(result).isEqualTo("AI_DAILY_LIMIT_EXCEEDED");
+            assertThat(rows(id)).isZero();
+        } finally {
+            other.shutdownNow();
+        }
+    }
+
+    private TransactionTemplate repeatableRead() {
+        TransactionTemplate outer = new TransactionTemplate(transactionManager);
+        outer.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        return outer;
+    }
+
+    private Optional<AiReviewRepository.Claim> claim(long submissionId) {
+        return reviews.claim(submissionId, ReviewType.ANALYSIS, "v1", "fake-model",
+                new AiReviewRepository.Abandoned(Duration.ofMinutes(15), Set.of()));
+    }
+
+    // 다른 스레드(다른 연결, 트랜잭션 없음)에서 돌리고 끝날 때까지 기다린다.
+    private static <T> T on(ExecutorService thread, Callable<T> work) {
+        try {
+            return thread.submit(work).get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test
