@@ -67,13 +67,17 @@ function Headline({ result }: { result: SubmissionResult }) {
           */}
           <summary className="min-h-11 cursor-pointer py-2 text-xl font-bold">
             {/* summary 자체가 아니라 안쪽 글자만 칠한다. summary를 flex로 바꾸지 않기 위해서다(위 주석) */}
-            <StatusText tone={VERDICT_INFO[key].tone}>{VERDICT_INFO[key].label}</StatusText>
+            <StatusText tone={VERDICT_INFO[key].tone} className="font-bold">
+              {VERDICT_INFO[key].label}
+            </StatusText>
           </summary>
           <Raw text={compilerMessage ?? ''} />
         </details>
       ) : (
         <p className="text-xl font-bold">
-          <StatusText tone={VERDICT_INFO[key].tone}>{VERDICT_INFO[key].label}</StatusText>
+          <StatusText tone={VERDICT_INFO[key].tone} className="font-bold">
+            {VERDICT_INFO[key].label}
+          </StatusText>
         </p>
       )}
     </div>
@@ -140,7 +144,7 @@ function RuntimeError({ result }: { result: SubmissionResult }) {
     <div className="bg-muted/40 flex flex-col gap-1 rounded-xl p-3">
       <p className="text-sm font-medium">{info.label}</p>
       <p className="text-muted-foreground text-sm leading-relaxed">{info.description}</p>
-      {runtimeErrorMessage !== null ? <Raw text={runtimeErrorMessage} /> : null}
+      {runtimeErrorMessage !== null ? <Raw text={runtimeErrorMessage} className="bg-card" /> : null}
     </div>
   )
 }

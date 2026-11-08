@@ -130,7 +130,7 @@ function Case({ item, expected }: { item: SampleRunCase; expected: string | unde
       </div>
 
       {/* 프로그램이 낸 에러 원문. 공개 예제라 그대로 온다 (RES-04) */}
-      {item.errorMessage !== null ? <Raw text={item.errorMessage} /> : null}
+      {item.errorMessage !== null ? <Raw text={item.errorMessage} className="bg-card" /> : null}
     </li>
   )
 }
