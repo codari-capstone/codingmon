@@ -140,6 +140,15 @@ shadcn 변수 이름은 그대로 두고 값만 바꿨다. 그래서 `bg-primary
 | 카드 | `bg-card rounded-2xl`, 선·그림자 없음. 표를 감쌀 때 `px-3 py-2`, 내용 묶음은 `p-6`. 빈 상태(`EmptyState`)도 흰 카드 |
 | 판정·풀이 상태 | `components/StatusText`에 `tone`을 준다. 색 글자 + 아이콘(아이콘은 aria-hidden). 판정 이름과 색은 `constants/verdicts.ts`의 `VERDICT_INFO`에 함께 있다(`tone`) |
 | 큰 숫자 | 마이페이지 요약 `text-3xl font-bold`. 숫자 칸은 카드 안에서 선 대신 옅은 면(`bg-muted/60 rounded-xl`) |
+| 카드 안 옅은 면 (②) | 선 대신 `bg-muted/40 rounded-xl`. 판정 색 글자가 올라가는 면은 `/40`까지만 쓴다 — 밝은 모드 경고 글자가 `/60` 위에서 4.47:1, `/40` 위에서 4.68:1이다. 안에 다시 코드를 보여 줄 때는 `bg-card` |
+| 카드 안 보조 버튼 (②) | `outline` 대신 회색 면 `secondary` |
+
+②에서 반영한 화면
+
+- 문제 풀이: 지문 칸과 코드 칸을 흰 카드로. 코드 칸 안의 [시작 코드 불러오기]·[실행]은 `secondary`, 예제 실행 결과와 입문자 안내는 옅은 면. 예제별 판정은 `StatusText`(통과도 success)
+- 제출 결과: 판정과 쉬운 설명을 한 장의 흰 카드로 묶고 판정 이름을 `StatusText`로(아이콘은 글자 크기를 따라 커진다). 런타임 에러 상자는 옅은 면, 제출한 코드는 흰 카드
+- AI 분석: 패널을 흰 카드로, 힌트 단계 버튼과 [코드 고치러 가기]를 `secondary`로
+- 화면의 오류 문구(`role="alert"`)는 `text-destructive-text`
 
 판정 색 묶음(`tone`)
 
@@ -151,8 +160,8 @@ shadcn 변수 이름은 그대로 두고 값만 바꿨다. 그래서 `bg-primary
 | `info` | 안내 | i |
 | `muted` | 채점 불가, 안 품 | 없음 |
 
-남은 것 (②·③에서)
+남은 것 (③에서)
 
-- 흰 카드가 생긴 곳의 보조 버튼은 `outline`에서 회색 면 `secondary`로 바꾼다. ①의 화면에는 카드 안 보조 버튼이 없어 ②·③에서 한다
+- 관리자·로그인 폼의 카드 안 보조 버튼을 `secondary`로, 오류 문구를 `text-destructive-text`로
 - 관리자 화면의 직접 만든 선택 상자(`select`)·여러 줄 입력칸(`textarea`)은 아직 테두리 상자다. `Input`과 같은 밑줄형(`rounded-none`, 밑줄 2px, 포커스 4px)으로 맞춘다. 둥근 상자로 맞추지 않는다
 - 문제 목록 필터의 초기화 버튼은 `size="lg"`에서 기본 크기로 바꿨다(①)
