@@ -21,8 +21,9 @@ import tools.jackson.databind.json.JsonMapper;
 // 비공개 테스트는 HiddenTests의 개수와 크기 등급만 담는다. 입력·기대 출력·stdout·stderr 원문과 몇 번째 케이스인지는
 // 담을 필드가 없다(8절 비공개 테스트 보호, ARCHITECTURE 5.2).
 // 글은 아래 상한까지만 넣고 뒤에 생략 표시를 붙인다. 모델 컨텍스트(OLLAMA_CONTEXT_LENGTH 16384토큰)에서 출력 4096토큰과
-// 지시문을 빼고 남는 만큼이다. 글자 수는 JSON에 쓰일 길이로 센다(jsonLength). 모든 항목이 상한에 닿아도 JSON이
-// 2만 자를 넘지 않는다(AnalysisInputTest).
+// 지시문을 빼고 남는 만큼이다. 출력 상한(LLM_MAX_OUTPUT_TOKENS)은 생각이 길 때를 위해 8192지만, 모든 항목이 상한에 닿은
+// 드문 입력에서는 컨텍스트에 남는 만큼까지만 쓸 수 있다. 글자 수는 JSON에 쓰일 길이로 센다(jsonLength). 모든 항목이 상한에
+// 닿아도 JSON이 2만 자를 넘지 않는다(AnalysisInputTest).
 record AnalysisInput(Problem problem, Submission submission, Samples samples, HiddenTests hiddenTests) {
 
     static final int STATEMENT_MAX_CHARS = 3_000;
