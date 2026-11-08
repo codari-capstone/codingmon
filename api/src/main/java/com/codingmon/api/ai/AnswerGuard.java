@@ -2,8 +2,10 @@ package com.codingmon.api.ai;
 
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -57,7 +59,9 @@ final class AnswerGuard {
     static final int MIN_SHARED_TOKENS = 8;
     static final int MIN_STRUCTURAL_TOKENS = 2;
 
-    private static final String ARGS = "\\((?:[^()\\n]|\\([^()\\n]*\\))*\\)";
+    // 호출의 괄호. 따옴표 밖에 한글이 있으면 "int(32비트 정수)" 같은 설명 글이라 호출로 보지 않는다. print('별')은 호출이다.
+    private static final String ARG = "(?:'[^'\\n]*'|\"[^\"\\n]*\"|[^()\\n'\"\\p{IsHangul}])";
+    private static final String ARGS = "\\((?:" + ARG + "|\\(" + ARG + "*\\))*\\)";
     private static final String NO_HANGUL = "[^\\n\\p{IsHangul}]";
 
     // 언어 키워드가 이어지는 꼴(AI-002). 하나라도 맞고 그 글이 학습자 코드에 없으면 위반이다.
@@ -92,6 +96,8 @@ final class AnswerGuard {
             Pattern.compile("[\\w)\\]'\"]\\s*;[^;\\n\\p{IsHangul}]{1,80};"),
             // 복합 대입과 증감 연산자. "C++"은 언어 이름이다.
             Pattern.compile("[A-Za-z_][\\w\\[\\]]*\\s*(?:\\+=|-=|\\*=|/=|%=|<<=|>>=)\\s*[\\w(]"),
+            // 좌변 변수가 우변에 다시 나오는 대입(i = i + 1). 수식 설명("n = 3일 때", "S = n * (n + 1) / 2")과 겹치지 않는다.
+            Pattern.compile("(?<![\\w.])([A-Za-z_]\\w*)\\s*=\\s*\\1\\s*[-+*/%]\\s*[\\w(]"),
             Pattern.compile("\\b(?![Cc]\\+\\+)[A-Za-z_]\\w*\\+\\+|(?<![\\w+])\\+\\+[A-Za-z_]\\w*|\\b[A-Za-z_]\\w*--(?!-)"));
 
     // 들여 쓴 줄은 주석(#, //) 앞부분에 한글이 없거나 코드 기호가 있으면 코드 줄로 본다. "n = 3일 때"처럼 들여 쓴 설명 글은
@@ -100,6 +106,9 @@ final class AnswerGuard {
     private static final Pattern HANGUL = Pattern.compile("\\p{IsHangul}");
     private static final Pattern CODE_SYMBOL = Pattern.compile("[;{}]|\\w\\(");
     private static final Pattern LINE_COMMENT = Pattern.compile("#|//");
+    // 인용 비교에서 문장을 넓힐 때 앞에 붙은 이름과 끝에서 뺄 문장 부호(statement)
+    private static final Pattern STATEMENT_HEAD = Pattern.compile("[\\w.\\[\\]]");
+    private static final Pattern STATEMENT_TAIL = Pattern.compile("[\\s.,:!?]+$");
 
     // 개념 태그 중 알고리즘 이름이 아닌 것. 반복문·조건문·문자열 같은 말은 오답 설명에 늘 나오므로 검사하지 않는다.
     // "출력 형식"은 판정 이름("출력 형식이 잘못되었습니다")에도 들어 있다.
@@ -129,6 +138,9 @@ final class AnswerGuard {
             Map.entry("유니온파인드", List.of("분리 집합", "union find")),
             Map.entry("비트마스킹", List.of("비트마스크", "bitmask")),
             Map.entry("슬라이딩윈도우", List.of("sliding window")));
+
+    // 묶음 안의 어느 이름으로 태그가 붙어도 같은 묶음을 찾는다(태그 "해시"와 키 "해시맵", 태그 "이진 탐색"과 키 "이분탐색").
+    private static final Map<String, List<String>> ALIAS_GROUPS = aliasGroups();
 
     // 이름 뒤에 이 말이 오면 알고리즘 이름이 아니다. 런타임 에러 설명의 "스택 오버플로", "스택 영역" 같은 것.
     private static final Map<String, String> NOT_ALGORITHM_AFTER = Map.of(
@@ -217,16 +229,60 @@ final class AnswerGuard {
         return false;
     }
 
+    // 맞은 글이 학습자 코드에 그대로 있으면 인용이다. 패턴은 문장의 앞부분(int sum =, .append(x))만 맞추기도 하므로
+    // 그 문장 전체(statement)도 학습자 코드에 있어야 인용으로 본다. 초기값이나 호출 대상만 바꾼 글을 가리려는 것이다.
     private static boolean codePattern(String text, String compactSource) {
         for (Pattern pattern : CODE_PATTERNS) {
             Matcher matcher = pattern.matcher(text);
             while (matcher.find()) {
-                if (!compactSource.contains(compact(matcher.group()))) {
+                if (!compactSource.contains(compact(matcher.group()))
+                        || !compactSource.contains(compact(statement(text, matcher.start(), matcher.end())))) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    // 맞은 곳을 앞으로는 붙어 있는 이름(a.append의 a)까지, 뒤로는 문장 끝까지 넓힌다. 한글·줄바꿈·백틱이나 괄호 밖의
+    // ", "가 나오면 설명 글로 돌아온 것으로 보고, ;는 넣고 끊는다. 끝에 붙은 닫는 괄호와 문장 부호는 뺀다
+    // 짝이 없는 닫는 괄호("4번 줄(range(1, n + 1))에서"의 마지막 ")")에서도 끊는다.
+    private static String statement(String text, int start, int end) {
+        while (start > 0 && STATEMENT_HEAD.matcher(text.substring(start - 1, start)).matches()) {
+            start--;
+        }
+        int depth = 0;
+        char quote = 0;
+        int limit = Math.min(text.length(), end + 120);
+        while (end < limit) {
+            char c = text.charAt(end);
+            if (quote != 0) {
+                if (c == '\n') {
+                    break;
+                }
+                if (c == quote) {
+                    quote = 0;
+                }
+            } else if (c == '\n' || c == '`' || HANGUL.matcher(String.valueOf(c)).matches()) {
+                break;
+            } else if (c == ';') {
+                end++;
+                break;
+            } else if (c == '\'' || c == '"') {
+                quote = c;
+            } else if (c == '(' || c == '[' || c == '{') {
+                depth++;
+            } else if (c == ')' || c == ']' || c == '}') {
+                if (--depth < 0) {
+                    break;
+                }
+            } else if (c == ',' && depth <= 0 && end + 1 < text.length() && text.charAt(end + 1) == ' ') {
+                break;
+            }
+            end++;
+        }
+        String statement = text.substring(start, end);
+        return statement.endsWith(";") ? statement : STATEMENT_TAIL.matcher(statement).replaceAll("");
     }
 
     private static boolean similar(String text, List<List<String>> references, String sourceTokens) {
@@ -288,7 +344,7 @@ final class AnswerGuard {
             }
             List<String> all = new ArrayList<>();
             all.add(tag);
-            all.addAll(ALIASES.getOrDefault(key, List.of()));
+            all.addAll(ALIAS_GROUPS.getOrDefault(aliasKey(tag), List.of()));
             for (String name : all) {
                 Pattern pattern = namePattern(name);
                 if (!pattern.matcher(problem).find() && !pattern.matcher(source).find()) {
@@ -297,6 +353,21 @@ final class AnswerGuard {
             }
         }
         return names;
+    }
+
+    private static Map<String, List<String>> aliasGroups() {
+        Map<String, List<String>> groups = new HashMap<>();
+        ALIASES.forEach((key, aliases) -> {
+            List<String> group = new ArrayList<>();
+            group.add(key);
+            group.addAll(aliases);
+            group.forEach(name -> groups.put(aliasKey(name), List.copyOf(group)));
+        });
+        return Map.copyOf(groups);
+    }
+
+    private static String aliasKey(String name) {
+        return name.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
     }
 
     private static Pattern namePattern(String name) {

@@ -118,6 +118,8 @@ class AnalysisControllerTest {
     long otherUserId;
     long problemId;
     long versionId;
+    // 테스트가 새로 넣은 개념 태그. 원래 있던 태그는 지우지 않는다.
+    Long insertedTagId;
 
     @BeforeEach
     void setUp() {
@@ -146,6 +148,10 @@ class AnalysisControllerTest {
         jdbc.sql("delete from users where id in (:ids)").param("ids", List.of(userId, otherUserId)).update();
         jdbc.sql("delete from problem_versions where id = :id").param("id", versionId).update();
         jdbc.sql("delete from problems where id = :id").param("id", problemId).update();
+        if (insertedTagId != null) {
+            jdbc.sql("delete from concept_tags where id = :id").param("id", insertedTagId).update();
+            insertedTagId = null;
+        }
     }
 
     @Test
@@ -519,7 +525,8 @@ class AnalysisControllerTest {
 
     @Test
     void 다시_만들어도_섞이면_차단하고_보여_주지_않는다() throws Exception {
-        jdbc.sql("insert into concept_tags (slug, name) values ('test-greedy', '그리디') on conflict do nothing").update();
+        insertedTagId = jdbc.sql("insert into concept_tags (slug, name) values ('test-greedy', '그리디')"
+                + " on conflict do nothing returning id").query(Long.class).optional().orElse(null);
         long tagId = jdbc.sql("select id from concept_tags where name = '그리디'").query(Long.class).single();
         jdbc.sql("insert into problem_version_tags (problem_version_id, concept_tag_id) values (:versionId, :tagId)")
                 .param("versionId", versionId).param("tagId", tagId).update();

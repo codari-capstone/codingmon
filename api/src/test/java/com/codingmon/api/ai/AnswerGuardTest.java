@@ -64,8 +64,9 @@ class AnswerGuardTest {
     void 코드_블록과_들여_쓴_코드_줄을_찾는다() {
         assertThat(rules(check(withPrinciple("다음처럼 고치세요.\n```\n별을 찍는다\n```"))))
                 .containsExactly(Rule.CODE_BLOCK);
+        // n = n - 1은 코드 모양 검사에도 걸린다.
         assertThat(rules(check(withPrinciple("다음처럼 고칩니다.\n    n = n - 1\n그러면 됩니다."))))
-                .containsExactly(Rule.INDENTED_CODE);
+                .containsExactly(Rule.INDENTED_CODE, Rule.CODE_PATTERN);
         // 들여 쓴 설명 글은 코드가 아니다.
         assertThat(check(withPrinciple("두 가지를 보세요.\n    첫째, 줄 수를 세어 보세요."))).isEmpty();
     }
@@ -216,7 +217,50 @@ class AnswerGuardTest {
     void 들여_쓴_설명_줄의_등호는_코드가_아니고_한글_주석을_단_코드는_코드다() {
         assertThat(check(withPrinciple("예를 들어\n    n = 3일 때 별은 5개입니다."))).isEmpty();
         assertThat(rules(check(withPrinciple("다음처럼 고칩니다.\n    n = n - 1  # 한 줄 줄이기"))))
-                .containsExactly(Rule.INDENTED_CODE);
+                .containsExactly(Rule.INDENTED_CODE, Rule.CODE_PATTERN);
+    }
+
+    @Test
+    void 초기값이나_호출_대상만_바꾼_문장은_학습자_코드의_인용이_아니다() {
+        String code = """
+                #include <iostream>
+                int main() {
+                    int sum = 1;
+                    a.append(x);
+                }
+                """;
+
+        for (String text : List.of("int sum = 0; 으로 고치세요.", "b.append(x)로 넣으세요.")) {
+            assertThat(rules(withReference(withPrinciple(text), code, List.of("입출력")))).as(text)
+                    .containsExactly(Rule.CODE_PATTERN);
+        }
+        for (String text : List.of("3번 줄의 int sum = 1; 에서 처음 값을 보세요.", "4번 줄 a.append(x)에서 넣는 곳을 보세요.",
+                "4번 줄(a.append(x))에서 넣는 곳을 보세요.", "3번 줄 int sum = 1, 4번 줄 a.append(x)를 보세요.")) {
+            assertThat(withReference(withGuess(text), code, List.of("입출력"))).as(text).isEmpty();
+        }
+    }
+
+    @Test
+    void 좌변을_우변에_다시_쓰는_대입을_찾는다() {
+        // AnalysisSamples.endlessLoop()가 금지한 글
+        assertThat(rules(check(withPrinciple("반복문 안에 i = i + 1을 넣으세요.")))).containsExactly(Rule.CODE_PATTERN);
+        // 수식 설명은 대입이 아니다.
+        assertThat(check(withPrinciple("합은 S = n * (n + 1) / 2이고, n = 3일 때 6입니다."))).isEmpty();
+    }
+
+    @Test
+    void 괄호_안이_한글_설명이면_호출이_아니다() {
+        assertThat(check(withPrinciple("합을 int(32비트 정수)로 담으면 넘칩니다. len(리스트 길이)도 보세요."))).isEmpty();
+        assertThat(rules(check(withPrinciple("print('별')로 찍으세요.")))).containsExactly(Rule.CODE_PATTERN);
+    }
+
+    @Test
+    void 태그가_다른_이름으로_붙어도_같은_묶음의_이름을_찾는다() {
+        // AnalysisSamples.quadraticPairs()의 태그는 "해시"다.
+        assertThat(withProblem(withPrinciple("딕셔너리에 본 수를 넣어 두세요."), List.of("해시"), "합이 K인 쌍"))
+                .containsExactly(new Violation(Rule.ALGORITHM_NAME, "hints.principle", "해시"));
+        assertThat(withProblem(withPrinciple("이분 탐색으로 찾으세요."), List.of("이진 탐색"), "수 찾기"))
+                .containsExactly(new Violation(Rule.ALGORITHM_NAME, "hints.principle", "이진 탐색"));
     }
 
     @Test
