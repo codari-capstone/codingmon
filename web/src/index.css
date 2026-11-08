@@ -64,6 +64,8 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* 떠 있는 것(메뉴·대화상자)의 부드러운 그림자. 카드에는 쓰지 않는다 */
+  --shadow-float: var(--elevation-float);
 }
 
 /* 색 값은 디자인 시안 '여백 카드' (docs/design-system.md). 포인트 색 #586FC4 하나에서 단계를 나눴다.
@@ -108,12 +110,15 @@
    * 한 단계 옅은 #8d8f95는 흰 카드 위에서는 통과하지만 회색 바탕 위에서 2.94:1이라, 바탕에 바로 놓인 입력칸을 위해 이 값을 쓴다 */
   --input: #6a6c71;
   --ring: #586fc4;
+  --elevation-float: 0 12px 32px -12px rgb(12 14 19 / 0.28), 0 2px 6px rgb(12 14 19 / 0.06);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  /* 둥글기 기준 12px: 버튼 rounded-lg 12px, 카드 rounded-2xl 약 22px, 작은 것 rounded-sm 약 7px.
+   * 입력칸은 둥글기 없는 밑줄형(rounded-none)이다 */
+  --radius: 0.75rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -162,6 +167,8 @@
   --border: #3b3d42;
   --input: #6a6c71;
   --ring: #7086d0;
+  /* 어두운 바탕에서는 그림자가 잘 안 보여 진하게 하고, 메뉴·대화상자에 얇은 선(ring)을 함께 둔다 */
+  --elevation-float: 0 16px 40px -12px rgb(0 0 0 / 0.65), 0 2px 6px rgb(0 0 0 / 0.4);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
