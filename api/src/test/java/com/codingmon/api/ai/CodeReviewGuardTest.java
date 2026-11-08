@@ -97,6 +97,18 @@ class CodeReviewGuardTest {
     }
 
     @Test
+    void 복잡도_표기는_코드_모양으로_보지_않는다() {
+        CodeReviewResult result = new CodeReviewResult("요약입니다.",
+                new CodeReviewResult.Complexity("6번 줄의 반복이 질의마다 N번 돕니다.", "O(max(N, Q) × N)", "O(N)",
+                        "O(sqrt(N) + Q log N)", "의도한 O((N + Q) log N)보다 느린 것으로 추정됩니다.", false),
+                List.of("약수는 sqrt(n)까지만 확인하면 되고, 최소공배수는 a × b / gcd(a, b)로 구합니다."), List.of(concept("정렬")));
+
+        assertThat(check(result)).isEmpty();
+        // 표기 밖에서 학습자 코드에 없는 호출을 쓰면 그대로 걸린다.
+        assertThat(rules(check(review("요약입니다.", List.of("마지막에 max(count, 0)을 출력하세요."))))).contains(Rule.CODE_PATTERN);
+    }
+
+    @Test
     void 모든_글을_검사하고_위치를_남긴다() {
         CodeReviewResult result = new CodeReviewResult("요약입니다.",
                 new CodeReviewResult.Complexity("근거입니다.", "O(n)", "O(1)", "O(1)", "a.sort()를 먼저 하면 됩니다.", false),

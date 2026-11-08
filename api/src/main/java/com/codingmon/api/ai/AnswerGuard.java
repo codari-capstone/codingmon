@@ -109,8 +109,10 @@ final class AnswerGuard {
     // 함수·메서드 호출의 머리. 괄호는 짝이 맞을 때까지 세어(callEnd) 인자 전체를 맞춘다. 학습자 코드의 호출과 고친 호출을
     // 가린다(range(n + 1)은 인용, range(n)은 고친 것). 중첩 깊이에 제한이 없다(print(sum(map(int, input().split())))).
     // LIBRARY_CALLS는 더 나은 풀이로 이끌 때 나오기 쉬운 라이브러리 함수다(코드 리뷰, #82). 예: bisect_right(a, x), sort(v.begin(), v.end())
+    // sqrt·gcd·lcm처럼 식에도 쓰는 이름은 넣지 않는다. 3단계 원리가 "약수는 sqrt(n)까지", "lcm(a, b) = a × b / gcd(a, b)"를
+    // 식으로 보여 줄 수 있다.
     private static final String LIBRARY_CALLS = "bisect|bisect_left|bisect_right|insort|heappush|heappop|heapify"
-            + "|Counter|defaultdict|deque|accumulate|permutations|combinations|product|sqrt|gcd|lcm"
+            + "|Counter|defaultdict|deque|accumulate|permutations|combinations"
             + "|sort|stable_sort|lower_bound|upper_bound|binary_search|next_permutation|unique|fill|swap";
     private static final List<Pattern> CALL_HEADS = List.of(
             Pattern.compile("(?<![\\w.])(?:range|print|input|len|map|list|int|str|split|join|sorted|enumerate|zip|open"
@@ -192,6 +194,10 @@ final class AnswerGuard {
             + "|[!-/:-@\\[-^`{-~]");
     // 응답 글은 한글 같은 ASCII 밖 글자에서 끊어, 코드처럼 이어진 부분끼리만 정답 코드와 비교한다.
     private static final Pattern NON_ASCII = Pattern.compile("[^\\x00-\\x7F]+");
+    // 복잡도 표기. 괄호 안이 두 겹까지 중첩될 수 있다(O(sqrt(n)), O(max(n, m) log n)). 코드 모양 검사에서는 지운다.
+    // max·min은 코드 모양 검사의 함수 이름이기도 해서, 지우지 않으면 정상 표기 "O(max(N, M))"가 호출로 보인다.
+    private static final Pattern BIG_O = Pattern.compile(
+            "\\bO\\s*\\((?:[^()\\n]|\\((?:[^()\\n]|\\([^()\\n]*\\))*\\))*\\)");
 
     private AnswerGuard() {
     }
@@ -228,7 +234,8 @@ final class AnswerGuard {
             if (rules.contains(Rule.INDENTED_CODE) && indentedCode(text)) {
                 violations.add(new Violation(Rule.INDENTED_CODE, field, null));
             }
-            if (rules.contains(Rule.CODE_PATTERN) && codePattern(text, compactSource, assigned)) {
+            if (rules.contains(Rule.CODE_PATTERN)
+                    && codePattern(BIG_O.matcher(text).replaceAll("O()"), compactSource, assigned)) {
                 violations.add(new Violation(Rule.CODE_PATTERN, field, null));
             }
             if (rules.contains(Rule.REFERENCE_SIMILAR) && similar(text, references, sourceTokens)) {
