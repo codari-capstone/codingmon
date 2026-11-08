@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -160,6 +161,17 @@ class SubmissionRepository {
                         rs.getObject("memory_used_kb", Integer.class), instant(rs.getObject("submitted_at", OffsetDateTime.class))))
                 .list();
         return new Page<>(content, total);
+    }
+
+    // 예제 실행은 결과를 한 번 보고 끝나므로 결과가 나온 지 1시간이 지난 것을 매시간 지운다(#145). 케이스별 결과는 FK로 함께 지워진다.
+    // 채점 중인 것은 judged_at이 비어 있어 남고, 끝난 뒤 1시간이 지나면 지운다. 대기열이 밀려도 결과를 받아 올 시간을 남긴다.
+    // ponytail: submission_kind·judged_at 인덱스 없이 훑는다. 제출이 많아져 느려지면 SAMPLE_RUN 부분 인덱스를 둔다.
+    @Scheduled(cron = "0 0 * * * *")
+    void deleteOldSampleRuns() {
+        jdbc.sql("delete from submissions where submission_kind = 'SAMPLE_RUN'"
+                + " and judged_at < now() - interval '1 hour'"
+                + " and job_status not in ('QUEUED', 'COMPILING', 'RUNNING')")
+                .update();
     }
 
     // 본인의 SAMPLE_RUN만 찾는다. 남의 것도 비어 있게 답한다(findResult와 같다).
