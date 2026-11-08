@@ -27,12 +27,14 @@ interface StatusTextProps {
  *
  * 글자가 뜻을 전하고 아이콘은 aria-hidden이다. 색만으로 알리지 않도록 아이콘을 함께 둔다.
  * 글자색은 채움 색이 아니라 `-text` 토큰이다 — 채움 색을 글자로 쓰면 경고·정보가 4.5:1에 못 미친다.
+ * 아이콘은 글자 크기를 따라간다(1.1em). 표의 작은 글자와 결과 화면의 큰 판정에 같은 조각을 쓴다.
+ * 카드 안 옅은 면 위에 둘 때는 `bg-muted/40`까지만 쓴다 — 밝은 모드 경고 글자가 /60에서 4.47:1이다.
  */
 export function StatusText({ tone, children, className }: StatusTextProps) {
   const { className: toneClass, icon: Icon } = TONE[tone]
   return (
     <span className={cn('inline-flex items-center gap-1.5 font-medium', toneClass, className)}>
-      {Icon ? <Icon aria-hidden="true" className="size-4 shrink-0" /> : null}
+      {Icon ? <Icon aria-hidden="true" className="size-[1.1em] shrink-0" /> : null}
       {children}
     </span>
   )

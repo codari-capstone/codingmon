@@ -126,7 +126,7 @@ function Workspace({ problem }: { problem: ProblemDetailView }) {
 
   const editor =
     language && current ? (
-      <div className="flex flex-col gap-2">
+      <div className="bg-card flex flex-col gap-3 rounded-2xl p-6">
         <div className="flex flex-wrap items-center justify-between gap-x-4">
           <LanguagePicker
             languages={problem.languages}
@@ -187,7 +187,7 @@ function Workspace({ problem }: { problem: ProblemDetailView }) {
     ) : null
 
   const statement = (
-    <div className="flex flex-col gap-6">
+    <div className="bg-card flex flex-col gap-6 rounded-2xl p-6">
       <Statement problem={problem} />
       <Samples samples={problem.samples} />
     </div>
