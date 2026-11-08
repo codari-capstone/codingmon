@@ -1,5 +1,6 @@
 import type { ProblemDetailView, SampleRunCase, SampleRunResult } from '@/api/types'
 import { Raw } from '@/components/Raw'
+import { StatusText } from '@/components/StatusText'
 import { Button } from '@/components/ui/button'
 import { RUNTIME_ERROR_INFO, VERDICT_INFO } from '@/constants/verdicts'
 import { problemMessage } from '@/features/auth/problemCode'
@@ -89,7 +90,7 @@ function Output({ title, text }: { title: string; text: string | null | undefine
         공백과 줄바꿈이 뜻을 가진다. 꺾지 않고 가로 스크롤로 보여 준다(Samples와 같은
         이유). 긴 출력은 65,536자까지 올 수 있어 높이도 묶는다.
       */}
-      <pre className="bg-muted max-h-48 overflow-auto rounded-lg p-3 text-sm leading-relaxed">
+      <pre className="bg-card max-h-48 overflow-auto rounded-lg p-3 text-sm leading-relaxed">
         {text}
       </pre>
     </div>
@@ -99,10 +100,15 @@ function Output({ title, text }: { title: string; text: string | null | undefine
 /** 예제 하나: 판정·시간·메모리와 기대/실제 출력. */
 function Case({ item, expected }: { item: SampleRunCase; expected: string | undefined }) {
   return (
-    <li className="border-border/60 flex flex-col gap-2 rounded-lg border p-3">
+    <li className="bg-muted/40 flex flex-col gap-2 rounded-xl p-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <span className="font-medium">예제 {item.ordinal}</span>
-        <span>{item.verdict === null ? '실행 전' : caseLabel(item.verdict)}</span>
+        {item.verdict === null ? (
+          <span className="text-muted-foreground">실행 전</span>
+        ) : (
+          // 판정 색은 채점 결과와 같다. 통과도 맞음과 같은 success다
+          <StatusText tone={VERDICT_INFO[item.verdict].tone}>{caseLabel(item.verdict)}</StatusText>
+        )}
         {/*
           실행하지 못한 예제는 둘 다 null이다(계약). '0ms'로 적으면 "아주 빨랐다"로
           읽히므로 없는 값은 뺀다 (결과 화면 Meta와 같다).
@@ -193,7 +199,7 @@ export function SampleRun({
         {/* 비활성 버튼은 클릭도 Enter도 받지 않아 disabled 하나로 중복 실행이 막힌다 */}
         <Button
           type="button"
-          variant="outline"
+          variant="secondary"
           className="min-h-11"
           disabled={empty || run.pending}
           onClick={() => run.start({ problemId, language, sourceCode: code })}
@@ -217,7 +223,7 @@ export function SampleRun({
 
       {/* 접수·조회 실패는 한 자리로 모은다. 사용자에게는 "실행이 안 됐다" 하나다 */}
       {run.error !== null && run.error !== undefined ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(run.error)}
         </p>
       ) : null}

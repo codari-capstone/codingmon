@@ -71,7 +71,7 @@ export function SubmitButton({
 
       {/* role="alert"이어야 누른 뒤 문구가 생길 때 스크린 리더가 읽는다 (LoginPage와 같다) */}
       {submit.error && current ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(submit.error)}
         </p>
       ) : null}
