@@ -19,7 +19,7 @@ import jakarta.annotation.PreDestroy;
 
 // AI 처리기. 채점 슬롯과 다른 스레드에서 돌아 모델이 느려도 채점을 막지 않는다.
 // 팀 서버의 모델 하나를 나눠 쓰므로 스레드 수가 곧 동시 호출 한도이고, 나머지 요청은 대기열에서 차례를 기다린다.
-// 대기열이 차면 더 쌓지 않고 바로 RATE_LIMITED로 돌려준다.
+// 대기열이 차면 더 쌓지 않고 바로 BUSY로 돌려준다(모델 서버의 429인 RATE_LIMITED와 구분한다, #81).
 @Component
 class AiWorker {
 
@@ -49,7 +49,7 @@ class AiWorker {
         try {
             result = CompletableFuture.supplyAsync(() -> run(reviewId, request), workers);
         } catch (RejectedExecutionException e) {
-            LlmException.Kind kind = workers.isShutdown() ? LlmException.Kind.UNAVAILABLE : LlmException.Kind.RATE_LIMITED;
+            LlmException.Kind kind = workers.isShutdown() ? LlmException.Kind.UNAVAILABLE : LlmException.Kind.BUSY;
             return CompletableFuture.failedFuture(new LlmException(kind, "AI 요청을 받을 수 없다", e, LlmUsage.NONE));
         }
         pending.add(result);

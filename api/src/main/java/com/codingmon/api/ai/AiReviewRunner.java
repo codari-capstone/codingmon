@@ -68,7 +68,7 @@ class AiReviewRunner {
     }
 
     // 처리기 스레드에서 돈다. 저장할 content를 돌려준다. 다시 만드는 요청도 같은 처리기 대기열에 넣으므로 다른 요청을 앞지르지
-    // 않고, 대기열이 차 있으면 RATE_LIMITED로 실패한다. 다시 만드는 요청의 토큰도 같은 행에 더해진다(AiWorker).
+    // 않고, 대기열이 차 있으면 BUSY로 실패한다. 다시 만드는 요청의 토큰도 같은 행에 더해진다(AiWorker).
     private <T> CompletableFuture<String> guarded(ReviewType type, AiReviewRepository.Claim claim, Generation<T> request,
             LlmResponse<T> first) {
         List<AnswerGuard.Violation> violations = request.check().apply(first.value());
