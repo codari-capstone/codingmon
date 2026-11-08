@@ -58,7 +58,7 @@ class EmailCodeService {
             sender.sendCode(email, purpose, code);
         } catch (MailException e) {
             log.warn("인증번호 메일 발송 실패", e);
-            throw AuthErrors.error(HttpStatus.SERVICE_UNAVAILABLE, "MAIL_FAILED", "메일을 보내지 못했어요. 1분 뒤 다시 시도해 주세요");
+            throw AuthErrors.error(HttpStatus.SERVICE_UNAVAILABLE, "MAIL_FAILED", "메일을 보내지 못했어요. 1분 후 다시 시도해 주세요");
         }
     }
 
@@ -96,7 +96,7 @@ class EmailCodeService {
                 throw AuthErrors.error(HttpStatus.BAD_REQUEST, "CODE_ATTEMPTS_EXCEEDED",
                         "입력 횟수를 초과했어요. 인증번호를 다시 받아 주세요");
             }
-            throw AuthErrors.error(HttpStatus.BAD_REQUEST, "CODE_MISMATCH", "인증번호가 맞지 않아요");
+            throw AuthErrors.error(HttpStatus.BAD_REQUEST, "CODE_MISMATCH", "인증번호가 맞지 않아요. 메일로 받은 인증번호를 다시 확인해 주세요");
         }
         active.use(now);
     }

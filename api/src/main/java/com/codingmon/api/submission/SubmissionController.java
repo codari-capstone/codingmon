@@ -64,7 +64,7 @@ class SubmissionController {
             throw ApiErrors.error(HttpStatus.BAD_REQUEST, "SOURCE_EMPTY", "코드를 입력해 주세요");
         }
         if (source.getBytes(StandardCharsets.UTF_8).length > MAX_SOURCE_BYTES) {
-            throw ApiErrors.error(HttpStatus.BAD_REQUEST, "SOURCE_TOO_LONG", "코드는 64KB까지 제출할 수 있어요");
+            throw ApiErrors.error(HttpStatus.BAD_REQUEST, "SOURCE_TOO_LONG", "코드가 64KB를 넘어요. 64KB 이하로 줄여 주세요");
         }
         // 아래 값은 화면이 정상적으로는 보낼 수 없어 code 없이 답한다.
         if (source.indexOf('\0') >= 0 || body.problemId() == null || body.language() == null) {

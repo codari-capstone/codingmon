@@ -880,8 +880,8 @@ export interface paths {
          *     - 최신 버전이 초안이면 그 초안에 저장한다. 정답 코드 검증 기록을 지우므로 다시 검증해야 한다.
          *     - 최신 버전이 공개 중이거나 비공개면 최신 버전을 복사해 새 초안(버전 번호 +1)을 만들고 거기에 저장한다.
          *       정답 코드도 복사하고, 정답 코드는 다시 검증해야 한다. 기존 버전과 사용자 제출 기록은 그대로다. 공개하기 전까지 사용자는 기존 버전을 푼다.
-         *     크기 제한(추후 조정할 수 있음): 케이스 10개, 입력 2MiB(2,097,152바이트), 기대 출력 1MiB(1,048,576바이트),
-         *     모든 케이스의 입력·기대 출력 합 10MiB. 크기는 UTF-8 바이트로 센다. 기대 출력 상한은 채점 서버의 출력 상한과 같다.
+         *     크기 제한(추후 조정할 수 있음): 케이스 10개, 입력 2MB(2,097,152바이트), 기대 출력 1MB(1,048,576바이트),
+         *     모든 케이스의 입력·기대 출력 합 10MB(10,485,760바이트). 크기는 UTF-8 바이트로 센다. 기대 출력 상한은 채점 서버의 출력 상한과 같다.
          */
         put: operations["replaceTestCases"];
         post?: never;
@@ -913,7 +913,7 @@ export interface paths {
          *     - 항목은 무시하는 것까지 합쳐 100개까지 읽는다. 케이스가 하나도 없으면 `ZIP_INVALID`다.
          *     - 파일은 UTF-8 글자여야 한다. 맨 앞의 BOM(`EF BB BF`)은 지운다.
          *     짝이 없거나 규칙 밖의 파일이 있으면 400 `ZIP_INVALID`이고 `detail`에 파일 이름을 적는다.
-         *     크기 제한은 저장(`PUT`)과 같고, 넘으면 400 `TEST_CASE_LIMIT_EXCEEDED`다. ZIP 파일 자체도 10MiB까지고, 넘으면 `code` 없는 413이다. 화면은 올리기 전에 파일 크기를 확인해 막는다.
+         *     크기 제한은 저장(`PUT`)과 같고, 넘으면 400 `TEST_CASE_LIMIT_EXCEEDED`다. ZIP 파일 자체도 10MB까지고, 넘으면 `code` 없는 413이다. 화면은 올리기 전에 파일 크기를 확인해 막는다.
          */
         post: operations["readTestCaseZip"];
         delete?: never;
@@ -1545,7 +1545,7 @@ export interface components {
             status?: number;
             detail?: string;
             instance?: string;
-            /** @description 화면이 경우를 나눌 때 쓰는 오류 코드. `detail`은 화면에 그대로 보여 줄 문구다. */
+            /** @description 화면이 경우를 나눌 때 쓰는 오류 코드. `detail`은 화면에 그대로 보여 줄 문구다. `code`가 없으면 `detail`은 개발용이라 화면에 보여 주지 않는다. */
             code?: string;
         };
     };
@@ -3084,7 +3084,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["Problem"];
-            /** @description ZIP 파일이 10MiB를 넘음. 화면이 막으므로 `code`가 없다 */
+            /** @description ZIP 파일이 10MB를 넘음. 화면이 막으므로 `code`가 없다 */
             413: {
                 headers: {
                     [name: string]: unknown;
