@@ -652,6 +652,7 @@ export interface paths {
          * 예제 실행 상태·예제별 결과 (SOLVE-08)
          * @description 화면은 `status`가 `COMPLETED`나 `JUDGE_ERROR`가 될 때까지 주기적으로 부른다(폴링).
          *     로그인한 본인의 예제 실행만 볼 수 있다. 남의 것·없는 것·채점 제출은 모두 404 `SAMPLE_RUN_NOT_FOUND`다.
+         *     예제 실행은 실행한 지 1시간이 지나면 지워진다(채점 중인 것은 제외). 지워진 실행은 404 `SAMPLE_RUN_NOT_FOUND`다.
          *     예제의 입력·기대 출력은 담지 않는다. 화면은 문제 상세의 `samples`와 `ordinal`로 짝짓는다.
          */
         get: operations["getSampleRunResult"];

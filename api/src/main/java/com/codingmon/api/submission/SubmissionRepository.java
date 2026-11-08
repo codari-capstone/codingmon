@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -163,6 +164,17 @@ class SubmissionRepository {
     }
 
     // 본인의 SAMPLE_RUN만 찾는다. 남의 것도 비어 있게 답한다(findResult와 같다).
+    // 예제 실행은 결과를 한 번 보고 끝나므로 실행한 지 1시간이 지난 것을 매시간 지운다(#145). 케이스별 결과는 FK로 함께 지워진다.
+    // 채점 중인 것은 처리기가 쓰고 있어 남기고, 끝난 뒤 다음 정리 때 지운다.
+    // ponytail: submission_kind·submitted_at 인덱스 없이 훑는다. 제출이 많아져 느려지면 SAMPLE_RUN 부분 인덱스를 둔다.
+    @Scheduled(cron = "0 0 * * * *")
+    void deleteOldSampleRuns() {
+        jdbc.sql("delete from submissions where submission_kind = 'SAMPLE_RUN'"
+                + " and submitted_at < now() - interval '1 hour'"
+                + " and job_status not in ('QUEUED', 'COMPILING', 'RUNNING')")
+                .update();
+    }
+
     // 행을 읽는 중에 예제 결과를 조회하므로 한 연결에서 돌게 묶고, 처리기가 그 사이 결과를 써도 상태와 cases가 같은 시점을 보게 한다.
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     Optional<SampleRunResult> findSampleRun(long userId, long submissionId) {
