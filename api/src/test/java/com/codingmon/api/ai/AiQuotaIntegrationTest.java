@@ -88,6 +88,14 @@ class AiQuotaIntegrationTest {
             return new LlmResponse<>(result, RESULT_JSON, new LlmUsage(100, 50));
         }
 
+        // 3단계 힌트에 코드 블록을 섞은 응답. 정답 코드 검사(#78)에 걸린다.
+        static LlmResponse<?> leaking() {
+            AnalysisResult result = new AnalysisResult("두 수를 빼고 있어요", List.of(2), List.of("예제 1에서 3 대신 -1을 출력했어요"),
+                    List.of("2번 줄에서 더하기 대신 빼기를 쓴 것 같아요"),
+                    new AnalysisResult.Hints("힌트 1", "힌트 2", "```python\nprint(a + b)\n```"));
+            return new LlmResponse<>(result, "{\"leaked\": true}", new LlmUsage(100, 50));
+        }
+
         static LlmResponse<?> down() {
             throw new LlmException(LlmException.Kind.UNAVAILABLE, "연결 실패", null, LlmUsage.NONE);
         }
@@ -233,6 +241,27 @@ class AiQuotaIntegrationTest {
         awaitStatus(id, "COMPLETED");
         assertThat(quotaUsed()).isEqualTo(1);
         assertThat(llm.calls).hasValue(3);
+    }
+
+    @Test
+    void 정답_코드_검사로_다시_만들거나_차단해도_1회로_센다() throws Exception {
+        long regenerated = submission(userId);
+        AtomicInteger answered = new AtomicInteger();
+        llm.answer = () -> answered.getAndIncrement() == 0 ? FakeLlm.leaking() : FakeLlm.ok();
+
+        mvc.perform(post(analysis(regenerated)).with(as(userId)));
+        awaitStatus(regenerated, "COMPLETED");
+        // 같은 행 안에서 한 번 다시 만들었다(모델 호출 2번).
+        assertThat(llm.calls).hasValue(2);
+        assertThat(quotaUsed()).isEqualTo(1);
+
+        long blocked = submission(userId);
+        llm.answer = FakeLlm::leaking;
+        mvc.perform(post(analysis(blocked)).with(as(userId)));
+        awaitStatus(blocked, "COMPLETED");
+        mvc.perform(get(analysis(blocked)).with(as(userId))).andExpect(jsonPath("$.blocked").value(true));
+        assertThat(llm.calls).hasValue(4);
+        assertThat(quotaUsed()).isEqualTo(2);
     }
 
     @Test
