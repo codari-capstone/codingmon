@@ -3,15 +3,21 @@
 # ruleset에 필수 상태 검사로 걸려 있지는 않으므로 사람이 확인한다.
 name: web CI
 
+# web/이나 이 파일을 바꿨을 때만 돈다. 모든 단계가 web/ 안에서 돌고,
+# contracts/openapi.yaml은 gen:api를 돌릴 때만 읽으므로 범위에 넣지 않는다.
+# 이 검사를 ruleset 필수 검사로 걸면 경로가 안 맞아 건너뛴 PR이 '대기 중'으로
+# 남아 병합이 막힌다. 그때는 paths 대신 작업 안에서 건너뛰는 방식으로 바꾼다.
 on:
   pull_request:
     branches: [develop, main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci.yml'
   push:
     branches: [develop, main]
-
-# 경로 필터를 걸지 않는 이유: 필수 검사로 지정했을 때 경로가 안 맞아 건너뛰면
-# GitHub가 '대기 중'으로 보아 병합이 막힌다. web 검사는 몇 분이면 끝나므로
-# 모든 PR에서 돌린다. 백엔드 CI가 생기면 그때 함께 정리한다.
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci.yml'
 
 defaults:
   run:
