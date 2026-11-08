@@ -807,11 +807,16 @@ final class FactCheck {
             return true;
         }
 
+        // 천 단위 쉼표를 지운 글("1,000,000" → 1000000)과 지우지 않은 글("[100,200,300,400]" → 100 200 300 400)을 둘 다 본다.
         boolean leaks(String normalized) {
             if (values.isEmpty() && phrases.isEmpty()) {
                 return false;
             }
-            String text = THOUSANDS.matcher(normalized).replaceAll("");
+            String withoutThousands = THOUSANDS.matcher(normalized).replaceAll("");
+            return matches(withoutThousands) || (!withoutThousands.equals(normalized) && matches(normalized));
+        }
+
+        private boolean matches(String text) {
             if (!phrases.isEmpty()) {
                 String padded = " " + String.join(" ", fields(text)) + " ";
                 if (phrases.stream().anyMatch(padded::contains)) {

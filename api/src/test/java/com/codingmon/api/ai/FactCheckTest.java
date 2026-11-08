@@ -274,6 +274,15 @@ class FactCheckTest {
         assertThat(blocked(secret, "IMPOSSIBLE을 출력해야 하는 조건을 떠올려 보세요.")).isTrue();
     }
 
+    @Test
+    void 쉼표로_붙여_쓴_목록도_비공개_값과_맞춰_본다() {
+        FactCheck.Sources sources = new FactCheck.Sources(List.of("100 200 300 400\n", "10000000\n"), List.of());
+
+        assertThat(blocked(sources, "[100,200,300,400]을 넣어 보세요.")).isTrue();
+        // 천 단위 쉼표는 지워서 맞춘다
+        assertThat(blocked(sources, "답이 10,000,000이 되는지 보세요.")).isTrue();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             // 짧은 값, 1씩 느는 정수열, 같은 값의 되풀이
