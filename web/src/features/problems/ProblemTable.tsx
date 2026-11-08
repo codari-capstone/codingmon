@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { Link } from 'react-router'
 
 import type { ProblemSummary } from '@/api/types'
+import { StatusText } from '@/components/StatusText'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -11,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { DIFFICULTY_LABEL, SOLVE_STATUS_LABEL } from './labels'
+import { DIFFICULTY_LABEL, SOLVE_STATUS_LABEL, SOLVE_STATUS_TONE } from './labels'
 import type { SortDirection, SortField } from './problemListParams'
 
 interface ProblemTableProps {
@@ -87,8 +88,14 @@ export function ProblemTable({
               </span>
             </TableCell>
             {showSolveStatus ? (
-              <TableCell className="text-muted-foreground">
-                {problem.solveStatus ? SOLVE_STATUS_LABEL[problem.solveStatus] : '—'}
+              <TableCell>
+                {problem.solveStatus ? (
+                  <StatusText tone={SOLVE_STATUS_TONE[problem.solveStatus]}>
+                    {SOLVE_STATUS_LABEL[problem.solveStatus]}
+                  </StatusText>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
               </TableCell>
             ) : null}
           </TableRow>

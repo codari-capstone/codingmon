@@ -21,7 +21,10 @@ const LOGIN_METHOD_LABEL: Record<CurrentUser['loginMethod'], string> = {
 /** 계정 정보 (MY-01). `/api/users/me`는 헤더가 이미 받아 둔 값이라 따로 부르지 않는다. */
 function AccountInfo({ user }: { user: CurrentUser }) {
   return (
-    <section aria-labelledby="account-heading" className="flex flex-col gap-4">
+    <section
+      aria-labelledby="account-heading"
+      className="bg-card flex flex-col gap-4 rounded-2xl p-6"
+    >
       <h2 id="account-heading" className="text-lg font-semibold">
         계정 정보
       </h2>
@@ -77,13 +80,13 @@ function Summary({ activity }: { activity: UserActivity }) {
   return (
     <div className="flex flex-col gap-3">
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(2,minmax(0,10rem))]">
-        <div className="rounded-lg border p-4">
+        <div className="bg-muted/60 rounded-xl p-4">
           <dt className="text-muted-foreground text-sm">맞힌 문제</dt>
-          <dd className="text-2xl font-semibold tabular-nums">{solvedCount}</dd>
+          <dd className="text-3xl font-bold tracking-tight tabular-nums">{solvedCount}</dd>
         </div>
-        <div className="rounded-lg border p-4">
+        <div className="bg-muted/60 rounded-xl p-4">
           <dt className="text-muted-foreground text-sm">틀린 문제</dt>
-          <dd className="text-2xl font-semibold tabular-nums">{wrongCount}</dd>
+          <dd className="text-3xl font-bold tracking-tight tabular-nums">{wrongCount}</dd>
         </div>
       </dl>
       <p className="text-muted-foreground text-sm">
@@ -166,7 +169,10 @@ function Activity() {
   }, [queryClient, error])
 
   return (
-    <section aria-labelledby="activity-heading" className="flex flex-col gap-4">
+    <section
+      aria-labelledby="activity-heading"
+      className="bg-card flex flex-col gap-4 rounded-2xl p-6"
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="activity-heading" className="text-lg font-semibold">
           풀이 요약
@@ -218,12 +224,15 @@ export function Component() {
 
   return (
     <section className="flex flex-col gap-8">
-      <h1 className="text-2xl font-semibold">마이페이지</h1>
+      <h1 className="page-title">마이페이지</h1>
       {/* RequireAuth 뒤라 user가 있다. 세션이 막 끊긴 순간만 비어 있을 수 있다. */}
       {user ? (
         <>
           <AccountInfo user={user} />
-          <section aria-labelledby="settings-heading" className="flex flex-col gap-6">
+          <section
+            aria-labelledby="settings-heading"
+            className="bg-card flex flex-col gap-6 rounded-2xl p-6"
+          >
             <h2 id="settings-heading" className="text-lg font-semibold">
               계정 설정
             </h2>

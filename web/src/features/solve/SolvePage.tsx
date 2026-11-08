@@ -35,7 +35,7 @@ function Header({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <h1 className="text-2xl font-semibold">{problem.title}</h1>
+      <h1 className="page-title">{problem.title}</h1>
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <span>{DIFFICULTY_LABEL[problem.difficulty]}</span>
         {current ? (
@@ -271,7 +271,7 @@ export function Component() {
   if (isPending || !data) {
     return (
       <section className="flex flex-col gap-4">
-        <h1 className="text-2xl font-semibold">문제 풀이</h1>
+        <h1 className="page-title">문제 풀이</h1>
         <ListSkeleton rows={8} />
       </section>
     )

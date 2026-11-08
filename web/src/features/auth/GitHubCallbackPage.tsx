@@ -134,7 +134,7 @@ export function Component() {
 
   return (
     <section className="mx-auto flex w-full max-w-sm flex-col gap-6 py-10">
-      <h1 className="text-2xl font-semibold">닉네임 정하기</h1>
+      <h1 className="page-title">닉네임 정하기</h1>
       <p className="text-muted-foreground text-sm">
         GitHub 계정으로 처음 오셨어요. 쓸 닉네임만 정하면 가입이 끝나요.
       </p>

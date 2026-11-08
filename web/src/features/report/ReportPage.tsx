@@ -48,7 +48,7 @@ export function Component() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">학습 리포트</h1>
+      <h1 className="page-title">학습 리포트</h1>
 
       {isPending && !error ? <ListSkeleton rows={4} /> : null}
 
@@ -69,42 +69,44 @@ export function Component() {
               높을수록 더 연습이 필요한 개념이에요.
             </p>
             {/* 순서는 서버가 정했다(취약 점수 높은 순). 다시 정렬하지 않는다. */}
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>개념</TableHead>
-                  <TableHead className="w-28">해결률</TableHead>
-                  <TableHead className="w-28">평균 힌트 단계</TableHead>
-                  <TableHead className="w-24">평균 시도</TableHead>
-                  <TableHead className="w-44">취약 점수</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.concepts.map((concept) => (
-                  <TableRow key={concept.slug}>
-                    <TableCell className="font-medium">
-                      {concept.name}
-                      {concept.weak ? (
-                        <span className="bg-destructive/10 text-destructive-text ml-2 rounded px-1.5 py-0.5 text-xs">
-                          취약
-                        </span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {percent(concept.solveRate)}
-                      <span className="text-muted-foreground ml-1 text-xs">
-                        ({concept.solvedCount}/{concept.problemCount})
-                      </span>
-                    </TableCell>
-                    <TableCell className="tabular-nums">{concept.averageHintLevel}</TableCell>
-                    <TableCell className="tabular-nums">{concept.averageAttempts}</TableCell>
-                    <TableCell>
-                      <Score concept={concept} />
-                    </TableCell>
+            <div className="bg-card rounded-2xl px-3 py-2">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>개념</TableHead>
+                    <TableHead className="w-28">해결률</TableHead>
+                    <TableHead className="w-28">평균 힌트 단계</TableHead>
+                    <TableHead className="w-24">평균 시도</TableHead>
+                    <TableHead className="w-44">취약 점수</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {data.concepts.map((concept) => (
+                    <TableRow key={concept.slug}>
+                      <TableCell className="font-medium">
+                        {concept.name}
+                        {concept.weak ? (
+                          <span className="bg-destructive/10 text-destructive-text ml-2 rounded px-1.5 py-0.5 text-xs">
+                            취약
+                          </span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {percent(concept.solveRate)}
+                        <span className="text-muted-foreground ml-1 text-xs">
+                          ({concept.solvedCount}/{concept.problemCount})
+                        </span>
+                      </TableCell>
+                      <TableCell className="tabular-nums">{concept.averageHintLevel}</TableCell>
+                      <TableCell className="tabular-nums">{concept.averageAttempts}</TableCell>
+                      <TableCell>
+                        <Score concept={concept} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </>
         )
       ) : null}
