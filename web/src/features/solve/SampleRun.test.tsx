@@ -1,4 +1,4 @@
-import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
+import { onlineManager, QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { delay, http, HttpResponse } from 'msw'
@@ -507,6 +507,45 @@ describe('SolvePage에서 예제 실행 (SOLVE-08)', () => {
 
     expect(screen.queryByRole('list', { name: '예제별 결과' })).not.toBeInTheDocument()
     expect(screen.getByText(/실행하고 있어요/)).toBeInTheDocument()
+  })
+
+  /**
+   * #200. 서버는 결과가 나온 지 1시간 지난 실행을 지운다(#198). 끝난 결과를 다시 물으면
+   * 404가 와서, 오래 띄워 둔 표가 재연결 한 번에 '찾을 수 없어요'로 바뀌었다.
+   */
+  it('끝난 실행은 재연결해도 다시 묻지 않고 표를 그대로 둔다', { timeout: 15_000 }, async () => {
+    const user = userEvent.setup()
+    renderSolve()
+
+    await user.click(await screen.findByRole('button', { name: '실행' }))
+    await screen.findByText('통과', undefined, { timeout: 6000 })
+
+    // 서버가 실행을 지운 뒤라고 꾸민다.
+    let polls = 0
+    server.use(
+      http.get('*/api/sample-runs/:id', () => {
+        polls += 1
+        return HttpResponse.json(
+          { status: 404, code: 'SAMPLE_RUN_NOT_FOUND', detail: '예제 실행을 찾을 수 없어요' },
+          { status: 404 },
+        )
+      }),
+    )
+
+    try {
+      // 결과를 띄워 둔 채 2시간이 지났다고 꾸민다. 전역 staleTime(30초)이 지나야 재연결이 다시 묻는다.
+      vi.setSystemTime(Date.now() + 2 * 60 * 60 * 1000)
+      onlineManager.setOnline(false)
+      onlineManager.setOnline(true)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    } finally {
+      vi.useRealTimers()
+      onlineManager.setOnline(true)
+    }
+
+    expect(polls).toBe(0)
+    expect(screen.getByRole('list', { name: '예제별 결과' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   /** 실행은 시도 횟수에 들어가지 않는다(계약). 결과 화면으로 가 버리면 안 된다. */
