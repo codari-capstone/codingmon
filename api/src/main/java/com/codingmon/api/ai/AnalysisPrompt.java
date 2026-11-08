@@ -1,13 +1,8 @@
 package com.codingmon.api.ai;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -47,11 +42,7 @@ class AnalysisPrompt {
     // 정답 코드 검사에 걸린 뒤 한 번 다시 만들 요청. 어긴 규칙을 알려 주고 지시를 강화한다. 응답 글은 다시 보내지 않는다.
     LlmRequest<AnalysisResult> retry(AnalysisInput input, List<AnswerGuard.Violation> violations) {
         LlmRequest<AnalysisResult> first = request(input);
-        String broken = violations.stream()
-                .map(v -> "- " + v.rule().description + (v.tag() == null ? "" : ": " + v.tag()))
-                .distinct()
-                .collect(Collectors.joining("\n"));
-        return new LlmRequest<>(first.system() + "\n" + retry.replace("{{violations}}", broken) + "\n", first.user(),
+        return new LlmRequest<>(PromptFiles.withRetry(first.system(), retry, violations), first.user(),
                 first.schemaName(), first.schema(), first.responseType());
     }
 
@@ -67,14 +58,6 @@ class AnalysisPrompt {
     }
 
     private static String read(String version, String file) {
-        String path = "prompts/analysis-" + version + "/" + file;
-        try (InputStream in = AnalysisPrompt.class.getClassLoader().getResourceAsStream(path)) {
-            if (in == null) {
-                throw new IllegalStateException("프롬프트 파일이 없다: " + path);
-            }
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException("프롬프트 파일을 읽지 못했다: " + path, e);
-        }
+        return PromptFiles.read("prompts/analysis-" + version + "/" + file);
     }
 }

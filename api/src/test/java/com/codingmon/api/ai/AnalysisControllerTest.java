@@ -547,7 +547,7 @@ class AnalysisControllerTest {
         assertThat(llm.calls).hasValue(2);
         assertThat(llm.systems.get(1)).contains(AnswerGuard.Rule.ALGORITHM_NAME.description + ": 그리디");
         assertThat(jdbc.sql("select content::text from ai_reviews where submission_id = :id").param("id", id)
-                .query(String.class).single()).isEqualTo(AnalysisService.BLOCKED_CONTENT);
+                .query(String.class).single()).isEqualTo(AiReviewRunner.BLOCKED_CONTENT);
     }
 
     private long completedAnalysis() throws Exception {
