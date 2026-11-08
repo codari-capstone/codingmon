@@ -22,6 +22,8 @@ record CodeReviewResult(
         @NotNull @Size(min = 1, max = MAX_CONCEPTS) List<@NotNull @Valid Concept> nextConcepts) {
 
     static final int MAX_IMPROVEMENTS = 5;
+    // ai_review_next_concepts.ordinal의 CHECK(1~3, V4)와 같은 값이다. 늘리면 새 마이그레이션으로 CHECK도 늘린다.
+    // 그러지 않으면 개념을 더 많이 준 리뷰는 개념을 저장하지 못해 결과까지 FAILED가 된다.
     static final int MAX_CONCEPTS = 3;
     static final int SUMMARY_MAX_CHARS = 300;
     static final int BASIS_MAX_CHARS = 600;

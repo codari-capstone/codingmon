@@ -4,7 +4,7 @@
 -- 이 표를 만들기 전에 끝난 리뷰는 맨 아래에서 채운다.
 CREATE TABLE ai_review_next_concepts (
     ai_review_id BIGINT NOT NULL REFERENCES ai_reviews(id) ON DELETE CASCADE,
-    -- 리뷰 응답 배열의 순서(1부터)
+    -- 리뷰 응답 배열의 순서(1부터). 상한 3은 CodeReviewResult.MAX_CONCEPTS다. 그 값을 바꾸면 새 마이그레이션으로 이것도 바꾼다
     ordinal SMALLINT NOT NULL CHECK (ordinal BETWEEN 1 AND 3),
     -- 모델이 쓴 개념 이름과 이유. 태그와 맞지 않아도 그대로 둔다
     name TEXT NOT NULL,
