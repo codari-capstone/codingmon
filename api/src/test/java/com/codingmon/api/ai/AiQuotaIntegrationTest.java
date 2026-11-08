@@ -143,7 +143,7 @@ class AiQuotaIntegrationTest {
 
     @Test
     void 남은_횟수는_UTC_다음_자정에_초기화된다() throws Exception {
-        Instant nextMidnight = jdbc.sql("select date_trunc('day', now(), 'UTC') + interval '1 day'")
+        Instant nextMidnight = jdbc.sql("select date_trunc('day', now(), 'UTC') + interval '24 hours'")
                 .query(OffsetDateTime.class).single().toInstant();
 
         String body = mvc.perform(get("/api/users/me/ai-quota").with(as(userId)))

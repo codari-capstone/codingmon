@@ -91,11 +91,12 @@ class AiReviewRepository {
 
     // 사용자의 채점 제출에 오늘 만들어졌거나 오늘 다시 시작한 FAILED가 아닌 행 수(database-schema.md). 분석과 리뷰를 합친다.
     // 버려진 PENDING도 센다. 다시 시작해도 같은 행이라 1회 그대로다. 하루는 UTC 날짜이고, 시각은 DB 시계로만 잰다.
+    // '1 day'는 세션 시간대(pgjdbc가 JVM 기본 시간대로 맞춘다)의 달력으로 더해져 DST 전환일에 23·25시간이 되므로 24시간을 더한다.
     Usage usedToday(long userId) {
         return jdbc.sql("select (select count(*) from ai_reviews r join submissions s on s.id = r.submission_id"
                 + "   where s.user_id = :userId and s.submission_kind = 'SUBMIT' and r.status <> 'FAILED'"
-                + "     and r.created_at >= t.day and r.created_at < t.day + interval '1 day') as used,"
-                + " t.day + interval '1 day' as resets_at"
+                + "     and r.created_at >= t.day and r.created_at < t.day + interval '24 hours') as used,"
+                + " t.day + interval '24 hours' as resets_at"
                 + " from (select date_trunc('day', now(), 'UTC') as day) t")
                 .param("userId", userId)
                 .query((rs, n) -> new Usage(rs.getInt("used"), rs.getObject("resets_at", OffsetDateTime.class).toInstant()))
