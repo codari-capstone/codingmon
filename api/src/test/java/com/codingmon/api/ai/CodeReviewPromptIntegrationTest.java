@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
@@ -21,8 +22,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 // 정답 제출 샘플(CodeReviewSamples)을 실제 모델에 보내 코드 리뷰 프롬프트 v1을 평가한다(#82). LLM_URL과 LLM_MODEL이 없으면 건너뛴다.
 // 응답 원문과 걸린 시간은 build/code-review-eval/에 남긴다. 사람이 읽고 복잡도 추정, 개선점, 다음 개념을 평가하는 데 쓴다.
-// summary.tsv에는 샘플마다 기대한 meetsIntended와 모델의 값을 나란히 적는다(기대값이 null이면 어느 쪽도 될 수 있다).
-// 여기서 보는 것은 스키마, 코드 블록·금지 글, 표기 규칙이다. 서버의 정답 코드 검사(AnswerGuard)는 따로 붙는다.
+// summary.tsv에는 샘플마다 기대한 meetsIntended와 모델의 값, 서버의 정답 코드 검사(AnswerGuard) 결과를 나란히 적는다
+// (기대값이 null이면 어느 쪽도 될 수 있다). 검사에 걸리면 운영에서는 한 번 다시 만든다. 여기서는 막지 않고 세기만 한다.
+// 여기서 막는 것은 스키마, 코드 블록·금지 글, 표기 규칙이다.
 @EnabledIfEnvironmentVariable(named = "LLM_URL", matches = ".+")
 @EnabledIfEnvironmentVariable(named = "LLM_MODEL", matches = ".+")
 class CodeReviewPromptIntegrationTest {
@@ -48,10 +50,12 @@ class CodeReviewPromptIntegrationTest {
         CodeReviewResult result = response.value();
         Files.createDirectories(OUT);
         Files.writeString(OUT.resolve(sample.name().replaceAll("[^0-9A-Za-z가-힣]+", "_") + ".json"), response.json());
+        List<AnswerGuard.Violation> violations = AnswerGuard.check(result, guard(sample.input()));
         synchronized (SUMMARY) {
             SUMMARY.add(sample.name() + "\t" + millis + "ms\t" + response.usage() + "\ttime=" + result.complexity().time()
                     + "\tintended=" + result.complexity().intendedTime() + "\tmeetsIntended=" + result.complexity().meetsIntended()
-                    + "\texpected=" + sample.meetsIntended());
+                    + "\texpected=" + sample.meetsIntended() + "\tguard=" + (violations.isEmpty() ? "PASSED"
+                            : AnswerGuard.describe(violations)));
         }
 
         String text = String.join("\n", texts(result));
@@ -81,6 +85,17 @@ class CodeReviewPromptIntegrationTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    // 샘플에는 검증 정답 코드가 없어 정답 코드 조각 검사(REFERENCE_SIMILAR)는 돌지 않는다. 학습자 코드는 줄 번호를 떼어 되살린다.
+    private static AnswerGuard.Context guard(CodeReviewInput input) {
+        String source = input.submission().code().lines().map(line -> line.replaceFirst("^\\d+\\| ", ""))
+                .collect(Collectors.joining("\n", "", "\n"));
+        AnalysisInput.Problem problem = input.problem();
+        String problemText = String.join("\n", problem.title(), problem.statement(), problem.inputDescription(),
+                problem.outputDescription(), problem.constraints());
+        return new AnswerGuard.Context(source, input.submission().language().name(), problemText, problem.conceptTags(),
+                List.of());
     }
 
     private static List<String> texts(CodeReviewResult result) {
