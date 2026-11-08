@@ -9,7 +9,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 // AI 코드 리뷰(F3, AI_FEATURES 6절). 정답(ACCEPTED)을 받은 본인 채점 제출에만 요청할 때 한 번 만들어 ai_reviews(CODE_REVIEW)에 저장한다.
 // 같은 제출·같은 프롬프트 버전의 결과는 다시 만들지 않는다(8절). 만드는 흐름(처리기, 정답 코드 검사와 1회 재생성, 차단 저장)은
-// AiReviewRunner가, 분석과 합친 하루 한도는 AiQuotaService가 맡는다(#80). 다음 개념의 개념 태그 매칭은 #83이 한다.
+// AiReviewRunner가, 분석과 합친 하루 한도는 AiQuotaService가 맡는다(#80). 결과를 저장할 때 다음 개념을 개념 태그와 맞춰
+// ai_review_next_concepts에 함께 저장한다(NextConceptRepository, #83). 학습 리포트(F4)가 이것을 읽는다.
 // 리뷰는 힌트가 없으므로 revealed_hint_level은 0으로 남고 풀이 통계(user_problem_stats)도 바꾸지 않는다.
 @Service
 class CodeReviewService {
@@ -26,9 +27,11 @@ class CodeReviewService {
     private final LlmClient llm;
     private final JsonMapper json;
     private final AiQuotaService quota;
+    private final NextConceptRepository concepts;
 
     CodeReviewService(AiReviewRepository reviews, AnalysisInputRepository inputs, AnswerGuardRepository guards,
-            CodeReviewPrompt prompt, AiReviewRunner runner, LlmClient llm, JsonMapper json, AiQuotaService quota) {
+            CodeReviewPrompt prompt, AiReviewRunner runner, LlmClient llm, JsonMapper json, AiQuotaService quota,
+            NextConceptRepository concepts) {
         this.reviews = reviews;
         this.inputs = inputs;
         this.guards = guards;
@@ -37,6 +40,7 @@ class CodeReviewService {
         this.llm = llm;
         this.json = json;
         this.quota = quota;
+        this.concepts = concepts;
     }
 
     // 제출과 판정을 먼저 확인한다. 정답이 아니면 한도와 상관없이 409다. 시도를 잡는 일만 하루 한도 검사와 한 트랜잭션에서 하고
@@ -69,14 +73,16 @@ class CodeReviewService {
     }
 
     // 처리기에 넣을 요청. 입력(문제와 제출만)과 정답 코드 검사 자료를 읽는다. 읽지 못하면 던지고, runner가 행을 FAILED로 바꾼다.
-    // 검증 정답 코드는 검사에만 쓰고 모델에는 보내지 않는다.
+    // 검증 정답 코드는 검사에만 쓰고 모델에는 보내지 않는다. 검사를 통과한 결과를 저장할 때 다음 개념을 모든 개념 태그와 맞춰 같이 쓴다.
     private AiReviewRunner.Generation<CodeReviewResult> generation(long submissionId) {
         CodeReviewInput input = inputs.findReview(submissionId)
                 .orElseThrow(() -> new IllegalStateException("리뷰 입력을 만들 수 없다: 제출 " + submissionId));
         AnswerGuard.Context guard = guards.find(submissionId)
                 .orElseThrow(() -> new IllegalStateException("정답 코드 검사 자료가 없다: 제출 " + submissionId));
         return new AiReviewRunner.Generation<>(prompt.request(input), result -> AnswerGuard.check(result, guard),
-                violations -> prompt.retry(input, violations));
+                violations -> prompt.retry(input, violations),
+                (reviewId, result) -> concepts.replace(reviewId,
+                        ConceptTagMatcher.match(result.nextConcepts(), concepts.findAllTags())));
     }
 
     // 남은 횟수는 결과를 만든 날이 아니라 응답하는 지금 기준이다(contracts의 SubmissionCodeReview.quota).

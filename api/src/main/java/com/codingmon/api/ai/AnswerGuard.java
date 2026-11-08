@@ -3,12 +3,10 @@ package com.codingmon.api.ai;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -148,31 +146,6 @@ final class AnswerGuard {
     private static final Set<String> GENERAL_CONCEPTS = Set.of("반복문범위", "반복문", "조건문", "나머지연산", "문자열",
             "인덱스변환", "배열", "2차원배열", "구현", "수학", "사칙연산", "입출력", "출력형식", "입력형식", "자료형",
             "자료형범위", "정수범위", "리스트", "함수", "재귀");
-
-    // 태그(공백을 뺀 이름)마다 같은 뜻의 다른 이름. 한글 이름은 띄어쓰기와 상관없이 찾는다.
-    // 대문자 줄임말(DP, BFS)은 대소문자를 가린다. 학습자 코드의 dp·bfs 같은 변수 이름을 짚은 것은 이름을 알려 준 것이 아니다.
-    private static final Map<String, List<String>> ALIASES = Map.ofEntries(
-            Map.entry("동적계획법", List.of("동적 프로그래밍", "다이나믹 프로그래밍", "메모이제이션", "DP")),
-            Map.entry("너비우선탐색", List.of("너비 우선", "넓이 우선 탐색", "BFS")),
-            Map.entry("깊이우선탐색", List.of("깊이 우선", "DFS")),
-            Map.entry("이분탐색", List.of("이진 탐색", "이분법", "binary search")),
-            Map.entry("그리디", List.of("탐욕법", "탐욕 알고리즘", "greedy")),
-            Map.entry("누적합", List.of("부분합", "prefix sum")),
-            Map.entry("투포인터", List.of("두 포인터", "two pointer")),
-            Map.entry("해시맵", List.of("해시", "딕셔너리", "hash", "dictionary")),
-            Map.entry("스택", List.of("stack")),
-            Map.entry("큐", List.of("queue")),
-            Map.entry("정렬", List.of("sorting")),
-            Map.entry("완전탐색", List.of("브루트 포스", "전수 조사", "brute force")),
-            Map.entry("백트래킹", List.of("backtracking")),
-            Map.entry("분할정복", List.of("divide and conquer")),
-            Map.entry("다익스트라", List.of("Dijkstra")),
-            Map.entry("유니온파인드", List.of("분리 집합", "union find")),
-            Map.entry("비트마스킹", List.of("비트마스크", "bitmask")),
-            Map.entry("슬라이딩윈도우", List.of("sliding window")));
-
-    // 묶음 안의 어느 이름으로 태그가 붙어도 같은 묶음을 찾는다(태그 "해시"와 키 "해시맵", 태그 "이진 탐색"과 키 "이분탐색").
-    private static final Map<String, List<String>> ALIAS_GROUPS = aliasGroups();
 
     // 이름 뒤에 이 말이 오면 알고리즘 이름이 아니다. 런타임 에러 설명의 "스택 오버플로", "스택 영역" 같은 것.
     private static final Map<String, String> NOT_ALGORITHM_AFTER = Map.of(
@@ -573,6 +546,8 @@ final class AnswerGuard {
 
     // 문제 태그 중 알고리즘 이름과 그 다른 이름. 지문이나 학습자 코드에 이미 나온 이름은 뺀다. 학습자 코드는 주석을 뺀 것을
     // 받는다. 주석에 이름을 늘어놓아 검사를 끄지 못하게 한다(변수 이름 dp 같은 것은 그대로 뺀다).
+    // 다른 이름은 ConceptAliases에 있다. 한글 이름은 띄어쓰기와 상관없이 찾고, 대문자 줄임말(DP, BFS)은 대소문자를 가린다
+    // (namePattern). 학습자 코드의 dp·bfs 같은 변수 이름을 짚은 것은 이름을 알려 준 것이 아니다.
     private static List<Name> names(Context context, String source) {
         String problem = normalize(context.problemText());
         List<Name> names = new ArrayList<>();
@@ -583,7 +558,7 @@ final class AnswerGuard {
             }
             Set<String> all = new LinkedHashSet<>();
             all.add(tag);
-            all.addAll(ALIAS_GROUPS.getOrDefault(aliasKey(tag), List.of()));
+            all.addAll(ConceptAliases.group(tag));
             for (String name : all) {
                 Pattern pattern = namePattern(name);
                 if (!pattern.matcher(problem).find() && !pattern.matcher(source).find()) {
@@ -592,21 +567,6 @@ final class AnswerGuard {
             }
         }
         return names;
-    }
-
-    private static Map<String, List<String>> aliasGroups() {
-        Map<String, List<String>> groups = new HashMap<>();
-        ALIASES.forEach((key, aliases) -> {
-            List<String> group = new ArrayList<>();
-            group.add(key);
-            group.addAll(aliases);
-            group.forEach(name -> groups.put(aliasKey(name), List.copyOf(group)));
-        });
-        return Map.copyOf(groups);
-    }
-
-    private static String aliasKey(String name) {
-        return name.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
     }
 
     private static Pattern namePattern(String name) {

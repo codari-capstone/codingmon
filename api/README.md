@@ -34,3 +34,12 @@ LLM_URL=http://127.0.0.1:11434 LLM_MODEL=gemma4:12b ./gradlew test --tests 'com.
 `AnalysisPromptIntegrationTest`는 판정별 오답 샘플(`AnalysisSamples`)을 실제 모델에 보내 스키마, 줄 번호 범위, 코드·정답 조각 유출, 마크다운·영어 값 이름이 섞였는지 본다. 응답 원문과 걸린 시간은 `build/analysis-eval/`에 남으니 힌트 내용은 사람이 읽고 평가한다.
 
 정답 코드 리뷰(F3) 프롬프트는 `src/main/resources/prompts/code-review-<버전>/`의 `system.md`(정답 코드 검사에 걸려 다시 만들 때는 뒤에 `retry.md`를 붙인다)이고 `CodeReviewPrompt`가 읽는다. 정답 제출만 리뷰하므로 판정별 지시는 없다. 버전은 `LLM_PROMPT_VERSION_CODE_REVIEW`(기본 `v1`)이고 고치는 방법은 오답 분석과 같다. 입력(`CodeReviewInput`)은 `AnalysisInput`에서 문제와 제출만 가져온다. 예제와 비공개 테스트는 모두 통과했으므로 보내지 않는다. `CodeReviewPromptIntegrationTest`는 정답 샘플 5개(`CodeReviewSamples`)를 실제 모델에 보내고 응답 원문과 `summary.tsv`(걸린 시간, 토큰, 복잡도, 기대한 `meetsIntended`, 정답 코드 검사 결과)를 `build/code-review-eval/`에 남긴다. 복잡도 추정, 개선점, 다음 개념은 사람이 읽고 평가한다.
+
+코드 리뷰를 저장할 때 다음 개념(`nextConcepts`)을 개념 태그와 맞춰 `ai_review_next_concepts`에 함께 저장한다(`ConceptTagMatcher`, 규칙은 [`docs/AI_FEATURES.md`](../docs/AI_FEATURES.md) 6절). 학습 리포트(#45)는 `NextConceptRepository.findRecent(userId, maxReviews)`로 사용자의 최근 리뷰 `maxReviews`개(1~100)가 권한 개념을 읽는다. 늦게 끝난 리뷰부터, 리뷰 안에서는 응답 순서다.
+
+```java
+List<NextConcept> concepts = nextConcepts.findRecent(userId, 20);
+// NextConcept(reviewId=12, submissionId=40, problemId=3, problemTitle="제곱수의 합", reviewedAt=…, ordinal=1,
+//             name="이진 탐색", reason="…", tag=Tag(id=5, slug="binary-search", name="이분 탐색"))
+// 맞는 태그가 없으면 tag는 null이고 name·reason은 원문 그대로다.
+```
