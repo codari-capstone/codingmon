@@ -33,6 +33,10 @@ class AiReviewRepository {
     record Target(String jobStatus, String verdict) {
     }
 
+    // 오늘 쓴 AI 분석·리뷰 횟수와 다음에 초기화되는 시각(usedToday).
+    record Usage(int used, Instant resetsAt) {
+    }
+
     // 끝나지 않은 PENDING 중 버려진 것을 가리는 기준. 이 서버의 처리기에 남아 있는(active) 시도는 오래 걸려도 버려진 것이 아니다.
     // 그 밖의 PENDING(서버가 처리 중에 내려갔다)은 시작하고 timeout이 지나면 버려진 것으로 본다. 시각은 DB 시계로만 비교한다.
     record Abandoned(Duration timeout, Collection<Long> active) {
@@ -73,6 +77,29 @@ class AiReviewRepository {
                 .param("userId", userId)
                 .query((rs, n) -> new Target(rs.getString("job_status"), rs.getString("verdict")))
                 .optional();
+    }
+
+    // 같은 사용자의 한도 검사를 한 줄로 세운다(AiQuotaService가 트랜잭션 안에서 부른다). 사용자가 없으면 false다.
+    // FOR NO KEY UPDATE라 제출을 새로 넣을 때의 외래 키 검사(FOR KEY SHARE)는 막지 않는다.
+    boolean lockUser(long userId) {
+        return jdbc.sql("select id from users where id = :userId for no key update")
+                .param("userId", userId)
+                .query(Long.class)
+                .optional()
+                .isPresent();
+    }
+
+    // 사용자의 채점 제출에 오늘 만들어졌거나 오늘 다시 시작한 FAILED가 아닌 행 수(database-schema.md). 분석과 리뷰를 합친다.
+    // 버려진 PENDING도 센다. 다시 시작해도 같은 행이라 1회 그대로다. 하루는 UTC 날짜이고, 시각은 DB 시계로만 잰다.
+    Usage usedToday(long userId) {
+        return jdbc.sql("select (select count(*) from ai_reviews r join submissions s on s.id = r.submission_id"
+                + "   where s.user_id = :userId and s.submission_kind = 'SUBMIT' and r.status <> 'FAILED'"
+                + "     and r.created_at >= t.day and r.created_at < t.day + interval '1 day') as used,"
+                + " t.day + interval '1 day' as resets_at"
+                + " from (select date_trunc('day', now(), 'UTC') as day) t")
+                .param("userId", userId)
+                .query((rs, n) -> new Usage(rs.getInt("used"), rs.getObject("resets_at", OffsetDateTime.class).toInstant()))
+                .single();
     }
 
     // 행이 없으면 만들고, FAILED이거나 버려진 PENDING이면 PENDING으로 되돌린다.
