@@ -26,7 +26,7 @@ final class CodeReviewSamples {
     }
 
     static List<Case> all() {
-        return List.of(rectangle(), evenSum(), distinctCount(), sortScores(), countAtMost());
+        return List.of(rectangle(), squareSum(), distinctCount(), sortScores(), countAtMost());
     }
 
     // O(1). 개선할 것은 의미 없는 변수 이름 정도다.
@@ -46,21 +46,20 @@ final class CodeReviewSamples {
                 List.of("width, height = map", "w, h = map", "print(a * b"), true);
     }
 
-    // O(n) 반복으로 짝수를 골라 더한다. 2씩 건너뛰거나 식 하나로 구할 수 있다.
-    static Case evenSum() {
-        Problem problem = Problem.of("짝수의 합", "정수 N을 입력받아 1부터 N까지의 수 중 짝수를 모두 더한 값을 출력하세요.",
-                "첫째 줄에 N이 주어진다.", "짝수의 합을 출력한다.", "1 ≤ N ≤ 1,000,000", 1000, 128, List.of("수학", "반복문"));
+    // O(n) 반복으로 제곱을 더한다. 식 하나로 구할 수 있지만 제약(N ≤ 1,000,000)은 반복도 허용한다.
+    static Case squareSum() {
+        Problem problem = Problem.of("제곱수의 합", "정수 N을 입력받아 1² + 2² + … + N²의 값을 출력하세요.",
+                "첫째 줄에 N이 주어진다.", "제곱수의 합을 출력한다.", "1 ≤ N ≤ 1,000,000", 1000, 128, List.of("수학", "반복문"));
         String code = """
                 n = int(input())
                 total = 0
                 for i in range(1, n + 1):
-                    if i % 2 == 0:
-                        total = total + i
+                    total = total + i * i
                 print(total)
                 """;
-        return new Case("짝수의 합 (파이썬, O(n) 반복)",
-                input(problem, Language.PYTHON, 190, 9300, code),
-                List.of("range(2, n + 1, 2)", "range(2,n+1,2)", "total += i", "sum(range(", "(n // 2) * (n // 2 + 1)"), null);
+        return new Case("제곱수의 합 (파이썬, O(n) 반복)",
+                input(problem, Language.PYTHON, 230, 9300, code),
+                List.of("total += i", "sum(i * i", "sum(i*i", "(2 * n + 1) // 6", "sum(range("), null);
     }
 
     // 집합으로 O(n). 리스트를 집합으로 바로 바꿀 수 있다.

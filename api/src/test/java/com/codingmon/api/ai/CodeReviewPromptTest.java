@@ -32,23 +32,23 @@ class CodeReviewPromptTest {
     private static final Schema SCHEMA = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
             .getSchema(JSON.<JsonNode>valueToTree(CodeReviewResult.SCHEMA));
 
-    // CodeReviewSamples.evenSum()에 대한 응답 예시
-    private static final String EVEN_SUM_ANSWER = """
-            {"summary":"1부터 n까지 돌면서 짝수만 골라 더하는 방식으로 정확하게 풀었어요. 반복을 줄이거나 식 하나로 구하는 방법도 있어요.",
-             "complexity":{"basis":"3번 줄의 반복이 1부터 n까지 n번 돌고, 4번 줄의 나머지 계산과 5번 줄의 덧셈은 한 번에 끝납니다. 저장하는 값은 n, total, i뿐이에요.",
+    // CodeReviewSamples.squareSum()에 대한 응답 예시
+    private static final String SQUARE_SUM_ANSWER = """
+            {"summary":"1부터 n까지 돌면서 제곱을 더하는 방식으로 정확하게 풀었어요. 반복 없이 식 하나로 구하는 방법도 있어요.",
+             "complexity":{"basis":"3번 줄의 반복이 1부터 n까지 n번 돌고, 4번 줄의 곱셈과 덧셈은 한 번에 끝납니다. 저장하는 값은 n, total, i뿐이에요.",
                            "time":"O(n)",
                            "space":"O(1)",
                            "intendedTime":"O(1)",
-                           "comparison":"n ≤ 1,000,000이면 약 100만 번 반복해 시간 안에 들어옵니다. 다만 짝수의 합은 2 + 4 + … + 2k = k × (k + 1)로 바로 구할 수 있어, 문제가 의도한 복잡도는 O(1)로 추정돼요.",
+                           "comparison":"n ≤ 1,000,000이면 약 100만 번 반복해 시간 안에 들어옵니다. 다만 1부터 n까지 제곱의 합은 n × (n + 1) × (2n + 1) / 6으로 바로 구할 수 있어, 문제가 의도한 복잡도는 O(1)로 추정돼요.",
                            "meetsIntended":false},
-             "improvements":["5번 줄은 total에 i를 더해 다시 넣는데, 더해서 넣는 복합 대입 연산자를 쓰면 더 짧게 읽힙니다.",
-                             "3번 줄의 반복을 2부터 시작해 2씩 건너뛰게 하면 4번 줄의 짝수 검사가 필요 없어요."],
-             "nextConcepts":[{"name":"등차수열의 합","reason":"일정하게 늘어나는 수의 합을 반복 없이 식 하나로 구할 수 있어, 3번 줄의 반복을 없앨 수 있어요."}]}
+             "improvements":["4번 줄은 total에 값을 더해 다시 넣는데, 더해서 넣는 복합 대입 연산자를 쓰면 더 짧게 읽힙니다.",
+                             "변수 total은 무엇의 합인지 드러나도록 제곱의 합이라는 뜻을 담은 이름으로 지으면 읽기 쉬워요."],
+             "nextConcepts":[{"name":"수열의 합 공식","reason":"규칙적으로 늘어나는 수의 합을 반복 없이 식 하나로 구할 수 있어, 3번 줄의 반복을 없앨 수 있어요."}]}
             """;
 
     @Test
     void 시스템_지시와_스키마로_요청을_만든다() {
-        LlmRequest<CodeReviewResult> request = PROMPT.request(CodeReviewSamples.evenSum().input());
+        LlmRequest<CodeReviewResult> request = PROMPT.request(CodeReviewSamples.squareSum().input());
 
         assertThat(request.system()).startsWith("너는 프로그래밍을 처음 배우는 학습자의 코드를 리뷰하는 도우미다.");
         assertThat(request.schemaName()).isEqualTo("code_review");
@@ -58,7 +58,7 @@ class CodeReviewPromptTest {
 
     @Test
     void 지시에_코드_금지와_복잡도_추정_규칙이_들어_있다() {
-        String system = PROMPT.request(CodeReviewSamples.evenSum().input()).system();
+        String system = PROMPT.request(CodeReviewSamples.squareSum().input()).system();
 
         assertThat(system).contains("코드를 쓰지 않는다", "코드 블록", "괄호 없이 이름만", "O 표기", "어림한다", "추정이라고 밝힌다",
                 "측정값만 보고 복잡도를 정하지 않는다", "가장 빠른 방법이라는 뜻은 아니다",
@@ -95,43 +95,43 @@ class CodeReviewPromptTest {
 
     @Test
     void 예시_응답은_스키마와_제약을_지킨다() {
-        JsonNode tree = JSON.readTree(EVEN_SUM_ANSWER);
+        JsonNode tree = JSON.readTree(SQUARE_SUM_ANSWER);
 
         assertThat(SCHEMA.validate(tree)).isEmpty();
         CodeReviewResult result = JSON.treeToValue(tree, CodeReviewResult.class);
         assertThat(VALIDATOR.validate(result)).isEmpty();
         assertThat(result.complexity().time()).isEqualTo("O(n)");
         assertThat(result.complexity().meetsIntended()).isFalse();
-        assertThat(result.nextConcepts()).extracting(CodeReviewResult.Concept::name).containsExactly("등차수열의 합");
+        assertThat(result.nextConcepts()).extracting(CodeReviewResult.Concept::name).containsExactly("수열의 합 공식");
     }
 
     @Test
     void 빠진_항목이나_없는_항목이_있으면_스키마를_어긴다() {
-        assertThat(SCHEMA.validate(JSON.readTree(EVEN_SUM_ANSWER.replace("\"improvements\"", "\"improvement\"")))).isNotEmpty();
-        assertThat(SCHEMA.validate(JSON.readTree(EVEN_SUM_ANSWER.replace("\"intendedTime\"", "\"intended\"")))).isNotEmpty();
-        assertThat(SCHEMA.validate(JSON.readTree(EVEN_SUM_ANSWER.replace("\"reason\"", "\"code\"")))).isNotEmpty();
-        assertThat(SCHEMA.validate(JSON.readTree(EVEN_SUM_ANSWER.replace("\"meetsIntended\":false", "\"meetsIntended\":\"no\""))))
+        assertThat(SCHEMA.validate(JSON.readTree(SQUARE_SUM_ANSWER.replace("\"improvements\"", "\"improvement\"")))).isNotEmpty();
+        assertThat(SCHEMA.validate(JSON.readTree(SQUARE_SUM_ANSWER.replace("\"intendedTime\"", "\"intended\"")))).isNotEmpty();
+        assertThat(SCHEMA.validate(JSON.readTree(SQUARE_SUM_ANSWER.replace("\"reason\"", "\"code\"")))).isNotEmpty();
+        assertThat(SCHEMA.validate(JSON.readTree(SQUARE_SUM_ANSWER.replace("\"meetsIntended\":false", "\"meetsIntended\":\"no\""))))
                 .isNotEmpty();
     }
 
     @Test
     void 항목_수가_범위를_벗어나면_스키마를_어긴다() {
-        assertThat(SCHEMA.validate(JSON.readTree(EVEN_SUM_ANSWER.replaceFirst("\"nextConcepts\":\\[.*]}", "\"nextConcepts\":[]}"))))
+        assertThat(SCHEMA.validate(JSON.readTree(SQUARE_SUM_ANSWER.replaceFirst("\"nextConcepts\":\\[.*]}", "\"nextConcepts\":[]}"))))
                 .isNotEmpty();
         String concept = "{\"name\":\"해시\",\"reason\":\"값을 빠르게 찾을 수 있어요.\"}";
-        assertThat(SCHEMA.validate(JSON.readTree(EVEN_SUM_ANSWER.replaceFirst("\"nextConcepts\":\\[",
+        assertThat(SCHEMA.validate(JSON.readTree(SQUARE_SUM_ANSWER.replaceFirst("\"nextConcepts\":\\[",
                 "\"nextConcepts\":[" + (concept + ",").repeat(3))))).isNotEmpty();
         String improvement = "\"이름을 더 분명하게 지으면 읽기 쉬워요.\",";
-        assertThat(SCHEMA.validate(JSON.readTree(EVEN_SUM_ANSWER.replaceFirst("\"improvements\":\\[",
+        assertThat(SCHEMA.validate(JSON.readTree(SQUARE_SUM_ANSWER.replaceFirst("\"improvements\":\\[",
                 "\"improvements\":[" + improvement.repeat(4))))).isNotEmpty();
         // 고칠 것이 없으면 개선점은 비어도 된다.
-        assertThat(SCHEMA.validate(JSON.readTree(EVEN_SUM_ANSWER.replaceFirst("(?s)\"improvements\":\\[.*?],",
+        assertThat(SCHEMA.validate(JSON.readTree(SQUARE_SUM_ANSWER.replaceFirst("(?s)\"improvements\":\\[.*?],",
                 "\"improvements\":[],")))).isEmpty();
     }
 
     @Test
     void 스키마로_못_거는_빈_글은_제약이_거른다() {
-        CodeReviewResult blank = JSON.readValue(EVEN_SUM_ANSWER.replace("\"O(n)\"", "\" \"").replace("\"등차수열의 합\"", "\" \""),
+        CodeReviewResult blank = JSON.readValue(SQUARE_SUM_ANSWER.replace("\"O(n)\"", "\" \"").replace("\"수열의 합 공식\"", "\" \""),
                 CodeReviewResult.class);
 
         assertThat(VALIDATOR.validate(blank)).extracting(v -> v.getPropertyPath().toString())
@@ -141,7 +141,7 @@ class CodeReviewPromptTest {
     @Test
     void 글자_수는_스키마와_제약이_같은_기준으로_센다() {
         // 이모지는 UTF-16으로 두 칸이다. 스키마(코드 포인트)를 통과한 글을 제약이 다시 막으면 재요청도 같은 이유로 실패한다.
-        String emoji = EVEN_SUM_ANSWER.replace("저장하는 값은 n, total, i뿐이에요.", "😀".repeat(CodeReviewResult.BASIS_MAX_CHARS - 200));
+        String emoji = SQUARE_SUM_ANSWER.replace("저장하는 값은 n, total, i뿐이에요.", "😀".repeat(CodeReviewResult.BASIS_MAX_CHARS - 200));
 
         assertThat(SCHEMA.validate(JSON.readTree(emoji))).isEmpty();
         assertThat(VALIDATOR.validate(JSON.readValue(emoji, CodeReviewResult.class))).isEmpty();
@@ -149,11 +149,11 @@ class CodeReviewPromptTest {
 
     @Test
     void 글자_수_상한은_스키마에도_있다() {
-        assertThat(SCHEMA.validate(JSON.readTree(EVEN_SUM_ANSWER.replace("\"O(1)\"",
+        assertThat(SCHEMA.validate(JSON.readTree(SQUARE_SUM_ANSWER.replace("\"O(1)\"",
                 "\"" + "가".repeat(CodeReviewResult.NOTATION_MAX_CHARS + 1) + "\"")))).isNotEmpty();
-        assertThat(SCHEMA.validate(JSON.readTree(EVEN_SUM_ANSWER.replace("\"등차수열의 합\"",
+        assertThat(SCHEMA.validate(JSON.readTree(SQUARE_SUM_ANSWER.replace("\"수열의 합 공식\"",
                 "\"" + "가".repeat(CodeReviewResult.CONCEPT_NAME_MAX_CHARS + 1) + "\"")))).isNotEmpty();
-        assertThat(SCHEMA.validate(JSON.readTree(EVEN_SUM_ANSWER.replace("정확하게 풀었어요.",
+        assertThat(SCHEMA.validate(JSON.readTree(SQUARE_SUM_ANSWER.replace("정확하게 풀었어요.",
                 "가".repeat(CodeReviewResult.SUMMARY_MAX_CHARS))))).isNotEmpty();
     }
 
