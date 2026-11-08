@@ -39,7 +39,8 @@ record AnalysisInput(Problem problem, Submission submission, Samples samples, Hi
     static final int SAMPLE_ERROR_MAX_CHARS = 500;
 
     // 빈 값(null)은 넣지 않는다. 필드 순서는 선언 순서 그대로 둔다(Jackson 3은 기본이 이름순이다).
-    private static final JsonMapper JSON = JsonMapper.builder()
+    // 코드 리뷰 입력(CodeReviewInput)도 같은 규칙으로 쓴다.
+    static final JsonMapper JSON = JsonMapper.builder()
             .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
             .changeDefaultPropertyInclusion(include -> include.withValueInclusion(JsonInclude.Include.NON_NULL))
             .build();

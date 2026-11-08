@@ -32,3 +32,5 @@ LLM_URL=http://127.0.0.1:11434 LLM_MODEL=gemma4:12b ./gradlew test --tests 'com.
 하루 한도는 `AiQuotaService`가 센다. 분석과 리뷰를 합쳐 사용자당 `LLM_DAILY_LIMIT`(기본 20)회이고, 하루는 UTC 날짜다. 시도를 잡는 일(`AiReviewRepository.claim`)만 본인 제출 행과 사용자 행을 이 순서로 잠근 트랜잭션에서 하고(탈퇴·채점 완료와 같은 순서라 교착이 없다), 잡았으면 그 행까지 세어 넘으면 429 `AI_DAILY_LIMIT_EXCEEDED`를 던져 롤백한다. 같은 사용자의 요청이 잠금에서 줄을 서므로 동시에 눌러도 한도를 넘지 않는다. 처리기에는 이 트랜잭션이 커밋된 뒤에 넣는다. 커밋 전에 넣으면 처리기가 `PENDING` 행을 못 봐 결과를 버린다. 세는 기준은 [`docs/database-schema.md`](../docs/database-schema.md)에 있다.
 
 `AnalysisPromptIntegrationTest`는 판정별 오답 샘플(`AnalysisSamples`)을 실제 모델에 보내 스키마, 줄 번호 범위, 코드·정답 조각 유출, 마크다운·영어 값 이름이 섞였는지 본다. 응답 원문과 걸린 시간은 `build/analysis-eval/`에 남으니 힌트 내용은 사람이 읽고 평가한다.
+
+정답 코드 리뷰(F3) 프롬프트는 `src/main/resources/prompts/code-review-<버전>/system.md` 하나이고 `CodeReviewPrompt`가 읽는다. 정답 제출만 리뷰하므로 판정별 지시는 없다. 버전은 `LLM_PROMPT_VERSION_CODE_REVIEW`(기본 `v1`)이고 고치는 방법은 오답 분석과 같다. 입력(`CodeReviewInput`)은 `AnalysisInput`에서 문제와 제출만 가져온다. 예제와 비공개 테스트는 모두 통과했으므로 보내지 않는다. `CodeReviewPromptIntegrationTest`는 정답 샘플 5개(`CodeReviewSamples`)를 실제 모델에 보내고 응답 원문과 `summary.tsv`(걸린 시간, 토큰, 복잡도, 기대한 `meetsIntended`)를 `build/code-review-eval/`에 남긴다. 복잡도 추정, 개선점, 다음 개념은 사람이 읽고 평가한다.
