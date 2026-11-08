@@ -351,7 +351,7 @@ class AnalysisControllerTest {
 
         assertThat(second.id()).isEqualTo(first.id());
         assertThat(reviews.complete(first, "{\"summary\":\"이전\"}")).isFalse();
-        assertThat(reviews.fail(first)).isFalse();
+        assertThat(reviews.fail(first, AiReviewRepository.FailureReason.UNAVAILABLE)).isFalse();
         assertThat(reviews.complete(second, "{\"summary\":\"새\"}")).isTrue();
         // 끝났거나 진행 중인 시도가 있으면 새로 시작하지 않는다.
         assertThat(reviews.claim(id, ReviewType.ANALYSIS, "v1", "fake-model", abandoned)).isEmpty();
@@ -464,8 +464,8 @@ class AnalysisControllerTest {
         jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, content, completed_at)"
                 + " values (:id, 'ANALYSIS', 'v0', 'old-model', 'COMPLETED', '{\"blocked\": true}', now())")
                 .param("id", id).update();
-        jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, completed_at)"
-                + " values (:id, 'ANALYSIS', 'v1', 'fake-model', 'FAILED', now())")
+        jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, failure_reason,"
+                + " completed_at) values (:id, 'ANALYSIS', 'v1', 'fake-model', 'FAILED', 'UNAVAILABLE', now())")
                 .param("id", id).update();
 
         // 화면이 재시도 버튼을 보이도록 지금 버전의 FAILED를 준다.
