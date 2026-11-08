@@ -2,6 +2,7 @@ package com.codingmon.api.ai;
 
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -14,8 +15,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-// 정답 코드 금지 검사(AI_FEATURES 8절, #78). F1·F2 응답의 글마다 아래 규칙을 보고 어긴 곳을 돌려준다.
-// 어기면 AnalysisService가 지시를 강화해 한 번 다시 만들고, 또 어기면 결과를 보여 주지 않는다.
+// 정답 코드 금지 검사(AI_FEATURES 8절, #78). F1·F2 응답과 F3 코드 리뷰 응답(#82)의 글마다 아래 규칙을 보고 어긴 곳을 돌려준다.
+// 어기면 AiReviewRunner가 지시를 강화해 한 번 다시 만들고, 또 어기면 결과를 보여 주지 않는다.
+// 코드 리뷰에는 ALGORITHM_NAME을 쓰지 않는다. 학습자는 이미 맞혔고, 리뷰는 다음에 배울 개념의 이름을 알려 주는 것이 목적이다.
 // 학습자 코드를 그대로 옮긴 글은 정답이 아니므로 코드 모양 검사와 정답 유사도에서 뺀다. 지문이나 학습자 코드에 이미 나온
 // 알고리즘 이름도 새로 알려 주는 것이 아니므로 뺀다. 코드 블록과 들여 쓴 코드 줄은 무엇을 옮겼든 위반이다.
 // 검사 결과(Violation)에는 응답 글을 담지 않는다. 로그에 남기므로 제출 코드나 정답 코드가 섞이면 안 된다.
@@ -106,13 +108,17 @@ final class AnswerGuard {
 
     // 함수·메서드 호출의 머리. 괄호는 짝이 맞을 때까지 세어(callEnd) 인자 전체를 맞춘다. 학습자 코드의 호출과 고친 호출을
     // 가린다(range(n + 1)은 인용, range(n)은 고친 것). 중첩 깊이에 제한이 없다(print(sum(map(int, input().split())))).
+    // LIBRARY_CALLS는 더 나은 풀이로 이끌 때 나오기 쉬운 라이브러리 함수다(코드 리뷰, #82). 예: bisect_right(a, x), sort(v.begin(), v.end())
+    private static final String LIBRARY_CALLS = "bisect|bisect_left|bisect_right|insort|heappush|heappop|heapify"
+            + "|Counter|defaultdict|deque|accumulate|permutations|combinations|product|sqrt|gcd|lcm"
+            + "|sort|stable_sort|lower_bound|upper_bound|binary_search|next_permutation|unique|fill|swap";
     private static final List<Pattern> CALL_HEADS = List.of(
             Pattern.compile("(?<![\\w.])(?:range|print|input|len|map|list|int|str|split|join|sorted|enumerate|zip|open"
                     + "|sum|set|dict|tuple|max|min|abs|any|all|reversed|round|pow|divmod|ord|chr"
-                    + "|readline|printf|scanf|getline|puts|getchar|memset|sizeof|strlen)\\s*\\("),
+                    + "|readline|printf|scanf|getline|puts|getchar|memset|sizeof|strlen|" + LIBRARY_CALLS + ")\\s*\\("),
             Pattern.compile("\\.\\s*(?:append|add|extend|update|remove|discard|setdefault|sort|split|join|strip|rstrip"
                     + "|lower|upper|replace|pop|push_back|pop_back|insert|reverse|items|keys|values|get|count|index"
-                    + "|find|substr|size|length|begin|end|readline)\\s*\\("));
+                    + "|find|substr|size|length|begin|end|readline|" + LIBRARY_CALLS + ")\\s*\\("));
 
     // 대입. ==, !=, <=, >=, += 같은 연산자는 뺀다.
     private static final Pattern ASSIGNMENT = Pattern.compile(
@@ -190,7 +196,18 @@ final class AnswerGuard {
     private AnswerGuard() {
     }
 
+    // 코드 리뷰(F3)에 쓰는 규칙. 알고리즘 이름은 리뷰가 알려 줄 내용이라 뺀다.
+    static final Set<Rule> CODE_REVIEW_RULES = Set.copyOf(EnumSet.complementOf(EnumSet.of(Rule.ALGORITHM_NAME)));
+
     static List<Violation> check(AnalysisResult result, Context context) {
+        return check(fields(result), context, EnumSet.allOf(Rule.class));
+    }
+
+    static List<Violation> check(CodeReviewResult result, Context context) {
+        return check(fields(result), context, CODE_REVIEW_RULES);
+    }
+
+    private static List<Violation> check(Map<String, String> fields, Context context, Set<Rule> rules) {
         String source = normalize(context.sourceCode());
         String compactSource = compact(source);
         Set<String> assigned = assignedNames(stripComments(source, context.sourceLanguage()));
@@ -198,21 +215,23 @@ final class AnswerGuard {
         List<List<String>> references = context.referenceSolutions().stream()
                 .map(reference -> tokens(stripComments(normalize(reference.code()), reference.language())))
                 .toList();
-        List<Name> names = names(context, stripComments(source, context.sourceLanguage()));
+        List<Name> names = rules.contains(Rule.ALGORITHM_NAME)
+                ? names(context, stripComments(source, context.sourceLanguage()))
+                : List.of();
 
         List<Violation> violations = new ArrayList<>();
-        fields(result).forEach((field, raw) -> {
+        fields.forEach((field, raw) -> {
             String text = normalize(raw);
-            if (text.contains("```") || text.contains("~~~")) {
+            if (rules.contains(Rule.CODE_BLOCK) && (text.contains("```") || text.contains("~~~"))) {
                 violations.add(new Violation(Rule.CODE_BLOCK, field, null));
             }
-            if (indentedCode(text)) {
+            if (rules.contains(Rule.INDENTED_CODE) && indentedCode(text)) {
                 violations.add(new Violation(Rule.INDENTED_CODE, field, null));
             }
-            if (codePattern(text, compactSource, assigned)) {
+            if (rules.contains(Rule.CODE_PATTERN) && codePattern(text, compactSource, assigned)) {
                 violations.add(new Violation(Rule.CODE_PATTERN, field, null));
             }
-            if (similar(text, references, sourceTokens)) {
+            if (rules.contains(Rule.REFERENCE_SIMILAR) && similar(text, references, sourceTokens)) {
                 violations.add(new Violation(Rule.REFERENCE_SIMILAR, field, null));
             }
             names.stream().filter(name -> name.pattern().matcher(text).find()).map(Name::tag).distinct()
@@ -240,6 +259,25 @@ final class AnswerGuard {
         fields.put("hints.observation", result.hints().observation());
         fields.put("hints.direction", result.hints().direction());
         fields.put("hints.principle", result.hints().principle());
+        return fields;
+    }
+
+    private static Map<String, String> fields(CodeReviewResult result) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("summary", result.summary());
+        CodeReviewResult.Complexity complexity = result.complexity();
+        fields.put("complexity.basis", complexity.basis());
+        fields.put("complexity.time", complexity.time());
+        fields.put("complexity.space", complexity.space());
+        fields.put("complexity.intendedTime", complexity.intendedTime());
+        fields.put("complexity.comparison", complexity.comparison());
+        for (int i = 0; i < result.improvements().size(); i++) {
+            fields.put("improvements[" + i + "]", result.improvements().get(i));
+        }
+        for (int i = 0; i < result.nextConcepts().size(); i++) {
+            fields.put("nextConcepts[" + i + "].name", result.nextConcepts().get(i).name());
+            fields.put("nextConcepts[" + i + "].reason", result.nextConcepts().get(i).reason());
+        }
         return fields;
     }
 
