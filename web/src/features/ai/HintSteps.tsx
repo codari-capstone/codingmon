@@ -65,7 +65,7 @@ export function HintSteps({
                 <div>
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     className="min-h-11"
                     disabled={level !== next || reveal.isPending}
                     aria-describedby={level > next ? 'hint-order' : undefined}
@@ -93,13 +93,13 @@ export function HintSteps({
       )}
 
       {reveal.isError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(reveal.error)}
         </p>
       ) : null}
 
       <div>
-        <Button asChild variant="outline" className="min-h-11">
+        <Button asChild variant="secondary" className="min-h-11">
           <Link to={retryPath}>코드 고치러 가기</Link>
         </Button>
       </div>

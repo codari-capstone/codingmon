@@ -6,6 +6,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -13,6 +14,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -37,23 +41,42 @@ class AiReviewRunner {
     static final String BLOCKED_CONTENT = "{\"blocked\": true}";
 
     // 한 번의 생성. first는 처음 보낼 요청, check는 응답의 정답 코드 검사, retry는 어긴 규칙을 알려 다시 만들 요청,
-    // verify는 검사를 통과한 응답의 사실 검증이다.
+    // verify는 검사를 통과한 응답의 사실 검증이다(#79).
+    // store는 검사와 사실 검증을 통과한 응답과 함께 저장할 것을 쓴다(코드 리뷰의 다음 개념, #83). 결과를 COMPLETED로 바꾸는
+    // 트랜잭션 안에서 ai_reviews.id와 사실 검증으로 고친 응답을 받아 부르고, 차단된 결과에는 부르지 않는다. 던지면 결과도 저장되지
+    // 않고 FAILED가 된다.
     record Generation<T>(LlmRequest<T> first, Function<T, List<AnswerGuard.Violation>> check,
-            Function<List<AnswerGuard.Violation>, LlmRequest<T>> retry, Function<T, FactCheck.Outcome<T>> verify) {
+            Function<List<AnswerGuard.Violation>, LlmRequest<T>> retry, Function<T, FactCheck.Outcome<T>> verify,
+            BiConsumer<Long, T> store) {
+
+        // 결과와 함께 저장할 것이 없는 생성(오답 분석)
+        Generation(LlmRequest<T> first, Function<T, List<AnswerGuard.Violation>> check,
+                Function<List<AnswerGuard.Violation>, LlmRequest<T>> retry, Function<T, FactCheck.Outcome<T>> verify) {
+            this(first, check, retry, verify, (reviewId, value) -> {
+            });
+        }
+    }
+
+    // 저장할 결과. json은 사실 검증으로 고친 값과 검증 내역이다. value는 그 고친 값이고, 차단됐으면 null이다(json은 차단 표시).
+    private record Outcome<T>(String json, T value) {
     }
 
     private final AiReviewRepository reviews;
     private final AiWorker worker;
+    private final TransactionTemplate transactions;
     private final Duration pendingTimeout;
     private final JsonMapper json;
     // 이 서버의 처리기에 넣고 아직 끝나지 않은 ai_reviews.id(분석·리뷰 모두). 대기열에서 오래 기다려도 버려진 것으로 보지 않게 한다.
     // 조회는 review_type으로 거르므로 두 기능의 id가 섞여 있어도 된다.
     private final Set<Long> active = ConcurrentHashMap.newKeySet();
 
-    AiReviewRunner(AiReviewRepository reviews, AiWorker worker,
+    // 결과 저장은 처리기 스레드에서 하므로 바깥 트랜잭션이 없지만, 대기열이 차 요청 스레드에서 바로 끝날 때도 늘 새로 연다.
+    AiReviewRunner(AiReviewRepository reviews, AiWorker worker, PlatformTransactionManager transactionManager,
             @Value("${app.llm.pending-timeout}") Duration pendingTimeout, JsonMapper json) {
         this.reviews = reviews;
         this.worker = worker;
+        this.transactions = new TransactionTemplate(transactionManager);
+        this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.pendingTimeout = pendingTimeout;
         this.json = json;
     }
@@ -66,7 +89,7 @@ class AiReviewRunner {
             Generation<T> request = generation.get();
             worker.submit(claim.id(), request.first())
                     .thenCompose(first -> guarded(type, claim, request, first))
-                    .whenComplete((content, failure) -> finish(type, claim, content, failure));
+                    .whenComplete((outcome, failure) -> finish(type, claim, request, outcome, failure));
         } catch (RuntimeException e) {
             log.error("{} {}을 시작하지 못했다", label(type), claim.id(), e);
             fail(type, claim, AiReviewRepository.FailureReason.INTERNAL);
@@ -77,10 +100,10 @@ class AiReviewRunner {
         return new AiReviewRepository.Abandoned(pendingTimeout, Set.copyOf(active));
     }
 
-    // 처리기 스레드에서 돈다. 저장할 content를 돌려준다. 다시 만드는 요청도 같은 처리기 대기열에 넣으므로 다른 요청을 앞지르지
+    // 처리기 스레드에서 돈다. 저장할 결과를 돌려준다. 다시 만드는 요청도 같은 처리기 대기열에 넣으므로 다른 요청을 앞지르지
     // 않고, 대기열이 차 있으면 BUSY로 실패한다. 다시 만드는 요청의 토큰도 같은 행에 더해진다(AiWorker).
-    private <T> CompletableFuture<String> guarded(ReviewType type, AiReviewRepository.Claim claim, Generation<T> request,
-            LlmResponse<T> first) {
+    private <T> CompletableFuture<Outcome<T>> guarded(ReviewType type, AiReviewRepository.Claim claim,
+            Generation<T> request, LlmResponse<T> first) {
         List<AnswerGuard.Violation> violations = request.check().apply(first.value());
         if (violations.isEmpty()) {
             logGuard(type, claim, 1, "PASSED", violations);
@@ -90,21 +113,21 @@ class AiReviewRunner {
         return worker.submit(claim.id(), request.retry().apply(violations)).thenApply(second -> {
             List<AnswerGuard.Violation> again = request.check().apply(second.value());
             logGuard(type, claim, 2, again.isEmpty() ? "PASSED" : "BLOCKED", again);
-            return again.isEmpty() ? verified(type, claim, request, second.value()) : BLOCKED_CONTENT;
+            return again.isEmpty() ? verified(type, claim, request, second.value()) : new Outcome<>(BLOCKED_CONTENT, null);
         });
     }
 
-    // 사실 검증으로 고친 값과 검증 내역(factCheck)을 담은 content. 사실 검증으로 차단하면 결과 대신 차단 표시를 담는다.
+    // 사실 검증으로 고친 값과 검증 내역(factCheck)을 담은 결과. 사실 검증으로 차단하면 고친 값 대신 차단 표시를 담는다.
     // 모델이 준 JSON 원문(LlmResponse.json)이 아니라 고친 값을 다시 쓴 것이다.
-    private <T> String verified(ReviewType type, AiReviewRepository.Claim claim, Generation<T> request, T value) {
-        FactCheck.Outcome<T> outcome = request.verify().apply(value);
+    private <T> Outcome<T> verified(ReviewType type, AiReviewRepository.Claim claim, Generation<T> request, T value) {
+        FactCheck.Outcome<T> checked = request.verify().apply(value);
+        FactCheck.Meta meta = checked.meta();
         factLog.info("fact-check review={} type={} outcome={} removed={} demoted={} unresolved={} fixes={}", claim.id(),
-                type, outcome.label(), outcome.meta().removed(), outcome.meta().demoted(), outcome.meta().unresolved(),
-                FactCheck.describe(outcome.fixes()));
-        ObjectNode content = outcome.blocked() ? json.createObjectNode().put("blocked", true)
-                : json.valueToTree(outcome.result());
-        content.set("factCheck", json.valueToTree(outcome.meta()));
-        return json.writeValueAsString(content);
+                type, checked.label(), meta.removed(), meta.demoted(), meta.unresolved(), FactCheck.describe(checked.fixes()));
+        ObjectNode content = checked.blocked() ? json.createObjectNode().put("blocked", true)
+                : json.valueToTree(checked.result());
+        content.set("factCheck", json.valueToTree(meta));
+        return new Outcome<>(json.writeValueAsString(content), checked.blocked() ? null : checked.result());
     }
 
     // 예: answer-guard review=12 type=CODE_REVIEW attempt=1 outcome=REGENERATE violations=CODE_PATTERN@improvements[1]
@@ -115,17 +138,19 @@ class AiReviewRunner {
     }
 
     // 처리기 스레드에서 돈다(대기열이 차서 바로 거절되면 요청 스레드). 여기서 던지면 아무도 받지 않으므로 기록만 한다.
-    private void finish(ReviewType type, AiReviewRepository.Claim claim, String content, Throwable failure) {
+    private <T> void finish(ReviewType type, AiReviewRepository.Claim claim, Generation<T> request, Outcome<T> outcome,
+            Throwable failure) {
         AiReviewRepository.FailureReason reason = AiReviewRepository.FailureReason.INTERNAL;
         if (failure == null) {
             try {
-                if (!reviews.complete(claim, content)) {
+                if (!save(claim, request, outcome)) {
                     log.info("{} {}의 이전 시도가 늦게 끝나 결과를 버렸다", label(type), claim.id());
                 }
                 active.remove(claim.id());
                 return;
             } catch (RuntimeException e) {
-                // 예: 응답의 \u0000은 JSON으로는 맞지만 jsonb가 받지 않는다. PENDING으로 남기지 않는다.
+                // 예: 응답의 \u0000은 JSON으로는 맞지만 jsonb가 받지 않는다. store가 던져도 결과까지 롤백되어 여기로 온다.
+                // PENDING으로 남기지 않는다.
                 log.error("{} {}의 결과를 저장하지 못했다", label(type), claim.id(), e);
             }
         } else {
@@ -149,6 +174,20 @@ class AiReviewRunner {
             case BUSY -> AiReviewRepository.FailureReason.BUSY;
             case INVALID_RESPONSE -> AiReviewRepository.FailureReason.INVALID_RESPONSE;
         };
+    }
+
+    // 결과와 store가 쓰는 것을 한 트랜잭션에 저장한다. 그 시도가 이미 끝났으면(다시 시작한 요청의 이전 시도가 늦게 끝났다)
+    // false이고 store도 부르지 않는다.
+    private <T> boolean save(AiReviewRepository.Claim claim, Generation<T> request, Outcome<T> outcome) {
+        return Boolean.TRUE.equals(transactions.execute(status -> {
+            if (!reviews.complete(claim, outcome.json())) {
+                return false;
+            }
+            if (outcome.value() != null) {
+                request.store().accept(claim.id(), outcome.value());
+            }
+            return true;
+        }));
     }
 
     // active에서 먼저 뺀다. FAILED를 커밋한 뒤에 빼면 그 사이 같은 행을 다시 잡은 새 시도의 등록까지 지운다.

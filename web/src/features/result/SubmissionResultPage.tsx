@@ -6,6 +6,7 @@ import type { SubmissionResult } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { Raw } from '@/components/Raw'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { StatusText } from '@/components/StatusText'
 import { Button } from '@/components/ui/button'
 import { RUNTIME_ERROR_INFO, STATUS_LABEL, VERDICT_INFO } from '@/constants/verdicts'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
@@ -64,13 +65,20 @@ function Headline({ result }: { result: SubmissionResult }) {
             그려 주는데, flex로 바꾸면 그 표식이 사라져 펼칠 수 있다는 단서가 마우스를
             올렸을 때의 커서뿐이 된다.
           */}
-          <summary className="min-h-11 cursor-pointer py-2 text-xl font-semibold">
-            {VERDICT_INFO[key].label}
+          <summary className="min-h-11 cursor-pointer py-2 text-xl font-bold">
+            {/* summary 자체가 아니라 안쪽 글자만 칠한다. summary를 flex로 바꾸지 않기 위해서다(위 주석) */}
+            <StatusText tone={VERDICT_INFO[key].tone} className="font-bold">
+              {VERDICT_INFO[key].label}
+            </StatusText>
           </summary>
           <Raw text={compilerMessage ?? ''} />
         </details>
       ) : (
-        <p className="text-xl font-semibold">{VERDICT_INFO[key].label}</p>
+        <p className="text-xl font-bold">
+          <StatusText tone={VERDICT_INFO[key].tone} className="font-bold">
+            {VERDICT_INFO[key].label}
+          </StatusText>
+        </p>
       )}
     </div>
   )
@@ -133,10 +141,10 @@ function RuntimeError({ result }: { result: SubmissionResult }) {
 
   const info = RUNTIME_ERROR_INFO[runtimeErrorType]
   return (
-    <div className="border-border/60 flex flex-col gap-1 rounded-lg border p-3">
+    <div className="bg-muted/40 flex flex-col gap-1 rounded-xl p-3">
       <p className="text-sm font-medium">{info.label}</p>
       <p className="text-muted-foreground text-sm leading-relaxed">{info.description}</p>
-      {runtimeErrorMessage !== null ? <Raw text={runtimeErrorMessage} /> : null}
+      {runtimeErrorMessage !== null ? <Raw text={runtimeErrorMessage} className="bg-card" /> : null}
     </div>
   )
 }
@@ -151,8 +159,8 @@ function SubmittedCode({ result }: { result: SubmissionResult }) {
   if (result.sourceCode === null) return null
 
   return (
-    <section className="flex flex-col">
-      <h2 className="text-base font-medium">제출한 코드</h2>
+    <section className="bg-card flex flex-col gap-2 rounded-2xl p-6">
+      <h2 className="text-base font-semibold">제출한 코드</h2>
       <Raw text={result.sourceCode} />
     </section>
   )
@@ -242,8 +250,11 @@ export function Component() {
             {data.problemTitle}
           </Link>
 
-          <Headline result={data} />
-          <Explanation result={data} />
+          {/* 판정과 쉬운 설명을 한 장의 흰 카드로 묶는다. 판정 색은 글자에만 쓰고 면은 칠하지 않는다 */}
+          <div className="bg-card flex flex-col gap-3 rounded-2xl p-6">
+            <Headline result={data} />
+            <Explanation result={data} />
+          </div>
           <SubmittedCode result={data} />
           <NextActions result={data} />
 

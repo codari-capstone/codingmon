@@ -1,3 +1,5 @@
+import { cn } from 'cn'
+
 /**
  * 학생 코드가 만든 원문 (RES-04·05, SOLVE-08).
  *
@@ -9,10 +11,17 @@
  * 제출 결과(RES)와 예제 실행(SOLVE-08)이 같이 쓴다. 결과 화면에 있던 것을 옮겼다 —
  * 그 자리에 두고 가져다 쓰면 문자열 하나 때문에 풀이 화면 청크가 결과 화면 모듈
  * 전체를 끌고 온다.
+ *
+ * 옅은 면(`bg-muted/40`) 안에 둘 때는 `className="bg-card"`를 넘긴다 — 같은 회색끼리는 경계가 안 보인다.
  */
-export function Raw({ text }: { text: string }) {
+export function Raw({ text, className }: { text: string; className?: string }) {
   return (
-    <pre className="bg-muted mt-2 overflow-x-auto rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap">
+    <pre
+      className={cn(
+        'bg-muted mt-2 overflow-x-auto rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap',
+        className,
+      )}
+    >
       {text}
     </pre>
   )

@@ -52,6 +52,7 @@ PostgreSQL용 초안이다. DDL은 `api/src/main/resources/db/migration/V1__init
 | 테이블 | 주요 데이터 | 역할 |
 | --- | --- | --- |
 | `ai_reviews` | 제출, 분석/리뷰 종류, 모델·프롬프트 버전, JSON 응답, 사용량·비용, 공개한 힌트 단계 | 오답 분석과 정답 코드 리뷰 결과 저장 및 재사용 |
+| `ai_review_next_concepts` | 코드 리뷰, 순서, 개념 이름·이유 원문, 맞춘 개념 태그 | 리뷰가 권한 다음 개념을 학습 리포트가 사용자별로 모아 읽게 함 |
 | `review_feedback` | AI 리뷰, 도움 여부, 이유 | 사용자가 남긴 피드백 |
 | `user_problem_stats` | 사용자·문제, 해결 여부·최초 정답 시각, 첫 정답까지 시도 수, 첫 정답까지 연 최고 힌트 단계 | 리포트용 집계값. 제출과 AI 기록에서 다시 계산 가능 |
 | `learning_reports` | 사용자, 기준 날짜, 통계 JSON, AI 결과 JSON, 모델·상태 | 사용자별 일일 리포트 |

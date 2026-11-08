@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -40,6 +41,7 @@ import org.springframework.web.ErrorResponseException;
 import org.springframework.web.context.WebApplicationContext;
 
 // 실제 PostgreSQL에서 AI 코드 리뷰(F3) 요청·저장·재사용, 정답 코드 검사, 분석과 합친 하루 한도를 API로 확인한다(#82). 모델은 가짜다.
+// 리뷰와 함께 저장하는 다음 개념(ai_review_next_concepts, #83)도 여기서 본다. 매칭 규칙은 ConceptTagMatcherTest가 본다.
 // 버려진 PENDING을 빨리 보려고 제한 시간을 1초로, 한도를 넘기기 쉽게 하루 한도를 3회로 둔다.
 @SpringBootTest(properties = { "app.llm.pending-timeout=1s", "app.llm.daily-limit=3" })
 class CodeReviewControllerTest {
@@ -128,6 +130,9 @@ class CodeReviewControllerTest {
 
     @Autowired
     AnalysisService analyses;
+
+    @Autowired
+    NextConceptRepository nextConcepts;
 
     @Autowired
     WebApplicationContext context;
@@ -220,6 +225,14 @@ class CodeReviewControllerTest {
         assertThat(jdbc.sql("select review_type || ' ' || prompt_version || ' ' || model || ' ' || input_tokens || ' '"
                 + " || revealed_hint_level from ai_reviews where submission_id = :id").param("id", id)
                 .query(String.class).single()).isEqualTo("CODE_REVIEW v1 fake-model 100 0");
+        // 다음 개념은 맞는 태그가 없어도 원문으로 한 벌 저장되고, 재사용해도 늘지 않는다. 학습 리포트가 이것을 읽는다.
+        assertThat(concepts(id)).containsExactly("1 수열의 합 공식 -");
+        assertThat(nextConcepts.findRecent(userId, 1)).singleElement().satisfies(concept -> {
+            assertThat(concept.submissionId()).isEqualTo(id);
+            assertThat(concept.problemTitle()).isEqualTo("제곱수의 합");
+            assertThat(concept.reason()).isEqualTo("반복 없이 식 하나로 합을 구할 수 있어요.");
+            assertThat(concept.tag()).isNull();
+        });
         // 리뷰는 힌트 통계를 건드리지 않는다.
         assertThat(jdbc.sql("select max_revealed_hint_level from user_problem_stats where user_id = :userId")
                 .param("userId", userId).query(Integer.class).single()).isZero();
@@ -292,6 +305,34 @@ class CodeReviewControllerTest {
         // 같은 행을 다시 썼고, 실패한 시도의 토큰도 더해져 있다.
         assertThat(jdbc.sql("select count(*) || ' ' || sum(input_tokens) from ai_reviews where submission_id = :id")
                 .param("id", id).query(String.class).single()).isEqualTo("1 110");
+        assertThat(concepts(id)).containsExactly("1 수열의 합 공식 -");
+    }
+
+    @Test
+    void 다음_개념을_저장하지_못하면_결과도_저장하지_않고_FAILED가_된다() throws Exception {
+        long id = accepted(userId);
+        // 모델 응답은 스키마가 개념을 3개로 막지만 가짜 모델은 검증을 거치지 않는다. 4개를 넘겨 표의 CHECK(ordinal 1~3)에 걸리게 한다.
+        // 결과(content)는 정상 JSON이라 저장할 수 있지만 같은 트랜잭션이라 함께 롤백되어야 한다.
+        llm.answer = FakeLlm.always(() -> {
+            LlmResponse<?> ok = FakeLlm.review("변수 total의 이름을 더 분명하게 지으면 좋아요.");
+            CodeReviewResult result = (CodeReviewResult) ok.value();
+            return new LlmResponse<>(new CodeReviewResult(result.summary(), result.complexity(), result.improvements(),
+                    Collections.nCopies(4, result.nextConcepts().getFirst())), ok.json(), ok.usage());
+        });
+
+        mvc.perform(post(review(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
+        awaitStatus(id, "FAILED");
+
+        assertThat(jdbc.sql("select content is null from ai_reviews where submission_id = :id").param("id", id)
+                .query(Boolean.class).single()).isTrue();
+        assertThat(concepts(id)).isEmpty();
+        // 결과 저장 실패라 그 밖의 서버 오류로 보인다(AI_FEATURES 8절)
+        mvc.perform(get(review(id)).with(as(userId))).andExpect(jsonPath("$.failureReason").value("INTERNAL"));
+        // 실패한 행이라 다시 요청할 수 있다.
+        llm.answer = FakeLlm::ok;
+        mvc.perform(post(review(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
+        awaitStatus(id, "COMPLETED");
+        assertThat(concepts(id)).containsExactly("1 수열의 합 공식 -");
     }
 
     @Test
@@ -320,7 +361,7 @@ class CodeReviewControllerTest {
         long id = accepted(userId);
         AtomicInteger answered = new AtomicInteger();
         llm.answer = request -> answered.getAndIncrement() == 0
-                ? FakeLlm.review("3번 줄부터 while i <= n: total += i * i 처럼 바꾸세요.")
+                ? FakeLlm.reviewWith("3번 줄부터 while i <= n: total += i * i 처럼 바꾸세요.", "첫 응답의 개념")
                 : FakeLlm.ok(request);
 
         mvc.perform(post(review(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
@@ -333,6 +374,8 @@ class CodeReviewControllerTest {
         assertThat(llm.calls).hasValue(2);
         assertThat(jdbc.sql("select input_tokens from ai_reviews where submission_id = :id").param("id", id)
                 .query(Integer.class).single()).isEqualTo(200);
+        // 다음 개념도 검사를 통과한 두 번째 응답의 것만 남는다.
+        assertThat(concepts(id)).containsExactly("1 수열의 합 공식 -");
         // 두 번째 요청에만 어긴 규칙과 강화한 지시가 붙는다. 정답 코드 자체는 모델에 보내지 않는다.
         assertThat(llm.systems.getFirst()).doesNotContain("# 다시 쓰기");
         assertThat(llm.systems.get(1)).startsWith(llm.systems.getFirst().strip())
@@ -364,6 +407,8 @@ class CodeReviewControllerTest {
         assertThat(llm.calls).hasValue(2);
         assertThat(jdbc.sql("select content::text from ai_reviews where submission_id = :id").param("id", id)
                 .query(String.class).single()).isEqualTo(AiReviewRunner.BLOCKED_CONTENT);
+        // 보여 주지 않는 결과라 다음 개념도 저장하지 않는다.
+        assertThat(concepts(id)).isEmpty();
     }
 
     @Test
@@ -384,6 +429,8 @@ class CodeReviewControllerTest {
                 .andExpect(jsonPath("$.blocked").value(false))
                 .andExpect(jsonPath("$.nextConcepts[0].name").value("그리디"));
         assertThat(llm.calls).hasValue(1);
+        // 이름이 같은 개념 태그와 이어 저장한다.
+        assertThat(concepts(id)).containsExactly("1 그리디 " + tagId);
     }
 
     @Test
@@ -497,6 +544,14 @@ class CodeReviewControllerTest {
         jdbc.sql("insert into ai_reviews (submission_id, review_type, prompt_version, model, status, content, completed_at)"
                 + " values (:id, :type, 'v1', 'fake-model', 'COMPLETED', '{\"summary\":\"결과\"}', now())")
                 .param("id", submissionId).param("type", type).update();
+    }
+
+    // 제출의 코드 리뷰에 저장된 다음 개념. "순서 이름 태그id" 꼴이고, 맞는 태그가 없으면 태그id 자리가 -다.
+    private List<String> concepts(long submissionId) {
+        return jdbc.sql("select c.ordinal || ' ' || c.name || ' ' || coalesce(c.concept_tag_id::text, '-')"
+                + " from ai_review_next_concepts c join ai_reviews r on r.id = c.ai_review_id"
+                + " where r.submission_id = :id and r.review_type = 'CODE_REVIEW' order by c.ordinal")
+                .param("id", submissionId).query(String.class).list();
     }
 
     private void awaitStatus(long submissionId, String expected) throws InterruptedException {

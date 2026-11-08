@@ -140,7 +140,7 @@ export function AnalysisPanel({
           </>
         ) : null}
         {request.isError ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive-text text-sm">
             {problemMessage(request.error)}
           </p>
         ) : null}
@@ -158,7 +158,7 @@ export function AnalysisPanel({
   return (
     <section
       aria-labelledby="analysis-heading"
-      className="border-border/60 flex min-w-0 flex-col gap-3 rounded-lg border p-4"
+      className="bg-card flex min-w-0 flex-col gap-3 rounded-2xl p-6"
     >
       <h2 id="analysis-heading" className="text-base font-medium">
         AI 분석
