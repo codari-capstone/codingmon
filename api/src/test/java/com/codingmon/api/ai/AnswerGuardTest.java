@@ -439,6 +439,16 @@ class AnswerGuardTest {
     }
 
     @Test
+    void 복잡도_표기_안이라도_다른_호출은_찾고_문자열_안의_표기는_인용으로_본다() {
+        // 표기 안에서 건너뛰는 것은 max·min뿐이다(#82 2차 리뷰). 표기를 지우면 그 안의 고친 코드까지 놓친다.
+        assertThat(rules(withReference(withPrinciple("O(n, print(sum(a)))로 합을 출력하세요."), "a = [3, 1, 2]\nprint(a)\n",
+                List.of()))).containsExactly(Rule.CODE_PATTERN);
+        // 글을 바꾸지 않으므로 학습자 코드의 문자열 속 표기를 그대로 짚은 글은 인용이다.
+        assertThat(withReference(withGuess("1번 줄의 print(\"O(n)\")는 복잡도 문자열을 출력하고 있어요."), "print(\"O(n)\")\n",
+                List.of())).isEmpty();
+    }
+
+    @Test
     void 로그에는_규칙과_위치만_남긴다() {
         List<Violation> violations = withReference(withPrinciple("동적계획법으로 range(n)까지 도세요."), "",
                 List.of("동적 계획법"));

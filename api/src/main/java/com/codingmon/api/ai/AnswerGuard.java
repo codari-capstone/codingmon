@@ -194,10 +194,12 @@ final class AnswerGuard {
             + "|[!-/:-@\\[-^`{-~]");
     // 응답 글은 한글 같은 ASCII 밖 글자에서 끊어, 코드처럼 이어진 부분끼리만 정답 코드와 비교한다.
     private static final Pattern NON_ASCII = Pattern.compile("[^\\x00-\\x7F]+");
-    // 복잡도 표기. 괄호 안이 두 겹까지 중첩될 수 있다(O(sqrt(n)), O(max(n, m) log n)). 코드 모양 검사에서는 지운다.
-    // max·min은 코드 모양 검사의 함수 이름이기도 해서, 지우지 않으면 정상 표기 "O(max(N, M))"가 호출로 보인다.
+    // 복잡도 표기. 괄호 안이 두 겹까지 중첩될 수 있다(O(sqrt(n)), O(max(n, m) log n)).
+    // max·min은 코드 모양 검사의 함수 이름이기도 해서 "O(max(N, M))"가 호출로 보인다. 이 표기 안에서 시작하는 max·min 호출만
+    // 호출로 보지 않는다(MATH_CALL). 글은 지우지 않는다. 표기 안의 다른 호출(O(n, print(a)))은 그대로 찾고, 인용 비교도 원문으로 한다.
     private static final Pattern BIG_O = Pattern.compile(
             "\\bO\\s*\\((?:[^()\\n]|\\((?:[^()\\n]|\\([^()\\n]*\\))*\\))*\\)");
+    private static final Pattern MATH_CALL = Pattern.compile("(?:max|min)\\s*\\(");
 
     private AnswerGuard() {
     }
@@ -234,8 +236,7 @@ final class AnswerGuard {
             if (rules.contains(Rule.INDENTED_CODE) && indentedCode(text)) {
                 violations.add(new Violation(Rule.INDENTED_CODE, field, null));
             }
-            if (rules.contains(Rule.CODE_PATTERN)
-                    && codePattern(BIG_O.matcher(text).replaceAll("O()"), compactSource, assigned)) {
+            if (rules.contains(Rule.CODE_PATTERN) && codePattern(text, compactSource, assigned)) {
                 violations.add(new Violation(Rule.CODE_PATTERN, field, null));
             }
             if (rules.contains(Rule.REFERENCE_SIMILAR) && similar(text, references, sourceTokens)) {
@@ -311,11 +312,21 @@ final class AnswerGuard {
                 }
             }
         }
+        List<int[]> notations = new ArrayList<>();
+        Matcher bigO = BIG_O.matcher(text);
+        while (bigO.find()) {
+            notations.add(new int[] { bigO.start(), bigO.end() });
+        }
         for (Pattern head : CALL_HEADS) {
             Matcher matcher = head.matcher(text);
             while (matcher.find()) {
+                int start = matcher.start();
+                if (MATH_CALL.matcher(text).region(start, matcher.end()).matches()
+                        && notations.stream().anyMatch(span -> span[0] < start && start < span[1])) {
+                    continue;
+                }
                 int end = callEnd(text, matcher.end() - 1);
-                if (end > 0 && !quotedStatement(text, matcher.start(), end, compactSource)) {
+                if (end > 0 && !quotedStatement(text, start, end, compactSource)) {
                     return true;
                 }
             }
