@@ -427,6 +427,28 @@ class AnswerGuardTest {
     }
 
     @Test
+    void 식에_쓰는_함수_이름과_복잡도_표기는_호출이_아니다() {
+        // 3단계 원리는 규칙을 식으로 보여 준다(#82 리뷰). 라이브러리 호출 목록에 sqrt·gcd·lcm을 넣지 않는다.
+        assertThat(check(withPrinciple("약수는 sqrt(n)까지만 확인하면 됩니다."))).isEmpty();
+        assertThat(check(withPrinciple("최소공배수는 lcm(a, b) = a × b / gcd(a, b)로 구합니다."))).isEmpty();
+        // max·min은 호출 목록에 있지만 복잡도 표기 안에서는 호출이 아니다.
+        assertThat(check(withGuess("4번 줄의 이중 반복이 O(max(n, m) log n)보다 느린 O(n × m)인 것 같습니다."))).isEmpty();
+        assertThat(check(withGuess("4번 줄은 O(sqrt(n))번 돕니다."))).isEmpty();
+        // 표기 밖의 호출은 그대로 찾는다.
+        assertThat(rules(check(withPrinciple("마지막에 max(a, b)를 출력하세요.")))).containsExactly(Rule.CODE_PATTERN);
+    }
+
+    @Test
+    void 복잡도_표기_안이라도_다른_호출은_찾고_문자열_안의_표기는_인용으로_본다() {
+        // 표기 안에서 건너뛰는 것은 max·min뿐이다(#82 2차 리뷰). 표기를 지우면 그 안의 고친 코드까지 놓친다.
+        assertThat(rules(withReference(withPrinciple("O(n, print(sum(a)))로 합을 출력하세요."), "a = [3, 1, 2]\nprint(a)\n",
+                List.of()))).containsExactly(Rule.CODE_PATTERN);
+        // 글을 바꾸지 않으므로 학습자 코드의 문자열 속 표기를 그대로 짚은 글은 인용이다.
+        assertThat(withReference(withGuess("1번 줄의 print(\"O(n)\")는 복잡도 문자열을 출력하고 있어요."), "print(\"O(n)\")\n",
+                List.of())).isEmpty();
+    }
+
+    @Test
     void 로그에는_규칙과_위치만_남긴다() {
         List<Violation> violations = withReference(withPrinciple("동적계획법으로 range(n)까지 도세요."), "",
                 List.of("동적 계획법"));

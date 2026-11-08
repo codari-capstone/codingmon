@@ -37,6 +37,12 @@ class AnalysisInputRepository {
                         AnalysisInput.HiddenTests.of(findHiddenCases(submissionId, head.versionId()))));
     }
 
+    // 코드 리뷰(F3) 입력. 정답 제출이라 예제와 비공개 테스트는 모두 통과했으므로 문제와 제출만 읽는다(예제·비공개 쿼리를 돌리지 않는다).
+    @Transactional(readOnly = true)
+    Optional<CodeReviewInput> findReview(long submissionId) {
+        return findHead(submissionId).map(head -> new CodeReviewInput(head.problem(), head.submission()));
+    }
+
     private Optional<Head> findHead(long submissionId) {
         return jdbc.sql("select s.problem_version_id, s.language, s.verdict, s.runtime_error_type, s.execution_time_ms,"
                 + " s.memory_used_kb, s.source_code, s.compiler_message, v.title, v.statement_markdown,"

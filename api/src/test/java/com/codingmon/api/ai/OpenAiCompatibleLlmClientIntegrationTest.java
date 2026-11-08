@@ -49,7 +49,7 @@ class OpenAiCompatibleLlmClientIntegrationTest {
 
     private static OpenAiCompatibleLlmClient client(String model) {
         return new OpenAiCompatibleLlmClient(System.getenv("LLM_URL"), System.getenv().getOrDefault("LLM_API_KEY", ""),
-                model, "v1", "v1", Duration.ofSeconds(3), Duration.ofSeconds(180), 4096, JsonMapper.builder().build(),
+                model, "v1", "v1", Duration.ofSeconds(3), Duration.ofSeconds(180), 8192, JsonMapper.builder().build(),
                 VALIDATOR);
     }
 

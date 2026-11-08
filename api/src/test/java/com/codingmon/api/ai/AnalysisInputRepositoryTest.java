@@ -122,6 +122,22 @@ class AnalysisInputRepositoryTest {
     }
 
     @Test
+    void 코드_리뷰_입력은_문제와_제출만_읽는다() {
+        testCase(1, "SAMPLE", "1 2\n", "3\n");
+        testCase(2, "HIDDEN", HIDDEN_INPUT, HIDDEN_OUTPUT);
+        long id = submission("SUBMIT", "COMPLETED", "ACCEPTED", null);
+
+        CodeReviewInput input = repository.findReview(id).orElseThrow();
+
+        assertThat(input.submission().verdict()).isEqualTo(Verdict.ACCEPTED);
+        assertThat(input.problem().conceptTags()).isNotEmpty();
+        // 정답 제출이라 예제와 비공개 테스트는 읽지 않는다(#82).
+        assertThat(input.toJson()).doesNotContain(HIDDEN_INPUT, HIDDEN_OUTPUT, "\"samples\"", "\"hiddenTests\"");
+        assertThat(repository.findReview(submission("SUBMIT", "RUNNING", null, null))).isEmpty();
+        assertThat(repository.findReview(submission("SAMPLE_RUN", "COMPLETED", "ACCEPTED", null))).isEmpty();
+    }
+
+    @Test
     void 채점이_끝난_SUBMIT_제출만_받는다() {
         testCase(1, "SAMPLE", "1 2\n", "3\n");
 

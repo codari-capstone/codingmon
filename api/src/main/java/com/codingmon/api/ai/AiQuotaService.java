@@ -15,7 +15,7 @@ import com.codingmon.api.ApiErrors;
 
 // AI 분석(F1·F2)과 리뷰(F3)를 합친 사용자당 하루 한도(AI_FEATURES 8절, database-schema.md).
 // 새 시도를 잡을 때만 1회로 센다. 저장된 결과 재사용, 만드는 중인 결과 재요청, 힌트 열기는 시도를 잡지 않으므로 세지 않는다.
-// 리뷰(#39)도 시도를 잡을 때 claimWithin을 쓰고 응답에 status를 담는다.
+// 분석(AnalysisService)과 리뷰(CodeReviewService)가 시도를 잡을 때 claimWithin을 쓰고, 응답에 status를 담는다.
 @Service
 class AiQuotaService {
 

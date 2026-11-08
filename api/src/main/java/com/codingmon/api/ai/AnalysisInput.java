@@ -20,9 +20,14 @@ import tools.jackson.databind.json.JsonMapper;
 // AI 오답 분석(F1·F2)에 보내는 근거(AI_FEATURES 3절). AnalysisInputRepository가 제출 하나로 만든다.
 // 비공개 테스트는 HiddenTests의 개수와 크기 등급만 담는다. 입력·기대 출력·stdout·stderr 원문과 몇 번째 케이스인지는
 // 담을 필드가 없다(8절 비공개 테스트 보호, ARCHITECTURE 5.2).
-// 글은 아래 상한까지만 넣고 뒤에 생략 표시를 붙인다. 모델 컨텍스트(OLLAMA_CONTEXT_LENGTH 16384토큰)에서 출력 4096토큰과
-// 지시문을 빼고 남는 만큼이다. 글자 수는 JSON에 쓰일 길이로 센다(jsonLength). 모든 항목이 상한에 닿아도 JSON이
-// 2만 자를 넘지 않는다(AnalysisInputTest).
+// 글은 아래 상한까지만 넣고 뒤에 생략 표시를 붙인다. 글자 수는 JSON에 쓰일 길이로 센다(jsonLength). 모든 항목이 상한에
+// 닿아도 JSON이 2만 자를 넘지 않는다(AnalysisInputTest).
+// 토큰으로는 컨텍스트(OLLAMA_CONTEXT_LENGTH 16384)를 다 쓸 수 있다. 2026-11-08 gemma4:12b로 잰 값(#82 리뷰): 모든 항목이
+// 상한에 닿은 한글 지문·300줄 코드·예제 3개의 런타임 에러 분석은 프롬프트가 약 12,500토큰(다시 만들 때 약 12,800)이라
+// 출력에 약 3,900토큰만 남는다. 출력 상한(LLM_MAX_OUTPUT_TOKENS)이 4096이던 때도 같았다. 그 입력으로 출력 상한 8192에서
+// 한 번 부른 결과는 출력 3,328토큰으로 끝났다. 생각이 더 길어 남은 몫을 넘으면 엔진이 어떻게 하는지는 확인하지 않았고,
+// 그때는 FAILED가 될 것으로 본다(다시 요청할 수 있고 한도에 세지 않는다). 실제 문제의 입력은 약 1,800토큰이다(#82 평가).
+// 같은 조건의 코드 리뷰 입력(CodeReviewInput)은 예제·비공개 요약이 없어 약 8,700토큰이다.
 record AnalysisInput(Problem problem, Submission submission, Samples samples, HiddenTests hiddenTests) {
 
     static final int STATEMENT_MAX_CHARS = 3_000;
@@ -39,7 +44,8 @@ record AnalysisInput(Problem problem, Submission submission, Samples samples, Hi
     static final int SAMPLE_ERROR_MAX_CHARS = 500;
 
     // 빈 값(null)은 넣지 않는다. 필드 순서는 선언 순서 그대로 둔다(Jackson 3은 기본이 이름순이다).
-    private static final JsonMapper JSON = JsonMapper.builder()
+    // 코드 리뷰 입력(CodeReviewInput)도 같은 규칙으로 쓴다.
+    static final JsonMapper JSON = JsonMapper.builder()
             .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
             .changeDefaultPropertyInclusion(include -> include.withValueInclusion(JsonInclude.Include.NON_NULL))
             .build();

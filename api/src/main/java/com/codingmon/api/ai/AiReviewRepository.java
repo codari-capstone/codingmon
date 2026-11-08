@@ -25,7 +25,8 @@ class AiReviewRepository {
     }
 
     // content는 COMPLETED일 때만 있다. status는 버려진 PENDING(Abandoned)을 FAILED로 바꿔 읽은 값이다.
-    record Stored(long id, long submissionId, Status status, String content, int revealedHintLevel,
+    // blocked는 가드레일에 두 번 걸려 차단 표시({"blocked": true})만 담긴 결과다(#78). SQL이 content로 계산한다.
+    record Stored(long id, long submissionId, Status status, String content, boolean blocked, int revealedHintLevel,
             Instant createdAt, Instant completedAt) {
     }
 
@@ -205,7 +206,7 @@ class AiReviewRepository {
     private static Stored stored(ResultSet rs, int n) throws SQLException {
         OffsetDateTime completedAt = rs.getObject("completed_at", OffsetDateTime.class);
         return new Stored(rs.getLong("id"), rs.getLong("submission_id"), Status.valueOf(rs.getString("status")),
-                rs.getString("content"), rs.getInt("revealed_hint_level"),
+                rs.getString("content"), rs.getBoolean("blocked"), rs.getInt("revealed_hint_level"),
                 rs.getObject("created_at", OffsetDateTime.class).toInstant(),
                 completedAt == null ? null : completedAt.toInstant());
     }
