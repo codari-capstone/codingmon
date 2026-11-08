@@ -20,7 +20,7 @@ class AiReviewRepository {
 
     enum Status { PENDING, COMPLETED, FAILED }
 
-    // FAILED인 이유(#81, contracts의 failureReason). 앞의 네 값은 LlmException.Kind와 이름이 같다.
+    // FAILED인 이유(#81, contracts의 failureReason). 앞의 네 값은 AiReviewRunner가 LlmException.Kind에서 바꾼다.
     // INTERNAL은 모델과 상관없는 이 서버의 오류다(입력 준비·결과 저장 실패).
     enum FailureReason { UNAVAILABLE, RATE_LIMITED, BUSY, INVALID_RESPONSE, INTERNAL }
 
@@ -33,6 +33,11 @@ class AiReviewRepository {
     // blocked는 가드레일에 두 번 걸려 차단 표시({"blocked": true})만 담긴 결과다(#78). SQL이 content로 계산한다.
     record Stored(long id, long submissionId, Status status, FailureReason failureReason, String content, boolean blocked,
             int revealedHintLevel, Instant createdAt, Instant completedAt) {
+
+        // 힌트를 연 뒤의 결과. 인자를 위치로 다시 늘어놓으면 같은 타입(Instant 둘)이 뒤바뀌어도 컴파일된다.
+        Stored withRevealedHintLevel(int level) {
+            return new Stored(id, submissionId, status, failureReason, content, blocked, level, createdAt, completedAt);
+        }
     }
 
     // 분석할 수 있는지 볼 제출 정보. 본인의 SUBMIT 제출만 찾는다.

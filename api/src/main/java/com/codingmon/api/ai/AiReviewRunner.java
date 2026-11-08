@@ -108,13 +108,24 @@ class AiReviewRunner {
         } else {
             Throwable cause = failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
             if (cause instanceof LlmException e) {
-                reason = AiReviewRepository.FailureReason.valueOf(e.kind().name());
+                reason = reason(e.kind());
                 log.warn("{} {} 실패({}): {}", label(type), claim.id(), e.kind(), e.getMessage());
             } else {
                 log.error("{} {} 실패", label(type), claim.id(), cause);
             }
         }
         fail(type, claim, reason);
+    }
+
+    // 빠짐없는 switch라 Kind에 값이 늘면 컴파일이 깨진다. 이름으로 바꾸면(valueOf) 빠진 값이 콜백 안에서 예외가 되어
+    // fail()에 닿지 못하고, 그 행은 재시작할 때까지 PENDING으로 남는다.
+    private static AiReviewRepository.FailureReason reason(LlmException.Kind kind) {
+        return switch (kind) {
+            case UNAVAILABLE -> AiReviewRepository.FailureReason.UNAVAILABLE;
+            case RATE_LIMITED -> AiReviewRepository.FailureReason.RATE_LIMITED;
+            case BUSY -> AiReviewRepository.FailureReason.BUSY;
+            case INVALID_RESPONSE -> AiReviewRepository.FailureReason.INVALID_RESPONSE;
+        };
     }
 
     // active에서 먼저 뺀다. FAILED를 커밋한 뒤에 빼면 그 사이 같은 행을 다시 잡은 새 시도의 등록까지 지운다.

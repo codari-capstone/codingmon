@@ -94,8 +94,7 @@ class AnalysisService {
         }
         reviews.revealHint(stored.id(), level);
         stats.recordHintRevealed(submissionId, level);
-        return view(userId, new AiReviewRepository.Stored(stored.id(), stored.submissionId(), stored.status(),
-                stored.failureReason(), stored.content(), stored.blocked(), level, stored.createdAt(), stored.completedAt()));
+        return view(userId, stored.withRevealedHintLevel(level));
     }
 
     // 처리기에 넣을 요청. 입력과 정답 코드 검사 자료를 읽는다. 읽지 못하면 던지고, runner가 행을 FAILED로 바꾼다.
