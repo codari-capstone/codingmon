@@ -1,0 +1,358 @@
+package com.codingmon.api.ai;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+
+import java.util.Arrays;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import com.codingmon.api.Language;
+import com.codingmon.api.ai.FactCheck.Action;
+import com.codingmon.api.ai.FactCheck.Fix;
+import com.codingmon.api.ai.FactCheck.Kind;
+import com.codingmon.api.judge.Verdict;
+
+class FactCheckTest {
+
+    private static final AnalysisResult.Hints HINTS = new AnalysisResult.Hints("힌트 1", "힌트 2", "힌트 3");
+
+    // ===== 실제 응답 =====
+
+    @Test
+    void 실제_모델의_정상_응답은_고치지_않는다() {
+        // AnalysisPromptTest.PYRAMID_ANSWER
+        AnalysisResult pyramid = new AnalysisResult("별 개수가 줄마다 줄어야 하는데 늘어나고 있어요.", List.of(4, 5),
+                List.of("공개 예제 1에서 기대 출력은 줄마다 별이 5개, 3개, 1개로 줄어드는데, 제출 코드의 출력은 1개, 3개, 5개로 늘어납니다."),
+                List.of("4번째 줄의 반복과 별 개수 식이 정방향 기준으로 작성된 것 같습니다."),
+                new AnalysisResult.Hints("예제 출력의 첫 줄과 마지막 줄 별 개수를 세어 보세요. 내 출력과 순서가 어떻게 다른가요?",
+                        "줄 번호 i가 커질 때 별 개수가 어떻게 변해야 하는지 식으로 적어 보세요.",
+                        "정방향 별 개수 2i − 1에서 i 자리에 n − i + 1을 넣으면 별은 2(n − i) + 1개, 앞 공백은 i − 1개가 됩니다."));
+        // AnswerGuardTest의 실제 gemma4:12b 응답
+        AnalysisResult gemma = new AnalysisResult("별의 개수가 줄어드는 것이 아니라 늘어나도록 계산되었습니다.", List.of(4),
+                List.of("예제 1번에서 기대 출력은 첫 줄 별 5개, 두 번째 줄 별 3개, 세 번째 줄 별 1개이지만, 실제 출력은 첫 줄 별 1개,"
+                        + " 두 번째 줄 별 3개, 세 번째 줄 별 5개로 출력되었습니다."),
+                List.of("4번 줄에서 i가 1부터 n까지 증가하도록 설정되어 있어 별의 개수가 줄어들지 않는 것 같습니다.",
+                        "4번 줄의 range(1, n + 1) 때문에 첫 줄의 별이 가장 적은 것 같습니다."),
+                new AnalysisResult.Hints(
+                        "예제 1번의 실제 출력과 기대 출력을 비교하여 별의 개수가 줄어드는 규칙이 지켜지고 있는지 확인해 보세요.",
+                        "반복문에서 i가 줄어드는 방향으로 변하게 하거나, 5번 줄의 공백과 별의 개수를 계산하는 수식을 수정해야 합니다.",
+                        "i번째 줄(i는 1부터 n까지)에서 별의 개수는 2 * (n - i) + 1개이고, 공백의 개수는 i − 1개입니다."
+                                + " 예를 들어 n이 3일 때, 첫 번째 줄(i=1)은 공백 0개, 별 5개입니다."));
+
+        for (AnalysisResult result : List.of(pyramid, gemma)) {
+            FactCheck.Outcome<AnalysisResult> outcome = verify(result, AnalysisSamples.reversePyramid());
+            assertThat(outcome.fixes()).isEmpty();
+            assertThat(outcome.result()).isEqualTo(result);
+            assertThat(outcome.label()).isEqualTo("PASSED");
+        }
+    }
+
+    @Test
+    void 판정별_샘플의_맞는_사실은_남긴다() {
+        assertThat(fixes(AnalysisSamples.missingSemicolon(), "6번째 줄에서 ';'가 빠졌다는 컴파일 메시지가 나왔습니다.",
+                "컴파일 에러라 예제를 실행하지 못했습니다.")).isEmpty();
+        assertThat(fixes(AnalysisSamples.indexOutOfRange(), "예제 1에서 리스트의 없는 칸을 읽어 실행이 멈췄습니다.",
+                "에러 메시지는 IndexError: list index out of range입니다.")).isEmpty();
+        assertThat(fixes(AnalysisSamples.quadraticPairs(), "예제 2개는 모두 통과했지만 비공개 테스트 8개 중 2개에서 시간 초과가 났습니다.",
+                "실행 시간이 3000ms로 시간 제한 1000ms를 넘었습니다.", "큰 입력에서만 실패했습니다.")).isEmpty();
+        assertThat(fixes(AnalysisSamples.storeEverything(), "메모리를 131,072KB 써서 메모리 제한 128MB를 넘었습니다.")).isEmpty();
+        assertThat(fixes(AnalysisSamples.joinedOutput(), "예제 1의 기대 출력은 1 2 3인데 실제 출력은 줄마다 하나씩 3줄입니다.",
+                "출력 형식이 잘못되었습니다.")).isEmpty();
+    }
+
+    // ===== 줄 번호 =====
+
+    @Test
+    void 범위_밖_의심_줄은_지운다() {
+        AnalysisResult result = analysis(List.of(4, 6, 0), List.of("예제 1에서 틀렸습니다."), List.of());
+
+        FactCheck.Outcome<AnalysisResult> outcome = verify(result, AnalysisSamples.reversePyramid());
+
+        assertThat(outcome.result().suspectLines()).containsExactly(4);
+        assertThat(outcome.fixes()).containsExactly(
+                new Fix(Kind.LINE_OUT_OF_RANGE, "suspectLines[1]", Action.REMOVED),
+                new Fix(Kind.LINE_OUT_OF_RANGE, "suspectLines[2]", Action.REMOVED));
+        assertThat(outcome.meta()).isEqualTo(new FactCheck.Meta(FactCheck.VERSION, 2, 0, 0,
+                List.of("LINE_OUT_OF_RANGE@suspectLines[1]", "LINE_OUT_OF_RANGE@suspectLines[2]")));
+    }
+
+    @Test
+    void 코드_줄을_짚는_표기를_찾는다() {
+        assertThat(refs("4번째 줄의 반복")).containsExactly("4-4");
+        assertThat(refs("6번 줄 끝에")).containsExactly("6-6");
+        assertThat(refs("3~9번 줄의 질의 처리")).containsExactly("3-9");
+        assertThat(refs("３～６번째 줄")).containsExactly("3-6");
+        assertThat(refs("4부터 6번째 줄")).containsExactly("4-6");
+        assertThat(refs("4, 7번째 줄")).containsExactly("4-4", "7-7");
+        assertThat(refs("4번째와 7번째 줄")).containsExactly("4-4", "7-7");
+        assertThat(refs("코드의 12번째 줄")).containsExactly("12-12");
+        assertThat(refs("4행에서")).containsExactly("4-4");
+        assertThat(refs("9~3번 줄")).containsExactly("9-3");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"3줄 출력", "출력이 100줄", "[…뒤 5줄 생략]", "1단계", "예제 1", "2i − 1", "10^9", "1000ms",
+            "main.cpp:6:5", "두 번째 줄", "i번째 줄", "기대 출력의 3번째 줄 끝에 공백", "출력 2번째 줄", "3번째 줄에는 별이 1개",
+            "3행 4열", "행렬", "실행 결과",
+            // 예제 출력의 줄인지 코드 줄인지 가릴 수 없어 보지 않는다(놓쳐도 맞는 문장을 지우지 않는 쪽을 고른다).
+            "예제 1에서 9번째 줄이 다릅니다"})
+    void 코드_줄이_아닌_수는_줄_번호로_보지_않는다(String text) {
+        assertThat(refs(text)).isEmpty();
+    }
+
+    @Test
+    void 범위_밖_줄을_짚은_사실과_추정은_옮기지_않고_지운다() {
+        AnalysisResult result = analysis(List.of(4),
+                List.of("9번째 줄 때문에 예제 1에서 틀렸습니다.", "예제 1에서 틀렸습니다."),
+                List.of("4번째와 12번째 줄이 의심스러운 것 같습니다.", "4번째 줄이 의심스러운 것 같습니다."));
+
+        FactCheck.Outcome<AnalysisResult> outcome = verify(result, AnalysisSamples.reversePyramid());
+
+        assertThat(outcome.result().facts()).containsExactly("예제 1에서 틀렸습니다.");
+        assertThat(outcome.result().guesses()).containsExactly("4번째 줄이 의심스러운 것 같습니다.");
+        assertThat(FactCheck.describe(outcome.fixes()))
+                .isEqualTo("LINE_OUT_OF_RANGE@facts[0],LINE_OUT_OF_RANGE@guesses[0]");
+    }
+
+    @Test
+    void 지울_수_없는_요약과_힌트의_범위_밖_줄은_그대로_두고_센다() {
+        AnalysisResult result = new AnalysisResult("7번째 줄이 문제예요.", List.of(4), List.of("예제 1에서 틀렸습니다."),
+                List.of(), new AnalysisResult.Hints("힌트 1", "8번 줄을 보세요.", "힌트 3"));
+
+        FactCheck.Outcome<AnalysisResult> outcome = verify(result, AnalysisSamples.reversePyramid());
+
+        assertThat(outcome.result()).isEqualTo(result);
+        assertThat(outcome.blocked()).isFalse();
+        assertThat(outcome.meta().unresolved()).isEqualTo(2);
+        assertThat(FactCheck.describe(outcome.fixes()))
+                .isEqualTo("LINE_OUT_OF_RANGE@summary(kept),LINE_OUT_OF_RANGE@hints.direction(kept)");
+    }
+
+    @Test
+    void 줄_번호_범위는_모델에_보낸_300줄이_아니라_전체_줄_수다() {
+        String code = "x = 1\n".repeat(400);
+        AnalysisInput input = new AnalysisInput(AnalysisSamples.reversePyramid().input().problem(),
+                AnalysisInput.Submission.of(Language.PYTHON, Verdict.WRONG_ANSWER, null, 18, 9200, code, null), null, null);
+        AnalysisResult result = analysis(List.of(350, 401), List.of("틀렸습니다."), List.of("350번째 줄이 의심스러운 것 같습니다."));
+
+        FactCheck.Outcome<AnalysisResult> outcome = FactCheck.verify(result,
+                FactCheck.Context.of(input, FactCheck.Sources.NONE));
+
+        assertThat(outcome.result().suspectLines()).containsExactly(350);
+        assertThat(outcome.result().guesses()).containsExactly("350번째 줄이 의심스러운 것 같습니다.");
+    }
+
+    // ===== [사실] 대조 =====
+
+    @Test
+    void 코드를_읽고_판단한_사실은_추정으로_옮긴다() {
+        AnalysisResult result = analysis(List.of(4),
+                List.of("4번째 줄의 반복이 정방향 기준으로 작성되어 있습니다.", "예제 1에서 틀렸습니다."),
+                List.of("짐작 하나"));
+
+        FactCheck.Outcome<AnalysisResult> outcome = verify(result, AnalysisSamples.reversePyramid());
+
+        assertThat(outcome.result().facts()).containsExactly("예제 1에서 틀렸습니다.");
+        assertThat(outcome.result().guesses()).containsExactly("짐작 하나", "4번째 줄의 반복이 정방향 기준으로 작성되어 있습니다.");
+        assertThat(outcome.fixes()).containsExactly(new Fix(Kind.UNGROUNDED_FACT, "facts[0]", Action.DEMOTED));
+        assertThat(outcome.meta().demoted()).isEqualTo(1);
+    }
+
+    @Test
+    void 입력에_없는_값을_쓴_사실은_예제_번호가_맞아도_옮긴다() {
+        assertThat(kinds(AnalysisSamples.reversePyramid(), "예제 1에서 42를 출력했어요."))
+                .containsExactly(Kind.UNMATCHED_VALUE);
+        assertThat(kinds(AnalysisSamples.reversePyramid(), "예제 1의 실제 출력은 '***'였어요.")).isEmpty();
+        assertThat(kinds(AnalysisSamples.reversePyramid(), "예제 1의 실제 출력은 '****'였어요."))
+                .containsExactly(Kind.UNMATCHED_VALUE);
+        // 지문의 수는 실행 결과가 아니다.
+        assertThat(kinds(AnalysisSamples.quadraticPairs(), "비공개 테스트에서 N이 100,000일 때 시간 초과가 났습니다."))
+                .containsExactly(Kind.UNMATCHED_VALUE);
+    }
+
+    @Test
+    void 입력에_실린_예제_번호만_근거가_된다() {
+        assertThat(kinds(AnalysisSamples.reversePyramid(), "예제 3에서 틀렸습니다.")).containsExactly(Kind.EXAMPLE_NOT_SEEN);
+        assertThat(kinds(AnalysisSamples.reversePyramid(), "2번째 예제는 통과했습니다.")).isEmpty();
+    }
+
+    @Test
+    void 컴파일_에러에서_예제나_비공개_실행_결과를_말하면_옮긴다() {
+        assertThat(kinds(AnalysisSamples.missingSemicolon(), "예제 1에서 출력이 달랐습니다."))
+                .containsExactly(Kind.EXAMPLE_NOT_RUN);
+        assertThat(kinds(AnalysisSamples.missingSemicolon(), "비공개 테스트 3개에서 틀렸습니다."))
+                .containsExactly(Kind.CONTRADICTED_FACT);
+    }
+
+    @Test
+    void 실행_결과와_어긋나는_사실은_옮긴다() {
+        // 입력에 없는 판정
+        assertThat(kinds(AnalysisSamples.reversePyramid(), "예제 1에서 시간 초과가 났습니다.")).containsExactly(Kind.CONTRADICTED_FACT);
+        // 예제 하나가 틀렸다
+        assertThat(kinds(AnalysisSamples.reversePyramid(), "예제를 모두 통과했습니다.")).containsExactly(Kind.CONTRADICTED_FACT);
+        // 비공개 요약이 없다
+        assertThat(kinds(AnalysisSamples.indexOutOfRange(), "비공개 테스트 3개에서 틀렸습니다.")).containsExactly(Kind.CONTRADICTED_FACT);
+        // 비공개 개수가 다르다
+        assertThat(kinds(AnalysisSamples.quadraticPairs(), "비공개 테스트 8개 중 7개에서 시간 초과가 났습니다."))
+                .containsExactly(Kind.CONTRADICTED_FACT);
+        // 크기가 모두 비슷해 가장 작은 입력을 가릴 수 없다(AnalysisSamples의 forbidden)
+        for (String forbidden : List.of("가장 작은 입력은 통과했습니다.", "가장 작은 입력에서는 통과했습니다.")) {
+            assertThat(kinds(AnalysisSamples.hiddenOnlyTrailingSpace(), forbidden)).containsExactly(Kind.CONTRADICTED_FACT);
+        }
+        // 가장 큰 입력에서 실패했다는 표시와 같다
+        assertThat(kinds(AnalysisSamples.quadraticPairs(), "가장 큰 입력에서 실패했습니다.")).isEmpty();
+        assertThat(kinds(AnalysisSamples.quadraticPairs(), "가장 작은 입력에서 실패했습니다.")).containsExactly(Kind.CONTRADICTED_FACT);
+    }
+
+    @Test
+    void 사실이_모두_옮겨져도_결과를_만든다() {
+        AnalysisResult result = analysis(List.of(), List.of("반복문이 n번 돕니다.", "변수 이름이 짧습니다."),
+                List.of("1", "2", "3", "4", "5"));
+
+        FactCheck.Outcome<AnalysisResult> outcome = verify(result, AnalysisSamples.reversePyramid());
+
+        assertThat(outcome.result().facts()).isEmpty();
+        assertThat(outcome.result().guesses()).containsExactly("1", "2", "3", "4", "5", "반복문이 n번 돕니다.", "변수 이름이 짧습니다.");
+    }
+
+    // ===== 비공개 값 =====
+
+    private static final FactCheck.Sources HIDDEN = new FactCheck.Sources(
+            List.of("5\n10 20 30 40 50\n", "150\n", "3\n1 2 3\n", "1 2 3 4 5 6\n", "7 7 7 7 7\n", "안녕 하세요 세상\n"),
+            List.of("정수 N개의 합", "3\n1 2 3\n6\n"));
+
+    @Test
+    void 비공개_값이_든_항목은_지운다() {
+        AnalysisResult result = analysis(List.of(),
+                List.of("예제 1에서 틀렸습니다.", "비공개 입력 10 20 30 40 50에서 틀렸습니다."),
+                List.of("입력이 20, 30, 40, 50일 때 틀린 것 같습니다.", "안녕 하세요 세상을 출력해야 할 것 같습니다.", "3번째 줄 같습니다."));
+
+        FactCheck.Outcome<AnalysisResult> outcome = verify(result, AnalysisSamples.reversePyramid(), HIDDEN);
+
+        assertThat(outcome.result().facts()).containsExactly("예제 1에서 틀렸습니다.");
+        assertThat(outcome.result().guesses()).containsExactly("3번째 줄 같습니다.");
+        assertThat(outcome.blocked()).isFalse();
+        assertThat(FactCheck.describe(outcome.fixes()))
+                .isEqualTo("HIDDEN_VALUE@facts[1],HIDDEN_VALUE@guesses[0],HIDDEN_VALUE@guesses[1]");
+    }
+
+    @Test
+    void 요약이나_힌트에_비공개_값이_있으면_차단한다() {
+        AnalysisResult result = new AnalysisResult("요약", List.of(), List.of("예제 1에서 틀렸습니다."), List.of(),
+                new AnalysisResult.Hints("힌트 1", "10 20 30 40을 넣어 보세요.", "힌트 3"));
+
+        FactCheck.Outcome<AnalysisResult> outcome = verify(result, AnalysisSamples.reversePyramid(), HIDDEN);
+
+        assertThat(outcome.blocked()).isTrue();
+        assertThat(outcome.label()).isEqualTo("BLOCKED");
+        assertThat(FactCheck.describe(outcome.fixes())).isEqualTo("HIDDEN_VALUE@hints.direction(blocked)");
+        assertThat(outcome.meta().removed()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            // 짧은 값, 1씩 느는 정수열, 같은 값의 되풀이
+            "150을 출력해야 합니다.", "1 2 3 4 5 6을 넣어 보세요.", "7 7 7 7 7을 넣어 보세요.",
+            // 공개 예제와 같은 값
+            "3 다음 줄에 1 2 3을 넣어 보세요.",
+            // 값 경계가 다르다
+            "110 20 30 40과 10 20 30 400은 다릅니다."})
+    void 비공개_값이_아닌_글은_지우지_않는다(String text) {
+        AnalysisResult result = analysis(List.of(), List.of("예제 1에서 틀렸습니다."), List.of(text));
+
+        assertThat(verify(result, AnalysisSamples.reversePyramid(), HIDDEN).fixes()).isEmpty();
+    }
+
+    @Test
+    void 몇_번째_비공개_테스트인지_말한_항목은_지운다() {
+        AnalysisResult result = new AnalysisResult("요약", List.of(), List.of("예제 1에서 틀렸습니다."),
+                List.of("3번째 비공개 테스트에서 틀린 것 같습니다.", "비공개 테스트 9개 중 7개에서 틀린 것 같습니다."),
+                new AnalysisResult.Hints("비공개 테스트 2번을 떠올려 보세요.", "힌트 2", "힌트 3"));
+
+        FactCheck.Outcome<AnalysisResult> outcome = verify(result, AnalysisSamples.reversePyramid());
+
+        assertThat(outcome.result().guesses()).containsExactly("비공개 테스트 9개 중 7개에서 틀린 것 같습니다.");
+        assertThat(FactCheck.describe(outcome.fixes()))
+                .isEqualTo("HIDDEN_ORDINAL@guesses[0],HIDDEN_ORDINAL@hints.observation(kept)");
+    }
+
+    // ===== 기록·빈 입력 =====
+
+    @Test
+    void 빈_입력에서도_던지지_않는다() {
+        AnalysisInput empty = new AnalysisInput(
+                AnalysisInput.Problem.of("제목", null, null, null, null, 1000, 128, List.of()),
+                AnalysisInput.Submission.of(Language.PYTHON, Verdict.WRONG_ANSWER, null, null, null, "", null), null, null);
+        AnalysisResult result = new AnalysisResult("요약", List.of(1), List.of("예제 1에서 틀렸습니다.", "비공개 테스트 3개"),
+                List.of("1번째 줄"), HINTS);
+
+        assertThatCode(() -> FactCheck.verify(result, FactCheck.Context.of(empty, FactCheck.Sources.NONE)))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> FactCheck.verify(result, FactCheck.Context.of(empty,
+                new FactCheck.Sources(Arrays.asList("1 2 9 9 9 9", null), Arrays.asList(null, "x")))))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void 기록에는_응답_글과_비공개_값을_남기지_않는다() {
+        AnalysisResult result = analysis(List.of(9), List.of("비공개 입력 10 20 30 40 50에서 틀렸습니다."), List.of());
+        FactCheck.Context context = FactCheck.Context.of(AnalysisSamples.reversePyramid().input(), HIDDEN);
+
+        FactCheck.Outcome<AnalysisResult> outcome = FactCheck.verify(result, context);
+
+        String recorded = FactCheck.describe(outcome.fixes()) + outcome.meta() + context + HIDDEN;
+        assertThat(recorded).doesNotContain("10 20", "틀렸", "안녕", "합");
+    }
+
+    // ===== F3 =====
+
+    @Test
+    void 코드_리뷰는_범위_밖_줄을_짚은_개선점만_지우고_나머지는_센다() {
+        CodeReviewResult result = new CodeReviewResult("요약입니다.",
+                new CodeReviewResult.Complexity("9번 줄의 반복이 n번 돕니다.", "O(n)", "O(1)", "O(1)", "비교", false),
+                List.of("12번 줄의 변수 이름을 바꾸면 좋아요.", "3~5번 줄을 함수로 묶으면 좋아요."),
+                List.of(new CodeReviewResult.Concept("등차수열의 합", "반복 없이 구할 수 있어요.")));
+
+        FactCheck.Outcome<CodeReviewResult> outcome = FactCheck.verify(result, 5);
+
+        assertThat(outcome.result().improvements()).containsExactly("3~5번 줄을 함수로 묶으면 좋아요.");
+        assertThat(outcome.result().complexity()).isEqualTo(result.complexity());
+        assertThat(FactCheck.describe(outcome.fixes()))
+                .isEqualTo("LINE_OUT_OF_RANGE@complexity.basis(kept),LINE_OUT_OF_RANGE@improvements[0]");
+        assertThat(outcome.meta()).isEqualTo(new FactCheck.Meta(FactCheck.VERSION, 1, 0, 1,
+                List.of("LINE_OUT_OF_RANGE@complexity.basis(kept)", "LINE_OUT_OF_RANGE@improvements[0]")));
+    }
+
+    // ===== 도우미 =====
+
+    private static AnalysisResult analysis(List<Integer> lines, List<String> facts, List<String> guesses) {
+        return new AnalysisResult("요약", lines, facts, guesses, HINTS);
+    }
+
+    private static FactCheck.Outcome<AnalysisResult> verify(AnalysisResult result, AnalysisSamples.Case sample) {
+        return verify(result, sample, FactCheck.Sources.NONE);
+    }
+
+    private static FactCheck.Outcome<AnalysisResult> verify(AnalysisResult result, AnalysisSamples.Case sample,
+            FactCheck.Sources sources) {
+        return FactCheck.verify(result, FactCheck.Context.of(sample.input(), sources));
+    }
+
+    // 사실 하나를 검사해 걸린 사유를 돌려준다.
+    private static List<Kind> kinds(AnalysisSamples.Case sample, String fact) {
+        return verify(analysis(List.of(), List.of(fact), List.of()), sample).fixes().stream().map(Fix::kind).toList();
+    }
+
+    private static List<String> fixes(AnalysisSamples.Case sample, String... facts) {
+        return verify(analysis(List.of(), List.of(facts), List.of()), sample).fixes().stream()
+                .map(fix -> fix.kind() + "@" + fix.field()).toList();
+    }
+
+    private static List<String> refs(String text) {
+        return FactCheck.lineRefs(AnswerGuard.normalize(text)).stream().map(r -> r[0] + "-" + r[1]).toList();
+    }
+}

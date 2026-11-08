@@ -432,6 +432,26 @@ class CodeReviewControllerTest {
         awaitStatus(results.getFirst().equals(true) ? wrong : right, "COMPLETED");
     }
 
+    @Test
+    void 제출_코드에_없는_줄을_짚은_개선점은_지우고_검증_내역을_남긴다() throws Exception {
+        // 제출 코드는 5줄이다.
+        long id = accepted(userId);
+        llm.answer = FakeLlm.always(() -> FakeLlm.review("12번 줄의 변수 이름을 더 분명하게 지으면 좋아요."));
+
+        mvc.perform(post(review(id)).with(as(userId))).andExpect(status().isAccepted());
+        awaitStatus(id, "COMPLETED");
+
+        mvc.perform(get(review(id)).with(as(userId)))
+                .andExpect(jsonPath("$.blocked").value(false))
+                .andExpect(jsonPath("$.improvements", hasSize(0)))
+                .andExpect(jsonPath("$.complexity.basis").value("3번 줄의 반복이 n번 돕니다."))
+                .andExpect(jsonPath("$.factCheck").doesNotExist());
+        assertThat(jdbc.sql("select (content -> 'factCheck')::text from ai_reviews where submission_id = :id")
+                .param("id", id).query(String.class).single())
+                .isEqualTo("{\"fixes\": [\"LINE_OUT_OF_RANGE@improvements[0]\"], \"demoted\": 0, \"removed\": 1, \"version\": 1,"
+                        + " \"unresolved\": 0}");
+    }
+
     private long completedReview() throws Exception {
         long id = accepted(userId);
         mvc.perform(post(review(id)).with(as(userId)));
