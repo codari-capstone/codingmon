@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { DIFFICULTIES } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
-import { Input } from '@/components/ui/input'
+import { Input, UNDERLINE_FIELD } from '@/components/ui/input'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { conceptTagsQuery } from '@/features/problems/problemsQuery'
 import { Field } from './Field'
@@ -46,7 +46,7 @@ export function BasicInfoTab({ form }: { form: ProblemFormApi }) {
         <select
           id="difficulty"
           {...register('difficulty')}
-          className="border-input bg-background min-h-11 rounded-md border px-3 text-sm"
+          className={`${UNDERLINE_FIELD} min-h-11`}
         >
           {DIFFICULTIES.map((value) => (
             <option key={value} value={value}>
@@ -94,7 +94,9 @@ export function BasicInfoTab({ form }: { form: ProblemFormApi }) {
           </div>
         )}
 
-        {errors.tags ? <p className="text-destructive text-sm">{errors.tags.message}</p> : null}
+        {errors.tags ? (
+          <p className="text-destructive-text text-sm">{errors.tags.message}</p>
+        ) : null}
       </fieldset>
 
       <Field

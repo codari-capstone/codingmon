@@ -115,7 +115,7 @@ export function Component() {
   if (result !== 'signup') {
     // 이동하는 동안의 한 화면이다. 비워 두면 흰 화면이 번쩍인다.
     return (
-      <section className="mx-auto flex w-full max-w-sm flex-col gap-6 py-10">
+      <section className="bg-card mx-auto my-10 flex w-full max-w-md flex-col gap-6 rounded-2xl p-6 sm:p-8">
         <p role="status" className="text-sm">
           GitHub 계정을 확인하고 있어요…
         </p>
@@ -133,7 +133,7 @@ export function Component() {
   if (isAuthenticated) return <Navigate to="/problems" replace />
 
   return (
-    <section className="mx-auto flex w-full max-w-sm flex-col gap-6 py-10">
+    <section className="bg-card mx-auto my-10 flex w-full max-w-md flex-col gap-6 rounded-2xl p-6 sm:p-8">
       <h1 className="page-title">닉네임 정하기</h1>
       <p className="text-muted-foreground text-sm">
         GitHub 계정으로 처음 오셨어요. 쓸 닉네임만 정하면 가입이 끝나요.
@@ -157,7 +157,7 @@ export function Component() {
         <NicknameField check={nickname} inputRef={nicknameInput} busy={signUp.isPending} />
 
         {signUp.isError ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive-text text-sm">
             {problemMessage(signUp.error)}
           </p>
         ) : null}

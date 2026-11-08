@@ -7,6 +7,7 @@ import type { CaseType } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Button } from '@/components/ui/button'
+import { UNDERLINE_FIELD } from '@/components/ui/input'
 import { problemMessage } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { adminTestCasesQuery, readTestCaseZip, saveTestCases } from './adminProblemQuery'
@@ -247,31 +248,31 @@ export function TestCasesTab({
       ) : null}
 
       {zipError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {zipError}
         </p>
       ) : null}
 
       {readZip.error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(readZip.error)}
         </p>
       ) : null}
 
       {save.error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(save.error)}
         </p>
       ) : null}
 
       {rowsWithError.length > 0 ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {`${rowsWithError.map((index) => `${index + 1}번`).join('·')} 케이스를 고쳐 주세요`}
         </p>
       ) : null}
 
       {form.formState.errors.cases?.message ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {form.formState.errors.cases.message}
         </p>
       ) : null}
@@ -290,7 +291,7 @@ export function TestCasesTab({
               const row = watched[index] ?? field
 
               return (
-                <li key={field.id} className="border-border rounded-xl border">
+                <li key={field.id} className="bg-muted/40 rounded-xl">
                   <details open={form.formState.errors.cases?.[index] !== undefined || undefined}>
                     <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
                       <span className="font-medium">{`${index + 1}. ${CASE_TYPE_LABEL[row.caseType]}`}</span>
@@ -315,7 +316,7 @@ export function TestCasesTab({
                         <select
                           id={`cases.${index}.caseType`}
                           {...form.register(`cases.${index}.caseType`)}
-                          className="border-input bg-background min-h-11 rounded-md border px-3 text-sm"
+                          className={`${UNDERLINE_FIELD} min-h-11`}
                         >
                           <option value="SAMPLE">공개 예제 (문제 화면에 보여요)</option>
                           <option value="HIDDEN">비공개 (채점에만 써요)</option>
@@ -332,10 +333,10 @@ export function TestCasesTab({
                           {...form.register(`cases.${index}.input`, {
                             onChange: () => forgetMeta(index),
                           })}
-                          className="border-input bg-background rounded-md border px-3 py-2 font-mono text-sm"
+                          className={`${UNDERLINE_FIELD} py-2 font-mono`}
                         />
                         {form.formState.errors.cases?.[index]?.input ? (
-                          <p className="text-destructive text-sm">
+                          <p className="text-destructive-text text-sm">
                             {form.formState.errors.cases[index]?.input?.message}
                           </p>
                         ) : null}
@@ -351,10 +352,10 @@ export function TestCasesTab({
                           {...form.register(`cases.${index}.output`, {
                             onChange: () => forgetMeta(index),
                           })}
-                          className="border-input bg-background rounded-md border px-3 py-2 font-mono text-sm"
+                          className={`${UNDERLINE_FIELD} py-2 font-mono`}
                         />
                         {form.formState.errors.cases?.[index]?.output ? (
-                          <p className="text-destructive text-sm">
+                          <p className="text-destructive-text text-sm">
                             {form.formState.errors.cases[index]?.output?.message}
                           </p>
                         ) : null}
@@ -382,7 +383,7 @@ export function TestCasesTab({
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               className="min-h-11"
               disabled={rows.fields.length >= MAX_CASES}
               onClick={() => rows.append(EMPTY_CASE, { shouldFocus: false })}
@@ -391,7 +392,7 @@ export function TestCasesTab({
             </Button>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               className="min-h-11"
               onClick={() => fileInput.current?.click()}
             >

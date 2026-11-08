@@ -65,7 +65,7 @@ export function Component() {
   const ready = resetToken !== null && isValidPassword(password) && password === passwordConfirm
 
   return (
-    <section className="mx-auto flex w-full max-w-sm flex-col gap-6 py-10">
+    <section className="bg-card mx-auto my-10 flex w-full max-w-md flex-col gap-6 rounded-2xl p-6 sm:p-8">
       <h1 className="page-title">비밀번호 찾기</h1>
 
       <EmailCodeStep
@@ -111,14 +111,14 @@ export function Component() {
           onChange={(event) => setPasswordConfirm(event.target.value)}
         />
         {passwordConfirm.length > 0 && password !== passwordConfirm ? (
-          <p className="text-destructive text-sm">
+          <p className="text-destructive-text text-sm">
             비밀번호 확인이 일치하지 않아요. 같은 비밀번호를 입력해 주세요
           </p>
         ) : null}
       </div>
 
       {submit.isError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(submit.error)}
         </p>
       ) : null}

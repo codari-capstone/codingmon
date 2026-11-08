@@ -1,13 +1,13 @@
 import { useEffect } from 'react'
 
 import { Markdown } from '@/components/Markdown'
-import { Input } from '@/components/ui/input'
+import { Input, UNDERLINE_FIELD } from '@/components/ui/input'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import { Field } from './Field'
 import { FORM_LANGUAGES, pythonLimits, type ProblemFormApi } from './problemInputSchema'
 
-/** 지문 입력칸의 꾸밈. @/components/ui에 textarea가 없어 Input과 같은 값을 쓴다. */
-const TEXTAREA = 'border-input bg-background min-h-32 rounded-md border px-3 py-2 text-sm'
+/** 지문 입력칸의 꾸밈. @/components/ui에 textarea가 없어 Input과 같은 밑줄을 쓴다. */
+const TEXTAREA = `${UNDERLINE_FIELD} min-h-32 py-2`
 
 const PYTHON = FORM_LANGUAGES.indexOf('PYTHON')
 const CPP = FORM_LANGUAGES.indexOf('CPP')
@@ -78,7 +78,7 @@ export function StatementTab({
           />
           <div className="min-w-0">
             <p className="text-muted-foreground mb-1 text-xs">미리보기</p>
-            <div className="border-border/60 min-h-32 overflow-x-auto rounded-md border p-3">
+            <div className="bg-muted/40 min-h-32 overflow-x-auto rounded-xl p-3">
               {statement.trim() === '' ? (
                 <p className="text-muted-foreground text-sm">아직 쓴 내용이 없어요.</p>
               ) : (
@@ -149,11 +149,11 @@ export function StatementTab({
           return (
             // fieldset+legend로 둔다. 두 언어의 칸 이름이 같아('시간 제한 (ms)')
             // 묶음에 이름이 없으면 사람도 스크린 리더도 어느 언어의 칸인지 알 수 없다.
-            <fieldset
-              key={language}
-              className="border-border/60 flex flex-col gap-3 rounded-md border p-3"
-            >
-              <legend className="text-sm font-medium">{LANGUAGE_LABEL[language]}</legend>
+            <fieldset key={language} className="bg-muted/40 flex flex-col gap-3 rounded-xl p-3">
+              {/* float를 주면 legend가 테두리 자리(면의 위 가장자리)가 아니라 면 안 첫 줄에 그려진다 */}
+              <legend className="float-left w-full text-sm font-medium">
+                {LANGUAGE_LABEL[language]}
+              </legend>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field

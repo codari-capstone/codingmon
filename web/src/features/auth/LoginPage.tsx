@@ -56,7 +56,7 @@ export function Component() {
   if (isAuthenticated) return <Navigate to={target} replace />
 
   return (
-    <section className="mx-auto flex w-full max-w-sm flex-col gap-6 py-10">
+    <section className="bg-card mx-auto my-10 flex w-full max-w-md flex-col gap-6 rounded-2xl p-6 sm:p-8">
       <h1 className="page-title">로그인</h1>
 
       {notice ? (
@@ -70,7 +70,7 @@ export function Component() {
         지우지 않으면 경고가 둘로 겹치고, 그중 하나는 이미 지나간 일을 설명한다.
       */}
       {failure && !login.isError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {failure}
         </p>
       ) : null}
@@ -98,7 +98,9 @@ export function Component() {
             이메일
           </label>
           <Input id="email" type="email" autoComplete="email" {...register('email')} />
-          {errors.email ? <p className="text-destructive text-sm">{errors.email.message}</p> : null}
+          {errors.email ? (
+            <p className="text-destructive-text text-sm">{errors.email.message}</p>
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -112,7 +114,7 @@ export function Component() {
             {...register('password')}
           />
           {errors.password ? (
-            <p className="text-destructive text-sm">{errors.password.message}</p>
+            <p className="text-destructive-text text-sm">{errors.password.message}</p>
           ) : null}
         </div>
 
@@ -121,7 +123,7 @@ export function Component() {
           COM-07은 실패 이유를 구분해 주지 않으므로 칸별 오류가 아니라 폼 단위 한 줄이다.
         */}
         {login.isError ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive-text text-sm">
             {loginErrorMessage(login.error)}
           </p>
         ) : null}
@@ -139,7 +141,7 @@ export function Component() {
       */}
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         size="lg"
         className="min-h-11"
         onClick={() => startGitHubLogin(target)}
