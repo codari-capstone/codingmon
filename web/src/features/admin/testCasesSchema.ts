@@ -54,7 +54,7 @@ const caseSchema = z
   .transform(({ caseType, input, output }) => ({ caseType, input, output }))
 
 export const testCasesSchema = z.object({
-  cases: z.array(caseSchema).max(MAX_CASES, `케이스는 ${MAX_CASES}개까지예요`),
+  cases: z.array(caseSchema).max(MAX_CASES, `케이스는 ${MAX_CASES}개까지 넣을 수 있어요`),
 })
 
 /** 폼이 들고 있는 한 줄. 서버가 모르는 행(새로 더한 행·ZIP으로 읽은 행)은 `meta`가 null이다. */

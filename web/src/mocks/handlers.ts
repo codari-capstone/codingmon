@@ -103,7 +103,7 @@ const ZIP_CASES: TestCaseInput[] = [
  */
 function checkTestCases(body: TestCaseInput[]) {
   if (body.length > MAX_CASES) {
-    return problem(400, 'TEST_CASE_LIMIT_EXCEEDED', `케이스는 ${MAX_CASES}개까지예요`)
+    return problem(400, 'TEST_CASE_LIMIT_EXCEEDED', `케이스는 ${MAX_CASES}개까지 넣을 수 있어요`)
   }
 
   let total = 0

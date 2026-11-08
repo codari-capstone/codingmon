@@ -72,7 +72,7 @@ describe('testCasesSchema', () => {
     const result = testCasesSchema.safeParse({ cases })
 
     expect(result.success).toBe(false)
-    expect(result.error?.issues[0]?.message).toBe('케이스는 10개까지예요')
+    expect(result.error?.issues[0]?.message).toBe('케이스는 10개까지 넣을 수 있어요')
   })
 
   it('입력 2MB를 넘긴 행을 짚어 준다', () => {
