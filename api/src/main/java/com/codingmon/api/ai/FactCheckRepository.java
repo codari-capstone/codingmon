@@ -40,8 +40,9 @@ class FactCheckRepository {
                 .param("id", submissionId)
                 .param("max", HIDDEN_TEXT_MAX_CHARS)
                 .query((rs, n) -> {
-                    List<String> hidden = new ArrayList<>(List.of((String[]) rs.getArray("hidden_inputs").getArray()));
-                    hidden.addAll(List.of((String[]) rs.getArray("hidden_outputs").getArray()));
+                    // 기대 출력(정답 값)을 먼저 둔다. 후보가 상한에 닿으면 뒤의 것은 보지 않는다(FactCheck.Hidden).
+                    List<String> hidden = new ArrayList<>(List.of((String[]) rs.getArray("hidden_outputs").getArray()));
+                    hidden.addAll(List.of((String[]) rs.getArray("hidden_inputs").getArray()));
                     List<String> open = new ArrayList<>(List.of((String[]) rs.getArray("samples").getArray()));
                     open.add(rs.getString("problem_text"));
                     open.add(rs.getString("source_code"));

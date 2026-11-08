@@ -90,8 +90,9 @@ final class FactCheck {
         }
     }
 
-    // 비공개 값 검사 자료(FactCheckRepository). hidden은 비공개 케이스의 입력·기대 출력, open은 학습자가 이미 볼 수 있는 글
-    // (지문·입출력 설명·제약, 공개 예제와 그 실행 출력, 제출 코드, 컴파일 메시지)이다. toString에는 개수만 넣는다.
+    // 비공개 값 검사 자료(FactCheckRepository). hidden은 비공개 케이스의 기대 출력, 그다음 입력이다. 후보가 상한에 닿으면
+    // 뒤의 것을 보지 않으므로 더 지켜야 할 것(정답 값)을 앞에 둔다. open은 학습자가 이미 볼 수 있는 글(지문·입출력 설명·제약,
+    // 공개 예제와 그 실행 출력, 제출 코드, 컴파일 메시지)이다. toString에는 개수만 넣는다.
     record Sources(List<String> hidden, List<String> open) {
 
         static final Sources NONE = new Sources(List.of(), List.of());
@@ -735,6 +736,7 @@ final class FactCheck {
     // ===== 비공개 값 =====
 
     // 비공개 케이스의 입력·기대 출력에서 뽑은 후보. 응답 글의 이어진 값과 하나라도 같으면 누출로 본다.
+    // Sources.hidden 순서대로 뽑다가 HIDDEN_MAX_CANDIDATES에 닿으면 멈춘다.
     // values는 ASCII만 있는 후보(값 사이 공백 하나), phrases는 한글 같은 글자가 섞인 후보(글 안에 들어 있는지 본다).
     // 학습자가 이미 볼 수 있는 글(open)에 있는 값, 짧은 값, 같은 값의 되풀이, 1씩 늘거나 주는 정수열은 후보로 삼지 않는다.
     record Hidden(Set<String> values, Set<String> phrases) {

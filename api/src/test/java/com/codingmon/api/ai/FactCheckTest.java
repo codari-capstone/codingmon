@@ -3,6 +3,7 @@ package com.codingmon.api.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -281,6 +282,25 @@ class FactCheckTest {
         assertThat(blocked(sources, "[100,200,300,400]을 넣어 보세요.")).isTrue();
         // 천 단위 쉼표는 지워서 맞춘다
         assertThat(blocked(sources, "답이 10,000,000이 되는지 보세요.")).isTrue();
+    }
+
+    @Test
+    void 후보가_상한에_닿으면_앞에_둔_비공개_값까지만_본다() {
+        // 서로 다른 정수 1,000개짜리 입력 하나는 4개씩 이은 조각 997개를 만든다. 셋이면 셋째에서 상한(2,000)에 닿는다.
+        List<String> inputs = List.of(1, 2, 3).stream().map(k -> {
+            StringBuilder line = new StringBuilder();
+            for (int i = 0; i < 1_000; i++) {
+                line.append(i * 7 + k * 100_000).append(' ');
+            }
+            return line.toString();
+        }).toList();
+        List<String> answerFirst = new ArrayList<>(List.of("SECRET ANSWER-XYZ\n"));
+        answerFirst.addAll(inputs);
+        List<String> answerLast = new ArrayList<>(inputs);
+        answerLast.add("SECRET ANSWER-XYZ\n");
+
+        assertThat(blocked(new FactCheck.Sources(answerFirst, List.of()), "SECRET ANSWER-XYZ를 보세요.")).isTrue();
+        assertThat(blocked(new FactCheck.Sources(answerLast, List.of()), "SECRET ANSWER-XYZ를 보세요.")).isFalse();
     }
 
     @ParameterizedTest

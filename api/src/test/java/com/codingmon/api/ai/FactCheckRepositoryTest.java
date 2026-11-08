@@ -63,9 +63,9 @@ class FactCheckRepositoryTest {
 
         FactCheck.Sources sources = repository.find(id).orElseThrow();
 
-        // 입력을 ordinal 순으로, 그다음 기대 출력을 ordinal 순으로 읽는다. 긴 원문은 앞부분만 읽는다.
-        assertThat(sources.hidden()).containsExactly("HIDDEN-IN-2\n",
-                "x".repeat(FactCheckRepository.HIDDEN_TEXT_MAX_CHARS), "HIDDEN-OUT-2\n", "HIDDEN-OUT-3\n");
+        // 기대 출력을 ordinal 순으로, 그다음 입력을 ordinal 순으로 읽는다. 긴 원문은 앞부분만 읽는다.
+        assertThat(sources.hidden()).containsExactly("HIDDEN-OUT-2\n", "HIDDEN-OUT-3\n", "HIDDEN-IN-2\n",
+                "x".repeat(FactCheckRepository.HIDDEN_TEXT_MAX_CHARS));
         assertThat(sources.open()).containsExactly("1 2\n\n3\n\n-1\n\noops", "5 7\n\n12\n",
                 "A+B\n두 수를 더한다\na b\na+b\n1 ≤ a, b ≤ 10", "a, b = map(int, input().split())\nprint(a - b)\n");
         assertThat(sources.toString()).doesNotContain("HIDDEN", "1 2");
