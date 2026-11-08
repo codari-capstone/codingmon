@@ -40,7 +40,9 @@ class OpenAiCompatibleLlmClient implements LlmClient {
 
     private static final String COMPLETIONS = "/v1/chat/completions";
 
-    // 처음 요청과 스키마를 어겼을 때의 재요청 1회
+    // 처음 요청과 스키마를 어겼을 때의 재요청 1회. 전송 오류(타임아웃·연결 실패·5xx·429)는 다시 부르지 않는다.
+    // 응답을 못 받은 호출은 모델이 아직 만들고 있을 수 있어(불확실한 호출) 다시 부르면 팀 서버에 일이 쌓인다(#81).
+    // 정답 코드 검사의 1회 재생성(AiReviewRunner)과 겹치면 사용자 요청 한 번에 최대 4번 부른다.
     private static final int MAX_ATTEMPTS = 2;
 
     // 스키마에 $schema가 없으면 이 판으로 읽는다.
@@ -147,8 +149,10 @@ class OpenAiCompatibleLlmClient implements LlmClient {
             log.warn(message);
             throw new LlmException(LlmException.Kind.UNAVAILABLE, message, null, usedSoFar);
         } catch (RestClientException e) {
-            // 타임아웃, 연결 실패, 해석할 수 없는 응답
-            throw new LlmException(LlmException.Kind.UNAVAILABLE, "LLM 서버를 호출하지 못했다", e, usedSoFar);
+            // 타임아웃, 연결 실패, 해석할 수 없는 응답. 실패 로그(AiReviewRunner)에서 타임아웃과 연결 실패를 가를 수 있게
+            // 원인 예외의 이름(SocketTimeoutException, ConnectException 등)만 붙인다. 원인 메시지에는 주소가 들어 있다.
+            String cause = e.getMostSpecificCause().getClass().getSimpleName();
+            throw new LlmException(LlmException.Kind.UNAVAILABLE, "LLM 서버를 호출하지 못했다(" + cause + ")", e, usedSoFar);
         }
         if (response == null) {
             throw new LlmException(LlmException.Kind.UNAVAILABLE, "LLM 서버가 빈 응답을 보냈다", null, usedSoFar);

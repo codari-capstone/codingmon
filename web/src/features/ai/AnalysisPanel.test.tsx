@@ -45,6 +45,7 @@ function analysis(over: Partial<SubmissionAnalysis> = {}): SubmissionAnalysis {
   return {
     submissionId: WRONG,
     status: 'COMPLETED',
+    failureReason: null,
     blocked: false,
     summary: '요약 문장',
     suspectLines: [2],
@@ -111,7 +112,14 @@ describe('AnalysisPanel', () => {
     it('만들지 못했으면 다시 시도할 수 있다', async () => {
       const user = userEvent.setup()
       stored(
-        analysis({ status: 'FAILED', summary: null, suspectLines: [], facts: [], guesses: [] }),
+        analysis({
+          status: 'FAILED',
+          failureReason: 'UNAVAILABLE',
+          summary: null,
+          suspectLines: [],
+          facts: [],
+          guesses: [],
+        }),
       )
       let requests = 0
       server.use(

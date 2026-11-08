@@ -271,7 +271,7 @@ function analysisView(
   { createdAt, revealed }: MockAnalysis,
   pending = false,
 ): SubmissionAnalysis {
-  const base = { submissionId, blocked: false, createdAt, quota: mockQuota() }
+  const base = { submissionId, failureReason: null, blocked: false, createdAt, quota: mockQuota() }
   if (pending) {
     return {
       ...base,

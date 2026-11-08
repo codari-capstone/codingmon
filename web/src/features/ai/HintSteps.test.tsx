@@ -172,6 +172,7 @@ function analysisAt(level: number): SubmissionAnalysis {
   return {
     submissionId: WRONG,
     status: 'COMPLETED',
+    failureReason: null,
     blocked: false,
     summary: '요약',
     suspectLines: [],

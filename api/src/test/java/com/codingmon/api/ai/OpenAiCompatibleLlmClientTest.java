@@ -242,6 +242,8 @@ class OpenAiCompatibleLlmClientTest {
                     assertThat(e.kind()).isEqualTo(LlmException.Kind.RATE_LIMITED);
                     assertThat(e).hasNoCause();
                 });
+        // 429에는 다시 부르지 않는다(#81).
+        server.verify();
     }
 
     @Test
@@ -265,15 +267,21 @@ class OpenAiCompatibleLlmClientTest {
         assertThatThrownBy(() -> client.complete(REQUEST))
                 .isInstanceOfSatisfying(LlmException.class,
                         e -> assertThat(e.kind()).isEqualTo(LlmException.Kind.UNAVAILABLE));
+        server.verify();
     }
 
     @Test
     void 타임아웃은_장애다() {
         server.expect(once(), requestTo(COMPLETIONS)).andRespond(withException(new SocketTimeoutException("read timed out")));
 
+        // 응답을 못 받은 호출은 모델이 아직 만들고 있을 수 있어 다시 부르지 않는다(#81).
+        // 실패 로그에서 연결 실패와 가를 수 있게 원인 예외 이름을 메시지에 남긴다.
         assertThatThrownBy(() -> client.complete(REQUEST))
-                .isInstanceOfSatisfying(LlmException.class,
-                        e -> assertThat(e.kind()).isEqualTo(LlmException.Kind.UNAVAILABLE));
+                .isInstanceOfSatisfying(LlmException.class, e -> {
+                    assertThat(e.kind()).isEqualTo(LlmException.Kind.UNAVAILABLE);
+                    assertThat(e).hasMessageContaining("SocketTimeoutException");
+                });
+        server.verify();
     }
 
     @Test

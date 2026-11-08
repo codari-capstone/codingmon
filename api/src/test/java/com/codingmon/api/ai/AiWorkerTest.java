@@ -133,7 +133,7 @@ class AiWorkerTest {
     }
 
     @Test
-    void 대기열이_차면_기다리지_않고_요청_한도로_돌려준다() throws Exception {
+    void 대기열이_차면_기다리지_않고_BUSY로_돌려준다() throws Exception {
         CountDownLatch release = new CountDownLatch(1);
         CountDownLatch started = new CountDownLatch(1);
         AiWorker slow = worker(1, 1, blockedUntil(release, started));
@@ -146,7 +146,7 @@ class AiWorkerTest {
         assertThatThrownBy(() -> rejected.get(1, TimeUnit.SECONDS))
                 .isInstanceOf(ExecutionException.class)
                 .cause().isInstanceOfSatisfying(LlmException.class,
-                        e -> assertThat(e.kind()).isEqualTo(LlmException.Kind.RATE_LIMITED));
+                        e -> assertThat(e.kind()).isEqualTo(LlmException.Kind.BUSY));
 
         release.countDown();
         CompletableFuture.allOf(running, queued).get(5, TimeUnit.SECONDS);
