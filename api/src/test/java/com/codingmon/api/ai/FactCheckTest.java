@@ -61,6 +61,11 @@ class FactCheckTest {
         assertThat(fixes(AnalysisSamples.quadraticPairs(), "예제 2개는 모두 통과했지만 비공개 테스트 8개 중 2개에서 시간 초과가 났습니다.",
                 "실행 시간이 3000ms로 시간 제한 1000ms를 넘었습니다.", "큰 입력에서만 실패했습니다.")).isEmpty();
         assertThat(fixes(AnalysisSamples.storeEverything(), "메모리를 131,072KB 써서 메모리 제한 128MB를 넘었습니다.")).isEmpty();
+        // 단위를 바꾼 값은 그대로 써도, 어림해 써도 된다(18ms, 9,200KB)
+        assertThat(fixes(AnalysisSamples.reversePyramid(), "실행 시간은 0.018초입니다.", "메모리를 8.98MB 썼습니다.",
+                "메모리를 약 9MB 썼습니다.")).isEmpty();
+        assertThat(fixes(AnalysisSamples.reversePyramid(), "실행 시간은 0.019초입니다."))
+                .containsExactly("UNMATCHED_VALUE@facts[0]");
         assertThat(fixes(AnalysisSamples.joinedOutput(), "예제 1의 기대 출력은 1 2 3인데 실제 출력은 줄마다 하나씩 3줄입니다.",
                 "출력 형식이 잘못되었습니다.")).isEmpty();
     }
