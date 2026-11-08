@@ -173,6 +173,25 @@ class AnalysisPromptTest {
                         Verdict.OUTPUT_LIMIT_EXCEEDED);
     }
 
+    @Test
+    void 다시_만드는_요청은_같은_지시_뒤에_어긴_규칙과_강화한_지시를_붙인다() {
+        AnalysisInput input = input(Verdict.WRONG_ANSWER);
+        LlmRequest<AnalysisResult> first = PROMPT.request(input);
+
+        LlmRequest<AnalysisResult> retry = PROMPT.retry(input, List.of(
+                new AnswerGuard.Violation(AnswerGuard.Rule.CODE_PATTERN, "hints.direction", null),
+                new AnswerGuard.Violation(AnswerGuard.Rule.CODE_PATTERN, "hints.principle", null),
+                new AnswerGuard.Violation(AnswerGuard.Rule.ALGORITHM_NAME, "summary", "누적합")));
+
+        assertThat(retry.system()).startsWith(first.system().strip()).contains("# 다시 쓰기")
+                .doesNotContain("{{violations}}");
+        // 같은 규칙은 한 번만 적는다.
+        assertThat(retry.system().split(AnswerGuard.Rule.CODE_PATTERN.description, -1)).hasSize(2);
+        assertThat(retry.system()).contains("- " + AnswerGuard.Rule.ALGORITHM_NAME.description + ": 누적합");
+        assertThat(retry.user()).isEqualTo(first.user());
+        assertThat(retry.schema()).isSameAs(first.schema());
+    }
+
     private static AnalysisInput input(Verdict verdict) {
         return new AnalysisInput(
                 Problem.of("두 수의 합", "A+B를 출력하세요.", "A와 B", "A+B", "0 < A, B < 10", 1000, 128, List.of("입출력")),

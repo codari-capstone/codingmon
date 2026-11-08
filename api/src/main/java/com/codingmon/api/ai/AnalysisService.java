@@ -1,7 +1,9 @@
 package com.codingmon.api.ai;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -20,11 +22,18 @@ import tools.jackson.databind.json.JsonMapper;
 
 // AI 오답 분석(F1)과 힌트 공개(F2). 분석은 요청할 때 한 번 만들어 ai_reviews에 저장하고, 힌트는 저장된 것을 연 단계까지만 준다
 // (AI_FEATURES 3·4절). 같은 제출·같은 프롬프트 버전의 결과는 다시 만들지 않는다(8절).
-// 하루 한도는 AiQuotaService가 센다(#80). 정답 코드 검사(#78), 사실 검증(#79), 실패 사유 구분(#81)은 아직 없다.
+// 응답은 정답 코드 검사(AnswerGuard, #78)를 거쳐 저장한다. 걸리면 지시를 강화해 한 번 다시 만들고, 또 걸리면 차단 표시만 저장해
+// 보여 주지 않는다(8절, database-schema.md). 하루 한도는 AiQuotaService가 센다(#80). 사실 검증(#79), 실패 사유 구분(#81)은 아직 없다.
 @Service
 class AnalysisService {
 
     private static final Logger log = LoggerFactory.getLogger(AnalysisService.class);
+    // 정답 코드 검사 결과를 한 줄씩 남긴다. 품질 평가(#14)에서 위반·재생성·차단 건수를 이 로그로 센다.
+    // 응답 글은 남기지 않는다(제출 코드가 섞일 수 있다). 어긴 규칙과 위치, 걸린 태그 이름만 남긴다.
+    private static final Logger guardLog = LoggerFactory.getLogger("com.codingmon.api.ai.answer-guard");
+
+    // 가드레일에 두 번 걸린 결과. content에 이것만 담긴다.
+    static final String BLOCKED_CONTENT = "{\"blocked\": true}";
 
     // 요청 결과. started면 이 요청이 새 시도를 시작했다.
     record Requested(AnalysisView view, boolean started) {
@@ -32,6 +41,7 @@ class AnalysisService {
 
     private final AiReviewRepository reviews;
     private final AnalysisInputRepository inputs;
+    private final AnswerGuardRepository guards;
     private final AnalysisPrompt prompt;
     private final AiWorker worker;
     private final LlmClient llm;
@@ -42,11 +52,12 @@ class AnalysisService {
     // 이 서버의 처리기에 넣고 아직 끝나지 않은 ai_reviews.id. 대기열에서 오래 기다려도 버려진 것으로 보지 않게 한다.
     private final Set<Long> active = ConcurrentHashMap.newKeySet();
 
-    AnalysisService(AiReviewRepository reviews, AnalysisInputRepository inputs, AnalysisPrompt prompt, AiWorker worker,
-            LlmClient llm, UserProblemStatsRepository stats, JsonMapper json,
+    AnalysisService(AiReviewRepository reviews, AnalysisInputRepository inputs, AnswerGuardRepository guards,
+            AnalysisPrompt prompt, AiWorker worker, LlmClient llm, UserProblemStatsRepository stats, JsonMapper json,
             @Value("${app.llm.pending-timeout}") Duration pendingTimeout, AiQuotaService quota) {
         this.reviews = reviews;
         this.inputs = inputs;
+        this.guards = guards;
         this.prompt = prompt;
         this.worker = worker;
         this.llm = llm;
@@ -113,7 +124,11 @@ class AnalysisService {
         try {
             AnalysisInput input = inputs.find(submissionId)
                     .orElseThrow(() -> new IllegalStateException("분석 입력을 만들 수 없다: 제출 " + submissionId));
-            worker.submit(claim.id(), prompt.request(input)).whenComplete((response, failure) -> finish(claim, response, failure));
+            AnswerGuard.Context guard = guards.find(submissionId)
+                    .orElseThrow(() -> new IllegalStateException("정답 코드 검사 자료가 없다: 제출 " + submissionId));
+            worker.submit(claim.id(), prompt.request(input))
+                    .thenCompose(first -> guarded(claim, input, guard, first))
+                    .whenComplete((content, failure) -> finish(claim, content, failure));
         } catch (RuntimeException e) {
             log.error("AI 분석 {}을 시작하지 못했다", claim.id(), e);
             fail(claim);
@@ -121,11 +136,35 @@ class AnalysisService {
         return claim;
     }
 
+    // 처리기 스레드에서 돈다. 저장할 content를 돌려준다. 다시 만드는 요청도 같은 처리기 대기열에 넣으므로 다른 분석을 앞지르지
+    // 않고, 대기열이 차 있으면 RATE_LIMITED로 실패한다. 다시 만드는 요청의 토큰도 같은 행에 더해진다(AiWorker).
+    private CompletableFuture<String> guarded(AiReviewRepository.Claim claim, AnalysisInput input,
+            AnswerGuard.Context guard, LlmResponse<AnalysisResult> first) {
+        List<AnswerGuard.Violation> violations = AnswerGuard.check(first.value(), guard);
+        if (violations.isEmpty()) {
+            logGuard(claim, 1, "PASSED", violations);
+            return CompletableFuture.completedFuture(first.json());
+        }
+        logGuard(claim, 1, "REGENERATE", violations);
+        return worker.submit(claim.id(), prompt.retry(input, violations)).thenApply(second -> {
+            List<AnswerGuard.Violation> again = AnswerGuard.check(second.value(), guard);
+            logGuard(claim, 2, again.isEmpty() ? "PASSED" : "BLOCKED", again);
+            return again.isEmpty() ? second.json() : BLOCKED_CONTENT;
+        });
+    }
+
+    // 예: answer-guard review=12 attempt=1 outcome=REGENERATE violations=CODE_PATTERN@hints.direction
+    private static void logGuard(AiReviewRepository.Claim claim, int attempt, String outcome,
+            List<AnswerGuard.Violation> violations) {
+        guardLog.info("answer-guard review={} attempt={} outcome={} violations={}", claim.id(), attempt, outcome,
+                AnswerGuard.describe(violations));
+    }
+
     // 처리기 스레드에서 돈다(대기열이 차서 바로 거절되면 요청 스레드). 여기서 던지면 아무도 받지 않으므로 기록만 한다.
-    private void finish(AiReviewRepository.Claim claim, LlmResponse<AnalysisResult> response, Throwable failure) {
+    private void finish(AiReviewRepository.Claim claim, String content, Throwable failure) {
         if (failure == null) {
             try {
-                if (!reviews.complete(claim, response.json())) {
+                if (!reviews.complete(claim, content)) {
                     log.info("AI 분석 {}의 이전 시도가 늦게 끝나 결과를 버렸다", claim.id());
                 }
                 active.remove(claim.id());
