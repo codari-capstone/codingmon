@@ -307,17 +307,19 @@ class CodeReviewControllerTest {
 
     @Test
     void 정답_코드가_섞이면_지시를_강화해_한_번_다시_만든다() throws Exception {
+        // 학습자와 다른 정답 코드(while 반복). 첫 응답이 이 코드의 조각을 옮겨 정답 코드 조각 검사(REFERENCE_SIMILAR)에 걸린다.
         jdbc.sql("insert into reference_solutions (problem_version_id, language, solution_role, source_code)"
                 + " values (:versionId, 'PYTHON', 'REFERENCE', :code)")
-                .param("versionId", versionId).param("code", "n = int(input())\nprint(n * (n + 1) * (2 * n + 1) // 6)\n")
+                .param("versionId", versionId)
+                .param("code", "n = int(input())\ntotal = 0\ni = 1\nwhile i <= n:\n    total += i * i\n    i += 1\nprint(total)\n")
                 .update();
         long id = accepted(userId);
         AtomicInteger answered = new AtomicInteger();
         llm.answer = request -> answered.getAndIncrement() == 0
-                ? FakeLlm.review("4번 줄을 total += i * i로 바꾸세요.")
+                ? FakeLlm.review("3번 줄부터 while i <= n: total += i * i 처럼 바꾸세요.")
                 : FakeLlm.ok(request);
 
-        mvc.perform(post(review(id)).with(as(userId))).andExpect(status().isAccepted());
+        mvc.perform(post(review(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
         awaitStatus(id, "COMPLETED");
 
         mvc.perform(get(review(id)).with(as(userId)))
@@ -330,8 +332,9 @@ class CodeReviewControllerTest {
         // 두 번째 요청에만 어긴 규칙과 강화한 지시가 붙는다. 정답 코드 자체는 모델에 보내지 않는다.
         assertThat(llm.systems.getFirst()).doesNotContain("# 다시 쓰기");
         assertThat(llm.systems.get(1)).startsWith(llm.systems.getFirst().strip())
-                .contains("# 다시 쓰기", "리뷰를 받지 못한다", AnswerGuard.Rule.CODE_PATTERN.description)
-                .doesNotContain("// 6");
+                .contains("# 다시 쓰기", "리뷰를 받지 못한다", AnswerGuard.Rule.CODE_PATTERN.description,
+                        AnswerGuard.Rule.REFERENCE_SIMILAR.description)
+                .doesNotContain("while i <= n");
     }
 
     @Test
@@ -339,7 +342,7 @@ class CodeReviewControllerTest {
         long id = accepted(userId);
         llm.answer = FakeLlm.always(() -> FakeLlm.review("```\nprint(sum(i * i for i in range(n + 1)))\n```"));
 
-        mvc.perform(post(review(id)).with(as(userId))).andExpect(status().isAccepted());
+        mvc.perform(post(review(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
         awaitStatus(id, "COMPLETED");
 
         mvc.perform(get(review(id)).with(as(userId)))
@@ -370,7 +373,7 @@ class CodeReviewControllerTest {
         // 오답 분석이었다면 알고리즘 이름 규칙에 걸려 다시 만들었을 응답이다.
         llm.answer = FakeLlm.always(() -> FakeLlm.reviewWith("그리디하게 큰 수부터 고르는 방식도 생각해 보세요.", "그리디"));
 
-        mvc.perform(post(review(id)).with(as(userId))).andExpect(status().isAccepted());
+        mvc.perform(post(review(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
         awaitStatus(id, "COMPLETED");
 
         mvc.perform(get(review(id)).with(as(userId)))
