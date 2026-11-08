@@ -28,7 +28,7 @@ export function formatBytes(bytes: number): string {
  * `trim()`을 걸면 기대 출력의 마지막 줄바꿈이 사라져 채점이 틀어진다.
  *
  * 바이트 상한은 행마다 검사한다 — 어느 행이 넘쳤는지 말해 주어야 고칠 수 있다.
- * 합(10MiB)은 행 하나로는 알 수 없어 저장 직전에 `totalBytesError`로 본다.
+ * 합(10MB)은 행 하나로는 알 수 없어 저장 직전에 `totalBytesError`로 본다.
  */
 /**
  * 서버가 그 케이스에 대해 알려 준 것.
@@ -42,12 +42,10 @@ export type CaseMeta = Pick<AdminTestCase, 'inputBytes' | 'outputBytes' | 'valid
 const caseSchema = z
   .object({
     caseType: z.enum(['SAMPLE', 'HIDDEN']),
-    input: z
-      .string()
-      .refine((value) => utf8Bytes(value) <= MAX_INPUT_BYTES, '입력이 2MiB를 넘어요'),
+    input: z.string().refine((value) => utf8Bytes(value) <= MAX_INPUT_BYTES, '입력이 2MB를 넘어요'),
     output: z
       .string()
-      .refine((value) => utf8Bytes(value) <= MAX_OUTPUT_BYTES, '기대 출력이 1MiB를 넘어요'),
+      .refine((value) => utf8Bytes(value) <= MAX_OUTPUT_BYTES, '기대 출력이 1MB를 넘어요'),
     // 화면만 쓰는 값이라 검사하지 않는다. 다만 빠뜨리면 거절되므로, 메타 없는 행을
     // 만들어 두고 다른 케이스의 크기를 보여 주는 일은 생기지 않는다.
     meta: z.custom<CaseMeta | null>(),
@@ -80,7 +78,7 @@ export const EMPTY_CASE: CaseRow = { caseType: 'SAMPLE', input: '', output: '', 
 export function totalBytesError(cases: TestCaseInput[]): string | null {
   const total = cases.reduce((sum, item) => sum + utf8Bytes(item.input) + utf8Bytes(item.output), 0)
   if (total <= MAX_TOTAL_BYTES) return null
-  return `모든 케이스의 합이 10MiB를 넘어요 (지금 ${formatBytes(total)})`
+  return `모든 케이스의 합이 10MB를 넘어요 (지금 ${formatBytes(total)})`
 }
 
 /**

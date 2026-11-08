@@ -48,7 +48,7 @@ function validationLabel(validation: CaseMeta['validation']): string {
 /**
  * 테스트케이스 탭 (ADM-04).
  *
- * **표가 아니라 펼침 목록이다.** 입력이 2MiB까지 오므로 열 줄에 textarea를 스물 깔면
+ * **표가 아니라 펼침 목록이다.** 입력이 2MB까지 오므로 열 줄에 textarea를 스물 깔면
  * "열 개가 제대로 들어왔나"를 한눈에 볼 수 없다. 주 입력 경로가 ZIP이라(계약·#164) 이
  * 화면의 첫 일은 **올린 것을 확인하는 것**이고, 고칠 행만 펼친다. `<details>`는 상태도
  * 필요 없다.
@@ -77,7 +77,7 @@ export function TestCasesTab({
   // zod가 걸러 내므로, 표가 들고 있는 서버 메타데이터가 저장 본문에 섞이지 않는다.
   //
   // `reValidateMode`를 기본값(onChange)으로 두면 저장이 한 번 실패한 뒤로는 어느 칸에서든
-  // 한 글자 칠 때마다 전체 케이스를 다시 인코딩한다. 입력이 2MiB까지 오는 폼이라 그만큼이
+  // 한 글자 칠 때마다 전체 케이스를 다시 인코딩한다. 입력이 2MB까지 오는 폼이라 그만큼이
   // 매 타이핑마다 돌아간다.
   const form = useForm<TestCasesForm, unknown, TestCasesBody>({
     resolver: zodResolver(testCasesSchema),
@@ -171,10 +171,10 @@ export function TestCasesTab({
     if (!file) return
 
     setZipError(null)
-    // 계약: "ZIP 파일 자체도 10MiB까지고, 넘으면 code 없는 413이다. 화면은 올리기 전에
+    // 계약: "ZIP 파일 자체도 10MB까지고, 넘으면 code 없는 413이다. 화면은 올리기 전에
     // 파일 크기를 확인해 막는다." 413에는 보여 줄 문구가 없어 여기서 막아야 한다.
     if (file.size > MAX_ZIP_BYTES) {
-      setZipError(`ZIP 파일은 10MiB까지예요 (고른 파일 ${formatBytes(file.size)})`)
+      setZipError(`ZIP 파일은 10MB까지예요 (고른 파일 ${formatBytes(file.size)})`)
       return
     }
     readZip.mutate(file)
@@ -216,7 +216,7 @@ export function TestCasesTab({
   /**
    * 오류가 있는 행 번호.
    *
-   * 행별 오류는 접힌 `<details>` 안에만 그려진다. 그대로 두면 2MiB를 넘긴 행이 접혀
+   * 행별 오류는 접힌 `<details>` 안에만 그려진다. 그대로 두면 2MB를 넘긴 행이 접혀
    * 있을 때 저장을 눌러도 아무 일도 없는 것처럼 보이고, 어느 행인지 찾을 길이 없다.
    */
   const rowsWithError = rows.fields
@@ -237,7 +237,7 @@ export function TestCasesTab({
         {/* 공개에 몇 개가 필요한지는 적지 않는다. ADM-06 공개 조건 체크리스트가 그 일을
             하고(#37 PR C), 같은 수를 두 곳에 쓰면 한쪽만 고쳐지는 자리가 생긴다. */}
         <p className="text-sm">{`공개 예제 ${sampleCount}개 · 비공개 ${hiddenCount}개`}</p>
-        <p className="text-muted-foreground text-xs">{`케이스는 ${MAX_CASES}개까지, 입력 2MiB·기대 출력 1MiB·합 10MiB까지예요`}</p>
+        <p className="text-muted-foreground text-xs">{`케이스는 ${MAX_CASES}개까지, 입력 2MB·기대 출력 1MB·합 10MB까지예요`}</p>
       </div>
 
       {notice ? (
@@ -296,7 +296,7 @@ export function TestCasesTab({
                       <span className="font-medium">{`${index + 1}. ${CASE_TYPE_LABEL[row.caseType]}`}</span>
                       <span className="text-muted-foreground text-xs">
                         {/* 바이트는 서버가 세어 준 값을 쓴다(계약이 담아 주는 이유다).
-                            고친 행은 저장할 때 세므로 그 말을 적는다 — 2MiB 값에
+                            고친 행은 저장할 때 세므로 그 말을 적는다 — 2MB 값에
                             매 타이핑마다 TextEncoder를 돌리지 않는다. */}
                         {row.meta === null
                           ? '저장하면 크기를 계산해요'

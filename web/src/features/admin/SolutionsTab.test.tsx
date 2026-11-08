@@ -182,7 +182,7 @@ describe('SolutionsTab (ADM-05)', () => {
     await retype(user, 'PYTHON', 'x'.repeat(64 * 1024 + 1))
     await user.click(saveButton())
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Python 코드가 64KB를 넘어요')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Python 정답 코드가 64KB를 넘어요')
     expect(sent).toHaveLength(0)
   })
 

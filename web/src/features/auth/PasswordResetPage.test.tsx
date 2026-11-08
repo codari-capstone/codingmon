@@ -185,7 +185,9 @@ describe('비밀번호 재설정 화면', () => {
     await typePasswords(user, mockAccounts[0]!.password)
     await user.click(screen.getByRole('button', { name: '재설정' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('현재 비밀번호와 달라야 해요')
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '지금 쓰는 비밀번호와 같아요. 다른 비밀번호를 입력해 주세요',
+    )
     expect(screen.getByText('인증됐어요')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '재설정' })).toBeEnabled()
   })

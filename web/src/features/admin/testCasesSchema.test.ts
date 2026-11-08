@@ -28,16 +28,16 @@ describe('formatBytes', () => {
     expect(formatBytes(512)).toBe('512B')
   })
 
-  it('1MiB 아래는 KB로 쓴다', () => {
+  it('1MB 아래는 KB로 쓴다', () => {
     expect(formatBytes(2048)).toBe('2.0KB')
   })
 
-  it('1MiB 이상은 MB로 쓴다', () => {
+  it('1MB 이상은 MB로 쓴다', () => {
     expect(formatBytes(3 * 1024 * 1024)).toBe('3.0MB')
   })
 })
 
-// 2MiB짜리를 테스트마다 새로 만들면 한 파일에서 10MB 넘게 할당해, 병렬로 도는 다른
+// 2MB짜리를 테스트마다 새로 만들면 한 파일에서 10MB 넘게 할당해, 병렬로 도는 다른
 // 테스트 파일까지 느려진다(5초 제한에 걸린 파일이 있었다). 한 번 만들어 돌려 쓴다.
 const BIG_INPUT = 'a'.repeat(MAX_INPUT_BYTES)
 const BIG_OUTPUT = 'a'.repeat(MAX_OUTPUT_BYTES)
@@ -75,7 +75,7 @@ describe('testCasesSchema', () => {
     expect(result.error?.issues[0]?.message).toBe('케이스는 10개까지예요')
   })
 
-  it('입력 2MiB를 넘긴 행을 짚어 준다', () => {
+  it('입력 2MB를 넘긴 행을 짚어 준다', () => {
     const result = testCasesSchema.safeParse({
       cases: [
         { caseType: 'SAMPLE', input: '', output: '', meta: null },
@@ -86,10 +86,10 @@ describe('testCasesSchema', () => {
     expect(result.success).toBe(false)
     // 어느 행인지 말해 주어야 고칠 수 있다.
     expect(result.error?.issues[0]?.path).toEqual(['cases', 1, 'input'])
-    expect(result.error?.issues[0]?.message).toBe('입력이 2MiB를 넘어요')
+    expect(result.error?.issues[0]?.message).toBe('입력이 2MB를 넘어요')
   })
 
-  it('기대 출력 1MiB를 넘긴 행을 짚어 준다', () => {
+  it('기대 출력 1MB를 넘긴 행을 짚어 준다', () => {
     const result = testCasesSchema.safeParse({
       cases: [{ caseType: 'SAMPLE', input: '', output: BIG_OUTPUT + 'a', meta: null }],
     })
@@ -138,7 +138,7 @@ describe('testCasesSchema', () => {
 })
 
 describe('totalBytesError', () => {
-  it('합이 10MiB 아래면 null이다', () => {
+  it('합이 10MB 아래면 null이다', () => {
     expect(totalBytesError([{ caseType: 'SAMPLE', input: '1\n', output: '1\n' }])).toBeNull()
   })
 
@@ -146,14 +146,14 @@ describe('totalBytesError', () => {
    * 행마다는 상한 안인데 합이 넘는 경우다. 이것만 스키마에 넣지 않은 까닭은 오류가 붙을
    * 자리가 행이 아니라 표 전체라서다.
    */
-  it('행마다는 괜찮아도 합이 10MiB를 넘으면 문구를 준다', () => {
+  it('행마다는 괜찮아도 합이 10MB를 넘으면 문구를 준다', () => {
     const cases = Array.from({ length: 6 }, () => ({
       caseType: 'HIDDEN' as const,
       input: BIG_INPUT,
       output: '',
     }))
 
-    expect(totalBytesError(cases)).toContain('10MiB를 넘어요')
+    expect(totalBytesError(cases)).toContain('10MB를 넘어요')
     expect(totalBytesError(cases)).toContain('12.0MB')
   })
 })

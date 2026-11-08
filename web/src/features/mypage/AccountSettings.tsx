@@ -226,7 +226,11 @@ export function PasswordForm({ user }: { user: CurrentUser }) {
         <p className="text-muted-foreground text-sm">
           10~20자, 영문 대문자·소문자·숫자·특수문자를 각각 하나 이상
         </p>
-        {same ? <p className="text-destructive text-sm">현재 비밀번호와 달라야 해요</p> : null}
+        {same ? (
+          <p className="text-destructive text-sm">
+            지금 쓰는 비밀번호와 같아요. 다른 비밀번호를 입력해 주세요
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-col gap-1.5">
         <PasswordInput
@@ -236,7 +240,11 @@ export function PasswordForm({ user }: { user: CurrentUser }) {
           onChange={setNewPasswordConfirm}
           autoComplete="new-password"
         />
-        {mismatch ? <p className="text-destructive text-sm">비밀번호가 일치하지 않아요</p> : null}
+        {mismatch ? (
+          <p className="text-destructive text-sm">
+            비밀번호 확인이 일치하지 않아요. 같은 비밀번호를 입력해 주세요
+          </p>
+        ) : null}
       </div>
       {submit.isError ? (
         <p role="alert" className="text-destructive text-sm">

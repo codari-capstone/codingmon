@@ -154,7 +154,9 @@ export function Component() {
           onChange={(event) => setPasswordConfirm(event.target.value)}
         />
         {passwordConfirm.length > 0 && password !== passwordConfirm ? (
-          <p className="text-destructive text-sm">비밀번호가 일치하지 않아요</p>
+          <p className="text-destructive text-sm">
+            비밀번호 확인이 일치하지 않아요. 같은 비밀번호를 입력해 주세요
+          </p>
         ) : null}
       </div>
 
