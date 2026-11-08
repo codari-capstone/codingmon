@@ -72,7 +72,7 @@ class CodeReviewService {
     // 처리기에 넣을 요청. 입력(문제와 제출만)과 정답 코드 검사 자료를 읽는다. 읽지 못하면 던지고, runner가 행을 FAILED로 바꾼다.
     // 검증 정답 코드는 검사에만 쓰고 모델에는 보내지 않는다.
     private AiReviewRunner.Generation<CodeReviewResult> generation(long submissionId) {
-        CodeReviewInput input = inputs.find(submissionId).map(CodeReviewInput::of)
+        CodeReviewInput input = inputs.findReview(submissionId)
                 .orElseThrow(() -> new IllegalStateException("리뷰 입력을 만들 수 없다: 제출 " + submissionId));
         AnswerGuard.Context guard = guards.find(submissionId)
                 .orElseThrow(() -> new IllegalStateException("정답 코드 검사 자료가 없다: 제출 " + submissionId));
