@@ -7,7 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.codingmon.api.ApiErrors;
 import com.codingmon.api.submission.UserProblemStatsRepository;
 
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 // AI 오답 분석(F1)과 힌트 공개(F2). 분석은 요청할 때 한 번 만들어 ai_reviews에 저장하고, 힌트는 저장된 것을 연 단계까지만 준다
@@ -84,7 +83,7 @@ class AnalysisService {
         if (stored.status() != AiReviewRepository.Status.COMPLETED) {
             throw ApiErrors.error(HttpStatus.CONFLICT, "ANALYSIS_NOT_READY", "분석이 끝난 뒤에 힌트를 볼 수 있어요");
         }
-        if (blocked(stored)) {
+        if (stored.blocked()) {
             throw ApiErrors.error(HttpStatus.CONFLICT, "ANALYSIS_BLOCKED", "이 분석은 보여 줄 수 없어요");
         }
         if (level > stored.revealedHintLevel() + 1) {
@@ -96,7 +95,7 @@ class AnalysisService {
         reviews.revealHint(stored.id(), level);
         stats.recordHintRevealed(submissionId, level);
         return view(userId, new AiReviewRepository.Stored(stored.id(), stored.submissionId(), stored.status(),
-                stored.content(), level, stored.createdAt(), stored.completedAt()));
+                stored.content(), stored.blocked(), level, stored.createdAt(), stored.completedAt()));
     }
 
     // 처리기에 넣을 요청. 입력과 정답 코드 검사 자료를 읽는다. 읽지 못하면 던지고, runner가 행을 FAILED로 바꾼다.
@@ -112,19 +111,10 @@ class AnalysisService {
     // 남은 횟수는 결과를 만든 날이 아니라 응답하는 지금 기준이다(contracts의 SubmissionAnalysis.quota).
     private AnalysisView view(long userId, AiReviewRepository.Stored stored) {
         AiQuota today = quota.status(userId);
-        if (stored.status() != AiReviewRepository.Status.COMPLETED) {
-            return AnalysisView.of(stored, false, null, today);
+        if (stored.status() != AiReviewRepository.Status.COMPLETED || stored.blocked()) {
+            return AnalysisView.of(stored, stored.blocked(), null, today);
         }
-        JsonNode content = json.readTree(stored.content());
-        if (content.path("blocked").asBoolean(false)) {
-            return AnalysisView.of(stored, true, null, today);
-        }
-        return AnalysisView.of(stored, false, json.treeToValue(content, AnalysisResult.class), today);
-    }
-
-    // 가드레일에 두 번 걸려 보여 주지 않기로 한 결과(#78, database-schema.md). content에 "blocked": true만 담긴다.
-    private boolean blocked(AiReviewRepository.Stored stored) {
-        return json.readTree(stored.content()).path("blocked").asBoolean(false);
+        return AnalysisView.of(stored, false, json.readValue(stored.content(), AnalysisResult.class), today);
     }
 
     private String version() {

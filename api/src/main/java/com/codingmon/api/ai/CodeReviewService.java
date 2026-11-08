@@ -5,7 +5,6 @@ import org.springframework.stereotype.Service;
 
 import com.codingmon.api.ApiErrors;
 
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 // AI 코드 리뷰(F3, AI_FEATURES 6절). 정답(ACCEPTED)을 받은 본인 채점 제출에만 요청할 때 한 번 만들어 ai_reviews(CODE_REVIEW)에 저장한다.
@@ -83,14 +82,10 @@ class CodeReviewService {
     // 남은 횟수는 결과를 만든 날이 아니라 응답하는 지금 기준이다(contracts의 SubmissionCodeReview.quota).
     private CodeReviewView view(long userId, AiReviewRepository.Stored stored) {
         AiQuota today = quota.status(userId);
-        if (stored.status() != AiReviewRepository.Status.COMPLETED) {
-            return CodeReviewView.of(stored, false, null, today);
+        if (stored.status() != AiReviewRepository.Status.COMPLETED || stored.blocked()) {
+            return CodeReviewView.of(stored, stored.blocked(), null, today);
         }
-        JsonNode content = json.readTree(stored.content());
-        if (content.path("blocked").asBoolean(false)) {
-            return CodeReviewView.of(stored, true, null, today);
-        }
-        return CodeReviewView.of(stored, false, json.treeToValue(content, CodeReviewResult.class), today);
+        return CodeReviewView.of(stored, false, json.readValue(stored.content(), CodeReviewResult.class), today);
     }
 
     private String version() {
