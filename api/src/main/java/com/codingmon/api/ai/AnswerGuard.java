@@ -37,7 +37,8 @@ final class AnswerGuard {
 
     // sourceCode는 학습자가 낸 코드 원문, problemText는 제목·지문·입출력 설명·제약을 이은 글이다.
     // referenceSolutions는 그 문제 버전의 검증 정답 코드다. 사용자에게도 모델에게도 보내지 않는다.
-    record Context(String sourceCode, String problemText, List<String> conceptTags, List<String> referenceSolutions) {
+    record Context(String sourceCode, String problemText, List<String> conceptTags,
+            List<Reference> referenceSolutions) {
 
         Context {
             sourceCode = sourceCode == null ? "" : sourceCode;
@@ -45,6 +46,10 @@ final class AnswerGuard {
             conceptTags = List.copyOf(conceptTags);
             referenceSolutions = List.copyOf(referenceSolutions);
         }
+    }
+
+    // language는 reference_solutions.language(PYTHON, CPP)다. 주석 모양이 언어마다 달라 함께 둔다.
+    record Reference(String language, String code) {
     }
 
     // 정답 코드와 이만큼 이어서 같은 토큰이 나오면 같은 코드 조각으로 본다. 단, 그 안에 코드에만 나오는 토큰(STRUCTURAL)이
@@ -66,12 +71,16 @@ final class AnswerGuard {
             Pattern.compile("\\blambda\\b[^:\\n]{0,30}:"),
             // 함수·메서드 호출. 인자까지 맞춰 학습자 코드의 호출과 고친 호출을 가린다(예: range(n + 1)은 인용, range(n)은 고친 것).
             Pattern.compile("(?<![\\w.])(?:range|print|input|len|map|list|int|str|split|join|sorted|enumerate|zip|open"
+                    + "|sum|set|dict|tuple|max|min|abs|any|all|reversed|round|pow|divmod|ord|chr"
                     + "|readline|printf|scanf|getline|puts|getchar|memset|sizeof|strlen)\\s*" + ARGS),
-            Pattern.compile("\\.\\s*(?:append|sort|split|join|strip|rstrip|pop|push_back|pop_back|insert|reverse|items"
-                    + "|keys|values|get|count|index|find|substr|size|length|begin|end|readline)\\s*" + ARGS),
+            Pattern.compile("\\.\\s*(?:append|add|extend|update|remove|discard|setdefault|sort|split|join|strip|rstrip"
+                    + "|lower|upper|replace|pop|push_back|pop_back|insert|reverse|items|keys|values|get|count|index"
+                    + "|find|substr|size|length|begin|end|readline)\\s*" + ARGS),
             // C++
             Pattern.compile("#\\s*include\\b|\\busing\\s+namespace\\b|\\bint\\s+main\\s*\\(|\\bstd\\s*::"),
-            Pattern.compile("\\b(?:cout|cerr)\\s*<<|\\bcin\\s*>>"),
+            // 입출력 문장은 끝까지 맞춘다. 학습자 코드의 "cin >> a >> b"를 짚은 글과 ";"를 붙여 고친 글을 가리려는 것이다.
+            // 한글, 쉼표, 백틱이 나오면 설명 글로 돌아온 것으로 보고 거기서 끊는다.
+            Pattern.compile("\\b(?:cout|cerr)\\s*<<[^;\\n\\p{IsHangul},`]*;?|\\bcin\\s*>>[^;\\n\\p{IsHangul},`]*;?"),
             Pattern.compile("\\bfor\\s*\\([^)\\n]*;[^)\\n]*;[^)\\n]*\\)"),
             Pattern.compile("\\b(?:if|while|switch)\\s*\\([^)\\n]*\\)\\s*\\{"),
             Pattern.compile("\\b(?:int|long|short|unsigned|double|float|char|bool|string|auto|void|size_t|int64_t)"
@@ -85,10 +94,12 @@ final class AnswerGuard {
             Pattern.compile("[A-Za-z_][\\w\\[\\]]*\\s*(?:\\+=|-=|\\*=|/=|%=|<<=|>>=)\\s*[\\w(]"),
             Pattern.compile("\\b(?![Cc]\\+\\+)[A-Za-z_]\\w*\\+\\+|(?<![\\w+])\\+\\+[A-Za-z_]\\w*|\\b[A-Za-z_]\\w*--(?!-)"));
 
-    // 들여 쓴 줄에 한글이 없거나 코드 기호가 있으면 코드 줄로 본다. 들여 쓴 설명 글은 넘긴다.
+    // 들여 쓴 줄은 주석(#, //) 앞부분에 한글이 없거나 코드 기호가 있으면 코드 줄로 본다. "n = 3일 때"처럼 들여 쓴 설명 글은
+    // 넘기고, "n = n - 1  # 한 줄 줄이기"처럼 한글 주석을 단 코드는 잡는다.
     private static final Pattern INDENTED = Pattern.compile("(?m)^(?: {4,}|\\t)\\S.*$");
     private static final Pattern HANGUL = Pattern.compile("\\p{IsHangul}");
-    private static final Pattern CODE_SYMBOL = Pattern.compile("[;{}=]|\\w\\(");
+    private static final Pattern CODE_SYMBOL = Pattern.compile("[;{}]|\\w\\(");
+    private static final Pattern LINE_COMMENT = Pattern.compile("#|//");
 
     // 개념 태그 중 알고리즘 이름이 아닌 것. 반복문·조건문·문자열 같은 말은 오답 설명에 늘 나오므로 검사하지 않는다.
     // "출력 형식"은 판정 이름("출력 형식이 잘못되었습니다")에도 들어 있다.
@@ -131,15 +142,13 @@ final class AnswerGuard {
             "main", "import", "from", "in", "and", "or", "not", "break", "continue", "vector", "auto", "void", "map",
             "split", "append", "sorted", "printf", "scanf");
 
-    private static final Pattern TOKEN = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*|[0-9]+(?:\\.[0-9]+)?"
+    // 문자열 리터럴은 한 토큰이다. ' '와 ''처럼 안의 공백만 다른 리터럴을 같은 것으로 보지 않는다.
+    private static final Pattern TOKEN = Pattern.compile("'(?:[^'\\\\\\n]|\\\\.)*'|\"(?:[^\"\\\\\\n]|\\\\.)*\""
+            + "|[A-Za-z_][A-Za-z0-9_]*|[0-9]+(?:\\.[0-9]+)?"
             + "|<<=|>>=|\\*\\*=|//=|->|\\+\\+|--|<<|>>|<=|>=|==|!=|&&|\\|\\||\\+=|-=|\\*=|/=|%=|\\*\\*|//|::"
             + "|[!-/:-@\\[-^`{-~]");
     // 응답 글은 한글 같은 ASCII 밖 글자에서 끊어, 코드처럼 이어진 부분끼리만 정답 코드와 비교한다.
     private static final Pattern NON_ASCII = Pattern.compile("[^\\x00-\\x7F]+");
-    // 정답 코드의 주석. 전처리 지시문(#include 등)은 남긴다.
-    private static final Pattern COMMENTS = Pattern.compile(
-            "/\\*.*?\\*/|//[^\\n]*|(?m)#(?!\\s*(?:include|define|pragma|if|ifdef|ifndef|else|endif)\\b)[^\\n]*$",
-            Pattern.DOTALL);
 
     private AnswerGuard() {
     }
@@ -149,7 +158,7 @@ final class AnswerGuard {
         String compactSource = compact(source);
         String sourceTokens = join(tokens(source));
         List<List<String>> references = context.referenceSolutions().stream()
-                .map(code -> tokens(COMMENTS.matcher(normalize(code)).replaceAll(" ")))
+                .map(reference -> tokens(stripComments(normalize(reference.code()), reference.language())))
                 .toList();
         List<Name> names = names(context, source);
 
@@ -200,7 +209,8 @@ final class AnswerGuard {
         Matcher lines = INDENTED.matcher(text);
         while (lines.find()) {
             String line = lines.group();
-            if (!HANGUL.matcher(line).find() || CODE_SYMBOL.matcher(line).find()) {
+            String code = LINE_COMMENT.split(line, 2)[0];
+            if ((!code.isBlank() && !HANGUL.matcher(code).find()) || CODE_SYMBOL.matcher(line).find()) {
                 return true;
             }
         }
@@ -312,8 +322,75 @@ final class AnswerGuard {
                 .replace('‘', '\'').replace('’', '\'').replace('“', '"').replace('”', '"');
     }
 
-    private static String compact(String text) {
-        return text.replaceAll("\\s+", "");
+    // 공백을 지워 띄어쓰기만 다른 인용도 학습자 코드와 맞춰 본다. 따옴표 안의 공백은 남긴다(' '.join과 ''.join은 다르다).
+    // 문자열은 줄을 넘지 않는다고 보고 줄이 바뀌면 따옴표를 닫는다. 주석의 아포스트로피(don't)가 뒤 줄까지 번지지 않게 한다.
+    static String compact(String text) {
+        StringBuilder out = new StringBuilder(text.length());
+        char quote = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (quote != 0) {
+                if (c == '\n') {
+                    quote = 0;
+                    continue;
+                }
+                out.append(c);
+                if (c == '\\' && i + 1 < text.length() && text.charAt(i + 1) != '\n') {
+                    out.append(text.charAt(++i));
+                } else if (c == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (Character.isWhitespace(c)) {
+                continue;
+            }
+            if (c == '\'' || c == '"') {
+                quote = c;
+            }
+            out.append(c);
+        }
+        return out.toString();
+    }
+
+    // 정답 코드의 주석을 지운다. 파이썬은 #, C++는 //와 /* */만 주석이다. 파이썬의 //(몫)와 C++의 #include, 문자열 안의
+    // #·//는 코드로 남긴다.
+    static String stripComments(String code, String language) {
+        boolean python = "PYTHON".equals(language);
+        StringBuilder out = new StringBuilder(code.length());
+        char quote = 0;
+        for (int i = 0; i < code.length(); i++) {
+            char c = code.charAt(i);
+            if (quote != 0) {
+                out.append(c);
+                if (c == '\\' && i + 1 < code.length()) {
+                    out.append(code.charAt(++i));
+                } else if (c == quote || c == '\n') {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (c == '\'' || c == '"') {
+                quote = c;
+                out.append(c);
+            } else if (python ? c == '#' : code.startsWith("//", i)) {
+                int end = code.indexOf('\n', i);
+                if (end < 0) {
+                    break;
+                }
+                i = end - 1;
+            } else if (!python && code.startsWith("/*", i)) {
+                int end = code.indexOf("*/", i + 2);
+                if (end < 0) {
+                    break;
+                }
+                out.append(' ');
+                i = end + 1;
+            } else {
+                out.append(c);
+            }
+        }
+        return out.toString();
     }
 
     static List<String> tokens(String code) {

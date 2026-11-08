@@ -3,6 +3,7 @@ package com.codingmon.api.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
@@ -147,6 +148,78 @@ class AnswerGuardTest {
     }
 
     @Test
+    void 입출력_문장은_끝까지_맞춰_고친_문장을_찾는다() {
+        String code = """
+                #include <iostream>
+                using namespace std;
+
+                int main() {
+                    int a, b;
+                    cin >> a >> b
+                    cout << a + b << endl;
+                    return 0;
+                }
+                """;
+
+        // AnalysisSamples.missingSemicolon()이 금지한 글
+        assertThat(rules(withReference(withPrinciple("6번 줄을 cin >> a >> b; 로 바꾸세요."), code, List.of("입출력"))))
+                .containsExactly(Rule.CODE_PATTERN);
+        assertThat(withReference(withGuess("6번 줄의 cin >> a >> b 뒤에 문장 끝 표시가 없는 것 같아요."), code, List.of("입출력")))
+                .isEmpty();
+        assertThat(withReference(withGuess("6번 줄 `cin >> a >> b`에서 끝나는 표시가 빠졌어요."), code, List.of("입출력")))
+                .isEmpty();
+    }
+
+    @Test
+    void 파이썬_내장_함수와_집합_메서드_호출을_찾는다() {
+        // AnalysisSamples.indexOutOfRange()와 quadraticPairs()가 금지한 글
+        for (String text : List.of("sum(a)로 한 번에 더하면 됩니다.", "set()을 하나 만들어 두세요.", "seen.add(x)로 본 수를 넣으세요.",
+                "max(a, b)를 출력하세요.")) {
+            assertThat(rules(check(withPrinciple(text)))).as(text).containsExactly(Rule.CODE_PATTERN);
+        }
+    }
+
+    @Test
+    void 따옴표_안의_공백만_다른_코드는_학습자_코드의_인용이_아니다() {
+        String code = """
+                words = input().split()
+                print(''.join(words))
+                """;
+
+        assertThat(rules(withReference(withPrinciple("2번 줄을 print(' '.join(words))로 바꾸세요."), code, List.of("문자열"))))
+                .containsExactly(Rule.CODE_PATTERN);
+        assertThat(withReference(withGuess("2번 줄의 print(''.join(words))에서 단어 사이에 아무것도 넣지 않아요."), code,
+                List.of("문자열"))).isEmpty();
+        assertThat(AnswerGuard.compact("print( ' a b ' ) # don't\nx = 1")).isEqualTo("print(' a b ')#don'tx=1");
+    }
+
+    @Test
+    void 정답_코드의_주석은_언어에_맞게_지운다() {
+        String reference = """
+                n = int(input())
+                a = sorted(map(int, input().split()))
+                median = (a[n // 2] + a[n // 2 - 1]) / 2  # 짝수 개
+                print('#' * n, median)
+                """;
+        AnalysisResult copied = withPrinciple("가운데 값은 median = (a[n // 2] + a[n // 2 - 1]) / 2 로 구합니다.");
+
+        // 파이썬의 //는 몫이라 지우지 않는다.
+        assertThat(rules(withReference(copied, "median = a[0]", List.of("정렬"), reference)))
+                .contains(Rule.REFERENCE_SIMILAR);
+        assertThat(AnswerGuard.stripComments(reference, "PYTHON"))
+                .contains("a[n // 2 - 1]) / 2  \n").contains("print('#' * n, median)").doesNotContain("짝수");
+        assertThat(AnswerGuard.stripComments("#include <cstdio>\nint a = 1; // 하나\nint b = 2; /* 둘 */\nputs(\"//\");",
+                "CPP")).isEqualTo("#include <cstdio>\nint a = 1; \nint b = 2;  \nputs(\"//\");");
+    }
+
+    @Test
+    void 들여_쓴_설명_줄의_등호는_코드가_아니고_한글_주석을_단_코드는_코드다() {
+        assertThat(check(withPrinciple("예를 들어\n    n = 3일 때 별은 5개입니다."))).isEmpty();
+        assertThat(rules(check(withPrinciple("다음처럼 고칩니다.\n    n = n - 1  # 한 줄 줄이기"))))
+                .containsExactly(Rule.INDENTED_CODE);
+    }
+
+    @Test
     void 로그에는_규칙과_위치만_남긴다() {
         List<Violation> violations = withReference(withPrinciple("동적계획법으로 range(n)까지 도세요."), "",
                 List.of("동적 계획법"));
@@ -161,7 +234,9 @@ class AnswerGuardTest {
 
     private static List<Violation> withReference(AnalysisResult result, String code, List<String> tags,
             String... references) {
-        return AnswerGuard.check(result, new AnswerGuard.Context(code, "문제", tags, List.of(references)));
+        List<AnswerGuard.Reference> python = Stream.of(references).map(r -> new AnswerGuard.Reference("PYTHON", r))
+                .toList();
+        return AnswerGuard.check(result, new AnswerGuard.Context(code, "문제", tags, python));
     }
 
     private static List<Violation> withProblem(AnalysisResult result, List<String> tags, String problem) {

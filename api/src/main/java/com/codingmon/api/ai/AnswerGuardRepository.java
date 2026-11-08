@@ -1,5 +1,6 @@
 package com.codingmon.api.ai;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,6 +25,8 @@ class AnswerGuardRepository {
                 + "   v.constraints_markdown) as problem_text,"
                 + " array(select t.name from problem_version_tags pvt join concept_tags t on t.id = pvt.concept_tag_id"
                 + "   where pvt.problem_version_id = v.id order by t.id) as tags,"
+                + " array(select r.language from reference_solutions r where r.problem_version_id = v.id"
+                + "   order by r.id) as languages,"
                 + " array(select r.source_code from reference_solutions r where r.problem_version_id = v.id"
                 + "   order by r.id) as solutions"
                 + " from submissions s join problem_versions v on v.id = s.problem_version_id"
@@ -31,7 +34,17 @@ class AnswerGuardRepository {
                 .param("id", submissionId)
                 .query((rs, n) -> new AnswerGuard.Context(rs.getString("source_code"), rs.getString("problem_text"),
                         List.of((String[]) rs.getArray("tags").getArray()),
-                        List.of((String[]) rs.getArray("solutions").getArray())))
+                        references((String[]) rs.getArray("languages").getArray(),
+                                (String[]) rs.getArray("solutions").getArray())))
                 .optional();
+    }
+
+    // 두 배열은 같은 순서(r.id)로 읽었다.
+    private static List<AnswerGuard.Reference> references(String[] languages, String[] solutions) {
+        List<AnswerGuard.Reference> references = new ArrayList<>(solutions.length);
+        for (int i = 0; i < solutions.length; i++) {
+            references.add(new AnswerGuard.Reference(languages[i], solutions[i]));
+        }
+        return references;
     }
 }
