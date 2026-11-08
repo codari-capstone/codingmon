@@ -351,7 +351,8 @@ class AnalysisControllerTest {
             llm.answer = () -> {
                 throw new LlmException(kind, "거절", null, LlmUsage.NONE);
             };
-            mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().isAccepted());
+            // 가짜 모델이 바로 던지므로 응답하기 전에 FAILED가 저장되면 202가 아니라 200이다.
+            mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().is2xxSuccessful());
             awaitStatus(id, "FAILED");
 
             mvc.perform(get(analysis(id)).with(as(userId)))
