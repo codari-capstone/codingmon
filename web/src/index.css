@@ -80,6 +80,9 @@
 /* 색 값은 디자인 시안 '여백 카드' (docs/design-system.md). 포인트 색 #586FC4 하나에서 단계를 나눴다.
  * 글자·선·입력칸 테두리는 WCAG 대비(글자 4.5:1, 입력칸 테두리 3:1)를 통과하는 단계를 골랐다. */
 :root {
+  /* 브라우저가 그리는 부품(select 옵션 목록·스크롤바·체크박스)도 테마를 따르게 한다.
+     없으면 다크 모드에서 select 옵션 목록이 흰 바탕에 밝은 글자로 뜬다(#220 리뷰). */
+  color-scheme: light;
   --background: #f2f4fb;
   --foreground: #1c1e23;
   --card: #ffffff;
@@ -139,6 +142,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: #0c0e13;
   --foreground: #f2f4fb;
   --card: #1c1e23;

@@ -100,7 +100,7 @@ export function NicknameForm({ user }: { user: CurrentUser }) {
         <p className="text-muted-foreground text-sm">지금 쓰는 닉네임이에요</p>
       ) : null}
       {save.isError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(save.error)}
         </p>
       ) : null}
@@ -227,7 +227,7 @@ export function PasswordForm({ user }: { user: CurrentUser }) {
           10~20자, 영문 대문자·소문자·숫자·특수문자를 각각 하나 이상
         </p>
         {same ? (
-          <p className="text-destructive text-sm">
+          <p className="text-destructive-text text-sm">
             지금 쓰는 비밀번호와 같아요. 다른 비밀번호를 입력해 주세요
           </p>
         ) : null}
@@ -241,13 +241,13 @@ export function PasswordForm({ user }: { user: CurrentUser }) {
           autoComplete="new-password"
         />
         {mismatch ? (
-          <p className="text-destructive text-sm">
+          <p className="text-destructive-text text-sm">
             비밀번호 확인이 일치하지 않아요. 같은 비밀번호를 입력해 주세요
           </p>
         ) : null}
       </div>
       {submit.isError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(submit.error)}
         </p>
       ) : null}
@@ -327,7 +327,7 @@ export function WithdrawSection({ user }: { user: CurrentUser }) {
             />
           </div>
           {submit.isError ? (
-            <p role="alert" className="text-destructive text-sm">
+            <p role="alert" className="text-destructive-text text-sm">
               {problemMessage(submit.error)}
             </p>
           ) : null}

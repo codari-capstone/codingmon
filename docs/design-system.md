@@ -156,7 +156,8 @@ shadcn 변수 이름은 그대로 두고 값만 바꿨다. 그래서 `bg-primary
 - 로그인·가입·비밀번호 찾기·GitHub 닉네임 화면: 폼 전체를 흰 카드 한 장으로(`max-w-md`, `p-6`, 넓은 화면 `p-8`). [GitHub로 로그인]·[이메일 바꾸기] 같은 보조 버튼은 `secondary`
 - 관리자 문제 폼: 탭 내용마다 흰 카드. 케이스 행·언어별 정답 칸·예제 묶음·미리 보기는 옅은 면. 옅은 면 안의 [N번 케이스 지우기]는 회색 바탕 위라 `outline`으로 둔다
 - 관리자 선택 상자·여러 줄 입력칸: `Input`과 같은 밑줄형. 값은 `components/ui/input`의 `UNDERLINE_FIELD` 한 곳에서 정한다
-- 폼 오류 문구는 모두 `text-destructive-text`
+- 폼 오류 문구는 모두 `text-destructive-text`(마이페이지 계정 설정 포함). 아이콘(`ErrorState`, 메뉴의 위험 항목 아이콘)은 글자가 아니라 3:1 기준이라 `text-destructive` 그대로
+- `:root`에 `color-scheme: light`, `.dark`에 `color-scheme: dark`. 브라우저가 그리는 부품(select 옵션 목록·스크롤바·체크박스)도 테마를 따른다. 밑줄형 select는 바탕이 투명해서, 이게 없으면 다크 모드 옵션 목록이 흰 바탕에 밝은 글자로 뜬다
 
 판정 색 묶음(`tone`)
 
