@@ -410,7 +410,7 @@ export interface paths {
         };
         /**
          * 오늘 남은 AI 분석·리뷰 횟수 (AI-01)
-         * @description [AI 분석]·[AI 리뷰] 버튼 옆에 남은 횟수를 보여 줄 때 쓴다. 분석 응답(`SubmissionAnalysis`의 `quota`)에도 같은 값이 있다.
+         * @description [AI 분석]·[AI 리뷰] 버튼 옆에 남은 횟수를 보여 줄 때 쓴다. 분석·리뷰 응답(`SubmissionAnalysis`·`SubmissionCodeReview`의 `quota`)에도 같은 값이 있다.
          *     조회해도 횟수는 줄지 않는다. 세는 기준은 `AiQuota`에 있다.
          */
         get: operations["getAiQuota"];
@@ -530,7 +530,7 @@ export interface paths {
          *     제출 기록에서 원하는 문제를 눌렀을 때 쓴다. 맞는 제출이 없으면 빈 `content`다.
          *     줄마다 문제 정보를 담지 않아 `problemId`는 필수다. 화면 위쪽의 문제 정보는 `GET /api/users/me/problem-history/{problemId}`로 받는다.
          *     코드는 담지 않는다. 원하는 제출 기록을 누르면 결과 조회(`GET /api/submissions/{id}`)로 코드와 판정을 받는다.
-         *     저장된 AI 분석과 연 힌트는 `GET /api/submissions/{id}/analysis`로 받는다.
+         *     저장된 AI 분석과 연 힌트는 `GET /api/submissions/{id}/analysis`로, AI 코드 리뷰는 `GET /api/submissions/{id}/code-review`로 받는다.
          */
         get: operations["listMySubmissions"];
         put?: never;
@@ -561,7 +561,7 @@ export interface paths {
         /**
          * 채점 상태·결과 (RES-01~06, HIST-02)
          * @description 화면은 `status`가 `COMPLETED`나 `JUDGE_ERROR`가 될 때까지 주기적으로 부른다(폴링).
-         *     제출 기록에서 원하는 제출 기록을 눌렀을 때도 쓴다. 저장된 AI 분석과 연 힌트는 `GET /api/submissions/{id}/analysis`로 받는다.
+         *     제출 기록에서 원하는 제출 기록을 눌렀을 때도 쓴다. 저장된 AI 분석과 연 힌트는 `GET /api/submissions/{id}/analysis`로, AI 코드 리뷰는 `GET /api/submissions/{id}/code-review`로 받는다.
          *     로그인한 본인의 채점 제출만 볼 수 있다. 남의 제출·없는 제출·예제 실행은 모두 404 `SUBMISSION_NOT_FOUND`다. 번호를 바꿔 물어도 그 번호의 제출이 있는지 드러나지 않는다.
          *     비공개 테스트의 입력·출력과 몇 번째 테스트에서 틀렸는지는 주지 않는다. 진행률만 준다.
          *     판정과 런타임 에러 종류의 쉬운 설명은 화면이 가진다(`docs/AI_FEATURES.md` 10절).
@@ -636,6 +636,44 @@ export interface paths {
          *     `level`이 1~3이 아니면 `code` 없는 400이다.
          */
         post: operations["revealHint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/submissions/{id}/code-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 제출 번호 */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * 저장된 AI 코드 리뷰 (AI-05)
+         * @description 리뷰를 만드는 동안의 폴링과, 제출 기록에서 그 제출의 리뷰를 다시 볼 때 쓴다. AI를 부르지 않고 하루 한도도 쓰지 않는다.
+         *     로그인한 본인 제출의 리뷰만 본다. 리뷰가 없거나 남의 제출이면 404 `CODE_REVIEW_NOT_FOUND`다. 리뷰를 요청하지 않은 제출이면 정상적으로 404다.
+         *     프롬프트 버전이 바뀌어 리뷰가 여럿이면 `getAnalysis`와 같은 순서로 하나를 고른다. 요청도 같은 리뷰를 대상으로 한다.
+         */
+        get: operations["getCodeReview"];
+        put?: never;
+        /**
+         * AI 코드 리뷰 요청 (AI-05, 기술명세서 `AI-004`)
+         * @description [AI 리뷰] 버튼. 시간·공간 복잡도, 문제가 의도한 복잡도와의 비교, 개선점, 다음에 배울 개념을 한 번의 AI 호출로 만들어 서버에 저장한다(`docs/AI_FEATURES.md` 6절).
+         *     로그인한 본인의 채점 제출 중 판정이 정답(`ACCEPTED`)인 것만 리뷰한다. 제출과 판정을 먼저 확인하므로, 정답이 아닌 제출은 한도가 남지 않아도 409다.
+         *     - 지금 프롬프트 버전의 리뷰가 끝났거나(`COMPLETED`, 차단 포함) 만드는 중(`PENDING`)이면 AI를 다시 부르지 않고 하루 한도도 쓰지 않는다.
+         *     - 없거나 `FAILED`면 새로 만들기 시작한다. `FAILED`에서 다시 누르는 것이 재시도이고, 이때 `completedAt`은 null로 돌아간다.
+         *       프롬프트 버전이 바뀐 뒤 누르면 새 버전으로 다시 만든다.
+         *     - 새로 만들기 시작할 때만 하루 한도(`AiQuota`, 분석과 합쳐 센다)에 1회로 센다. 오늘 한도를 다 썼으면 429 `AI_DAILY_LIMIT_EXCEEDED`이고 아무것도 만들지 않는다.
+         *       이미 있는 리뷰를 돌려줄 때(만드는 중 포함)는 한도를 다 썼어도 200이고 세지 않는다.
+         *     - 응답은 `GET`과 같은 규칙으로 고른 리뷰다. 새로 만들기 시작했고 응답이 `PENDING`이면 202, 그 밖에는 200이다.
+         *       화면은 `status`가 `PENDING`이면 바뀔 때까지 `GET`을 주기적으로 부른다.
+         *     - AI 대기열이 차서 시작하지 못하면 200 `FAILED`다(이전 버전의 끝난 리뷰가 있으면 그 리뷰). 한도는 쓰지 않는다. 실패 사유 구분은 #81에서 더한다.
+         */
+        post: operations["requestCodeReview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1357,7 +1395,7 @@ export interface components {
          * @description 오늘 AI 분석(F1·F2)과 리뷰(F3)를 합쳐 쓸 수 있는 횟수(AI-01, `docs/AI_FEATURES.md` 8절). 하루는 UTC 날짜로 나눈다(한국 시각 오전 9시에 바뀐다).
          *     - AI 결과를 새로 만들기 시작할 때만 1회로 센다. 저장된 결과를 다시 받거나, 만드는 중인 결과를 다시 요청하거나, 힌트를 열면 세지 않는다.
          *     - 만들지 못한(`FAILED`) 결과는 세지 않는다. 그 결과를 다시 요청하면 그날 1회로 센다. 차단(`blocked`)된 결과는 1회로 센다.
-         *     - 서버가 처리 중에 내려가 시간이 지나 `FAILED`로 보이는 결과(`SubmissionAnalysis.status`)는 예외로, 다시 요청하기 전까지 1회로 남는다.
+         *     - 서버가 처리 중에 내려가 시간이 지나 `FAILED`로 보이는 결과(`SubmissionAnalysis`·`SubmissionCodeReview`의 `status`)는 예외로, 다시 요청하기 전까지 1회로 남는다.
          *       다시 요청해도 같은 결과라 1회 그대로다(한도를 다 썼어도 다시 요청할 수 있다).
          *     - 실패한 호출을 세지 않으므로 실제 AI 호출 수는 한도보다 많을 수 있다.
          */
@@ -1373,6 +1411,64 @@ export interface components {
              * @description 다음에 횟수가 초기화되는 시각(다음 UTC 자정, 한국 시각 오전 9시)
              */
             resetsAt: string;
+        };
+        /**
+         * @description AI 코드 리뷰(F3). 리뷰 내용(`summary`·`complexity`·`improvements`·`nextConcepts`)은 `COMPLETED`이고 `blocked`가 아닐 때만 있고,
+         *     그 밖에는 `summary`·`complexity`가 null, 배열은 빈 배열이다.
+         *     모델이 만든 문장이라 글자 그대로 보여 준다(HTML로 렌더링하지 않는다). 고친 코드는 주지 않고 고칠 방향을 말로만 설명한다.
+         */
+        SubmissionCodeReview: {
+            /** Format: int64 */
+            submissionId: number;
+            /**
+             * @description `PENDING` 만드는 중, `COMPLETED` 끝남, `FAILED` 만들지 못함(다시 요청할 수 있다).
+             *     서버가 처리 중에 내려가 끝나지 못한 리뷰는 시작하고 15분(서버 설정 `LLM_PENDING_TIMEOUT`)이 지나면 `FAILED`로 준다.
+             *     서버가 대기열에서 처리하고 있는 리뷰는 오래 걸려도 `PENDING`이다.
+             * @enum {string}
+             */
+            status: "PENDING" | "COMPLETED" | "FAILED";
+            /**
+             * @description 정답 코드가 섞인 응답이 다시 만들어도 나와 결과를 보여 주지 않기로 한 리뷰(`docs/AI_FEATURES.md` 8절).
+             *     `COMPLETED`이지만 내용이 없다. 다시 요청해도 새로 만들지 않는다. 화면은 AI 사용 불가 안내(AI-06)를 보여 준다.
+             */
+            blocked: boolean;
+            /** @description 맞힌 점을 먼저 짚은 리뷰 요약 */
+            summary: string | null;
+            complexity: {
+                /** @description 복잡도를 정하는 부분(반복·정렬·재귀·자료구조)과 n·m이 입력의 무엇인지. 코드 위치는 줄 번호로 가리킨다 */
+                basis: string;
+                /** @description 시간 복잡도. `O(n log n)`처럼 일반 글자로 쓴 O 표기다 */
+                time: string;
+                /** @description 공간 복잡도. 입력을 저장한 공간과 재귀 스택을 포함한다 */
+                space: string;
+                /** @description 문제가 의도한 시간 복잡도. 문제에 적힌 값이 아니라 AI가 제약과 시간 제한으로 어림한 추정이다 */
+                intendedTime: string;
+                /** @description 의도한 복잡도와 비교한 설명. 더 느리면 어느 부분 때문인지와 줄이는 원리를 말로 설명한다 */
+                comparison: string;
+                /** @description 의도한 복잡도와 같거나 더 좋으면 true. `intendedTime`처럼 추정을 바탕으로 한 값이다 */
+                meetsIntended: boolean;
+            } | null;
+            /** @description 가독성·중복·불필요한 연산 같은 개선점. 고칠 것이 없으면 빈 배열일 수 있다 */
+            improvements: string[];
+            /** @description 다음에 배울 개념. `COMPLETED`이고 `blocked`가 아니면 1~3개다. 학습 리포트(F4)의 입력이 된다(#83) */
+            nextConcepts: {
+                /** @description 짧은 개념 이름(예 누적합). 개념 태그(`ConceptTag`) 이름과 같다는 보장은 없다 */
+                name: string;
+                /** @description 이 코드를 바탕으로 그 개념을 배우면 좋은 이유 */
+                reason: string;
+            }[];
+            /** @description 응답한 시점의 오늘 남은 횟수. 리뷰를 만든 날이 아니라 오늘 기준이다. 요청·조회 모두 준다 */
+            quota: components["schemas"]["AiQuota"];
+            /**
+             * Format: date-time
+             * @description 요청한 시각. 다시 시도하면 그 시각으로 바뀐다
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description `COMPLETED`·`FAILED`가 된 시각. `PENDING`이면 null이다(재시도하면 다시 null). 오래되어 `FAILED`로 주는 리뷰도 null이다
+             */
+            completedAt: string | null;
         };
         SampleRunResult: {
             /**
@@ -1614,6 +1710,18 @@ export interface components {
             };
             content: {
                 "application/problem+json": components["schemas"]["ProblemDetail"];
+            };
+        };
+        /** @description 오류 `code`: `AI_DAILY_LIMIT_EXCEEDED`(오늘 AI 분석·리뷰 한도를 다 씀). `quota`로 초기화 시각을 준다. 분석·리뷰 요청이 같이 쓴다 */
+        AiDailyLimitExceeded: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetail"] & {
+                    /** @description 거절한 시점의 한도. `remaining`은 0이다 */
+                    quota: components["schemas"]["AiQuota"];
+                };
             };
         };
         /** @description 토큰이 없거나 유효하지 않음 */
@@ -2528,18 +2636,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
-            /** @description 오류 `code`: `AI_DAILY_LIMIT_EXCEEDED`(오늘 AI 분석·리뷰 한도를 다 씀). `quota`로 초기화 시각을 준다 */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetail"] & {
-                        /** @description 거절한 시점의 한도. `remaining`은 0이다 */
-                        quota: components["schemas"]["AiQuota"];
-                    };
-                };
-            };
+            429: components["responses"]["AiDailyLimitExceeded"];
         };
     };
     revealHint: {
@@ -2601,6 +2698,109 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
+        };
+    };
+    getCodeReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 제출 번호 */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 지금 상태 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionCodeReview"];
+                };
+            };
+            /** @description `id`가 정수가 아님 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description 오류 `code`: `CODE_REVIEW_NOT_FOUND`(리뷰가 없거나 남의 제출) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    requestCodeReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 제출 번호 */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 이미 있는 리뷰(만드는 중 포함), 또는 대기열이 차서 시작하지 못함(`FAILED`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionCodeReview"];
+                };
+            };
+            /** @description 리뷰를 만들기 시작함(`PENDING`) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionCodeReview"];
+                };
+            };
+            /** @description `id`가 정수가 아님 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description 오류 `code`: `SUBMISSION_NOT_FOUND`(없는 제출, 남의 제출, 예제 실행) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description 오류 `code`: `CODE_REVIEW_NOT_AVAILABLE`(정답이 아님, 채점 중, 채점 불가) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            429: components["responses"]["AiDailyLimitExceeded"];
         };
     };
     runSamples: {
