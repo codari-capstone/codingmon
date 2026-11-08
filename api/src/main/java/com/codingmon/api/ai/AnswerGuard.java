@@ -71,10 +71,6 @@ final class AnswerGuard {
     static final int MIN_SHARED_TOKENS = 8;
     static final int MIN_STRUCTURAL_TOKENS = 2;
 
-    // 호출의 괄호. 따옴표 밖에 한글이 있으면 "int(32비트 정수)" 같은 설명 글이라 호출로 보지 않는다. print('별')은 호출이다.
-    // 수량자는 소유형(*+)이다. 긴 글에서 되돌아가며 스택을 쓰지 않게 한다(TOKEN도 같다).
-    private static final String ARG = "(?:'[^'\\n]*+'|\"[^\"\\n]*+\"|[^()\\n'\"\\p{IsHangul}])";
-    private static final String ARGS = "\\((?:" + ARG + "|\\(" + ARG + "*+\\))*+\\)";
     private static final String NO_HANGUL = "[^\\n\\p{IsHangul}]";
 
     // 언어 키워드가 이어지는 꼴(AI-002). 하나라도 맞고 그 글이 학습자 코드에 없으면 위반이다.
@@ -86,13 +82,6 @@ final class AnswerGuard {
             Pattern.compile("\\bdef\\s+[A-Za-z_]\\w*\\s*\\("),
             Pattern.compile("\\bimport\\s+[A-Za-z_][\\w.]*|\\bfrom\\s+[A-Za-z_][\\w.]*\\s+import\\b"),
             Pattern.compile("\\blambda\\b[^:\\n\\p{IsHangul}]{0,30}:"),
-            // 함수·메서드 호출. 인자까지 맞춰 학습자 코드의 호출과 고친 호출을 가린다(예: range(n + 1)은 인용, range(n)은 고친 것).
-            Pattern.compile("(?<![\\w.])(?:range|print|input|len|map|list|int|str|split|join|sorted|enumerate|zip|open"
-                    + "|sum|set|dict|tuple|max|min|abs|any|all|reversed|round|pow|divmod|ord|chr"
-                    + "|readline|printf|scanf|getline|puts|getchar|memset|sizeof|strlen)\\s*" + ARGS),
-            Pattern.compile("\\.\\s*(?:append|add|extend|update|remove|discard|setdefault|sort|split|join|strip|rstrip"
-                    + "|lower|upper|replace|pop|push_back|pop_back|insert|reverse|items|keys|values|get|count|index"
-                    + "|find|substr|size|length|begin|end|readline)\\s*" + ARGS),
             // C++
             Pattern.compile("#\\s*include\\b|\\busing\\s+namespace\\b|\\bint\\s+main\\s*\\(|\\bstd\\s*::"),
             // 입출력 문장은 끝까지 맞춘다. 학습자 코드의 "cin >> a >> b"를 짚은 글과 ";"를 붙여 고친 글을 가리려는 것이다.
@@ -101,7 +90,7 @@ final class AnswerGuard {
             Pattern.compile("\\bfor\\s*\\([^)\\n\\p{IsHangul}]*;[^)\\n\\p{IsHangul}]*;[^)\\n\\p{IsHangul}]*\\)"),
             Pattern.compile("\\b(?:if|while|switch)\\s*\\([^)\\n]*\\)\\s*\\{"),
             Pattern.compile("\\b(?:int|long|short|unsigned|double|float|char|bool|string|auto|void|size_t|int64_t)"
-                    + "\\s+[A-Za-z_]\\w*\\s*[=;\\[({,]"),
+                    + "\\s+[A-Za-z_]\\w*(?:\\s*[=;\\[({,]|(?=\\s*(?:\\p{IsHangul}|$)))"),
             Pattern.compile("\\b(?:long\\s+long|unsigned\\s+long|long\\s+double)\\s+[A-Za-z_]\\w*"),
             Pattern.compile("\\bvector\\s*<"),
             Pattern.compile("\\breturn\\b[^\\n\\p{IsHangul};]{0,40};"),
@@ -113,11 +102,22 @@ final class AnswerGuard {
             Pattern.compile("(?<![\\w.])([A-Za-z_]\\w*)\\s*=\\s*\\1\\s*[-+*/%]\\s*[\\w(]"),
             Pattern.compile("\\b(?![Cc]\\+\\+)[A-Za-z_]\\w*\\+\\+|(?<![\\w+])\\+\\+[A-Za-z_]\\w*|\\b[A-Za-z_]\\w*--(?!-)"));
 
+    // 함수·메서드 호출의 머리. 괄호는 짝이 맞을 때까지 세어(callEnd) 인자 전체를 맞춘다. 학습자 코드의 호출과 고친 호출을
+    // 가린다(range(n + 1)은 인용, range(n)은 고친 것). 중첩 깊이에 제한이 없다(print(sum(map(int, input().split())))).
+    private static final List<Pattern> CALL_HEADS = List.of(
+            Pattern.compile("(?<![\\w.])(?:range|print|input|len|map|list|int|str|split|join|sorted|enumerate|zip|open"
+                    + "|sum|set|dict|tuple|max|min|abs|any|all|reversed|round|pow|divmod|ord|chr"
+                    + "|readline|printf|scanf|getline|puts|getchar|memset|sizeof|strlen)\\s*\\("),
+            Pattern.compile("\\.\\s*(?:append|add|extend|update|remove|discard|setdefault|sort|split|join|strip|rstrip"
+                    + "|lower|upper|replace|pop|push_back|pop_back|insert|reverse|items|keys|values|get|count|index"
+                    + "|find|substr|size|length|begin|end|readline)\\s*\\("));
+    private static final int CALL_MAX_CHARS = 300;
+
     // 들여 쓴 줄은 주석(#, //) 앞부분에 한글이 없거나 코드 기호가 있으면 코드 줄로 본다. "n = 3일 때"처럼 들여 쓴 설명 글은
     // 넘기고, "n = n - 1  # 한 줄 줄이기"처럼 한글 주석을 단 코드는 잡는다.
     private static final Pattern INDENTED = Pattern.compile("(?m)^(?: {4,}|\\t)\\S.*$");
     private static final Pattern HANGUL = Pattern.compile("\\p{IsHangul}");
-    private static final Pattern CODE_SYMBOL = Pattern.compile("[;{}]|\\w\\(");
+    private static final Pattern CODE_SYMBOL = Pattern.compile("[;{}]|[A-Za-z_]\\w*\\(");
     private static final Pattern LINE_COMMENT = Pattern.compile("#|//");
     // 인용 비교에서 문장을 넓힐 때 앞에 붙은 이름과 끝에서 뺄 문장 부호(statement)
     private static final Pattern STATEMENT_HEAD = Pattern.compile("[\\w.\\[\\]]");
@@ -252,13 +252,54 @@ final class AnswerGuard {
         for (Pattern pattern : CODE_PATTERNS) {
             Matcher matcher = pattern.matcher(text);
             while (matcher.find()) {
-                if (!quoted(compactSource, compact(matcher.group()))
-                        || !quoted(compactSource, compact(statement(text, matcher.start(), matcher.end())))) {
+                if (!quotedStatement(text, matcher.start(), matcher.end(), compactSource)) {
+                    return true;
+                }
+            }
+        }
+        for (Pattern head : CALL_HEADS) {
+            Matcher matcher = head.matcher(text);
+            while (matcher.find()) {
+                int end = callEnd(text, matcher.end() - 1);
+                if (end > 0 && !quotedStatement(text, matcher.start(), end, compactSource)) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    private static boolean quotedStatement(String text, int start, int end, String compactSource) {
+        return quoted(compactSource, compact(text.substring(start, end)))
+                && quoted(compactSource, compact(statement(text, start, end)));
+    }
+
+    // open 자리의 여는 괄호와 짝인 닫는 괄호 다음 자리. 따옴표 밖에 한글이 있거나("int(32비트 정수)") 줄이 바뀌거나
+    // 짝이 없으면 호출이 아니므로 -1이다. print('별')의 한글은 따옴표 안이라 호출이다.
+    private static int callEnd(String text, int open) {
+        int depth = 0;
+        char quote = 0;
+        int limit = Math.min(text.length(), open + CALL_MAX_CHARS);
+        for (int i = open; i < limit; i++) {
+            char c = text.charAt(i);
+            if (c == '\n') {
+                return -1;
+            }
+            if (quote != 0) {
+                if (c == quote) {
+                    quote = 0;
+                }
+            } else if (c == '\'' || c == '"') {
+                quote = c;
+            } else if (HANGUL.matcher(String.valueOf(c)).matches()) {
+                return -1;
+            } else if (c == '(') {
+                depth++;
+            } else if (c == ')' && --depth == 0) {
+                return i + 1;
+            }
+        }
+        return -1;
     }
 
     // 학습자 코드 안에 그 글이 있되, 앞뒤가 식별자 중간이 아니어야 한다(uint64_t 안의 int64_t는 인용이 아니다).
@@ -456,12 +497,14 @@ final class AnswerGuard {
         return Pattern.compile("(?<![A-Za-z])" + words + "s?(?![A-Za-z])" + after, flags);
     }
 
-    // 전각 글자와 수학 기호를 ASCII로 바꿔 "n − 1", "a × b"도 코드 토큰처럼 비교한다. 수학 기호는 따옴표 밖에서만 바꾼다.
-    // print('×')와 print('*')는 다른 코드다. 따옴표는 줄이 바뀌면 닫는다(compact와 같다).
+    // 전각 글자와 수학 기호를 ASCII로 바꿔 "n − 1", "a × b"도 코드 토큰처럼 비교한다. 따옴표 안은 바꾸지 않는다.
+    // print('×')와 print('*'), print('Ａ')와 print('A')는 다른 코드다. 둥근 따옴표와 전각 따옴표만은 따옴표를 알아보려고
+    // 먼저 바꾼다. 따옴표는 줄이 바뀌면 닫는다(compact와 같다).
     static String normalize(String text) {
-        String quotesFixed = Normalizer.normalize(text, Normalizer.Form.NFKC)
-                .replace('‘', '\'').replace('’', '\'').replace('“', '"').replace('”', '"');
+        String quotesFixed = text.replace('‘', '\'').replace('’', '\'').replace('“', '"').replace('”', '"')
+                .replace('＇', '\'').replace('＂', '"');
         StringBuilder out = new StringBuilder(quotesFixed.length());
+        StringBuilder plain = new StringBuilder();
         char quote = 0;
         for (int i = 0; i < quotesFixed.length(); i++) {
             char c = quotesFixed.charAt(i);
@@ -470,23 +513,23 @@ final class AnswerGuard {
                 if (c == quote || c == '\n') {
                     quote = 0;
                 }
-                continue;
-            }
-            switch (c) {
-                case '\'', '"' -> {
-                    quote = c;
-                    out.append(c);
-                }
-                case '−', '–' -> out.append('-');
-                case '×' -> out.append('*');
-                case '÷' -> out.append('/');
-                case '≤' -> out.append("<=");
-                case '≥' -> out.append(">=");
-                case '≠' -> out.append("!=");
-                default -> out.append(c);
+            } else if (c == '\'' || c == '"') {
+                out.append(plain(plain));
+                plain.setLength(0);
+                quote = c;
+                out.append(c);
+            } else {
+                plain.append(c);
             }
         }
-        return out.toString();
+        return out.append(plain(plain)).toString();
+    }
+
+    // 따옴표 밖의 글. 전각 글자(NFKC)와 수학 기호를 ASCII로 바꾼다.
+    private static String plain(CharSequence text) {
+        return Normalizer.normalize(text, Normalizer.Form.NFKC)
+                .replace('−', '-').replace('–', '-').replace('×', '*').replace('÷', '/')
+                .replace("≤", "<=").replace("≥", ">=").replace("≠", "!=");
     }
 
     // 공백을 지워 띄어쓰기만 다른 인용도 학습자 코드와 맞춰 본다. 따옴표 안의 공백은 남긴다(' '.join과 ''.join은 다르다).

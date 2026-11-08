@@ -310,6 +310,9 @@ class AnswerGuardTest {
     @Test
     void 문자열_리터럴_안의_기호는_바꾸지_않는다() {
         assertThat(AnswerGuard.normalize("print('×') # a × b")).isEqualTo("print('×') # a * b");
+        assertThat(AnswerGuard.normalize("print('Ａ') # Ａ")).isEqualTo("print('Ａ') # A");
+        assertThat(rules(withReference(withPrinciple("print('A')로 바꾸세요."), "print('Ａ')\n", List.of("문자열"))))
+                .containsExactly(Rule.CODE_PATTERN);
         assertThat(rules(withReference(withPrinciple("print('*')로 바꾸세요."), "print('×')\n", List.of("문자열"))))
                 .containsExactly(Rule.CODE_PATTERN);
     }
@@ -337,6 +340,42 @@ class AnswerGuardTest {
                 List.of(new AnswerGuard.Reference("PYTHON", "print(sorted(a))")));
 
         assertThat(context.toString()).doesNotContain("print").contains("8 chars", "16 chars");
+    }
+
+    @Test
+    void 여러_겹_중첩된_호출도_통째로_비교한다() {
+        String code = """
+                n = int(input())
+                print(n + 1)
+                """;
+
+        for (String text : List.of("2번 줄을 print(int(input()))로 바꾸세요.",
+                "print(sum(map(int, input().split())))로 한 번에 구하세요.")) {
+            assertThat(rules(withReference(withPrinciple(text), code, List.of("입출력")))).as(text)
+                    .containsExactly(Rule.CODE_PATTERN);
+        }
+        assertThat(withReference(withGuess("1번 줄 n = int(input())은 맞아요. 2번 줄 print(n + 1)을 보세요."), code,
+                List.of("입출력"))).isEmpty();
+    }
+
+    @Test
+    void 한_낱말_타입_선언_뒤에_한글이_와도_찾는다() {
+        String code = """
+                #include <iostream>
+                int main() {
+                    int sum = 0;
+                }
+                """;
+
+        // AnalysisSamples.intOverflow()가 금지한 글
+        assertThat(rules(withReference(withPrinciple("합계를 int64_t sum으로 선언하세요."), code, List.of("입출력"))))
+                .containsExactly(Rule.CODE_PATTERN);
+        assertThat(withReference(withGuess("3번 줄의 int sum은 32비트라 넘칠 것 같아요."), code, List.of("입출력"))).isEmpty();
+    }
+
+    @Test
+    void 들여_쓴_한글_목록의_숫자_괄호는_호출이_아니다() {
+        assertThat(check(withPrinciple("규칙을 보세요.\n    1. 예제 1(입력 3)은 별 5개입니다."))).isEmpty();
     }
 
     @Test
