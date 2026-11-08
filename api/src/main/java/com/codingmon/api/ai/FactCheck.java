@@ -154,6 +154,8 @@ final class FactCheck {
     private static final Pattern EXAMPLE_WORD = Pattern.compile("예제|(?:기대|실제)\\s*출력");
     private static final Pattern NOT_RUN = Pattern.compile("실행(?:하지|되지|을\\s*하지)\\s*(?:않|못)|실행하기\\s*전|실행할\\s*수\\s*없");
     private static final Pattern ALL_RESULT = Pattern.compile("(?:모두|전부|다)\\s*(?:가|를|는)?\\s*(통과|맞|틀|실패)");
+    // ALL_RESULT 바로 뒤의 부정("모두 통과하지는 못했습니다", "다 틀린 것은 아닙니다")
+    private static final Pattern NEGATED_AFTER = Pattern.compile("^[^.!?]{0,8}?(?:지\\s*(?:는|도|를|가)?\\s*(?:못|않)|아니|아닙|아님|아닌)");
     private static final Pattern RESULT_WORD = Pattern.compile("실패|통과|틀|맞");
     private static final Pattern COUNT = Pattern.compile("(?<![\\w.])(\\d+)\\s*개");
     private static final Pattern EXTREME = Pattern.compile("가장\\s*(작은|큰)\\s*입력[^.!?]*?(실패|틀|통과|맞)");
@@ -450,7 +452,12 @@ final class FactCheck {
             Matcher all = ALL_RESULT.matcher(sentence);
             if (sentence.contains("예제") && !HIDDEN_WORD.matcher(sentence).find() && all.find()) {
                 boolean passed = all.group(1).equals("통과") || all.group(1).equals("맞");
-                if (passed ? e.samples().failed() > 0 : e.samples().failed() < e.samples().total()) {
+                // 모두 그렇다는 주장과, 뒤에 부정이 붙어 모두 그렇지는 않다는 주장을 나눠 본다.
+                boolean negated = NEGATED_AFTER.matcher(sentence.substring(all.end())).find();
+                boolean everyPassed = e.samples().failed() == 0;
+                boolean everyFailed = e.samples().failed() == e.samples().total();
+                boolean holds = passed ? everyPassed != negated : everyFailed != negated;
+                if (!holds) {
                     return Kind.CONTRADICTED_FACT;
                 }
             }
