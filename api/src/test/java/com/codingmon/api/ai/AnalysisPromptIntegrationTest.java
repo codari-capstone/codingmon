@@ -21,7 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 // 판정별 오답 샘플(AnalysisSamples)을 실제 모델에 보내 프롬프트 v1을 평가한다(#76). LLM_URL과 LLM_MODEL이 없으면 건너뛴다.
 // 응답 원문과 걸린 시간은 build/analysis-eval/에 남긴다. 사람이 읽고 힌트 단계·말투를 평가하는 데 쓴다.
-// 여기서 보는 것은 스키마, 줄 번호 범위, 코드 블록과 정답 코드 조각이다. 서버 검사 자체는 #78·#79에서 만든다.
+// 여기서 보는 것은 스키마, 줄 번호 범위, 코드 블록과 정답 코드 조각이다. 서버의 정답 코드 검사는 AnswerGuard(#78), 사실 검증은 #79다.
 @EnabledIfEnvironmentVariable(named = "LLM_URL", matches = ".+")
 @EnabledIfEnvironmentVariable(named = "LLM_MODEL", matches = ".+")
 class AnalysisPromptIntegrationTest {
