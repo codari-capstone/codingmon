@@ -184,6 +184,30 @@ class CodeReviewPromptTest {
                 .noneMatch(forbidden -> c.input().submission().code().contains(forbidden)));
     }
 
+    @Test
+    void 다시_만들_때는_어긴_규칙을_한_번씩_알리고_지시를_강화한다() {
+        CodeReviewInput input = CodeReviewSamples.countAtMost().input();
+        LlmRequest<CodeReviewResult> first = PROMPT.request(input);
+        LlmRequest<CodeReviewResult> retry = PROMPT.retry(input, List.of(
+                new AnswerGuard.Violation(AnswerGuard.Rule.CODE_PATTERN, "improvements[0]", null),
+                new AnswerGuard.Violation(AnswerGuard.Rule.CODE_PATTERN, "nextConcepts[1].reason", null),
+                new AnswerGuard.Violation(AnswerGuard.Rule.REFERENCE_SIMILAR, "complexity.comparison", null)));
+
+        assertThat(retry.system()).startsWith(first.system().strip())
+                .contains("# 다시 쓰기", "리뷰를 받지 못한다", "괄호 없이 이름만", AnswerGuard.Rule.REFERENCE_SIMILAR.description)
+                .doesNotContain("{{violations}}");
+        // 같은 규칙은 한 번만 적는다. 앞서 만든 리뷰 글과 정답 코드는 보내지 않는다.
+        assertThat(retry.system().split(AnswerGuard.Rule.CODE_PATTERN.description, -1)).hasSize(2);
+        assertThat(retry.user()).isEqualTo(first.user());
+        assertThat(retry.schema()).isSameAs(first.schema());
+    }
+
+    @Test
+    void 없는_버전에는_다시_쓰기_지시도_있어야_한다() {
+        assertThatThrownBy(() -> new CodeReviewPrompt("v999")).hasMessageContaining("prompts/code-review-v999/");
+        assertThat(PromptFiles.read("prompts/code-review-v1/retry.md")).contains("{{violations}}");
+    }
+
     private static CodeReviewInput input(Verdict verdict) {
         return new CodeReviewInput(
                 Problem.of("곱셈", "A×B를 출력하세요.", "A와 B", "A×B", "0 < A, B < 10", 1000, 128, List.of("입출력")),
