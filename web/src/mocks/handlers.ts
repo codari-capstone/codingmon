@@ -3,6 +3,7 @@ import { http, HttpResponse, type RequestHandler } from 'msw'
 import type {
   AdminSolution,
   AdminTestCase,
+  AiQuota,
   Language,
   LoginRequest,
   ProblemInput,
@@ -239,13 +240,29 @@ export function resetSubmissions(): void {
   nextSubmissionId = 1
 }
 
+/** 하루 AI 분석·리뷰 한도 (AI-01). 계약의 `AiQuota.limit` 설명과 같은 값이다. */
+const AI_DAILY_LIMIT = 20
+
+/**
+ * 오늘 남은 AI 횟수 (AI-01). 하루는 UTC 날짜다(계약). 목은 사용자를 나누지 않고 오늘 만든 분석 수를 센다 —
+ * 분석 목이 세션을 보지 않는 것과 같다. 한도를 넘는 429는 화면 작업에서 필요할 때 더한다.
+ */
+function mockQuota(now = new Date()): AiQuota {
+  const today = now.toISOString().slice(0, 10)
+  const used = [...mockAnalyses.values()].filter((a) => a.createdAt.slice(0, 10) === today).length
+  const resetsAt = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
+  ).toISOString()
+  return { limit: AI_DAILY_LIMIT, used, remaining: Math.max(0, AI_DAILY_LIMIT - used), resetsAt }
+}
+
 /** 분석 응답. 내용은 AI_FEATURES 5절의 역방향 피라미드 예시다. 힌트는 연 단계까지만 준다(계약). */
 function analysisView(
   submissionId: number,
   { createdAt, revealed }: MockAnalysis,
   pending = false,
 ): SubmissionAnalysis {
-  const base = { submissionId, blocked: false, createdAt }
+  const base = { submissionId, blocked: false, createdAt, quota: mockQuota() }
   if (pending) {
     return {
       ...base,
@@ -1160,6 +1177,11 @@ export const handlers: RequestHandler[] = [
 
   /** 학습 통계 (REP-01·02). 읽기뿐이라 상태가 없다. 조건 미달 모양은 테스트가 `server.use`로 바꾼다. */
   http.get('*/api/users/me/learning-stats', () => HttpResponse.json(learningStatsReady)),
+
+  /** 오늘 남은 AI 분석·리뷰 횟수 (AI-01). 세는 방법은 mockQuota에 있다. */
+  http.get('*/api/users/me/ai-quota', ({ request }) =>
+    userIdFromToken(bearer(request)) === null ? unauthorized() : HttpResponse.json(mockQuota()),
+  ),
 
   /**
    * 제출 기록 (HIST-01·02). 읽기뿐이라 상태가 없다 — 세션은 보지 않는다(RequireAuth 뒤의 화면).
