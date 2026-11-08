@@ -181,6 +181,14 @@ final class FactCheck {
     // 값 토큰(valueTokens): 수, 영문 낱말, 쉼표 밖의 ASCII 기호 묶음
     private static final Pattern VALUE_TOKEN = Pattern.compile(
             "-?\\d+(?:\\.\\d+)?|[A-Za-z_][A-Za-z0-9_]*|[!\"#$%&'()*+\\-./:;<=>?@\\[\\\\\\]^`{|}~]+");
+    // 지수 표기: (가수 ×) 밑 ^ 지수 (± 더할 수). "10^{9}", "10**9"도 받는다.
+    private static final Pattern POWER = Pattern.compile("(?:(\\d+(?:\\.\\d+)?)\\s*[×xX*·]\\s*)?(\\d+)\\s*(?:\\^|\\*\\*)\\s*\\{?\\s*(\\d+)\\s*\\}?"
+            + "(?:\\s*([+\\-−])\\s*(\\d+))?");
+    private static final Pattern SCIENTIFIC = Pattern.compile(
+            "(?<![\\w.])(\\d+(?:\\.\\d+)?)[eE]\\+?(\\d+)(?![\\w.])(?:\\s*([+\\-−])\\s*(\\d+))?");
+    private static final Pattern SUP_TAG = Pattern.compile("(\\d+)\\s*<sup>\\s*(\\d+)\\s*</sup>", Pattern.CASE_INSENSITIVE);
+    private static final String SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+    private static final Pattern SUPERSCRIPT = Pattern.compile("(\\d+)([" + SUPERSCRIPT_DIGITS + "]+)");
 
     // 판정마다 응답에 나올 만한 말. 근거로 넓게 본다.
     private static final Map<Verdict, Pattern> VERDICT_WORDS = Map.of(
@@ -873,14 +881,15 @@ final class FactCheck {
     }
 
     // 학습자가 이미 볼 수 있는 글의 색인. grams는 ASCII 구간마다 이어진 값 토큰 1~HIDDEN_WINDOW_FIELDS개를 공백으로 이은 것,
-    // phrases는 줄마다 공백·쉼표로 나눈 값을 이은 것(한글이 섞인 후보용)이다.
+    // phrases는 줄마다 공백·쉼표로 나눈 값을 이은 것(한글이 섞인 후보용)이다. 지수 표기(10^9, 2 × 10^5, 10⁹, 10<sup>9</sup>, 1e9,
+    // 10^9 + 7)는 그 수로도 넣는다. 제약의 최대값이 비공개 입력 한 줄과 같아도 비공개 값으로 보지 않게 한다.
     private record OpenIndex(Set<String> grams, String phrases) {
 
         static OpenIndex of(List<String> texts) {
             Set<String> grams = new HashSet<>();
             StringBuilder phrases = new StringBuilder("\n");
             for (String raw : texts) {
-                for (String variant : variants(plain(raw))) {
+                for (String variant : variants(plain(raw) + "\n" + String.join("\n", powers(raw)))) {
                     for (String line : variant.split("\\R")) {
                         phrases.append(' ').append(String.join(" ", fields(line))).append(" \n");
                         for (String segment : AnswerGuard.NON_ASCII.split(line)) {
@@ -933,6 +942,50 @@ final class FactCheck {
     private static List<String> variants(String text) {
         String withoutThousands = THOUSANDS.matcher(text).replaceAll("");
         return withoutThousands.equals(text) ? List.of(text) : List.of(withoutThousands, text);
+    }
+
+    // 지수 표기를 펼친 수. 원문(NFKC 전)에서 찾는다. NFKC는 "10⁹"를 "109"로 바꾼다.
+    static List<String> powers(String raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        StringBuilder text = new StringBuilder();
+        Matcher sup = SUPERSCRIPT.matcher(SUP_TAG.matcher(raw).replaceAll("$1^$2"));
+        while (sup.find()) {
+            StringBuilder exponent = new StringBuilder();
+            sup.group(2).codePoints().forEach(c -> exponent.append(SUPERSCRIPT_DIGITS.indexOf(c)));
+            sup.appendReplacement(text, sup.group(1) + "^" + exponent);
+        }
+        sup.appendTail(text);
+        List<String> values = new ArrayList<>();
+        Matcher power = POWER.matcher(text);
+        while (power.find()) {
+            BigDecimal mantissa = power.group(1) == null ? BigDecimal.ONE : new BigDecimal(power.group(1));
+            addPower(values, mantissa, power.group(2), power.group(3), power.group(4), power.group(5));
+        }
+        Matcher scientific = SCIENTIFIC.matcher(text);
+        while (scientific.find()) {
+            addPower(values, new BigDecimal(scientific.group(1)), "10", scientific.group(2), scientific.group(3),
+                    scientific.group(4));
+        }
+        return values;
+    }
+
+    private static void addPower(List<String> values, BigDecimal mantissa, String base, String exponent, String sign,
+            String offset) {
+        // 펼친 수가 19자리(long)를 넘으면 쓰지 않는다. 10^18, 2^63까지다.
+        if (base.length() > 3 || exponent.length() > 2 || Integer.parseInt(exponent) > 63) {
+            return;
+        }
+        BigDecimal value = mantissa.multiply(new BigDecimal(base).pow(Integer.parseInt(exponent)));
+        if (value.stripTrailingZeros().scale() > 0 || value.toBigInteger().toString().length() > 19) {
+            return;
+        }
+        values.add(value.toBigInteger().toString());
+        if (sign != null) {
+            BigDecimal shifted = sign.equals("+") ? value.add(new BigDecimal(offset)) : value.subtract(new BigDecimal(offset));
+            values.add(shifted.toBigInteger().toString());
+        }
     }
 
     // 공백·쉼표로 나눈 값. 값 앞뒤의 따옴표·괄호·문장 부호는 뗀다.

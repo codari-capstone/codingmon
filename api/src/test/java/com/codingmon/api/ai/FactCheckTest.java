@@ -319,6 +319,26 @@ class FactCheckTest {
                 "'6227020800'이 나와야 해요.")).isTrue();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"1 ≤ N ≤ 10^9", "1 ≤ N ≤ 10⁹", "1 ≤ N ≤ 10<sup>9</sup>", "N ≤ 1e9", "N ≤ 10^{9}",
+            "1 ≤ N ≤ 1,000,000,000"})
+    void 제약에_지수로_쓴_최대값은_비공개_값으로_보지_않는다(String constraint) {
+        FactCheck.Sources sources = new FactCheck.Sources(List.of("1000000000\n"), List.of(constraint));
+
+        assertThat(blocked(sources, "N이 1,000,000,000일 때는 이중 반복이 너무 오래 걸려요.")).isFalse();
+        assertThat(blocked(sources, "N이 1000000000일 때를 생각해 보세요.")).isFalse();
+    }
+
+    @Test
+    void 지수_표기를_그_수로_펼친다() {
+        assertThat(FactCheck.powers("1 ≤ N ≤ 2 × 10^5, 답은 10^9 + 7로 나눈 나머지, 값은 2^31 − 1 이하, 1e9, 10⁹, 10<sup>18</sup>"))
+                .contains("200000", "1000000000", "1000000007", "2147483648", "2147483647", "1000000000000000000");
+        assertThat(FactCheck.powers("n^2번 반복한다, x^9")).isEmpty();
+        // 지수가 공개 글에 없으면 최대값도 비공개 값으로 본다
+        assertThat(blocked(new FactCheck.Sources(List.of("1000000000\n"), List.of("1 ≤ N ≤ 100")),
+                "N이 1000000000일 때를 생각해 보세요.")).isTrue();
+    }
+
     @Test
     void 쉼표로_이은_목록은_공개_글과_비공개_원문에서도_두_형태로_본다() {
         // 지문에 같은 목록이 있으면 공개 값이다
