@@ -118,6 +118,8 @@ class AnalysisControllerTest {
     long otherUserId;
     long problemId;
     long versionId;
+    // 공개 예제 1(1 2 → 3). 오답 제출은 이 예제에서 -1을 출력한 것으로 넣어, FakeLlm.ok()의 [사실]이 사실 검증(#79)의 근거를 갖게 한다.
+    long sampleCaseId;
     // 테스트가 새로 넣은 개념 태그. 원래 있던 태그는 지우지 않는다.
     Long insertedTagId;
 
@@ -138,6 +140,9 @@ class AnalysisControllerTest {
                 .param("problemId", problemId).query(Long.class).single();
         jdbc.sql("insert into problem_language_configs (problem_version_id, language, time_limit_ms, memory_limit_mb)"
                 + " values (:versionId, 'PYTHON', 1000, 256)").param("versionId", versionId).update();
+        sampleCaseId = jdbc.sql("insert into test_cases (problem_version_id, ordinal, case_type, input_data, expected_output)"
+                + " values (:versionId, 1, 'SAMPLE', '1 2' || chr(10), '3' || chr(10)) returning id")
+                .param("versionId", versionId).query(Long.class).single();
         jdbc.sql("insert into user_problem_stats (user_id, problem_id, attempt_count) values (:userId, :problemId, 1)")
                 .param("userId", userId).param("problemId", problemId).update();
     }
@@ -482,8 +487,10 @@ class AnalysisControllerTest {
     @Test
     void 결과를_저장하지_못하면_FAILED로_바꿔_다시_요청할_수_있게_한다() throws Exception {
         long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
-        // JSON으로는 맞지만 PostgreSQL jsonb가 받지 않는 응답
-        llm.answer = () -> new LlmResponse<>(FakeLlm.ok().value(), "{\"summary\":\"a\\u0000b\"}", LlmUsage.NONE);
+        // JSON으로는 맞지만 PostgreSQL jsonb가 받지 않는 응답. 저장은 고친 값을 다시 쓴 것이라(#79) 값에 넣는다.
+        AnalysisResult ok = (AnalysisResult) FakeLlm.ok().value();
+        llm.answer = () -> new LlmResponse<>(new AnalysisResult("a\u0000b", ok.suspectLines(), ok.facts(), ok.guesses(),
+                ok.hints()), "{}", LlmUsage.NONE);
 
         mvc.perform(post(analysis(id)).with(as(userId)));
         awaitStatus(id, "FAILED");
@@ -602,13 +609,19 @@ class AnalysisControllerTest {
 
     private long submission(long owner, String kind, String jobStatus, String verdict) {
         boolean judged = "COMPLETED".equals(jobStatus) || "JUDGE_ERROR".equals(jobStatus);
-        return jdbc.sql("insert into submissions (user_id, problem_version_id, submission_kind, language, source_code,"
+        long id = jdbc.sql("insert into submissions (user_id, problem_version_id, submission_kind, language, source_code,"
                 + " job_status, verdict, judged_at)"
                 + " values (:userId, :versionId, :kind, 'PYTHON', :source, :status, :verdict, :judgedAt) returning id")
                 .param("userId", owner).param("versionId", versionId).param("kind", kind)
                 .param("source", "a, b = map(int, input().split())\nprint(a - b)\n").param("status", jobStatus)
                 .param("verdict", verdict).param("judgedAt", judged ? OffsetDateTime.now(ZoneOffset.UTC) : null)
                 .query(Long.class).single();
+        if ("COMPLETED".equals(jobStatus) && "WRONG_ANSWER".equals(verdict)) {
+            jdbc.sql("insert into submission_test_results (submission_id, problem_version_id, test_case_id, verdict, stdout)"
+                    + " values (:id, :versionId, :caseId, 'WRONG_ANSWER', '-1' || chr(10))")
+                    .param("id", id).param("versionId", versionId).param("caseId", sampleCaseId).update();
+        }
+        return id;
     }
 
     private static String analysis(long submissionId) {

@@ -11,8 +11,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 // AI 오답 분석(F1)과 힌트 공개(F2). 분석은 요청할 때 한 번 만들어 ai_reviews에 저장하고, 힌트는 저장된 것을 연 단계까지만 준다
 // (AI_FEATURES 3·4절). 같은 제출·같은 프롬프트 버전의 결과는 다시 만들지 않는다(8절).
-// 만드는 흐름(처리기, 정답 코드 검사와 1회 재생성, 차단 저장)은 AiReviewRunner가 맡는다(#78). 하루 한도는 AiQuotaService가 센다(#80).
-// 사실 검증(#79), 실패 사유 구분(#81)은 아직 없다.
+// 만드는 흐름(처리기, 정답 코드 검사와 1회 재생성, 차단 저장, 사실 검증)은 AiReviewRunner가 맡는다(#78, #79).
+// 하루 한도는 AiQuotaService가 센다(#80). 실패 사유 구분(#81)은 아직 없다.
 @Service
 class AnalysisService {
 
@@ -23,6 +23,7 @@ class AnalysisService {
     private final AiReviewRepository reviews;
     private final AnalysisInputRepository inputs;
     private final AnswerGuardRepository guards;
+    private final FactCheckRepository factSources;
     private final AnalysisPrompt prompt;
     private final AiReviewRunner runner;
     private final LlmClient llm;
@@ -31,11 +32,12 @@ class AnalysisService {
     private final AiQuotaService quota;
 
     AnalysisService(AiReviewRepository reviews, AnalysisInputRepository inputs, AnswerGuardRepository guards,
-            AnalysisPrompt prompt, AiReviewRunner runner, LlmClient llm, UserProblemStatsRepository stats, JsonMapper json,
-            AiQuotaService quota) {
+            FactCheckRepository factSources, AnalysisPrompt prompt, AiReviewRunner runner, LlmClient llm,
+            UserProblemStatsRepository stats, JsonMapper json, AiQuotaService quota) {
         this.reviews = reviews;
         this.inputs = inputs;
         this.guards = guards;
+        this.factSources = factSources;
         this.prompt = prompt;
         this.runner = runner;
         this.llm = llm;
@@ -98,14 +100,17 @@ class AnalysisService {
                 stored.content(), stored.blocked(), level, stored.createdAt(), stored.completedAt()));
     }
 
-    // 처리기에 넣을 요청. 입력과 정답 코드 검사 자료를 읽는다. 읽지 못하면 던지고, runner가 행을 FAILED로 바꾼다.
+    // 처리기에 넣을 요청. 입력과 정답 코드 검사·사실 검증 자료를 읽는다. 읽지 못하면 던지고, runner가 행을 FAILED로 바꾼다.
+    // 사실 검증은 모델이 본 입력(AnalysisInput)을 근거로 쓰고, 비공개 원문은 검사에만 쓴다(모델에는 보내지 않는다).
     private AiReviewRunner.Generation<AnalysisResult> generation(long submissionId) {
         AnalysisInput input = inputs.find(submissionId)
                 .orElseThrow(() -> new IllegalStateException("분석 입력을 만들 수 없다: 제출 " + submissionId));
         AnswerGuard.Context guard = guards.find(submissionId)
                 .orElseThrow(() -> new IllegalStateException("정답 코드 검사 자료가 없다: 제출 " + submissionId));
+        FactCheck.Context facts = FactCheck.Context.of(input, factSources.find(submissionId)
+                .orElseThrow(() -> new IllegalStateException("사실 검증 자료가 없다: 제출 " + submissionId)));
         return new AiReviewRunner.Generation<>(prompt.request(input), result -> AnswerGuard.check(result, guard),
-                violations -> prompt.retry(input, violations));
+                violations -> prompt.retry(input, violations), result -> FactCheck.verify(result, facts));
     }
 
     // 남은 횟수는 결과를 만든 날이 아니라 응답하는 지금 기준이다(contracts의 SubmissionAnalysis.quota).

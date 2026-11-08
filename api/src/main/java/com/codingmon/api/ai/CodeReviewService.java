@@ -8,8 +8,8 @@ import com.codingmon.api.ApiErrors;
 import tools.jackson.databind.json.JsonMapper;
 
 // AI 코드 리뷰(F3, AI_FEATURES 6절). 정답(ACCEPTED)을 받은 본인 채점 제출에만 요청할 때 한 번 만들어 ai_reviews(CODE_REVIEW)에 저장한다.
-// 같은 제출·같은 프롬프트 버전의 결과는 다시 만들지 않는다(8절). 만드는 흐름(처리기, 정답 코드 검사와 1회 재생성, 차단 저장)은
-// AiReviewRunner가, 분석과 합친 하루 한도는 AiQuotaService가 맡는다(#80). 다음 개념의 개념 태그 매칭은 #83이 한다.
+// 같은 제출·같은 프롬프트 버전의 결과는 다시 만들지 않는다(8절). 만드는 흐름(처리기, 정답 코드 검사와 1회 재생성, 차단 저장,
+// 사실 검증)은 AiReviewRunner가, 분석과 합친 하루 한도는 AiQuotaService가 맡는다(#80). 사실 검증은 줄 번호 범위만 본다(#79). 다음 개념의 개념 태그 매칭은 #83이 한다.
 // 리뷰는 힌트가 없으므로 revealed_hint_level은 0으로 남고 풀이 통계(user_problem_stats)도 바꾸지 않는다.
 @Service
 class CodeReviewService {
@@ -75,8 +75,9 @@ class CodeReviewService {
                 .orElseThrow(() -> new IllegalStateException("리뷰 입력을 만들 수 없다: 제출 " + submissionId));
         AnswerGuard.Context guard = guards.find(submissionId)
                 .orElseThrow(() -> new IllegalStateException("정답 코드 검사 자료가 없다: 제출 " + submissionId));
+        int codeLines = input.submission().codeLines();
         return new AiReviewRunner.Generation<>(prompt.request(input), result -> AnswerGuard.check(result, guard),
-                violations -> prompt.retry(input, violations));
+                violations -> prompt.retry(input, violations), result -> FactCheck.verify(result, codeLines));
     }
 
     // 남은 횟수는 결과를 만든 날이 아니라 응답하는 지금 기준이다(contracts의 SubmissionCodeReview.quota).
