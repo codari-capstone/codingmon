@@ -253,6 +253,15 @@ class FactCheckTest {
         assertThat(outcome.meta().removed()).isEqualTo(1);
     }
 
+    @Test
+    void 값_하나짜리_비공개_기대_출력도_본다() {
+        FactCheck.Sources sources = new FactCheck.Sources(List.of("12\n", "6227020800\n", "1234567\n"), List.of());
+
+        assertThat(blocked(sources, "정답은 6227020800이에요.")).isTrue();
+        // 값 하나는 8자 이상만 본다
+        assertThat(blocked(sources, "1234567을 출력해 보세요.")).isFalse();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             // 짧은 값, 1씩 느는 정수열, 같은 값의 되풀이
@@ -350,6 +359,13 @@ class FactCheckTest {
     private static List<String> fixes(AnalysisSamples.Case sample, String... facts) {
         return verify(analysis(List.of(), List.of(facts), List.of()), sample).fixes().stream()
                 .map(fix -> fix.kind() + "@" + fix.field()).toList();
+    }
+
+    // 2단계 힌트에 text를 넣었을 때 차단되는가
+    private static boolean blocked(FactCheck.Sources sources, String text) {
+        AnalysisResult result = new AnalysisResult("요약", List.of(), List.of("예제 1에서 틀렸습니다."), List.of(),
+                new AnalysisResult.Hints("힌트 1", text, "힌트 3"));
+        return verify(result, AnalysisSamples.reversePyramid(), sources).blocked();
     }
 
     private static List<String> refs(String text) {

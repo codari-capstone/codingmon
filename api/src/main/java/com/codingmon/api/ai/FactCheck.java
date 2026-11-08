@@ -772,9 +772,10 @@ final class FactCheck {
             }
             String joined = String.join(" ", fields);
             int length = joined.codePointCount(0, joined.length());
+            // 같은 값의 되풀이("0 0 0 0")는 값이 둘 이상일 때만 본다. 값 하나짜리(정답 하나를 출력하는 기대 출력)는 길이로만 거른다.
+            boolean repeated = fields.size() > 1 && fields.stream().distinct().count() == 1;
             if (length < HIDDEN_MIN_CHARS || (fields.size() == 1 && length < HIDDEN_SINGLE_MIN_CHARS)
-                    || fields.stream().distinct().count() == 1 || consecutive(fields)
-                    || openIndex.contains(" " + joined + " ")) {
+                    || repeated || consecutive(fields) || openIndex.contains(" " + joined + " ")) {
                 return;
             }
             if (ASCII_ONLY.matcher(joined).matches()) {
