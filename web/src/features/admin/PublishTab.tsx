@@ -161,14 +161,14 @@ export function PublishTab({
               PUBLISH_CONDITION_LABEL[condition]
             return (
               <li key={condition} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-destructive">
+                <span className="text-destructive-text">
                   {info?.text ?? `아직 못 채운 조건이 있어요 (${condition})`}
                 </span>
                 {/* 조건만 보여 주고 고칠 곳을 알려 주지 않으면 네 탭을 뒤져야 한다. */}
                 {info === undefined ? null : (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     className="min-h-11"
                     onClick={() => onGoToTab(info.tab)}
                   >
@@ -188,7 +188,7 @@ export function PublishTab({
       ) : null}
 
       {error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(error)}
         </p>
       ) : null}
@@ -224,7 +224,7 @@ export function PublishTab({
                 검증 중이라고 막으면, 검증이 끝날 때까지 틀린 문제가 사용자에게 계속
                 보인다. 내려도 초안은 그대로 남아 검증은 하던 대로 끝난다(계약).
               */}
-              <Button type="button" variant="outline" className="min-h-11" disabled={busy}>
+              <Button type="button" variant="secondary" className="min-h-11" disabled={busy}>
                 비공개로 내리기
               </Button>
             </AlertDialogTrigger>

@@ -272,19 +272,19 @@ export function SolutionsTab({
       ) : null}
 
       {sizeError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {sizeError}
         </p>
       ) : null}
 
       {save.error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(save.error)}
         </p>
       ) : null}
 
       {validateError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {[problemMessage(validateError), validateHint(validateError)].filter(Boolean).join(' ')}
         </p>
       ) : null}
@@ -293,11 +293,11 @@ export function SolutionsTab({
           없으니, 아직 채워지는 중인 줄 알고 기다리게 된다. 재조회만 실패한 경우에는 지난
           결과가 지금 결과처럼 남는다. 그래서 말해 주고 다시 받을 길을 둔다. */}
       {cases.error ? (
-        <p role="alert" className="text-destructive flex flex-wrap items-center gap-2 text-sm">
+        <p role="alert" className="text-destructive-text flex flex-wrap items-center gap-2 text-sm">
           {`케이스별 결과를 받지 못했어요. ${problemMessage(cases.error)}`}
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             className="min-h-11"
             onClick={() => void cases.refetch()}
           >
@@ -318,7 +318,7 @@ export function SolutionsTab({
           .filter((row): row is typeof row & { result: CaseValidation } => row.result !== null)
 
         return (
-          <div key={language} className="border-border flex flex-col gap-3 rounded-xl border p-3">
+          <div key={language} className="bg-muted/40 flex flex-col gap-3 rounded-xl p-3">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <h3 className="font-medium">{LANGUAGE_LABEL[language]}</h3>
               <p className="text-muted-foreground text-xs">{statusLine(solution, dirty)}</p>
@@ -327,7 +327,7 @@ export function SolutionsTab({
             {/* 계약: "정답 코드가 그대로 들어간 문자열이라 글자 그대로 보여 준다(HTML로
                 렌더링하지 않는다)." 그래서 Markdown 컴포넌트를 쓰지 않는다. */}
             {solution?.compilerMessage ? (
-              <pre className="bg-muted max-h-48 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
+              <pre className="bg-card max-h-48 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
                 {solution.compilerMessage}
               </pre>
             ) : null}
@@ -380,7 +380,7 @@ export function SolutionsTab({
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             className="min-h-11"
             disabled={save.isPending}
             onClick={() => handleSave(false)}

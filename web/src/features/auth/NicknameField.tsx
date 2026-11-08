@@ -53,12 +53,12 @@ export function NicknameField({
       {skipReason !== null ? <p className="text-sm">{skipReason}</p> : null}
       {check.ok ? <p className="text-sm">쓸 수 있어요</p> : null}
       {check.taken ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           이미 사용 중인 닉네임이에요
         </p>
       ) : null}
       {check.error !== null ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(check.error)}
         </p>
       ) : null}

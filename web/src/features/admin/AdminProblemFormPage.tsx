@@ -238,7 +238,7 @@ function AdminProblemForm() {
       ) : null}
 
       {save.error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(save.error)}
           {/* 상한을 넘긴 값이 잠긴 Python 칸일 수 있다. C++ 값은 범위 안인데 거절당하면
               이유가 화면에 없다. 상한을 여기 적지 않고 서버 응답을 받아 덧붙인다 —
@@ -305,10 +305,10 @@ function AdminProblemForm() {
           {/* disabled 하나로 모든 입력칸이 잠긴다. 링크는 걸리지 않는다.
               TabsContent는 Tabs의 context로 동작해 fieldset을 사이에 끼워도 된다. */}
           <fieldset disabled={locked} className="contents">
-            <TabsContent value="basic">
+            <TabsContent className="bg-card rounded-2xl p-6" value="basic">
               <BasicInfoTab form={form} />
             </TabsContent>
-            <TabsContent value="statement">
+            <TabsContent className="bg-card rounded-2xl p-6" value="statement">
               <StatementTab
                 form={form}
                 manualPython={manualPython}
@@ -328,12 +328,22 @@ function AdminProblemForm() {
 
         {id === null || readOnly || !openedCases ? null : (
           // forceMount면 Radix가 hidden을 끄지만, 뒤에 오는 prop이 이겨 우리가 다시 건다.
-          <TabsContent value="cases" forceMount hidden={tab !== 'cases'}>
+          <TabsContent
+            className="bg-card rounded-2xl p-6"
+            value="cases"
+            forceMount
+            hidden={tab !== 'cases'}
+          >
             <TestCasesTab problemId={id} locked={locked} before={before} />
           </TabsContent>
         )}
         {id === null || readOnly || !openedSolutions ? null : (
-          <TabsContent value="solutions" forceMount hidden={tab !== 'solutions'}>
+          <TabsContent
+            className="bg-card rounded-2xl p-6"
+            value="solutions"
+            forceMount
+            hidden={tab !== 'solutions'}
+          >
             <SolutionsTab problemId={id} locked={locked} before={before} />
           </TabsContent>
         )}
@@ -342,12 +352,12 @@ function AdminProblemForm() {
           떠났다 돌아와도 잃을 것이 없고, 공개 조건은 상세에서 다시 읽는다.
         */}
         {id === null || readOnly ? null : (
-          <TabsContent value="publish">
+          <TabsContent className="bg-card rounded-2xl p-6" value="publish">
             <PublishTab problemId={id} locked={locked} onGoToTab={goToTab} />
           </TabsContent>
         )}
         {id === null ? null : (
-          <TabsContent value="versions">
+          <TabsContent className="bg-card rounded-2xl p-6" value="versions">
             <VersionsTab problemId={id} />
           </TabsContent>
         )}

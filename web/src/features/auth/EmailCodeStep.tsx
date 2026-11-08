@@ -176,7 +176,7 @@ export function EmailCodeStep({
             onChange={(event) => handleEmailInput(event.target.value)}
           />
           {verified ? (
-            <Button type="button" variant="outline" disabled={busy} onClick={clearForEmail}>
+            <Button type="button" variant="secondary" disabled={busy} onClick={clearForEmail}>
               이메일 바꾸기
             </Button>
           ) : (
@@ -195,9 +195,9 @@ export function EmailCodeStep({
             </Button>
           )}
         </div>
-        {emailError ? <p className="text-destructive text-sm">{emailError}</p> : null}
+        {emailError ? <p className="text-destructive-text text-sm">{emailError}</p> : null}
         {send.isError ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive-text text-sm">
             {problemMessage(send.error)} {sendErrorAction?.(problemCode(send.error))}
           </p>
         ) : null}
@@ -235,9 +235,9 @@ export function EmailCodeStep({
               </Button>
             )}
           </div>
-          {codeError ? <p className="text-destructive text-sm">{codeError}</p> : null}
+          {codeError ? <p className="text-destructive-text text-sm">{codeError}</p> : null}
           {verify.isError ? (
-            <p role="alert" className="text-destructive text-sm">
+            <p role="alert" className="text-destructive-text text-sm">
               {problemMessage(verify.error)}
             </p>
           ) : null}
