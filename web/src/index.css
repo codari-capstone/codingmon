@@ -24,6 +24,22 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  /* 판정 색: 채움(기본) · 채움 위 글자(-foreground) · 옅은 면(-soft) · 카드나 옅은 면 위 글자(-text) */
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-text: var(--destructive-text);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-soft: var(--success-soft);
+  --color-success-text: var(--success-text);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-text: var(--warning-text);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-soft: var(--info-soft);
+  --color-info-text: var(--info-text);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -47,25 +63,44 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* 색 값은 디자인 시안 '여백 카드' (docs/design-system.md). 포인트 색 #586FC4 하나에서 단계를 나눴다.
+ * 글자·선·입력칸 테두리는 WCAG 대비(글자 4.5:1, 입력칸 테두리 3:1)를 통과하는 단계를 골랐다. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.488 0.217 264.4);
-  --primary-foreground: oklch(1 0 89.9);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.488 0.217 264.4);
+  --background: #f2f4fb;
+  --foreground: #1c1e23;
+  --card: #ffffff;
+  --card-foreground: #1c1e23;
+  --popover: #ffffff;
+  --popover-foreground: #1c1e23;
+  --primary: #586fc4;
+  --primary-foreground: #ffffff;
+  --secondary: #e5e8ee;
+  --secondary-foreground: #1c1e23;
+  --muted: #e5e8ee;
+  --muted-foreground: #505258;
+  --accent: color-mix(in srgb, #586fc4 10%, transparent);
+  --accent-foreground: #354589;
+  --destructive: #c42837;
+  --destructive-foreground: #ffffff;
+  --destructive-soft: color-mix(in srgb, #c42837 12%, transparent);
+  --destructive-text: #9c1025;
+  --success: #1b892c;
+  --success-foreground: #ffffff;
+  --success-soft: color-mix(in srgb, #1b892c 12%, transparent);
+  --success-text: #006a18;
+  --warning: #eab532;
+  --warning-foreground: #0c0e13;
+  --warning-soft: color-mix(in srgb, #eab532 12%, transparent);
+  --warning-text: #8d6900;
+  --info: #009ab3;
+  --info-foreground: #0c0e13;
+  --info-soft: color-mix(in srgb, #009ab3 12%, transparent);
+  --info-text: #007386;
+  --border: #d2d4da;
+  /* 입력칸 테두리는 선보다 진하다: 입력칸의 경계는 3:1 이상이어야 한다 (WCAG 1.4.11).
+   * 한 단계 옅은 #8d8f95는 흰 카드 위에서는 통과하지만 회색 바탕 위에서 2.94:1이라, 바탕에 바로 놓인 입력칸을 위해 이 값을 쓴다 */
+  --input: #6a6c71;
+  --ring: #586fc4;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -83,24 +118,40 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.72 0.144 267.1);
-  --primary-foreground: oklch(0.187 0.011 268.1);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.72 0.144 267.1);
+  --background: #0c0e13;
+  --foreground: #f2f4fb;
+  --card: #1c1e23;
+  --card-foreground: #f2f4fb;
+  --popover: #1c1e23;
+  --popover-foreground: #f2f4fb;
+  /* 주 버튼은 다크 모드에서도 같은 인디고 + 흰 글자 (4.5:1) */
+  --primary: #586fc4;
+  --primary-foreground: #ffffff;
+  --secondary: #282a30;
+  --secondary-foreground: #f2f4fb;
+  --muted: #282a30;
+  --muted-foreground: #b2b4ba;
+  --accent: color-mix(in srgb, #586fc4 16%, transparent);
+  --accent-foreground: #91a3da;
+  --destructive: #ef6667;
+  --destructive-foreground: #0c0e13;
+  --destructive-soft: color-mix(in srgb, #ef6667 16%, transparent);
+  --destructive-text: #f48e8c;
+  --success: #5db562;
+  --success-foreground: #0c0e13;
+  --success-soft: color-mix(in srgb, #5db562 16%, transparent);
+  --success-text: #88c589;
+  --warning: #edc05d;
+  --warning-foreground: #0c0e13;
+  --warning-soft: color-mix(in srgb, #edc05d 16%, transparent);
+  --warning-text: #efcf8b;
+  --info: #5fc8e0;
+  --info-foreground: #0c0e13;
+  --info-soft: color-mix(in srgb, #5fc8e0 16%, transparent);
+  --info-text: #8ed4e5;
+  --border: #3b3d42;
+  --input: #6a6c71;
+  --ring: #7086d0;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
