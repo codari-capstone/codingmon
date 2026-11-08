@@ -20,7 +20,7 @@ class AnswerGuardRepository {
     }
 
     Optional<AnswerGuard.Context> find(long submissionId) {
-        return jdbc.sql("select s.source_code,"
+        return jdbc.sql("select s.source_code, s.language,"
                 + " concat_ws(E'\\n', v.title, v.statement_markdown, v.input_description, v.output_description,"
                 + "   v.constraints_markdown) as problem_text,"
                 + " array(select t.name from problem_version_tags pvt join concept_tags t on t.id = pvt.concept_tag_id"
@@ -32,7 +32,8 @@ class AnswerGuardRepository {
                 + " from submissions s join problem_versions v on v.id = s.problem_version_id"
                 + " where s.id = :id")
                 .param("id", submissionId)
-                .query((rs, n) -> new AnswerGuard.Context(rs.getString("source_code"), rs.getString("problem_text"),
+                .query((rs, n) -> new AnswerGuard.Context(rs.getString("source_code"), rs.getString("language"),
+                        rs.getString("problem_text"),
                         List.of((String[]) rs.getArray("tags").getArray()),
                         references((String[]) rs.getArray("languages").getArray(),
                                 (String[]) rs.getArray("solutions").getArray())))

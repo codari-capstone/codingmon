@@ -37,9 +37,10 @@ final class AnswerGuard {
     record Violation(Rule rule, String field, String tag) {
     }
 
-    // sourceCode는 학습자가 낸 코드 원문, problemText는 제목·지문·입출력 설명·제약을 이은 글이다.
-    // referenceSolutions는 그 문제 버전의 검증 정답 코드다. 사용자에게도 모델에게도 보내지 않는다.
-    record Context(String sourceCode, String problemText, List<String> conceptTags,
+    // sourceCode는 학습자가 낸 코드 원문, sourceLanguage는 그 언어(PYTHON, CPP), problemText는 제목·지문·입출력 설명·제약을
+    // 이은 글이다. referenceSolutions는 그 문제 버전의 검증 정답 코드다. 사용자에게도 모델에게도 보내지 않는다.
+    // toString에는 코드를 넣지 않는다. 로그나 예외 메시지에 실수로 넣어도 정답 코드가 남지 않게 한다.
+    record Context(String sourceCode, String sourceLanguage, String problemText, List<String> conceptTags,
             List<Reference> referenceSolutions) {
 
         Context {
@@ -48,10 +49,21 @@ final class AnswerGuard {
             conceptTags = List.copyOf(conceptTags);
             referenceSolutions = List.copyOf(referenceSolutions);
         }
+
+        @Override
+        public String toString() {
+            return "Context[sourceCode=" + sourceCode.length() + " chars, sourceLanguage=" + sourceLanguage
+                    + ", conceptTags=" + conceptTags + ", referenceSolutions=" + referenceSolutions + "]";
+        }
     }
 
     // language는 reference_solutions.language(PYTHON, CPP)다. 주석 모양이 언어마다 달라 함께 둔다.
     record Reference(String language, String code) {
+
+        @Override
+        public String toString() {
+            return "Reference[language=" + language + ", code=" + (code == null ? 0 : code.length()) + " chars]";
+        }
     }
 
     // 정답 코드와 이만큼 이어서 같은 토큰이 나오면 같은 코드 조각으로 본다. 단, 그 안에 코드에만 나오는 토큰(STRUCTURAL)이
@@ -60,8 +72,9 @@ final class AnswerGuard {
     static final int MIN_STRUCTURAL_TOKENS = 2;
 
     // 호출의 괄호. 따옴표 밖에 한글이 있으면 "int(32비트 정수)" 같은 설명 글이라 호출로 보지 않는다. print('별')은 호출이다.
-    private static final String ARG = "(?:'[^'\\n]*'|\"[^\"\\n]*\"|[^()\\n'\"\\p{IsHangul}])";
-    private static final String ARGS = "\\((?:" + ARG + "|\\(" + ARG + "*\\))*\\)";
+    // 수량자는 소유형(*+)이다. 긴 글에서 되돌아가며 스택을 쓰지 않게 한다(TOKEN도 같다).
+    private static final String ARG = "(?:'[^'\\n]*+'|\"[^\"\\n]*+\"|[^()\\n'\"\\p{IsHangul}])";
+    private static final String ARGS = "\\((?:" + ARG + "|\\(" + ARG + "*+\\))*+\\)";
     private static final String NO_HANGUL = "[^\\n\\p{IsHangul}]";
 
     // 언어 키워드가 이어지는 꼴(AI-002). 하나라도 맞고 그 글이 학습자 코드에 없으면 위반이다.
@@ -72,7 +85,7 @@ final class AnswerGuard {
             Pattern.compile("\\belse\\s*:"),
             Pattern.compile("\\bdef\\s+[A-Za-z_]\\w*\\s*\\("),
             Pattern.compile("\\bimport\\s+[A-Za-z_][\\w.]*|\\bfrom\\s+[A-Za-z_][\\w.]*\\s+import\\b"),
-            Pattern.compile("\\blambda\\b[^:\\n]{0,30}:"),
+            Pattern.compile("\\blambda\\b[^:\\n\\p{IsHangul}]{0,30}:"),
             // 함수·메서드 호출. 인자까지 맞춰 학습자 코드의 호출과 고친 호출을 가린다(예: range(n + 1)은 인용, range(n)은 고친 것).
             Pattern.compile("(?<![\\w.])(?:range|print|input|len|map|list|int|str|split|join|sorted|enumerate|zip|open"
                     + "|sum|set|dict|tuple|max|min|abs|any|all|reversed|round|pow|divmod|ord|chr"
@@ -85,7 +98,7 @@ final class AnswerGuard {
             // 입출력 문장은 끝까지 맞춘다. 학습자 코드의 "cin >> a >> b"를 짚은 글과 ";"를 붙여 고친 글을 가리려는 것이다.
             // 한글, 쉼표, 백틱이 나오면 설명 글로 돌아온 것으로 보고 거기서 끊는다.
             Pattern.compile("\\b(?:cout|cerr)\\s*<<[^;\\n\\p{IsHangul},`]*;?|\\bcin\\s*>>[^;\\n\\p{IsHangul},`]*;?"),
-            Pattern.compile("\\bfor\\s*\\([^)\\n]*;[^)\\n]*;[^)\\n]*\\)"),
+            Pattern.compile("\\bfor\\s*\\([^)\\n\\p{IsHangul}]*;[^)\\n\\p{IsHangul}]*;[^)\\n\\p{IsHangul}]*\\)"),
             Pattern.compile("\\b(?:if|while|switch)\\s*\\([^)\\n]*\\)\\s*\\{"),
             Pattern.compile("\\b(?:int|long|short|unsigned|double|float|char|bool|string|auto|void|size_t|int64_t)"
                     + "\\s+[A-Za-z_]\\w*\\s*[=;\\[({,]"),
@@ -109,6 +122,9 @@ final class AnswerGuard {
     // 인용 비교에서 문장을 넓힐 때 앞에 붙은 이름과 끝에서 뺄 문장 부호(statement)
     private static final Pattern STATEMENT_HEAD = Pattern.compile("[\\w.\\[\\]]");
     private static final Pattern STATEMENT_TAIL = Pattern.compile("[\\s.,:!?]+$");
+    // 코드 낱말 뒤에 붙는 조사. 이것이 붙은 낱말("0으로", "b가")은 코드의 일부로 본다.
+    private static final Pattern PARTICLE = Pattern.compile(
+            "(?:으로|로|을|를|이|가|은|는|와|과|의|에|도|만|까지|부터|처럼|이다|입니다|이고|이면|라고|이라고)");
 
     // 개념 태그 중 알고리즘 이름이 아닌 것. 반복문·조건문·문자열 같은 말은 오답 설명에 늘 나오므로 검사하지 않는다.
     // "출력 형식"은 판정 이름("출력 형식이 잘못되었습니다")에도 들어 있다.
@@ -155,7 +171,8 @@ final class AnswerGuard {
             "split", "append", "sorted", "printf", "scanf");
 
     // 문자열 리터럴은 한 토큰이다. ' '와 ''처럼 안의 공백만 다른 리터럴을 같은 것으로 보지 않는다.
-    private static final Pattern TOKEN = Pattern.compile("'(?:[^'\\\\\\n]|\\\\.)*'|\"(?:[^\"\\\\\\n]|\\\\.)*\""
+    // 리터럴은 소유형 수량자로 찾는다. 글자마다 되돌아갈 자리를 남기면 수천 자 리터럴에서 StackOverflowError가 난다.
+    private static final Pattern TOKEN = Pattern.compile("'(?:[^'\\\\\\n]++|\\\\.)*+'|\"(?:[^\"\\\\\\n]++|\\\\.)*+\""
             + "|[A-Za-z_][A-Za-z0-9_]*|[0-9]+(?:\\.[0-9]+)?"
             + "|<<=|>>=|\\*\\*=|//=|->|\\+\\+|--|<<|>>|<=|>=|==|!=|&&|\\|\\||\\+=|-=|\\*=|/=|%=|\\*\\*|//|::"
             + "|[!-/:-@\\[-^`{-~]");
@@ -172,7 +189,7 @@ final class AnswerGuard {
         List<List<String>> references = context.referenceSolutions().stream()
                 .map(reference -> tokens(stripComments(normalize(reference.code()), reference.language())))
                 .toList();
-        List<Name> names = names(context, source);
+        List<Name> names = names(context, stripComments(source, context.sourceLanguage()));
 
         List<Violation> violations = new ArrayList<>();
         fields(result).forEach((field, raw) -> {
@@ -235,8 +252,8 @@ final class AnswerGuard {
         for (Pattern pattern : CODE_PATTERNS) {
             Matcher matcher = pattern.matcher(text);
             while (matcher.find()) {
-                if (!compactSource.contains(compact(matcher.group()))
-                        || !compactSource.contains(compact(statement(text, matcher.start(), matcher.end())))) {
+                if (!quoted(compactSource, compact(matcher.group()))
+                        || !quoted(compactSource, compact(statement(text, matcher.start(), matcher.end())))) {
                     return true;
                 }
             }
@@ -244,15 +261,39 @@ final class AnswerGuard {
         return false;
     }
 
+    // 학습자 코드 안에 그 글이 있되, 앞뒤가 식별자 중간이 아니어야 한다(uint64_t 안의 int64_t는 인용이 아니다).
+    static boolean quoted(String compactSource, String fragment) {
+        if (fragment.isEmpty()) {
+            return true;
+        }
+        boolean wordStart = isWord(fragment.charAt(0));
+        boolean wordEnd = isWord(fragment.charAt(fragment.length() - 1));
+        for (int at = compactSource.indexOf(fragment); at >= 0; at = compactSource.indexOf(fragment, at + 1)) {
+            int after = at + fragment.length();
+            if ((!wordStart || at == 0 || !isWord(compactSource.charAt(at - 1)))
+                    && (!wordEnd || after == compactSource.length() || !isWord(compactSource.charAt(after)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isWord(char c) {
+        return c == '_' || (c < 128 && Character.isLetterOrDigit(c));
+    }
+
     // 맞은 곳을 앞으로는 붙어 있는 이름(a.append의 a)까지, 뒤로는 문장 끝까지 넓힌다. 한글·줄바꿈·백틱이나 괄호 밖의
-    // ", "가 나오면 설명 글로 돌아온 것으로 보고, ;는 넣고 끊는다. 끝에 붙은 닫는 괄호와 문장 부호는 뺀다
-    // 짝이 없는 닫는 괄호("4번 줄(range(1, n + 1))에서"의 마지막 ")")에서도 끊는다.
+    // ", "가 나오면 설명 글로 돌아온 것으로 보고, ;는 넣고 끊는다. 짝이 없는 닫는 괄호("4번 줄(range(1, n + 1))에서"의
+    // 마지막 ")")에서도 끊고, 끝에 붙은 문장 부호는 뺀다. 괄호 깊이는 맞은 부분에서 이어받는다(int a[ 뒤의 10]).
+    // 한글에서 끊을 때 바로 앞 낱말이 "n번", "3개"처럼 수를 세는 말에 붙어 있으면 그 낱말은 설명 글로 보고 뺀다.
+    // "0으로", "b가"처럼 조사가 붙은 낱말은 코드의 일부로 남긴다.
     private static String statement(String text, int start, int end) {
         while (start > 0 && STATEMENT_HEAD.matcher(text.substring(start - 1, start)).matches()) {
             start--;
         }
-        int depth = 0;
+        int depth = Math.max(0, depth(text.substring(start, end)));
         char quote = 0;
+        int lastSpace = -1;
         int limit = Math.min(text.length(), end + 120);
         while (end < limit) {
             char c = text.charAt(end);
@@ -263,8 +304,16 @@ final class AnswerGuard {
                 if (c == quote) {
                     quote = 0;
                 }
-            } else if (c == '\n' || c == '`' || HANGUL.matcher(String.valueOf(c)).matches()) {
+            } else if (HANGUL.matcher(String.valueOf(c)).matches()) {
+                if (lastSpace >= 0 && !Character.isWhitespace(text.charAt(end - 1))
+                        && !PARTICLE.matcher(text.substring(end)).lookingAt()) {
+                    end = lastSpace;
+                }
                 break;
+            } else if (c == '\n' || c == '`') {
+                break;
+            } else if (Character.isWhitespace(c)) {
+                lastSpace = end;
             } else if (c == ';') {
                 end++;
                 break;
@@ -283,6 +332,27 @@ final class AnswerGuard {
         }
         String statement = text.substring(start, end);
         return statement.endsWith(";") ? statement : STATEMENT_TAIL.matcher(statement).replaceAll("");
+    }
+
+    // 따옴표 밖의 여는 괄호 수에서 닫는 괄호 수를 뺀다.
+    private static int depth(String code) {
+        int depth = 0;
+        char quote = 0;
+        for (int i = 0; i < code.length(); i++) {
+            char c = code.charAt(i);
+            if (quote != 0) {
+                if (c == quote) {
+                    quote = 0;
+                }
+            } else if (c == '\'' || c == '"') {
+                quote = c;
+            } else if (c == '(' || c == '[' || c == '{') {
+                depth++;
+            } else if (c == ')' || c == ']' || c == '}') {
+                depth--;
+            }
+        }
+        return depth;
     }
 
     private static boolean similar(String text, List<List<String>> references, String sourceTokens) {
@@ -333,7 +403,8 @@ final class AnswerGuard {
     private record Name(String tag, Pattern pattern) {
     }
 
-    // 문제 태그 중 알고리즘 이름과 그 다른 이름. 지문이나 학습자 코드에 이미 나온 이름은 뺀다.
+    // 문제 태그 중 알고리즘 이름과 그 다른 이름. 지문이나 학습자 코드에 이미 나온 이름은 뺀다. 학습자 코드는 주석을 뺀 것을
+    // 받는다. 주석에 이름을 늘어놓아 검사를 끄지 못하게 한다(변수 이름 dp 같은 것은 그대로 뺀다).
     private static List<Name> names(Context context, String source) {
         String problem = normalize(context.problemText());
         List<Name> names = new ArrayList<>();
@@ -385,24 +456,52 @@ final class AnswerGuard {
         return Pattern.compile("(?<![A-Za-z])" + words + "s?(?![A-Za-z])" + after, flags);
     }
 
-    // 전각 글자와 수학 기호를 ASCII로 바꿔 "n − 1", "a × b"도 코드 토큰처럼 비교한다.
+    // 전각 글자와 수학 기호를 ASCII로 바꿔 "n − 1", "a × b"도 코드 토큰처럼 비교한다. 수학 기호는 따옴표 밖에서만 바꾼다.
+    // print('×')와 print('*')는 다른 코드다. 따옴표는 줄이 바뀌면 닫는다(compact와 같다).
     static String normalize(String text) {
-        return Normalizer.normalize(text, Normalizer.Form.NFKC)
-                .replace('−', '-').replace('–', '-').replace('×', '*').replace('÷', '/')
-                .replace("≤", "<=").replace("≥", ">=").replace("≠", "!=")
+        String quotesFixed = Normalizer.normalize(text, Normalizer.Form.NFKC)
                 .replace('‘', '\'').replace('’', '\'').replace('“', '"').replace('”', '"');
+        StringBuilder out = new StringBuilder(quotesFixed.length());
+        char quote = 0;
+        for (int i = 0; i < quotesFixed.length(); i++) {
+            char c = quotesFixed.charAt(i);
+            if (quote != 0) {
+                out.append(c);
+                if (c == quote || c == '\n') {
+                    quote = 0;
+                }
+                continue;
+            }
+            switch (c) {
+                case '\'', '"' -> {
+                    quote = c;
+                    out.append(c);
+                }
+                case '−', '–' -> out.append('-');
+                case '×' -> out.append('*');
+                case '÷' -> out.append('/');
+                case '≤' -> out.append("<=");
+                case '≥' -> out.append(">=");
+                case '≠' -> out.append("!=");
+                default -> out.append(c);
+            }
+        }
+        return out.toString();
     }
 
     // 공백을 지워 띄어쓰기만 다른 인용도 학습자 코드와 맞춰 본다. 따옴표 안의 공백은 남긴다(' '.join과 ''.join은 다르다).
+    // 식별자 글자 사이의 공백은 하나로 남긴다. "in range"가 "inrange"가 되면 식별자 경계(quoted)를 가릴 수 없다.
     // 문자열은 줄을 넘지 않는다고 보고 줄이 바뀌면 따옴표를 닫는다. 주석의 아포스트로피(don't)가 뒤 줄까지 번지지 않게 한다.
     static String compact(String text) {
         StringBuilder out = new StringBuilder(text.length());
         char quote = 0;
+        boolean gap = false;
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
             if (quote != 0) {
                 if (c == '\n') {
                     quote = 0;
+                    gap = true;
                     continue;
                 }
                 out.append(c);
@@ -414,8 +513,13 @@ final class AnswerGuard {
                 continue;
             }
             if (Character.isWhitespace(c)) {
+                gap = true;
                 continue;
             }
+            if (gap && !out.isEmpty() && isWord(out.charAt(out.length() - 1)) && isWord(c)) {
+                out.append(' ');
+            }
+            gap = false;
             if (c == '\'' || c == '"') {
                 quote = c;
             }

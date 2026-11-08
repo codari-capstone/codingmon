@@ -191,7 +191,7 @@ class AnswerGuardTest {
                 .containsExactly(Rule.CODE_PATTERN);
         assertThat(withReference(withGuess("2번 줄의 print(''.join(words))에서 단어 사이에 아무것도 넣지 않아요."), code,
                 List.of("문자열"))).isEmpty();
-        assertThat(AnswerGuard.compact("print( ' a b ' ) # don't\nx = 1")).isEqualTo("print(' a b ')#don'tx=1");
+        assertThat(AnswerGuard.compact("print( ' a b ' ) # don't\nx = 1")).isEqualTo("print(' a b ')#don't x=1");
     }
 
     @Test
@@ -264,6 +264,82 @@ class AnswerGuardTest {
     }
 
     @Test
+    void 긴_문자열_리터럴도_토큰으로_나눈다() {
+        String code = "table = '" + "0123456789".repeat(2_000) + "'\nprint(table[0])\n";
+
+        assertThat(AnswerGuard.tokens(code)).hasSize(10);
+        assertThat(check(withPrinciple("요약입니다."))).isEmpty();
+        assertThat(withReference(withPrinciple("2번 줄의 print(table[0])를 보세요."), code, List.of("문자열"), code)).isEmpty();
+    }
+
+    @Test
+    void 수를_세는_말이_붙은_낱말은_인용_문장에_넣지_않는다() {
+        // 학습자 코드 4번 줄 그대로다. "n번"의 n은 설명 글이다.
+        assertThat(check(withGuess("4번 줄 for i in range(1, n + 1): n번 반복합니다."))).isEmpty();
+        // 조사가 붙은 낱말은 고친 코드의 일부다.
+        String code = """
+                #include <iostream>
+                int main() {
+                    int sum = 1;
+                }
+                """;
+        assertThat(rules(withReference(withPrinciple("int sum = 0으로 시작하세요."), code, List.of("입출력"))))
+                .containsExactly(Rule.CODE_PATTERN);
+    }
+
+    @Test
+    void 인용은_식별자_경계와_괄호_깊이를_지켜_비교한다() {
+        String code = """
+                #include <cstdint>
+                int main() {
+                    uint64_t sum = 0;
+                    int a[10];
+                }
+                """;
+
+        for (String text : List.of("int64_t sum = 0; 으로 바꾸세요.", "int a[10] = {0}; 으로 바꾸세요.")) {
+            assertThat(rules(withReference(withPrinciple(text), code, List.of("입출력")))).as(text)
+                    .containsExactly(Rule.CODE_PATTERN);
+        }
+        assertThat(withReference(withGuess("3번 줄 uint64_t sum = 0; 은 맞아요. 4번 줄 int a[10]; 도 맞아요."), code,
+                List.of("입출력"))).isEmpty();
+        assertThat(AnswerGuard.quoted("uint64_t sum=0;", "int64_t sum=0;")).isFalse();
+        assertThat(AnswerGuard.quoted("a=1;uint64_t sum=0;", "uint64_t sum=0;")).isTrue();
+    }
+
+    @Test
+    void 문자열_리터럴_안의_기호는_바꾸지_않는다() {
+        assertThat(AnswerGuard.normalize("print('×') # a × b")).isEqualTo("print('×') # a * b");
+        assertThat(rules(withReference(withPrinciple("print('*')로 바꾸세요."), "print('×')\n", List.of("문자열"))))
+                .containsExactly(Rule.CODE_PATTERN);
+    }
+
+    @Test
+    void 반복문_꼴과_lambda를_말로_설명한_글은_코드가_아니다() {
+        assertThat(check(withPrinciple("C++의 반복문은 for (초기식; 조건식; 증감식) 꼴입니다."))).isEmpty();
+        assertThat(check(withPrinciple("lambda 함수: 이름 없는 한 줄 함수입니다."))).isEmpty();
+    }
+
+    @Test
+    void 학습자_코드_주석의_알고리즘_이름으로는_검사를_끄지_못한다() {
+        AnalysisResult result = withPrinciple("그리디로 큰 수부터 고르세요.");
+        String commented = "# 그리디 DP BFS\nn = int(input())\n";
+        String named = "greedy = True\n";
+
+        assertThat(rules(withReference(result, commented, List.of("그리디")))).containsExactly(Rule.ALGORITHM_NAME);
+        // 코드에 이름이 그대로 쓰인 경우(변수 이름)는 지금처럼 뺀다.
+        assertThat(withReference(withPrinciple("greedy 값을 보세요."), named, List.of("그리디"))).isEmpty();
+    }
+
+    @Test
+    void 검사_자료의_toString에는_코드를_넣지_않는다() {
+        AnswerGuard.Context context = new AnswerGuard.Context("print(1)", "PYTHON", "문제", List.of("정렬"),
+                List.of(new AnswerGuard.Reference("PYTHON", "print(sorted(a))")));
+
+        assertThat(context.toString()).doesNotContain("print").contains("8 chars", "16 chars");
+    }
+
+    @Test
     void 로그에는_규칙과_위치만_남긴다() {
         List<Violation> violations = withReference(withPrinciple("동적계획법으로 range(n)까지 도세요."), "",
                 List.of("동적 계획법"));
@@ -280,11 +356,11 @@ class AnswerGuardTest {
             String... references) {
         List<AnswerGuard.Reference> python = Stream.of(references).map(r -> new AnswerGuard.Reference("PYTHON", r))
                 .toList();
-        return AnswerGuard.check(result, new AnswerGuard.Context(code, "문제", tags, python));
+        return AnswerGuard.check(result, new AnswerGuard.Context(code, "PYTHON", "문제", tags, python));
     }
 
     private static List<Violation> withProblem(AnalysisResult result, List<String> tags, String problem) {
-        return AnswerGuard.check(result, new AnswerGuard.Context("", problem, tags, List.of()));
+        return AnswerGuard.check(result, new AnswerGuard.Context("", "PYTHON", problem, tags, List.of()));
     }
 
     private static List<Rule> rules(List<Violation> violations) {
