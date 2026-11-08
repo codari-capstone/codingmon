@@ -44,6 +44,9 @@ export function sampleRunQuery(id: number) {
       return result.data
     },
     refetchInterval: (query) => pollingInterval(query.state.error, query.state.data?.status),
+    // 끝난 결과는 바뀌지 않는데, 서버가 1시간 뒤 지워(#198) 재연결 때 다시 물으면 404로 표가 사라진다(#200).
+    staleTime: (query) =>
+      query.state.data !== undefined && isFinished(query.state.data.status) ? Infinity : 30_000,
     retry: false,
   })
 }
