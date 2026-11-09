@@ -407,6 +407,18 @@ class FactCheckTest {
     }
 
     @Test
+    void 긴_기호_문자열이_있어도_던지지_않는다() {
+        // 제출 코드의 주석 장식이나 아스키 그림. 정규식이 글자마다 재귀하면 StackOverflowError가 난다.
+        String code = "#".repeat(60_000) + "\n" + "-".repeat(60_000) + "\n" + "'-".repeat(30_000) + "\nprint(0)\n";
+
+        assertThatCode(() -> verify(analysis(List.of(), List.of("예제 1에서 틀렸습니다."), List.of()),
+                AnalysisSamples.reversePyramid(), new FactCheck.Sources(List.of("-123456789\n"), List.of(code))))
+                .doesNotThrowAnyException();
+        assertThat(blocked(new FactCheck.Sources(List.of("-123456789\n"), List.of(code)), "답이 (-123456789)인지 보세요."))
+                .isTrue();
+    }
+
+    @Test
     void 긴_숫자열이_있어도_지수_표기를_빨리_찾는다() {
         // 학습자가 정하는 제출 코드도 공개 글로 읽는다. 64KB 상한 안의 긴 숫자열에서 시간이 제곱으로 늘면 안 된다.
         String code = "x = '" + "7".repeat(60_000) + "'\ny = 10^9\nz = '" + "1".repeat(3_000) + "⁹'\n";
