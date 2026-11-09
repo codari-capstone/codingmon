@@ -1010,10 +1010,13 @@ final class FactCheck {
         if (value.stripTrailingZeros().scale() > 0 || value.toBigInteger().toString().length() > 19) {
             return;
         }
+        // 앞의 부호는 보지 않고 음수도 넣는다. "-10^9 ≤ N"의 -1000000000도 공개 값이다.
         values.add(value.toBigInteger().toString());
+        values.add(value.toBigInteger().negate().toString());
         if (sign != null) {
             BigDecimal shifted = sign.equals("+") ? value.add(new BigDecimal(offset)) : value.subtract(new BigDecimal(offset));
             values.add(shifted.toBigInteger().toString());
+            values.add(shifted.toBigInteger().negate().toString());
         }
     }
 

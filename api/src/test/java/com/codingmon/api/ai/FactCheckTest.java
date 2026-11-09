@@ -355,6 +355,9 @@ class FactCheckTest {
         assertThat(FactCheck.powers("1 ≤ N ≤ 2 × 10^5, 답은 10^9 + 7로 나눈 나머지, 값은 2^31 − 1 이하, 1e9, 10⁹, 10<sup>18</sup>"))
                 .contains("200000", "1000000000", "1000000007", "2147483648", "2147483647", "1000000000000000000");
         assertThat(FactCheck.powers("n^2번 반복한다, x^9")).isEmpty();
+        // 음수 경계도 공개 값이다
+        assertThat(blocked(new FactCheck.Sources(List.of("-1000000000\n"), List.of("-10^9 ≤ N ≤ 0")),
+                "N이 -1000000000인 경계값을 확인하세요.")).isFalse();
         // 지수가 공개 글에 없으면 최대값도 비공개 값으로 본다
         assertThat(blocked(new FactCheck.Sources(List.of("1000000000\n"), List.of("1 ≤ N ≤ 100")),
                 "N이 1000000000일 때를 생각해 보세요.")).isTrue();
