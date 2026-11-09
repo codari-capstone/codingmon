@@ -217,6 +217,10 @@ class FactCheckTest {
         assertThat(kinds(AnalysisSamples.quadraticPairs(), "예제를 모두 통과하지는 못했습니다."))
                 .containsExactly(Kind.CONTRADICTED_FACT);
         assertThat(kinds(AnalysisSamples.quadraticPairs(), "예제가 모두 틀린 것은 아닙니다.")).isEmpty();
+        // 뒷 절의 부정은 앞 절의 "모두 통과"를 뒤집지 않는다
+        assertThat(kinds(AnalysisSamples.quadraticPairs(), "예제를 모두 통과했지만 정답은 아닙니다.")).isEmpty();
+        assertThat(kinds(AnalysisSamples.reversePyramid(), "예제를 모두 통과했지만 정답은 아닙니다."))
+                .containsExactly(Kind.CONTRADICTED_FACT);
         // 비공개 요약이 없다
         assertThat(kinds(AnalysisSamples.indexOutOfRange(), "비공개 테스트 3개에서 틀렸습니다.")).containsExactly(Kind.CONTRADICTED_FACT);
         // 비공개 개수가 다르다
