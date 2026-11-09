@@ -367,6 +367,15 @@ class FactCheckTest {
     }
 
     @Test
+    void 기호가_낀_비공개_줄의_일부만_옮겨도_잡는다() {
+        FactCheck.Sources sources = new FactCheck.Sources(List.of("(3,7) (1,9) (4,4) (8,2) (6,5)\n"), List.of());
+
+        assertThat(blocked(sources, "(3,7) (1,9) (4,4)를 넣어 보세요.")).isTrue();
+        assertThat(blocked(sources, "(3,7) (1,9) (4,4) (8,2) (6,5)를 넣어 보세요.")).isTrue();
+        assertThat(blocked(sources, "(3,7)을 넣어 보세요.")).isFalse();
+    }
+
+    @Test
     void 괄호로_감싼_정수열이나_기호로만_된_값은_비공개_값으로_보지_않는다() {
         FactCheck.Sources sources = new FactCheck.Sources(
                 List.of("[1, 2, 3, 4, 5]\n", "[0, 0, 0, 0, 0]\n", "*********\n ******* \n"), List.of());

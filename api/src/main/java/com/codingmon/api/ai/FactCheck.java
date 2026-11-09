@@ -802,10 +802,12 @@ final class FactCheck {
                                 examined++;
                                 value(tokens, open, values);
                             }
-                            for (int i = 0; tokens.size() > HIDDEN_WINDOW_FIELDS && i + HIDDEN_WINDOW_FIELDS <= tokens.size();
-                                    i++) {
+                            // 조각은 기호를 뺀 값 HIDDEN_WINDOW_FIELDS개 단위로 자른다. 사이에 낀 기호도 조각에 넣는다.
+                            // "(3,7) (1,9) (4,4)"의 조각은 "3 7 ) ( 1 9"다. 토큰 개수로 자르면 기호가 자리를 차지해 값이 모자란다.
+                            List<Integer> at = valueIndexes(tokens);
+                            for (int i = 0; at.size() > HIDDEN_WINDOW_FIELDS && i + HIDDEN_WINDOW_FIELDS <= at.size(); i++) {
                                 examined++;
-                                value(tokens.subList(i, i + HIDDEN_WINDOW_FIELDS), open, values);
+                                value(tokens.subList(at.get(i), at.get(i + HIDDEN_WINDOW_FIELDS - 1) + 1), open, values);
                             }
                         }
                         // 한글이 섞인 줄도 같은 상한을 센다.
@@ -828,6 +830,17 @@ final class FactCheck {
             if (candidate(fields) && !open.hasPhrase(String.join(" ", fields))) {
                 phrases.add(String.join(" ", fields));
             }
+        }
+
+        // 기호로만 된 토큰이 아닌 것(수·영문 낱말)의 자리
+        private static List<Integer> valueIndexes(List<String> tokens) {
+            List<Integer> at = new ArrayList<>();
+            for (int i = 0; i < tokens.size(); i++) {
+                if (!SYMBOLS_ONLY.matcher(tokens.get(i)).matches()) {
+                    at.add(i);
+                }
+            }
+            return at;
         }
 
         // 짧은 값, 같은 값의 되풀이, 1씩 늘거나 주는 정수열, 기호로만 된 값("*********", "[ ]")은 비공개 값으로 보지 않는다.
