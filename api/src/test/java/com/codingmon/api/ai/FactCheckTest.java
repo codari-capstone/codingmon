@@ -66,6 +66,8 @@ class FactCheckTest {
                 "메모리를 약 9MB 썼습니다.")).isEmpty();
         assertThat(fixes(AnalysisSamples.reversePyramid(), "실행 시간은 0.019초입니다."))
                 .containsExactly("UNMATCHED_VALUE@facts[0]");
+        // 9,200KB = 8.984375MB. 소수 셋째 자리까지 어림해 써도 된다
+        assertThat(fixes(AnalysisSamples.reversePyramid(), "메모리를 약 8.984MB 썼습니다.")).isEmpty();
         // 9,272KB = 9.0546875MB
         AnalysisInput memory = new AnalysisInput(AnalysisSamples.reversePyramid().input().problem(),
                 AnalysisInput.Submission.of(Language.PYTHON, Verdict.MEMORY_LIMIT_EXCEEDED, null, 18, 9272, "x = 1\n", null),

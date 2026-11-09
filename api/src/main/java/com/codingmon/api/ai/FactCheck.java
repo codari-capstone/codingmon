@@ -753,9 +753,10 @@ final class FactCheck {
             numbers.add(Integer.toString(mb * 1024));
         }
 
-        // 바꾼 값 그대로("0.018초", "8.984MB")와 어림한 값(소수 둘째·첫째 자리, 정수)
+        // 바꾼 값 그대로("0.018초", "8.984375MB")와 어림한 값(소수 셋째·둘째·첫째 자리, 정수)
         private static void addRounded(Set<String> numbers, BigDecimal value) {
             numbers.add(canonical(value.toPlainString()));
+            numbers.add(canonical(value.setScale(3, RoundingMode.HALF_UP).toPlainString()));
             numbers.add(canonical(value.setScale(2, RoundingMode.HALF_UP).toPlainString()));
             numbers.add(canonical(value.setScale(1, RoundingMode.HALF_UP).toPlainString()));
             for (RoundingMode mode : List.of(RoundingMode.FLOOR, RoundingMode.CEILING, RoundingMode.HALF_UP)) {
