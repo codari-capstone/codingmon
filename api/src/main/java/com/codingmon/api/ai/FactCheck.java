@@ -43,6 +43,8 @@ final class FactCheck {
     static final int HIDDEN_MAX_CANDIDATES = 2_000;
     // 후보를 뽑으려고 살펴보는 조각 수의 상한. 걸러진 조각도 센다. 비공개 원문이 커도 요청마다 하는 일이 이만큼으로 묶인다.
     static final int HIDDEN_MAX_EXAMINED = 20_000;
+    // 한글이 섞인 후보의 상한. 이 후보는 공개 글 전체에서 부분 문자열로 찾으므로 따로 작게 묶는다.
+    static final int HIDDEN_MAX_PHRASES = 300;
     // 응답 글에서 후보와 맞춰 볼 이어진 값의 최대 개수. 이보다 긴 후보 줄은 조각으로만 맞춘다.
     private static final int MAX_MATCH_FIELDS = 64;
     private static final int MAX_SEGMENT_FIELDS = 300;
@@ -770,6 +772,7 @@ final class FactCheck {
     // 학습자가 이미 볼 수 있는 글(open)에 있는 값, 짧은 값, 같은 값의 되풀이, 1씩 늘거나 주는 정수열은 후보로 삼지 않는다.
     // 공개 글은 토큰 n-gram 집합(OpenIndex)으로 색인해 후보마다 집합 조회로 거른다.
     // Sources.hidden 순서대로 뽑다가 후보가 HIDDEN_MAX_CANDIDATES에, 살펴본 조각이 HIDDEN_MAX_EXAMINED에 닿으면 멈춘다.
+    // 한글이 섞인 후보는 HIDDEN_MAX_PHRASES까지만 둔다.
     record Hidden(Set<String> values, Set<String> phrases) {
 
         static Hidden of(Sources sources) {
@@ -782,18 +785,22 @@ final class FactCheck {
                     for (String line : variant.split("\\R")) {
                         if (!ASCII_ONLY.matcher(line).matches()) {
                             examined++;
-                            phrase(fields(line), open, phrases);
-                            continue;
+                            if (phrases.size() < HIDDEN_MAX_PHRASES) {
+                                phrase(fields(line), open, phrases);
+                            }
+                        } else {
+                            List<String> tokens = valueTokens(line);
+                            if (tokens.size() <= MAX_MATCH_FIELDS) {
+                                examined++;
+                                value(tokens, open, values);
+                            }
+                            for (int i = 0; tokens.size() > HIDDEN_WINDOW_FIELDS && i + HIDDEN_WINDOW_FIELDS <= tokens.size();
+                                    i++) {
+                                examined++;
+                                value(tokens.subList(i, i + HIDDEN_WINDOW_FIELDS), open, values);
+                            }
                         }
-                        List<String> tokens = valueTokens(line);
-                        if (tokens.size() <= MAX_MATCH_FIELDS) {
-                            examined++;
-                            value(tokens, open, values);
-                        }
-                        for (int i = 0; tokens.size() > HIDDEN_WINDOW_FIELDS && i + HIDDEN_WINDOW_FIELDS <= tokens.size(); i++) {
-                            examined++;
-                            value(tokens.subList(i, i + HIDDEN_WINDOW_FIELDS), open, values);
-                        }
+                        // 한글이 섞인 줄도 같은 상한을 센다.
                         if (values.size() + phrases.size() >= HIDDEN_MAX_CANDIDATES || examined >= HIDDEN_MAX_EXAMINED) {
                             return new Hidden(Set.copyOf(values), Set.copyOf(phrases));
                         }

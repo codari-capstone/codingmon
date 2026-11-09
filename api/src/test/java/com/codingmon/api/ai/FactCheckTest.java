@@ -355,6 +355,24 @@ class FactCheckTest {
     }
 
     @Test
+    void 한글이_섞인_비공개_줄도_후보_상한을_지킨다() {
+        List<String> hidden = new ArrayList<>();
+        for (int c = 0; c < 50; c++) {
+            StringBuilder text = new StringBuilder();
+            for (int i = 0; text.length() < FactCheckRepository.HIDDEN_TEXT_MAX_CHARS; i++) {
+                text.append("학생").append(c * 1_000 + i).append(" 점수 ").append(i * 7).append('\n');
+            }
+            hidden.add(text.toString());
+        }
+
+        FactCheck.Hidden candidates = FactCheck.Context.of(AnalysisSamples.reversePyramid().input(),
+                new FactCheck.Sources(hidden, List.of())).hidden();
+
+        assertThat(candidates.phrases()).hasSize(FactCheck.HIDDEN_MAX_PHRASES);
+        assertThat(candidates.values().size() + candidates.phrases().size()).isLessThanOrEqualTo(FactCheck.HIDDEN_MAX_CANDIDATES);
+    }
+
+    @Test
     void 긴_숫자열이_있어도_지수_표기를_빨리_찾는다() {
         // 학습자가 정하는 제출 코드도 공개 글로 읽는다. 64KB 상한 안의 긴 숫자열에서 시간이 제곱으로 늘면 안 된다.
         String code = "x = '" + "7".repeat(60_000) + "'\ny = 10^9\nz = '" + "1".repeat(3_000) + "⁹'\n";
