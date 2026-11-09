@@ -184,13 +184,17 @@ final class FactCheck {
     private static final Pattern VALUE_TOKEN = Pattern.compile(
             "-?\\d+(?:\\.\\d+)?|[A-Za-z_][A-Za-z0-9_]*|[!\"#$%&'()*+\\-./:;<=>?@\\[\\\\\\]^`{|}~]+");
     // 지수 표기: (가수 ×) 밑 ^ 지수 (± 더할 수). "10^{9}", "10**9"도 받는다.
-    private static final Pattern POWER = Pattern.compile("(?:(\\d+(?:\\.\\d+)?)\\s*[×xX*·]\\s*)?(\\d+)\\s*(?:\\^|\\*\\*)\\s*\\{?\\s*(\\d+)\\s*\\}?"
-            + "(?:\\s*([+\\-−])\\s*(\\d+))?");
+    // 제출 코드도 읽으므로 긴 숫자열에서 느려지면 안 된다. 수는 첫 자리에서만 시작하고((?<![\\d.])) 되돌아가지 않는다(\\d++).
+    // 그러지 않으면 숫자 자리마다 다시 시작하며 되돌아가 16,000자리 숫자열 하나에 10초가 넘게 걸린다.
+    private static final Pattern POWER = Pattern.compile(
+            "(?:(?<![\\d.])(\\d++(?:\\.\\d++)?)\\s*+[×xX*·]\\s*+)?(?<![\\d.])(\\d++)\\s*+(?:\\^|\\*\\*)\\s*+\\{?\\s*+(\\d++)\\s*+\\}?"
+                    + "(?:\\s*+([+\\-−])\\s*+(\\d++))?");
     private static final Pattern SCIENTIFIC = Pattern.compile(
-            "(?<![\\w.])(\\d+(?:\\.\\d+)?)[eE]\\+?(\\d+)(?![\\w.])(?:\\s*([+\\-−])\\s*(\\d+))?");
-    private static final Pattern SUP_TAG = Pattern.compile("(\\d+)\\s*<sup>\\s*(\\d+)\\s*</sup>", Pattern.CASE_INSENSITIVE);
+            "(?<![\\w.])(\\d++(?:\\.\\d++)?)[eE]\\+?(\\d++)(?![\\w.])(?:\\s*+([+\\-−])\\s*+(\\d++))?");
+    private static final Pattern SUP_TAG = Pattern.compile("(?<!\\d)(\\d++)\\s*+<sup>\\s*+(\\d++)\\s*+</sup>",
+            Pattern.CASE_INSENSITIVE);
     private static final String SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
-    private static final Pattern SUPERSCRIPT = Pattern.compile("(\\d+)([" + SUPERSCRIPT_DIGITS + "]+)");
+    private static final Pattern SUPERSCRIPT = Pattern.compile("(?<!\\d)(\\d++)([" + SUPERSCRIPT_DIGITS + "]++)");
 
     // 판정마다 응답에 나올 만한 말. 근거로 넓게 본다.
     private static final Map<Verdict, Pattern> VERDICT_WORDS = Map.of(

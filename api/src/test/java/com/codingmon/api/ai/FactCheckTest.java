@@ -355,6 +355,19 @@ class FactCheckTest {
     }
 
     @Test
+    void 긴_숫자열이_있어도_지수_표기를_빨리_찾는다() {
+        // 학습자가 정하는 제출 코드도 공개 글로 읽는다. 64KB 상한 안의 긴 숫자열에서 시간이 제곱으로 늘면 안 된다.
+        String code = "x = '" + "7".repeat(60_000) + "'\ny = 10^9\nz = '" + "1".repeat(3_000) + "⁹'\n";
+
+        long started = System.nanoTime();
+        List<String> powers = FactCheck.powers(code);
+        long millis = (System.nanoTime() - started) / 1_000_000;
+
+        assertThat(powers).contains("1000000000");
+        assertThat(millis).isLessThan(1_000);
+    }
+
+    @Test
     void 쉼표로_이은_목록은_공개_글과_비공개_원문에서도_두_형태로_본다() {
         // 지문에 같은 목록이 있으면 공개 값이다
         assertThat(blocked(new FactCheck.Sources(List.of("100 200 300 400\n"), List.of("예: [100,200,300,400]")),
