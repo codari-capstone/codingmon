@@ -83,6 +83,8 @@ class AiReviewRunner {
 
     // 처리기에 넣는다. 시도를 잡은 트랜잭션이 커밋된 뒤에 부른다(PENDING 행이 커밋된 뒤라야 처리기가 결과를 쓴다).
     // generation은 입력과 검사 자료를 읽어 요청을 만든다. 여기서 실패해도 행이 PENDING으로 남지 않게 FAILED로 바꾼다.
+    // 사실 검증 자료는 학습자가 낸 코드를 정규식으로 읽으므로 StackOverflowError도 잡는다. 놓치면 행이 active에 남아
+    // pending-timeout으로도 버려진 것으로 보이지 않고, 서버를 다시 시작할 때까지 다시 요청할 수 없다.
     <T> void start(ReviewType type, AiReviewRepository.Claim claim, Supplier<Generation<T>> generation) {
         active.add(claim.id());
         try {
@@ -90,7 +92,7 @@ class AiReviewRunner {
             worker.submit(claim.id(), request.first())
                     .thenCompose(first -> guarded(type, claim, request, first))
                     .whenComplete((outcome, failure) -> finish(type, claim, request, outcome, failure));
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | StackOverflowError e) {
             log.error("{} {}을 시작하지 못했다", label(type), claim.id(), e);
             fail(type, claim, AiReviewRepository.FailureReason.INTERNAL);
         }
