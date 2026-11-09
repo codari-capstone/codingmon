@@ -174,6 +174,7 @@ final class FactCheck {
     private static final Pattern QUOTED = Pattern.compile("'([^'\\n]{1,80})'|\"([^\"\\n]{1,80})\"");
     private static final Pattern ASCII_VISIBLE = Pattern.compile("[!-~]");
     private static final Pattern ASCII_ONLY = Pattern.compile("[\\x00-\\x7F]*");
+    private static final Pattern SYMBOLS_ONLY = Pattern.compile("[!-/:-@\\[-`{-~]+");
     private static final Pattern INTEGER = Pattern.compile("-?\\d+");
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]{2,}");
     private static final Pattern BIG_O = Pattern.compile("\\bO\\s*\\([^)\\n]*\\)");
@@ -826,17 +827,19 @@ final class FactCheck {
             }
         }
 
-        // 짧은 값, 같은 값의 되풀이, 1씩 늘거나 주는 정수열은 비공개 값으로 보지 않는다.
+        // 짧은 값, 같은 값의 되풀이, 1씩 늘거나 주는 정수열, 기호로만 된 값("*********", "[ ]")은 비공개 값으로 보지 않는다.
+        // 검사는 기호 토큰을 뺀 값으로 한다. "[1, 2, 3, 4, 5]"의 조각 "[ 1 2 3"도 1씩 느는 정수열이다.
         private static boolean candidate(List<String> parts) {
-            if (parts.isEmpty()) {
+            List<String> values = parts.stream().filter(part -> !SYMBOLS_ONLY.matcher(part).matches()).toList();
+            if (values.isEmpty()) {
                 return false;
             }
-            String joined = String.join(" ", parts);
+            String joined = String.join(" ", values);
             int length = joined.codePointCount(0, joined.length());
             // 같은 값의 되풀이("0 0 0 0")는 값이 둘 이상일 때만 본다. 값 하나짜리(정답 하나를 출력하는 기대 출력)는 길이로만 거른다.
-            boolean repeated = parts.size() > 1 && parts.stream().distinct().count() == 1;
-            return length >= HIDDEN_MIN_CHARS && (parts.size() > 1 || length >= HIDDEN_SINGLE_MIN_CHARS) && !repeated
-                    && !consecutive(parts);
+            boolean repeated = values.size() > 1 && values.stream().distinct().count() == 1;
+            return length >= HIDDEN_MIN_CHARS && (values.size() > 1 || length >= HIDDEN_SINGLE_MIN_CHARS) && !repeated
+                    && !consecutive(values);
         }
 
         // 1 2 3 4, 10 9 8 7처럼 1씩 늘거나 주는 정수열

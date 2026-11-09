@@ -360,6 +360,16 @@ class FactCheckTest {
                 "N이 1000000000일 때를 생각해 보세요.")).isTrue();
     }
 
+    @Test
+    void 괄호로_감싼_정수열이나_기호로만_된_값은_비공개_값으로_보지_않는다() {
+        FactCheck.Sources sources = new FactCheck.Sources(
+                List.of("[1, 2, 3, 4, 5]\n", "[0, 0, 0, 0, 0]\n", "*********\n ******* \n"), List.of());
+
+        assertThat(blocked(sources, "이미 정렬된 [1, 2, 3, 4, 5]를 넣어 보세요.")).isFalse();
+        assertThat(blocked(sources, "[0, 0, 0, 0, 0]을 넣어 보세요.")).isFalse();
+        assertThat(blocked(sources, "다섯째 줄은 *********처럼 별이 9개여야 해요.")).isFalse();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"정답은 -123456789입니다.", "정답은 '-123456789'입니다.", "답이 (-123456789)인지 보세요.",
             "[-123456789]를 출력해야 해요."})
