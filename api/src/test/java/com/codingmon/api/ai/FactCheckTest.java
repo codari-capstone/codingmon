@@ -354,6 +354,13 @@ class FactCheckTest {
                 "N이 1000000000일 때를 생각해 보세요.")).isTrue();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"정답은 -123456789입니다.", "정답은 '-123456789'입니다.", "답이 (-123456789)인지 보세요.",
+            "[-123456789]를 출력해야 해요."})
+    void 기호가_붙은_음수_비공개_값도_잡는다(String hint) {
+        assertThat(blocked(new FactCheck.Sources(List.of("-123456789\n"), List.of()), hint)).isTrue();
+    }
+
     @Test
     void 따옴표나_조사가_붙어_지문에_나온_한글_값은_비공개_값으로_보지_않는다() {
         String hint = "'소수가 아닙니다'를 출력하는 조건을 먼저 확인해 보세요.";

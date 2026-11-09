@@ -182,9 +182,10 @@ final class FactCheck {
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
     private static final Pattern FIELD_SEPARATOR = Pattern.compile("[\\s,]+");
     private static final String FIELD_PUNCTUATION = "\"'`()[]{}.:;!?";
-    // 값 토큰(valueTokens): 수, 영문 낱말, 쉼표 밖의 ASCII 기호 묶음
+    // 값 토큰(valueTokens): 수, 영문 낱말, 쉼표 밖의 ASCII 기호 묶음. 기호 묶음은 숫자 앞의 '-'를 먹지 않는다.
+    // 먹으면 "'-123456789'"가 "'-", "123456789"로 나뉘어 음수 비공개 값과 맞지 않는다.
     private static final Pattern VALUE_TOKEN = Pattern.compile(
-            "-?\\d+(?:\\.\\d+)?|[A-Za-z_][A-Za-z0-9_]*|[!\"#$%&'()*+\\-./:;<=>?@\\[\\\\\\]^`{|}~]+");
+            "-?\\d+(?:\\.\\d+)?|[A-Za-z_][A-Za-z0-9_]*|(?:[!\"#$%&'()*+./:;<=>?@\\[\\\\\\]^`{|}~]|-(?!\\d))+");
     // 지수 표기: (가수 ×) 밑 ^ 지수 (± 더할 수). "10^{9}", "10**9"도 받는다.
     // 제출 코드도 읽으므로 긴 숫자열에서 느려지면 안 된다. 수는 첫 자리에서만 시작하고((?<![\\d.])) 되돌아가지 않는다(\\d++).
     // 그러지 않으면 숫자 자리마다 다시 시작하며 되돌아가 16,000자리 숫자열 하나에 10초가 넘게 걸린다.
