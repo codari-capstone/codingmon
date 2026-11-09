@@ -355,6 +355,17 @@ class FactCheckTest {
     }
 
     @Test
+    void 따옴표나_조사가_붙어_지문에_나온_한글_값은_비공개_값으로_보지_않는다() {
+        String hint = "'소수가 아닙니다'를 출력하는 조건을 먼저 확인해 보세요.";
+        assertThat(blocked(new FactCheck.Sources(List.of("소수가 아닙니다\n"),
+                List.of("소수가 아니면 '소수가 아닙니다'를 출력한다.")), hint)).isFalse();
+        assertThat(blocked(new FactCheck.Sources(List.of("소수가 아닙니다\n"), List.of("아니면 소수가 아닙니다를 출력한다.")), hint))
+                .isFalse();
+        // 지문에 없으면 비공개 값이다
+        assertThat(blocked(new FactCheck.Sources(List.of("소수가 아닙니다\n"), List.of("소수인지 판별한다.")), hint)).isTrue();
+    }
+
+    @Test
     void 한글이_섞인_비공개_줄도_후보_상한을_지킨다() {
         List<String> hidden = new ArrayList<>();
         for (int c = 0; c < 50; c++) {

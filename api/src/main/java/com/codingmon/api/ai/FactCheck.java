@@ -942,8 +942,9 @@ final class FactCheck {
             return true;
         }
 
+        // 응답(Hidden.matches)과 같이 부분 문자열로 본다. 지문의 "'소수가 아닙니다'를"처럼 따옴표·조사가 붙어 나와도 공개 값이다.
         boolean hasPhrase(String phrase) {
-            return phrases.contains(" " + phrase + " ");
+            return phrases.contains(phrase);
         }
     }
 
