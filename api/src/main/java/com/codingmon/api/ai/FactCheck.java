@@ -157,9 +157,9 @@ final class FactCheck {
     private static final Pattern NOT_RUN = Pattern.compile("실행(?:하지|되지|을\\s*하지)\\s*(?:않|못)|실행하기\\s*전|실행할\\s*수\\s*없");
     private static final Pattern ALL_RESULT = Pattern.compile("(?:모두|전부|다)\\s*(?:가|를|는)?\\s*(통과|맞|틀|실패)");
     // ALL_RESULT 바로 뒤의 부정("모두 통과하지는 못했습니다", "다 틀린 것은 아닙니다"). 그 서술어의 부정만 본다.
-    // "모두 통과했지만 정답은 아닙니다"의 "아닙"은 뒷 절의 것이라 "지만·는데·으나·면서"나 쉼표를 넘어가지 않는다.
+    // "모두 통과했지만 정답은 아닙니다"의 "아닙"은 뒷 절의 것이라 "지만·는데·으나·면서·고·며"나 쉼표를 넘어가지 않는다.
     private static final Pattern NEGATED_AFTER = Pattern.compile(
-            "^(?:(?!지만|는데|으나|면서|,)[^.!?]){0,8}?(?:지\\s*(?:는|도|를|가)?\\s*(?:못|않)|아니|아닙|아님|아닌)");
+            "^(?:(?!지만|는데|으나|면서|고\\s|며\\s|,)[^.!?]){0,8}?(?:지\\s*(?:는|도|를|가)?\\s*(?:못|않)|아니|아닙|아님|아닌)");
     private static final Pattern RESULT_WORD = Pattern.compile("실패|통과|틀|맞");
     private static final Pattern COUNT = Pattern.compile("(?<![\\w.])(\\d+)\\s*개");
     private static final Pattern EXTREME = Pattern.compile("가장\\s*(작은|큰)\\s*입력[^.!?]*?(실패|틀|통과|맞)");
