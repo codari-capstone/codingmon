@@ -197,8 +197,9 @@ final class FactCheck {
     private static final Pattern POWER = Pattern.compile(
             "(?:(?<![\\d.])(\\d++(?:\\.\\d++)?)\\s*+[×xX*·]\\s*+)?(?<![\\d.])(\\d++)\\s*+(?:\\^|\\*\\*)\\s*+\\{?\\s*+(\\d++)\\s*+\\}?"
                     + "(?:\\s*+([+\\-−])\\s*+(\\d++))?");
+    // 지수 뒤의 마침표는 문장 끝일 수 있어 막지 않는다("N ≤ 1e9."). 뒤에 숫자가 오는 마침표("1e9.5")만 막는다.
     private static final Pattern SCIENTIFIC = Pattern.compile(
-            "(?<![\\w.])(\\d++(?:\\.\\d++)?)[eE]\\+?(\\d++)(?![\\w.])(?:\\s*+([+\\-−])\\s*+(\\d++))?");
+            "(?<![\\w.])(\\d++(?:\\.\\d++)?)[eE]\\+?(\\d++)(?!\\w)(?!\\.\\d)(?:\\s*+([+\\-−])\\s*+(\\d++))?");
     private static final Pattern SUP_TAG = Pattern.compile("(?<!\\d)(\\d++)\\s*+<sup>\\s*+(\\d++)\\s*+</sup>",
             Pattern.CASE_INSENSITIVE);
     private static final String SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";

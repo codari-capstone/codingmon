@@ -341,7 +341,7 @@ class FactCheckTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"1 ≤ N ≤ 10^9", "1 ≤ N ≤ 10⁹", "1 ≤ N ≤ 10<sup>9</sup>", "N ≤ 1e9", "N ≤ 10^{9}",
+    @ValueSource(strings = {"1 ≤ N ≤ 10^9", "1 ≤ N ≤ 10⁹", "1 ≤ N ≤ 10<sup>9</sup>", "N ≤ 1e9", "1 ≤ N ≤ 1e9.", "N ≤ 10^{9}",
             "1 ≤ N ≤ 1,000,000,000"})
     void 제약에_지수로_쓴_최대값은_비공개_값으로_보지_않는다(String constraint) {
         FactCheck.Sources sources = new FactCheck.Sources(List.of("1000000000\n"), List.of(constraint));
