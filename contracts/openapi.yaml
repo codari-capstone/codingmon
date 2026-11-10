@@ -2053,6 +2053,7 @@ paths:
       description: |
         화면은 상태와 메모를 늘 함께 보낸다. 메모를 비우려면 `adminMemo`에 null을 보낸다.
         관리자가 고를 수 있는 상태는 `RECEIVED`·`IN_PROGRESS`·`RESOLVED`·`REJECTED`이고, 이 넷 사이는 자유롭게 바꾼다.
+        문제가 지워진 신고(`problemId`가 null)는 `RESOLVED`·`REJECTED` 사이만 바꿀 수 있다. `RECEIVED`·`IN_PROGRESS`로 되돌리면 400 `REPORT_PROBLEM_DELETED`다. 처리할 문제가 없는 신고가 처리 안 한 신고 수에 남지 않게 한다.
         `PROBLEM_DELETED`는 문제를 지울 때 서버만 정한다. 이 상태로 바꾸거나 이 상태에서 다른 상태로 바꾸면 400 `REPORT_PROBLEM_DELETED`다.
         `PROBLEM_DELETED`인 신고도 상태를 그대로 보내면 메모는 고칠 수 있다.
         `PROBLEM_DELETED`는 저장보다 앞선다. 저장 도중 문제가 지워져 신고가 `PROBLEM_DELETED`가 되면 그 저장은 400 `REPORT_PROBLEM_DELETED`다. 서버는 상태 확인과 저장을 한 문장(조건부 UPDATE)으로 한다.
