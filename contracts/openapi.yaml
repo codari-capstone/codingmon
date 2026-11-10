@@ -1878,7 +1878,7 @@ paths:
   /api/admin/concept-tags:
     post:
       operationId: createConceptTag
-      summary: 개념 태그 등록 (ADM-02)
+      summary: 개념 태그 등록 (ADM-11)
       description: |
         `slug`는 영문 소문자·숫자를 `-`로 이은 것이다(예: `binary-search`). 문제 목록 주소의 태그 필터에 쓰이고 바꿀 수 없다.
         `name`이나 `slug`가 이미 있으면 409 `CONCEPT_TAG_EXISTS`다.
