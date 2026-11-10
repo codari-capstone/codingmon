@@ -127,6 +127,17 @@ class AiReviewRepository {
                 .single();
     }
 
+    // 사용자의 채점 제출에서 지금 만드는 중인(대기열에 있거나 처리 중인) 결과 수. 버려진 PENDING은 세지 않는다.
+    // AiQuotaService가 시도를 잡은 트랜잭션 안에서 부르므로 방금 잡은 행도 센다.
+    int inProgress(long userId, Abandoned abandoned) {
+        return abandoned.bind(jdbc.sql("select count(*) from ai_reviews r join submissions s on s.id = r.submission_id"
+                + " where s.user_id = :userId and s.submission_kind = 'SUBMIT' and r.status = 'PENDING'"
+                + "   and not (" + abandoned.condition("r") + ")"))
+                .param("userId", userId)
+                .query(Integer.class)
+                .single();
+    }
+
     // 행이 없으면 만들고, FAILED이거나 버려진 PENDING이면 PENDING으로 되돌린다.
     // 한 문장이라 동시에 눌러도 한 요청만 시도를 얻는다. 끝났거나(차단 포함) 진행 중이면 비어 있다.
     // 토큰 수는 그대로 둔다(addUsage가 시도마다 더한다).

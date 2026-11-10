@@ -51,13 +51,16 @@ import com.jayway.jsonpath.JsonPath;
 // 실제 PostgreSQL에서 AI 하루 한도(#80)를 확인한다. 한도를 3으로 줄여 돌린다. 모델은 가짜다.
 // 동시 요청은 서로 다른 연결로 경쟁해야 하므로 테스트를 트랜잭션으로 감싸지 않는다.
 // 가짜 모델이 바로 답하면 요청 응답이 PENDING(202)일지 이미 끝났을지(200) 정해지지 않으므로, 그런 요청은 상태를 기다린 뒤 본다.
-@SpringBootTest(properties = { "app.llm.pending-timeout=1s", "app.llm.daily-limit=3" })
+@SpringBootTest(properties = { "app.llm.pending-timeout=1s", "app.llm.daily-limit=3", "app.llm.user-concurrency=2" })
 class AiQuotaIntegrationTest {
 
     private static final String RESULT_JSON = """
             {"summary":"두 수를 빼고 있어요","suspectLines":[2],"facts":["예제 1에서 3 대신 -1을 출력했어요"],\
             "guesses":["2번 줄에서 더하기 대신 빼기를 쓴 것 같아요"],\
             "hints":{"observation":"힌트 1","direction":"힌트 2","principle":"힌트 3"}}""";
+
+    private static final AiReviewRepository.Abandoned ABANDONED = new AiReviewRepository.Abandoned(Duration.ofMinutes(15),
+            Set.of());
 
     // 가짜 모델. answer가 정한 대로 답하고, 부른 횟수를 센다.
     static class FakeLlm implements LlmClient {
@@ -386,6 +389,38 @@ class AiQuotaIntegrationTest {
     }
 
     @Test
+    void 만드는_중인_결과가_사용자_상한을_넘으면_BUSY로_답하고_한도를_쓰지_않는다() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        llm.answer = () -> {
+            await(release);
+            return FakeLlm.ok();
+        };
+        long first = submission(userId);
+        long second = submission(userId);
+        long third = submission(userId);
+        mvc.perform(post(analysis(first)).with(as(userId))).andExpect(status().isAccepted());
+        mvc.perform(post(analysis(second)).with(as(userId))).andExpect(status().isAccepted());
+
+        mvc.perform(post(analysis(third)).with(as(userId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.failureReason").value("BUSY"))
+                .andExpect(jsonPath("$.quota.used").value(2));
+        // 다른 사용자는 막지 않는다.
+        jdbc.sql("insert into user_problem_stats (user_id, problem_id, attempt_count) values (:userId, :problemId, 1)")
+                .param("userId", otherUserId).param("problemId", problemId).update();
+        mvc.perform(post(analysis(submission(otherUserId))).with(as(otherUserId))).andExpect(status().isAccepted());
+
+        release.countDown();
+        awaitStatus(first, "COMPLETED");
+        awaitStatus(second, "COMPLETED");
+        // 앞의 것이 끝나면 같은 행으로 다시 요청할 수 있다.
+        mvc.perform(post(analysis(third)).with(as(userId))).andExpect(status().isAccepted());
+        awaitStatus(third, "COMPLETED");
+        assertThat(quotaUsed()).isEqualTo(3);
+    }
+
+    @Test
     void 같은_제출을_동시에_요청하면_한_번만_만든다() throws Exception {
         long id = submission(userId);
         CountDownLatch release = new CountDownLatch(1);
@@ -415,7 +450,7 @@ class AiQuotaIntegrationTest {
         ExecutorService other = Executors.newSingleThreadExecutor();
         try {
             int visible = repeatableRead().execute(status -> {
-                assertThat(quota.claimWithin(userId, id, () -> claim(id))).isPresent();
+                assertThat(quota.claimWithin(userId, id, ABANDONED, () -> claim(id))).isPresent();
                 // 다른 연결에서 보이면 바깥 트랜잭션과 따로 커밋한 것이다. 그래야 처리기가 PENDING 행을 본다.
                 return on(other, () -> rows(id));
             });
@@ -440,7 +475,7 @@ class AiQuotaIntegrationTest {
                     return null;
                 });
                 try {
-                    return quota.claimWithin(userId, id, () -> claim(id));
+                    return quota.claimWithin(userId, id, ABANDONED, () -> claim(id));
                 } catch (ErrorResponseException e) {
                     return e.getBody().getProperties().get("code");
                 }
@@ -459,8 +494,7 @@ class AiQuotaIntegrationTest {
     }
 
     private Optional<AiReviewRepository.Claim> claim(long submissionId) {
-        return reviews.claim(submissionId, ReviewType.ANALYSIS, "v1", "fake-model",
-                new AiReviewRepository.Abandoned(Duration.ofMinutes(15), Set.of()));
+        return reviews.claim(submissionId, ReviewType.ANALYSIS, "v1", "fake-model", ABANDONED);
     }
 
     // 다른 스레드(다른 연결, 트랜잭션 없음)에서 돌리고 끝날 때까지 기다린다.
