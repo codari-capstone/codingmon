@@ -13,7 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.codingmon.api.ApiErrors;
 import com.codingmon.api.problem.ProblemRepository.ConceptTag;
 
-// 개념 태그 등록(ADM-02, #34). 목록은 GET /api/concept-tags(ProblemController)다.
+// 개념 태그 등록(ADM-11, #34). 목록은 GET /api/concept-tags(ProblemController)다.
 @RestController
 @RequestMapping("/api/admin/concept-tags")
 class AdminConceptTagController {
