@@ -530,7 +530,7 @@ export interface paths {
          * 문제 신고 (SOLVE-12)
          * @description 문제의 오류를 관리자에게 알린다. 서버가 신고 당시 공개 버전 번호와 제목을 함께 저장한다.
          *     학습자는 보낸 신고를 다시 볼 수 없어서 돌려줄 내용이 없다. 횟수 제한은 없다.
-         *     `content`는 앞뒤 공백을 지우고 저장한다. 지운 뒤 비었거나 1,000자를 넘으면 400 `INVALID_REPORT_CONTENT`다.
+         *     `content`는 받은 그대로 1,000자를 넘거나 앞뒤 공백을 지운 뒤 비었으면 400 `INVALID_REPORT_CONTENT`다. 길이는 스키마 `maxLength`와 같게 받은 그대로 잰다. 저장할 때 앞뒤 공백을 지운다.
          *     오류 `code`: `PROBLEM_NOT_FOUND`(없는 문제 또는 공개된 버전이 없는 문제. `GET /api/problems/{id}`와 같다).
          */
         post: operations["createProblemReport"];
@@ -1149,8 +1149,8 @@ export interface paths {
          *     문제가 지워진 신고(`problemId`가 null)는 `RESOLVED`·`REJECTED` 사이만 바꿀 수 있다. `RECEIVED`·`IN_PROGRESS`로 되돌리면 400 `REPORT_PROBLEM_DELETED`다. 처리할 문제가 없는 신고가 처리 안 한 신고 수에 남지 않게 한다.
          *     `PROBLEM_DELETED`는 문제를 지울 때 서버만 정한다. 이 상태로 바꾸거나 이 상태에서 다른 상태로 바꾸면 400 `REPORT_PROBLEM_DELETED`다.
          *     `PROBLEM_DELETED`인 신고도 상태를 그대로 보내면 메모는 고칠 수 있다.
-         *     `PROBLEM_DELETED`는 저장보다 앞선다. 저장 도중 문제가 지워져 신고가 `PROBLEM_DELETED`가 되면 그 저장은 400 `REPORT_PROBLEM_DELETED`다. 서버는 상태 확인과 저장을 한 문장(조건부 UPDATE)으로 한다.
-         *     `adminMemo`는 앞뒤 공백을 지우고 저장한다. 지운 뒤 비면 null로 저장한다. 1,000자를 넘으면 400 `INVALID_REPORT_MEMO`다.
+         *     `PROBLEM_DELETED`는 저장보다 앞선다. 저장 도중 문제가 지워져 신고가 `PROBLEM_DELETED`가 되거나, `RECEIVED`·`IN_PROGRESS`로 바꾸는 도중 문제가 지워지면 그 저장은 400 `REPORT_PROBLEM_DELETED`다. 서버는 상태 확인(`PROBLEM_DELETED`가 아님, 미처리로 바꿀 때는 문제가 있음)과 저장을 한 문장(조건부 UPDATE)으로 한다.
+         *     `adminMemo`는 받은 그대로 1,000자를 넘으면 400 `INVALID_REPORT_MEMO`다(스키마 `maxLength`와 같은 기준). 저장할 때 앞뒤 공백을 지우고, 지운 뒤 비면 null로 저장한다.
          *     저장하면 `updatedAt`이 지금 시각이 된다. 같은 값을 보내도 바뀐다. 나중 저장이 이긴다.
          */
         put: operations["updateAdminReport"];
