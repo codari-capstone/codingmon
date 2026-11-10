@@ -23,7 +23,7 @@ function AccountInfo({ user }: { user: CurrentUser }) {
   return (
     <section
       aria-labelledby="account-heading"
-      className="bg-card flex flex-col gap-4 rounded-2xl p-6"
+      className="bg-card flex flex-col gap-4 rounded-lg border p-6"
     >
       <h2 id="account-heading" className="text-lg font-semibold">
         계정 정보
@@ -171,7 +171,7 @@ function Activity() {
   return (
     <section
       aria-labelledby="activity-heading"
-      className="bg-card flex flex-col gap-4 rounded-2xl p-6"
+      className="bg-card flex flex-col gap-4 rounded-lg border p-6"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="activity-heading" className="text-lg font-semibold">
@@ -231,7 +231,7 @@ export function Component() {
           <AccountInfo user={user} />
           <section
             aria-labelledby="settings-heading"
-            className="bg-card flex flex-col gap-6 rounded-2xl p-6"
+            className="bg-card flex flex-col gap-6 rounded-lg border p-6"
           >
             <h2 id="settings-heading" className="text-lg font-semibold">
               계정 설정

@@ -305,10 +305,10 @@ function AdminProblemForm() {
           {/* disabled 하나로 모든 입력칸이 잠긴다. 링크는 걸리지 않는다.
               TabsContent는 Tabs의 context로 동작해 fieldset을 사이에 끼워도 된다. */}
           <fieldset disabled={locked} className="contents">
-            <TabsContent className="bg-card rounded-2xl p-6" value="basic">
+            <TabsContent className="bg-card rounded-lg border p-6" value="basic">
               <BasicInfoTab form={form} />
             </TabsContent>
-            <TabsContent className="bg-card rounded-2xl p-6" value="statement">
+            <TabsContent className="bg-card rounded-lg border p-6" value="statement">
               <StatementTab
                 form={form}
                 manualPython={manualPython}
@@ -329,7 +329,7 @@ function AdminProblemForm() {
         {id === null || readOnly || !openedCases ? null : (
           // forceMount면 Radix가 hidden을 끄지만, 뒤에 오는 prop이 이겨 우리가 다시 건다.
           <TabsContent
-            className="bg-card rounded-2xl p-6"
+            className="bg-card rounded-lg border p-6"
             value="cases"
             forceMount
             hidden={tab !== 'cases'}
@@ -339,7 +339,7 @@ function AdminProblemForm() {
         )}
         {id === null || readOnly || !openedSolutions ? null : (
           <TabsContent
-            className="bg-card rounded-2xl p-6"
+            className="bg-card rounded-lg border p-6"
             value="solutions"
             forceMount
             hidden={tab !== 'solutions'}
@@ -352,12 +352,12 @@ function AdminProblemForm() {
           떠났다 돌아와도 잃을 것이 없고, 공개 조건은 상세에서 다시 읽는다.
         */}
         {id === null || readOnly ? null : (
-          <TabsContent className="bg-card rounded-2xl p-6" value="publish">
+          <TabsContent className="bg-card rounded-lg border p-6" value="publish">
             <PublishTab problemId={id} locked={locked} onGoToTab={goToTab} />
           </TabsContent>
         )}
         {id === null ? null : (
-          <TabsContent className="bg-card rounded-2xl p-6" value="versions">
+          <TabsContent className="bg-card rounded-lg border p-6" value="versions">
             <VersionsTab problemId={id} />
           </TabsContent>
         )}
