@@ -227,6 +227,21 @@
 - `(learning_report_id, problem_id)` 중복 불가: 같은 문제를 한 리포트에 두 번 추천하지 못하게 한다.
 - 문제 버전은 가리키지 않는다. 버전을 가리키면 관리자가 공개 버전의 태그를 고칠 때 추천 행이 막는다. 추천할 때 그 태그가 문제의 공개 버전에 붙어 있는지는 추천을 만드는 서비스가 확인한다.
 
+## `problem_reports` — 문제 신고
+
+- `id` (PK): 신고 번호. 관리자 목록에 그대로 보인다.
+- `problem_id` (비어도 됨, FK): 신고한 문제. 문제를 삭제하면 비워지고 신고는 남는다.
+- `problem_title`: 신고 당시 공개 버전의 제목. 문제가 있으면 목록은 최신 버전의 제목을 보여 주고, 문제가 지워진 뒤에만 이 값을 쓴다.
+- `problem_version_no`: 신고 당시 공개 버전 번호. 버전은 문제와 함께 지워지므로 FK 없이 번호만 둔다. 관리자는 이 번호로 지난 버전(ADM-07)을 연다.
+- `reporter_id` (비어도 됨, FK): 신고한 사용자. 탈퇴하면 비워지고 신고는 남는다. 화면은 '탈퇴한 회원'으로 보여 준다.
+- `report_type`: `STATEMENT`, `IO_DESCRIPTION`, `SAMPLE`, `TEST_CASE`, `TYPO`, `OTHER` 중 하나(SOLVE-12).
+- `content`: 학습자가 쓴 내용(1~1,000자, 앞뒤 공백을 지운 값). 누구도 고칠 수 없다.
+- `status`: `RECEIVED`(기본값), `IN_PROGRESS`, `RESOLVED`, `REJECTED`, `PROBLEM_DELETED` 중 하나. `PROBLEM_DELETED`는 처리 안 한 신고(`RECEIVED`·`IN_PROGRESS`)의 문제를 지울 때 서버만 정한다.
+- `admin_memo` (비어도 됨): 관리자끼리 보는 메모(1,000자). 학습자에게는 보이지 않는다.
+- `created_at`: 신고한 시각.
+- `updated_at` (비어도 됨): 관리자가 마지막으로 저장했거나 `PROBLEM_DELETED`가 된 시각. 아무도 손대지 않았으면 비어 있다.
+- `problem_id`가 비어 있으면 `status`는 `RESOLVED`·`REJECTED`·`PROBLEM_DELETED` 중 하나여야 한다(CHECK). 처리할 문제가 없는 신고가 처리 안 한 신고 수에 남지 않게 한다.
+
 ## 아직 정할 정책
 
 - AI 결과 통계(성공한 분석 수 등)가 필요해지면, `content`의 차단 표시 대신 `ai_reviews.status`에 `BLOCKED`를 추가하는 마이그레이션을 검토한다. 지금은 `COMPLETED` 중 `content->>'blocked'`가 참인 행이 차단 건이다. 그중 `content ? 'factCheck'`인 행은 사실 검증으로, 나머지는 정답 코드 검사로 차단한 것이다.
