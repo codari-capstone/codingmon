@@ -516,6 +516,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/problems/{id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 문제 신고 (SOLVE-12)
+         * @description 문제의 오류를 관리자에게 알린다. 서버가 신고 당시 공개 버전 번호와 제목을 함께 저장한다.
+         *     학습자는 보낸 신고를 다시 볼 수 없어서 돌려줄 내용이 없다. 횟수 제한은 없다.
+         *     `content`는 앞뒤 공백을 지우고 저장한다. 지운 뒤 비었거나 1,000자를 넘으면 400 `INVALID_REPORT_CONTENT`다.
+         *     오류 `code`: `PROBLEM_NOT_FOUND`(없는 문제 또는 공개된 버전이 없는 문제. `GET /api/problems/{id}`와 같다).
+         */
+        post: operations["createProblemReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/submissions": {
         parameters: {
             query?: never;
@@ -812,6 +835,7 @@ export interface paths {
          * 문제 삭제
          * @description 사용자 기록(제출·풀이 통계·리포트 추천)이 없는 문제만 지운다. 잘못 만든 문제를 정리할 때 쓴다.
          *     예제 실행과 관리자의 정답 코드 검증 기록은 사용자 기록으로 세지 않고 함께 지운다.
+         *     신고는 지우지 않고 남긴다. 처리 안 한 신고(`RECEIVED`·`IN_PROGRESS`)는 `PROBLEM_DELETED`가 된다(`GET /api/admin/reports`).
          *     기록이 있으면 409 `PROBLEM_IN_USE`다. 사용자에게서 내리려면 비공개(`unpublish`)를 쓴다.
          *     정답 코드를 검증하는 중(`VALIDATING`)이면 409 `PROBLEM_VALIDATING`이다. 검증은 늘 끝나므로 끝난 뒤 지운다.
          */
@@ -1073,6 +1097,61 @@ export interface paths {
          *     태그 목록은 `GET /api/concept-tags`로 본다.
          */
         post: operations["createConceptTag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 신고 목록 (ADM-13, ADM-10·ADM-12의 처리 안 한 신고 수)
+         * @description 최신 신고가 위로 온다. 정렬은 바꿀 수 없다.
+         *     `status`를 여러 번 보내면 그중 하나인 신고를 준다. 없으면 전체다.
+         *     처리 안 한 신고 수는 `status=RECEIVED&status=IN_PROGRESS`로 요청해 `totalElements`를 쓴다(메뉴는 `size=1`, 대시보드는 최근 신고와 함께).
+         */
+        get: operations["listAdminReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/reports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 신고 목록의 `id` */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * 신고 상세 (ADM-13)
+         * @description 상태와 상관없이 언제든 볼 수 있다. 학습자가 쓴 `content`는 누구도 고칠 수 없다.
+         *     오류 `code`: `REPORT_NOT_FOUND`(없는 신고).
+         */
+        get: operations["getAdminReport"];
+        /**
+         * 신고 상태·메모 저장 (ADM-13)
+         * @description 화면은 상태와 메모를 늘 함께 보낸다. 메모를 비우려면 `adminMemo`에 null을 보낸다.
+         *     관리자가 고를 수 있는 상태는 `RECEIVED`·`IN_PROGRESS`·`RESOLVED`·`REJECTED`이고, 이 넷 사이는 자유롭게 바꾼다.
+         *     `PROBLEM_DELETED`는 문제를 지울 때 서버만 정한다. 이 상태로 바꾸거나 이 상태에서 다른 상태로 바꾸면 400 `REPORT_PROBLEM_DELETED`다.
+         *     `PROBLEM_DELETED`인 신고도 상태를 그대로 보내면 메모는 고칠 수 있다.
+         *     `adminMemo`는 앞뒤 공백을 지우고 저장한다. 지운 뒤 비면 null로 저장한다. 1,000자를 넘으면 400 `INVALID_REPORT_MEMO`다.
+         *     저장하면 `updatedAt`이 지금 시각이 된다. 같은 값을 보내도 바뀐다. 나중 저장이 이긴다.
+         */
+        put: operations["updateAdminReport"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1706,6 +1785,61 @@ export interface components {
              * @enum {string|null}
              */
             runtimeErrorType: "INDEX_ERROR" | "ZERO_DIVISION" | "VALUE_ERROR" | "NAME_ERROR" | "TYPE_ERROR" | "RECURSION_ERROR" | "EOF_ERROR" | "OTHER" | null;
+        };
+        /**
+         * @description 문제 설명 오류, 입력/출력 설명 오류, 예제 오류, 테스트케이스 오류, 오탈자, 기타 (SOLVE-12)
+         * @enum {string}
+         */
+        ReportType: "STATEMENT" | "IO_DESCRIPTION" | "SAMPLE" | "TEST_CASE" | "TYPO" | "OTHER";
+        /**
+         * @description 접수, 확인 중, 처리 완료, 반려, 문제 삭제됨 (ADM-13).
+         *     `PROBLEM_DELETED`는 처리 안 한 신고(`RECEIVED`·`IN_PROGRESS`)의 문제가 지워지면 서버가 정한다. 이미 `RESOLVED`·`REJECTED`인 신고는 그대로 둔다.
+         * @enum {string}
+         */
+        ReportStatus: "RECEIVED" | "IN_PROGRESS" | "RESOLVED" | "REJECTED" | "PROBLEM_DELETED";
+        ReportInput: {
+            type: components["schemas"]["ReportType"];
+            /** @description 공백뿐이면 안 된다. 앞뒤 공백은 지우고 저장한다 */
+            content: string;
+        };
+        AdminReportSummary: {
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: int64
+             * @description 문제가 지워졌으면 null. 화면은 회색으로 '(삭제된 문제) 제목'을 보여 주고 링크를 없앤다
+             */
+            problemId: number | null;
+            /** @description 문제가 있으면 최신 버전의 제목(관리자 문제 목록과 같다), 지워졌으면 신고 당시 제목 */
+            problemTitle: string;
+            type: components["schemas"]["ReportType"];
+            /**
+             * Format: int64
+             * @description 신고자가 탈퇴했으면 null. 회원 상세로 가는 링크에 쓴다
+             */
+            reporterId: number | null;
+            /** @description 신고자의 지금 닉네임. 탈퇴했으면 null이고 화면은 '탈퇴한 회원'으로 보여 준다 */
+            reporterNickname: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            status: components["schemas"]["ReportStatus"];
+        };
+        AdminReportDetail: components["schemas"]["AdminReportSummary"] & {
+            /** @description 학습자가 쓴 신고 내용 */
+            content: string;
+            /** @description 신고 당시 공개 버전 번호. 문제가 지워지면 버전도 지워져 번호만 남는다 */
+            versionNo: number;
+            /** @description 관리자끼리 보는 메모. 학습자에게는 보이지 않는다. 없으면 null */
+            adminMemo: string | null;
+            /**
+             * Format: date-time
+             * @description 관리자가 마지막으로 저장했거나 문제 삭제로 `PROBLEM_DELETED`가 된 시각. 아무도 손대지 않았으면 null
+             */
+            updatedAt: string | null;
+        };
+        AdminReportUpdate: {
+            status: components["schemas"]["ReportStatus"];
+            adminMemo: string | null;
         };
         AccessTokenResponse: {
             accessToken: string;
@@ -2439,6 +2573,45 @@ export interface operations {
                 };
             };
             /** @description `id`가 정수가 아님 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createProblemReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 목록의 `id` */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportInput"];
+            };
+        };
+        responses: {
+            /** @description 신고됨 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description 오류 `code`: `INVALID_REPORT_CONTENT`(내용이 비었거나 1,000자를 넘음).
+             *     `type`이 목록에 없는 값이거나 `id`가 정수가 아니면 `code` 없는 400이다.
+             */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3578,6 +3751,121 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Problem"];
+        };
+    };
+    listAdminReports: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["ReportStatus"][];
+                /** @description 0부터 센다 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 신고 목록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        content: components["schemas"]["AdminReportSummary"][];
+                        /** Format: int64 */
+                        totalElements: number;
+                    };
+                };
+            };
+            /** @description `status`가 목록에 없는 값이거나 `page`·`size` 범위 밖 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAdminReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 신고 목록의 `id` */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 신고 상세 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReportDetail"];
+                };
+            };
+            /** @description `id`가 정수가 아님 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateAdminReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 신고 목록의 `id` */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminReportUpdate"];
+            };
+        };
+        responses: {
+            /** @description 저장됨. 화면은 상세를 다시 불러온다 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description 오류 `code`: `INVALID_REPORT_MEMO`(메모가 1,000자를 넘음), `REPORT_PROBLEM_DELETED`(삭제된 문제의 신고 상태를 바꾸려 함).
+             *     `status`가 목록에 없는 값이거나 `id`가 정수가 아니면 `code` 없는 400이다.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["Problem"];
         };
     };
 }
