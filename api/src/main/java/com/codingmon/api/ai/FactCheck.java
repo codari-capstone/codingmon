@@ -40,6 +40,10 @@ final class FactCheck {
     static final int HIDDEN_SINGLE_MIN_CHARS = 8;
     // 긴 줄은 이 개수만큼 이어진 값 조각도 후보로 삼는다. 줄 일부만 옮긴 것을 잡는다.
     static final int HIDDEN_WINDOW_FIELDS = 4;
+    // 값이 모두 한 글자인 후보("3 1 4 2", "0 1 1 0")는 모델이 지어낸 예시와 우연히 겹치기 쉽다. 값이 이 개수 이상이고
+    // 서로 다른 값이 HIDDEN_SMALL_MIN_DISTINCT개 이상일 때만 후보로 삼고, 조각도 이 개수로 자른다.
+    static final int HIDDEN_SMALL_MIN_FIELDS = 8;
+    static final int HIDDEN_SMALL_MIN_DISTINCT = 3;
     static final int HIDDEN_MAX_CANDIDATES = 2_000;
     // 후보를 뽑으려고 살펴보는 조각 수의 상한. 걸러진 조각도 센다. 비공개 원문이 커도 요청마다 하는 일이 이만큼으로 묶인다.
     static final int HIDDEN_MAX_EXAMINED = 20_000;
@@ -131,8 +135,11 @@ final class FactCheck {
     private static final String NUM = "(?<![\\w.^/:])\\d{1,6}(?!\\d)";
     private static final String NUM_JOIN = "\\s*(?:번째|번)?\\s*(?:,|·|~|〜|-|부터|와|과|및|또는|이나)\\s*";
     // "4번째 줄", "4번 줄", "3~9번 줄", "4, 7번째 줄", "4번째와 7번째 줄", "4부터 6번째 줄"
+    // "줄"로 시작하는 다른 말은 뺀다. "100번 줄어듭니다", "1000번 줄이면", "2번째 줄바꿈"의 수는 횟수나 출력의 자리다.
+    // "4번 줄이 틀렸다", "4번 줄이고", "4번 줄인 것"은 줄 번호로 둔다.
     private static final Pattern LINE_REF = Pattern.compile(
-            "(" + NUM + "(?:" + NUM_JOIN + NUM + ")*)\\s*(?:번째|번)\\s*(?:줄|라인)");
+            "(" + NUM + "(?:" + NUM_JOIN + NUM + ")*)\\s*(?:번째|번)\\s*(?:줄|라인)"
+                    + "(?!어|여|였|바꿈|이(?:면|는|기|려|세요|자|거나))");
     // "4행". "3행 4열", "행렬" 같은 표 이야기는 뺀다.
     private static final Pattern ROW_REF = Pattern.compile("(" + NUM + ")\\s*행(?![렬동위])(?!\\s*\\d+\\s*열)");
     private static final Pattern RANGE_JOIN = Pattern.compile("~|〜|-|부터");
@@ -141,7 +148,9 @@ final class FactCheck {
     private static final Pattern NOT_CODE_BEFORE = Pattern.compile(
             "(?:출력|입력|결과|메시지|트레이스백|예제\\s*\\d{0,3}\\s*번?)\\s*(?:의|에서|에|은|는|이|가|을|를|과|와|,)?\\s*$");
     // 바로 뒤에 출력 모양이 오면 출력의 줄이다("3번째 줄에는 별이 1개", "2번째 줄 공백").
-    private static final Pattern OUTPUT_AFTER = Pattern.compile("^\\s*(?:에|에는|에서는)?\\s*(?:별|공백|빈\\s*줄|줄바꿈)");
+    // 줄이 "다르다"는 말도 두 출력을 견준 것이다("12번째 줄부터 다릅니다"). 코드 줄을 두고는 쓰지 않는 말이다.
+    private static final Pattern OUTPUT_AFTER = Pattern.compile("^\\s*(?:(?:에|에는|에서는)?\\s*(?:별|공백|빈\\s*줄|줄바꿈)"
+            + "|(?:이|가|은|는|부터|에서|에서부터)?\\s*(?:다릅|다르|달라))");
 
     // ===== 예제·비공개 테스트 =====
 
@@ -176,6 +185,11 @@ final class FactCheck {
     private static final Pattern ASCII_ONLY = Pattern.compile("[\\x00-\\x7F]*");
     private static final Pattern SYMBOLS_ONLY = Pattern.compile("[!-/:-@\\[-`{-~]+");
     private static final Pattern INTEGER = Pattern.compile("-?\\d+");
+    // 자료형의 한계와 자주 쓰는 나머지 연산의 수. 오버플로를 설명하는 글에 늘 나오므로 값 하나짜리 비공개 줄과 같아도 비공개 값으로
+    // 보지 않는다. 부호는 떼고 본다.
+    private static final Set<String> WELL_KNOWN_NUMBERS = Set.of("2147483647", "2147483648", "4294967295", "4294967296",
+            "9223372036854775807", "9223372036854775808", "18446744073709551615", "1000000007", "1000000009",
+            "998244353");
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]{2,}");
     private static final Pattern BIG_O = Pattern.compile("\\bO\\s*\\([^)\\n]*\\)");
     private static final Pattern COUNTABLE = Pattern.compile("(?<![\\w.])(\\d+)\\s*(?:개|줄|글자|자|칸|번|회)");
@@ -805,9 +819,16 @@ final class FactCheck {
                             // 조각은 기호를 뺀 값 HIDDEN_WINDOW_FIELDS개 단위로 자른다. 사이에 낀 기호도 조각에 넣는다.
                             // "(3,7) (1,9) (4,4)"의 조각은 "3 7 ) ( 1 9"다. 토큰 개수로 자르면 기호가 자리를 차지해 값이 모자란다.
                             List<Integer> at = valueIndexes(tokens);
+                            // 값이 모두 한 글자인 조각은 HIDDEN_SMALL_MIN_FIELDS개로 늘려 자른다. 모자라면 후보로 삼지 않는다.
                             for (int i = 0; at.size() > HIDDEN_WINDOW_FIELDS && i + HIDDEN_WINDOW_FIELDS <= at.size(); i++) {
                                 examined++;
-                                value(tokens.subList(at.get(i), at.get(i + HIDDEN_WINDOW_FIELDS - 1) + 1), open, values);
+                                int last = i + HIDDEN_WINDOW_FIELDS - 1;
+                                if (small(tokens.subList(at.get(i), at.get(last) + 1))) {
+                                    last = i + HIDDEN_SMALL_MIN_FIELDS - 1;
+                                }
+                                if (last < at.size()) {
+                                    value(tokens.subList(at.get(i), at.get(last) + 1), open, values);
+                                }
                             }
                         }
                         // 한글이 섞인 줄도 같은 상한을 센다.
@@ -844,6 +865,7 @@ final class FactCheck {
         }
 
         // 짧은 값, 같은 값의 되풀이, 1씩 늘거나 주는 정수열, 기호로만 된 값("*********", "[ ]")은 비공개 값으로 보지 않는다.
+        // 값이 모두 한 글자인데 개수나 종류가 적은 것("3 1 4 2", "0 1 1 0 1 0 0 1"), 값 하나짜리 흔한 수(WELL_KNOWN_NUMBERS)도 뺀다.
         // 검사는 기호 토큰을 뺀 값으로 한다. "[1, 2, 3, 4, 5]"의 조각 "[ 1 2 3"도 1씩 느는 정수열이다.
         private static boolean candidate(List<String> parts) {
             List<String> values = parts.stream().filter(part -> !SYMBOLS_ONLY.matcher(part).matches()).toList();
@@ -854,8 +876,21 @@ final class FactCheck {
             int length = joined.codePointCount(0, joined.length());
             // 같은 값의 되풀이("0 0 0 0")는 값이 둘 이상일 때만 본다. 값 하나짜리(정답 하나를 출력하는 기대 출력)는 길이로만 거른다.
             boolean repeated = values.size() > 1 && values.stream().distinct().count() == 1;
+            if (values.size() == 1 && WELL_KNOWN_NUMBERS.contains(values.get(0).replaceFirst("^[-+]", ""))) {
+                return false;
+            }
+            if (small(parts) && (values.size() < HIDDEN_SMALL_MIN_FIELDS
+                    || values.stream().distinct().count() < HIDDEN_SMALL_MIN_DISTINCT)) {
+                return false;
+            }
             return length >= HIDDEN_MIN_CHARS && (values.size() > 1 || length >= HIDDEN_SINGLE_MIN_CHARS) && !repeated
                     && !consecutive(values);
+        }
+
+        // 기호를 뺀 값이 둘 이상이고 모두 한 글자다
+        private static boolean small(List<String> parts) {
+            List<String> values = parts.stream().filter(part -> !SYMBOLS_ONLY.matcher(part).matches()).toList();
+            return values.size() > 1 && values.stream().allMatch(value -> value.codePointCount(0, value.length()) == 1);
         }
 
         // 1 2 3 4, 10 9 8 7처럼 1씩 늘거나 주는 정수열

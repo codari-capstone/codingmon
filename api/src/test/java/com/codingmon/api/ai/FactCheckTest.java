@@ -109,6 +109,9 @@ class FactCheckTest {
         assertThat(refs("코드의 12번째 줄")).containsExactly("12-12");
         assertThat(refs("4행에서")).containsExactly("4-4");
         assertThat(refs("9~3번 줄")).containsExactly("9-3");
+        assertThat(refs("4번 줄이 문제입니다")).containsExactly("4-4");
+        assertThat(refs("4번 줄이고 조건이 틀렸습니다")).containsExactly("4-4");
+        assertThat(refs("4번 줄에서 5번 줄까지")).containsExactly("4-4", "5-5");
     }
 
     @ParameterizedTest
@@ -116,7 +119,10 @@ class FactCheckTest {
             "main.cpp:6:5", "두 번째 줄", "i번째 줄", "기대 출력의 3번째 줄 끝에 공백", "출력 2번째 줄", "3번째 줄에는 별이 1개",
             "3행 4열", "행렬", "실행 결과",
             // 예제 출력의 줄인지 코드 줄인지 가릴 수 없어 보지 않는다(놓쳐도 맞는 문장을 지우지 않는 쪽을 고른다).
-            "예제 1에서 9번째 줄이 다릅니다"})
+            "예제 1에서 9번째 줄이 다릅니다",
+            // "줄"로 시작하는 다른 말, 출력을 견준 말
+            "반복 횟수가 100번 줄어듭니다", "1000번 줄이면 됩니다", "연산을 50번 줄였습니다", "2번째 줄바꿈이 빠졌습니다",
+            "출력이 틀렸습니다. 12번째 줄부터 다릅니다", "기대한 값과 7번째 줄이 달라요"})
     void 코드_줄이_아닌_수는_줄_번호로_보지_않는다(String text) {
         assertThat(refs(text)).isEmpty();
     }
@@ -370,9 +376,42 @@ class FactCheckTest {
     void 기호가_낀_비공개_줄의_일부만_옮겨도_잡는다() {
         FactCheck.Sources sources = new FactCheck.Sources(List.of("(3,7) (1,9) (4,4) (8,2) (6,5)\n"), List.of());
 
-        assertThat(blocked(sources, "(3,7) (1,9) (4,4)를 넣어 보세요.")).isTrue();
+        assertThat(blocked(sources, "(3,7) (1,9) (4,4) (8,2)를 넣어 보세요.")).isTrue();
         assertThat(blocked(sources, "(3,7) (1,9) (4,4) (8,2) (6,5)를 넣어 보세요.")).isTrue();
+        // 값이 모두 한 글자면 8개 이상 이어져야 본다
+        assertThat(blocked(sources, "(3,7) (1,9) (4,4)를 넣어 보세요.")).isFalse();
         assertThat(blocked(sources, "(3,7)을 넣어 보세요.")).isFalse();
+    }
+
+    @Test
+    void 한_글자_값만_있는_비공개_줄은_지어낸_예시와_겹치기_쉬워_길게_같을_때만_잡는다() {
+        FactCheck.Sources sources = new FactCheck.Sources(
+                List.of("3 1 4 1 5 9 2 6 5 3 5 8 9 7 9 3\n", "0 1 1 0 1 0 0 1 1 0\n", "5 3 8 1 2\n"), List.of());
+
+        assertThat(blocked(sources, "예를 들어 배열이 [3, 1, 4, 1, 5]이면 어떻게 될까요?")).isFalse();
+        assertThat(blocked(sources, "5 3 8 1 2를 넣어 보세요.")).isFalse();
+        // 서로 다른 값이 둘뿐이면 길어도 보지 않는다
+        assertThat(blocked(sources, "배열이 0 1 1 0 1 0 0 1 1 0이면 어떻게 될까요?")).isFalse();
+        assertThat(blocked(sources, "3 1 4 1 5 9 2 6을 넣어 보세요.")).isTrue();
+        assertThat(blocked(sources, "배열이 [5, 9, 2, 6, 5, 3, 5, 8, 9]일 때를 보세요.")).isTrue();
+    }
+
+    @Test
+    void 두_글자_이상인_값이_섞인_조각은_네_개만_같아도_잡는다() {
+        FactCheck.Sources sources = new FactCheck.Sources(List.of("3 12 7 15 4 9 21 8\n"), List.of());
+
+        assertThat(blocked(sources, "12 7 15 4를 넣어 보세요.")).isTrue();
+    }
+
+    @Test
+    void 자료형의_한계처럼_흔한_수는_비공개_값으로_보지_않는다() {
+        FactCheck.Sources sources = new FactCheck.Sources(
+                List.of("2147483647\n", "-2147483648\n", "1000000007\n", "6227020800\n"), List.of());
+
+        assertThat(blocked(sources, "int의 최댓값 2147483647을 넘으면 오버플로가 납니다.")).isFalse();
+        assertThat(blocked(sources, "-2147483648보다 작아질 수 있어요.")).isFalse();
+        assertThat(blocked(sources, "1000000007로 나눈 나머지를 구해 보세요.")).isFalse();
+        assertThat(blocked(sources, "정답은 6227020800이에요.")).isTrue();
     }
 
     @Test
