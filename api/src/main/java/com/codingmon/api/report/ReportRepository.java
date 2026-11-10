@@ -54,7 +54,7 @@ public class ReportRepository {
 
     // 공개 버전이 없으면(없는 문제·비공개) 넣지 않고 false. 공개 버전의 번호와 제목을 같은 문장에서 읽어 저장한다.
     // 문제 삭제(AdminProblemRepository.delete)가 문제 행을 잠근 사이에 들어오면 FK 검사가 기다렸다가 실패한다.
-    // 그 경우는 호출한 쪽이 DataIntegrityViolationException을 404로 바꾼다.
+    // 같은 순간 신고자가 탈퇴해도 FK에 걸린다. 두 경우 모두 호출한 쪽이 DataIntegrityViolationException을 404로 바꾼다.
     boolean create(long problemId, long reporterId, ReportType type, String content) {
         return jdbc.sql("insert into problem_reports (problem_id, problem_title, problem_version_no, reporter_id, report_type, content)"
                 + " select problem_id, title, version_no, :reporterId, :type, :content"

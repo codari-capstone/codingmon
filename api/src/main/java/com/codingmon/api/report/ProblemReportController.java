@@ -48,7 +48,8 @@ class ProblemReportController {
         try {
             created = reports.create(id, Long.parseLong(jwt.getSubject()), input.type(), content);
         } catch (DataIntegrityViolationException e) {
-            // 신고와 같은 순간 문제가 지워졌다(ReportRepository.create)
+            // 문제 삭제나 신고자 탈퇴와 같은 순간에 겹쳐 FK에 걸렸다(ReportRepository.create). 다른 제약은 위에서 미리 걸러 여기 오지 않는다.
+            // 둘 다 드물고, 탈퇴라면 다음 요청부터 401이라 구분하지 않고 404로 답한다.
             created = false;
         }
         if (!created) {
