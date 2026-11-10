@@ -166,7 +166,7 @@
 - `model`: 사용한 AI 모델 이름.
 - `status`: `PENDING`, `COMPLETED`, `FAILED` 중 하나.
 - `failure_reason` (비어도 됨): `FAILED`일 때만 있는 만들지 못한 이유. `UNAVAILABLE`(AI 서버 장애), `RATE_LIMITED`(AI 서버의 429), `BUSY`(이 서버의 AI 대기열이 참), `INVALID_RESPONSE`(형식에 맞지 않는 응답), `INTERNAL`(그 밖의 서버 오류) 중 하나다. 다시 시도하면 지운다.
-- `content` (비어도 됨): 설명·힌트를 담은 구조화 JSON. 완료 전에는 비어 있을 수 있다. `ANALYSIS`는 `AnalysisResult`(요약·의심 줄·사실·추정·힌트 3단계), `CODE_REVIEW`는 `CodeReviewResult`(요약·복잡도·개선점·다음 개념) 모양이다. 정답 코드 검사에 두 번 걸리면 둘 다 `{"blocked": true}`만 담는다.
+- `content` (비어도 됨): 설명·힌트를 담은 구조화 JSON. 완료 전에는 비어 있을 수 있다. `ANALYSIS`는 `AnalysisResult`(요약·의심 줄·사실·추정·힌트 3단계), `CODE_REVIEW`는 `CodeReviewResult`(요약·복잡도·개선점·다음 개념) 모양이다. 저장하기 전에 사실 검증(#79)으로 고친 값이고, 검증 내역 `factCheck`(`version`, `removed`, `demoted`, `unresolved`, `fixes`)가 더 붙는다. #79 전에 저장한 결과에는 `factCheck`가 없다. 정답 코드 검사에 두 번 걸리면 둘 다 `{"blocked": true}`만 담고, 사실 검증으로 차단하면 `{"blocked": true, "factCheck": {...}}`를 담는다.
 - `input_tokens`, `output_tokens` (비어도 됨): AI 요청·응답 토큰 수.
 - `cost_usd` (비어도 됨): 해당 AI 처리 비용(미국 달러). 팀 서버의 모델은 호출당 요금이 없어 비워 둔다.
 - `revealed_hint_level`: 사용자가 공개한 힌트 단계(0~3). 코드 리뷰(`CODE_REVIEW`)에는 힌트가 없어 늘 0이다.
@@ -229,5 +229,5 @@
 
 ## 아직 정할 정책
 
-- AI 결과 통계(성공한 분석 수 등)가 필요해지면, `content`의 차단 표시 대신 `ai_reviews.status`에 `BLOCKED`를 추가하는 마이그레이션을 검토한다. 지금은 `COMPLETED` 중 `content->>'blocked'`가 참인 행이 차단 건이다.
+- AI 결과 통계(성공한 분석 수 등)가 필요해지면, `content`의 차단 표시 대신 `ai_reviews.status`에 `BLOCKED`를 추가하는 마이그레이션을 검토한다. 지금은 `COMPLETED` 중 `content->>'blocked'`가 참인 행이 차단 건이다. 그중 `content ? 'factCheck'`인 행은 사실 검증으로, 나머지는 정답 코드 검사로 차단한 것이다.
 - 문제 공개 조건, 태그 1~3개, 언어별 설정 존재 여부처럼 여러 행을 봐야 하는 조건은 DB 제약이 아니라 게시·관리 서비스가 확인한다.

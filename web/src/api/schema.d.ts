@@ -1374,7 +1374,8 @@ export interface components {
              */
             failureReason: "UNAVAILABLE" | "RATE_LIMITED" | "BUSY" | "INVALID_RESPONSE" | "INTERNAL" | null;
             /**
-             * @description 정답 코드가 섞인 응답이 다시 만들어도 나와 결과를 보여 주지 않기로 한 분석(`docs/AI_FEATURES.md` 8절, #78).
+             * @description 결과를 보여 주지 않기로 한 분석(`docs/AI_FEATURES.md` 8절). 정답 코드가 섞인 응답이 다시 만들어도 나왔거나(#78),
+             *     요약·힌트에 비공개 테스트의 입력·기대 출력으로 보이는 값이 있을 때다(#79).
              *     `COMPLETED`이지만 내용과 힌트가 없고 힌트를 열 수 없다(409 `ANALYSIS_BLOCKED`). 다시 요청해도 새로 만들지 않는다.
              *     화면은 AI 사용 불가 안내(AI-06)를 보여 준다. #78 전에는 늘 false다.
              */
@@ -1383,12 +1384,16 @@ export interface components {
             summary: string | null;
             /**
              * @description 원인일 가능성이 높은 줄 번호(제출 코드 기준, 1부터).
-             *     제출 코드의 줄 수 안인지는 아직 서버가 검사하지 않는다(#79). 그 전까지 화면은 줄 수를 넘는 번호를 무시한다.
+             *     서버가 제출 코드의 줄 수를 넘는 번호를 지우고 저장한다(#79). 그 전에 저장된 분석이 남아 있을 수 있어 화면도 줄 수를 넘는 번호를 무시한다.
              */
             suspectLines: number[];
-            /** @description [실행 결과] 배지 항목. 실행 결과로 확인된 사실 */
+            /**
+             * @description [실행 결과] 배지 항목. 실행 결과로 확인된 사실.
+             *     서버가 실행 결과(판정·공개 예제·컴파일 메시지·비공개 테스트 요약)와 대조해 근거가 없거나 어긋나는 항목은 `guesses`로 옮긴다(#79).
+             *     그래서 빈 배열일 수 있다.
+             */
             facts: string[];
-            /** @description [코드 분석] 배지 항목. AI가 코드에서 짐작한 원인 */
+            /** @description [코드 분석] 배지 항목. AI가 코드에서 짐작한 원인. 서버가 `facts`에서 옮긴 항목이 뒤에 붙는다(#79). 최대 10개다. */
             guesses: string[];
             /** @description 연 힌트 단계. 0이면 아직 열지 않았다 */
             revealedHintLevel: number;
@@ -1449,7 +1454,7 @@ export interface components {
              */
             failureReason: "UNAVAILABLE" | "RATE_LIMITED" | "BUSY" | "INVALID_RESPONSE" | "INTERNAL" | null;
             /**
-             * @description 정답 코드가 섞인 응답이 다시 만들어도 나와 결과를 보여 주지 않기로 한 리뷰(`docs/AI_FEATURES.md` 8절).
+             * @description 정답 코드가 섞인 응답이 다시 만들어도 나와 결과를 보여 주지 않기로 한 리뷰(`docs/AI_FEATURES.md` 8절, #78).
              *     `COMPLETED`이지만 내용이 없다. 다시 요청해도 새로 만들지 않는다. 화면은 AI 사용 불가 안내(AI-06)를 보여 준다.
              */
             blocked: boolean;
@@ -1469,7 +1474,10 @@ export interface components {
                 /** @description 의도한 복잡도와 같거나 더 좋으면 true. `intendedTime`처럼 추정을 바탕으로 한 값이다 */
                 meetsIntended: boolean;
             } | null;
-            /** @description 가독성·중복·불필요한 연산 같은 개선점. 고칠 것이 없으면 빈 배열일 수 있다 */
+            /**
+             * @description 가독성·중복·불필요한 연산 같은 개선점. 고칠 것이 없으면 빈 배열일 수 있다.
+             *     제출 코드의 줄 수를 넘는 줄 번호를 짚은 항목은 서버가 지운다(#79).
+             */
             improvements: string[];
             /** @description 다음에 배울 개념. `COMPLETED`이고 `blocked`가 아니면 1~3개다. 학습 리포트(F4)의 입력이 된다(#83) */
             nextConcepts: {

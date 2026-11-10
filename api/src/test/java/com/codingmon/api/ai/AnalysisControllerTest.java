@@ -118,6 +118,8 @@ class AnalysisControllerTest {
     long otherUserId;
     long problemId;
     long versionId;
+    // 공개 예제 1(1 2 → 3). 오답 제출은 이 예제에서 -1을 출력한 것으로 넣어, FakeLlm.ok()의 [사실]이 사실 검증(#79)의 근거를 갖게 한다.
+    long sampleCaseId;
     // 테스트가 새로 넣은 개념 태그. 원래 있던 태그는 지우지 않는다.
     Long insertedTagId;
 
@@ -138,6 +140,9 @@ class AnalysisControllerTest {
                 .param("problemId", problemId).query(Long.class).single();
         jdbc.sql("insert into problem_language_configs (problem_version_id, language, time_limit_ms, memory_limit_mb)"
                 + " values (:versionId, 'PYTHON', 1000, 256)").param("versionId", versionId).update();
+        sampleCaseId = jdbc.sql("insert into test_cases (problem_version_id, ordinal, case_type, input_data, expected_output)"
+                + " values (:versionId, 1, 'SAMPLE', '1 2' || chr(10), '3' || chr(10)) returning id")
+                .param("versionId", versionId).query(Long.class).single();
         jdbc.sql("insert into user_problem_stats (user_id, problem_id, attempt_count) values (:userId, :problemId, 1)")
                 .param("userId", userId).param("problemId", problemId).update();
     }
@@ -409,6 +414,7 @@ class AnalysisControllerTest {
         assertThat(llm.calls).hasValue(1);
     }
 
+    // 이전 버전 결과는 사실 검증(#79) 전에 저장돼 factCheck가 없다. 그래도 읽힌다.
     @Test
     void 새_프롬프트_버전이_실패해도_이전_버전의_분석과_연_힌트를_보여_준다() throws Exception {
         long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
@@ -510,8 +516,10 @@ class AnalysisControllerTest {
     @Test
     void 결과를_저장하지_못하면_FAILED로_바꿔_다시_요청할_수_있게_한다() throws Exception {
         long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
-        // JSON으로는 맞지만 PostgreSQL jsonb가 받지 않는 응답
-        llm.answer = () -> new LlmResponse<>(FakeLlm.ok().value(), "{\"summary\":\"a\\u0000b\"}", LlmUsage.NONE);
+        // JSON으로는 맞지만 PostgreSQL jsonb가 받지 않는 응답. 저장은 고친 값을 다시 쓴 것이라(#79) 값에 넣는다.
+        AnalysisResult ok = (AnalysisResult) FakeLlm.ok().value();
+        llm.answer = () -> new LlmResponse<>(new AnalysisResult("a\u0000b", ok.suspectLines(), ok.facts(), ok.guesses(),
+                ok.hints()), "{}", LlmUsage.NONE);
 
         mvc.perform(post(analysis(id)).with(as(userId)));
         awaitStatus(id, "FAILED");
@@ -579,6 +587,59 @@ class AnalysisControllerTest {
                 .query(String.class).single()).isEqualTo(AiReviewRunner.BLOCKED_CONTENT);
     }
 
+    @Test
+    void 사실_검증으로_고친_결과와_검증_내역을_저장하고_내역은_보여_주지_않는다() throws Exception {
+        long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
+        // 제출 코드는 2줄이라 9번 줄은 없다. 예제 1의 실제 출력은 -1이라 42는 실행 결과에 없다.
+        AnalysisResult ok = (AnalysisResult) FakeLlm.ok().value();
+        llm.answer = () -> new LlmResponse<>(new AnalysisResult(ok.summary(), List.of(2, 9),
+                List.of(ok.facts().getFirst(), "예제 1에서 42를 출력했어요"), ok.guesses(), ok.hints()), "{}",
+                new LlmUsage(100, 50));
+
+        mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().isAccepted());
+        awaitStatus(id, "COMPLETED");
+
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.suspectLines", hasSize(1)))
+                .andExpect(jsonPath("$.suspectLines[0]").value(2))
+                .andExpect(jsonPath("$.facts", hasSize(1)))
+                .andExpect(jsonPath("$.facts[0]").value("예제 1에서 3 대신 -1을 출력했어요"))
+                .andExpect(jsonPath("$.guesses", hasSize(2)))
+                .andExpect(jsonPath("$.guesses[1]").value("예제 1에서 42를 출력했어요"))
+                .andExpect(jsonPath("$.factCheck").doesNotExist());
+        assertThat(jdbc.sql("select (content -> 'factCheck')::text from ai_reviews where submission_id = :id")
+                .param("id", id).query(String.class).single())
+                .isEqualTo("{\"fixes\": [\"LINE_OUT_OF_RANGE@suspectLines[1]\", \"UNMATCHED_VALUE@facts[1]\"], \"demoted\": 1,"
+                        + " \"removed\": 1, \"version\": 1, \"unresolved\": 0}");
+        assertThat(llm.calls).hasValue(1);
+    }
+
+    @Test
+    void 힌트에_비공개_테스트_값이_보이면_차단하고_그_값은_저장하지_않는다() throws Exception {
+        jdbc.sql("insert into test_cases (problem_version_id, ordinal, case_type, input_data, expected_output)"
+                + " values (:versionId, 2, 'HIDDEN', '1000 2000 3000 4000' || chr(10), '10000' || chr(10))")
+                .param("versionId", versionId).update();
+        long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
+        AnalysisResult ok = (AnalysisResult) FakeLlm.ok().value();
+        llm.answer = () -> new LlmResponse<>(new AnalysisResult(ok.summary(), ok.suspectLines(), ok.facts(), ok.guesses(),
+                new AnalysisResult.Hints(HINT_1, "1000 2000 3000 4000을 넣어 보세요.", HINT_3)), "{}", new LlmUsage(100, 50));
+
+        mvc.perform(post(analysis(id)).with(as(userId))).andExpect(status().isAccepted());
+        awaitStatus(id, "COMPLETED");
+
+        mvc.perform(get(analysis(id)).with(as(userId)))
+                .andExpect(jsonPath("$.blocked").value(true))
+                .andExpect(jsonPath("$.summary").isEmpty())
+                .andExpect(jsonPath("$.hints", hasSize(0)));
+        hint(id, 1).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ANALYSIS_BLOCKED"));
+        // 사실 검증으로는 다시 만들지 않는다.
+        assertThat(llm.calls).hasValue(1);
+        assertThat(jdbc.sql("select content::text from ai_reviews where submission_id = :id").param("id", id)
+                .query(String.class).single())
+                .isEqualTo("{\"blocked\": true, \"factCheck\": {\"fixes\": [\"HIDDEN_VALUE@hints.direction(blocked)\"],"
+                        + " \"demoted\": 0, \"removed\": 1, \"version\": 1, \"unresolved\": 0}}");
+    }
+
     private long completedAnalysis() throws Exception {
         long id = submission(userId, "SUBMIT", "COMPLETED", "WRONG_ANSWER");
         mvc.perform(post(analysis(id)).with(as(userId)));
@@ -631,13 +692,19 @@ class AnalysisControllerTest {
 
     private long submission(long owner, String kind, String jobStatus, String verdict) {
         boolean judged = "COMPLETED".equals(jobStatus) || "JUDGE_ERROR".equals(jobStatus);
-        return jdbc.sql("insert into submissions (user_id, problem_version_id, submission_kind, language, source_code,"
+        long id = jdbc.sql("insert into submissions (user_id, problem_version_id, submission_kind, language, source_code,"
                 + " job_status, verdict, judged_at)"
                 + " values (:userId, :versionId, :kind, 'PYTHON', :source, :status, :verdict, :judgedAt) returning id")
                 .param("userId", owner).param("versionId", versionId).param("kind", kind)
                 .param("source", "a, b = map(int, input().split())\nprint(a - b)\n").param("status", jobStatus)
                 .param("verdict", verdict).param("judgedAt", judged ? OffsetDateTime.now(ZoneOffset.UTC) : null)
                 .query(Long.class).single();
+        if ("COMPLETED".equals(jobStatus) && "WRONG_ANSWER".equals(verdict)) {
+            jdbc.sql("insert into submission_test_results (submission_id, problem_version_id, test_case_id, verdict, stdout)"
+                    + " values (:id, :versionId, :caseId, 'WRONG_ANSWER', '-1' || chr(10))")
+                    .param("id", id).param("versionId", versionId).param("caseId", sampleCaseId).update();
+        }
+        return id;
     }
 
     private static String analysis(long submissionId) {

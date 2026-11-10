@@ -13,8 +13,10 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 // AI 오답 분석(F1)과 힌트 3단계(F2)를 한 번에 받는 응답(AI_FEATURES 3·4절). ai_reviews.content에 이 JSON이 저장된다.
-// facts는 화면의 [실행 결과], guesses는 [코드 분석]이다(원칙 4). 줄 번호가 코드 범위 안인지와 facts가 실행 결과와
-// 맞는지는 #79, 코드·알고리즘명이 섞였는지는 #78에서 서버가 따로 본다.
+// facts는 화면의 [실행 결과], guesses는 [코드 분석]이다(원칙 4). 코드·알고리즘명이 섞였는지는 AnswerGuard(#78)가,
+// 줄 번호가 코드 범위 안인지와 facts가 실행 결과와 맞는지는 FactCheck(#79)가 저장 전에 본다. FactCheck는 근거 없는 facts를
+// guesses 뒤로 옮기므로 저장된 값은 facts가 비고 guesses가 MAX_ITEMS를 넘을 수 있다. 아래 제약은 모델 응답에만 건다(읽을 때는 보지 않는다).
+// 저장된 JSON에는 검증 내역(factCheck)이 더 있다. 읽을 때 모르는 키는 무시한다(Jackson 3 기본값).
 // 스키마와 아래 제약을 같이 고친다. 스키마는 모델 출력을 제한하고, 제약은 스키마로 못 거는 것(공백뿐인 글)만 본다.
 // 글자 수 상한은 스키마에만 둔다. 스키마 검사기는 코드 포인트로, @Size는 UTF-16 단위로 세어 이모지 같은 글자가 섞이면
 // 스키마는 통과하고 @Size만 어기는데, 재요청도 같은 상한을 받아 같은 이유로 실패한다.

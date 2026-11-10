@@ -176,7 +176,7 @@ describe('AnalysisPanel', () => {
       expect(screen.getByText(/의심되는 줄/).closest('p')).toHaveTextContent(/^의심되는 줄: 2번$/)
     })
 
-    /** 계약: 서버가 아직 범위를 검사하지 않는다(#79). 제출 코드는 4줄이다. */
+    /** 계약: 서버가 범위를 검사하기(#79) 전에 저장된 분석이 남아 있다. 제출 코드는 4줄이다. */
     it('제출 코드의 줄 수를 넘는 줄 번호는 버린다', async () => {
       stored(analysis({ suspectLines: [4, 5, 99] }))
       renderResult(WRONG)

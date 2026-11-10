@@ -18,9 +18,14 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
+
 // AI 결과 하나를 만드는 흐름. 오답 분석(F1·F2, AnalysisService)과 코드 리뷰(F3, CodeReviewService)가 같이 쓴다.
 // 잡은 시도(Claim)를 처리기에 넣고, 응답을 정답 코드 검사(AnswerGuard, #78)에 거쳐 저장한다. 걸리면 지시를 강화해 한 번 다시 만들고,
 // 또 걸리면 차단 표시만 저장해 보여 주지 않는다(AI_FEATURES 8절, database-schema.md).
+// 검사를 통과한 응답은 사실 검증(FactCheck, #79)으로 고친 값을 다시 JSON으로 써서, 검증 내역(factCheck)과 함께 저장한다.
+// 사실 검증으로는 다시 만들지 않는다. 비공개 값이 요약·힌트에 있으면 차단 표시와 검증 내역만 저장한다.
 // 시도를 잡는 일(하루 한도, AiQuotaService)과 결과를 보여 주는 일은 각 서비스가 한다.
 @Component
 class AiReviewRunner {
@@ -29,25 +34,30 @@ class AiReviewRunner {
     // 정답 코드 검사 결과를 한 줄씩 남긴다. 품질 평가(#14)에서 위반·재생성·차단 건수를 이 로그로 센다.
     // 응답 글은 남기지 않는다(제출 코드가 섞일 수 있다). 어긴 규칙과 위치, 걸린 태그 이름만 남긴다.
     private static final Logger guardLog = LoggerFactory.getLogger("com.codingmon.api.ai.answer-guard");
+    // 사실 검증 결과도 같은 방식으로 한 줄씩 남긴다. 응답 글과 비공개 값은 남기지 않는다.
+    private static final Logger factLog = LoggerFactory.getLogger("com.codingmon.api.ai.fact-check");
 
     // 가드레일에 두 번 걸린 결과. content에 이것만 담긴다.
     static final String BLOCKED_CONTENT = "{\"blocked\": true}";
 
-    // 한 번의 생성. first는 처음 보낼 요청, check는 응답의 정답 코드 검사, retry는 어긴 규칙을 알려 다시 만들 요청이다.
-    // store는 검사를 통과한 응답과 함께 저장할 것을 쓴다(코드 리뷰의 다음 개념, #83). 결과를 COMPLETED로 바꾸는 트랜잭션 안에서
-    // ai_reviews.id와 응답을 받아 부르고, 차단된 결과에는 부르지 않는다. 던지면 결과도 저장되지 않고 FAILED가 된다.
+    // 한 번의 생성. first는 처음 보낼 요청, check는 응답의 정답 코드 검사, retry는 어긴 규칙을 알려 다시 만들 요청,
+    // verify는 검사를 통과한 응답의 사실 검증이다(#79).
+    // store는 검사와 사실 검증을 통과한 응답과 함께 저장할 것을 쓴다(코드 리뷰의 다음 개념, #83). 결과를 COMPLETED로 바꾸는
+    // 트랜잭션 안에서 ai_reviews.id와 사실 검증으로 고친 응답을 받아 부르고, 차단된 결과에는 부르지 않는다. 던지면 결과도 저장되지
+    // 않고 FAILED가 된다.
     record Generation<T>(LlmRequest<T> first, Function<T, List<AnswerGuard.Violation>> check,
-            Function<List<AnswerGuard.Violation>, LlmRequest<T>> retry, BiConsumer<Long, T> store) {
+            Function<List<AnswerGuard.Violation>, LlmRequest<T>> retry, Function<T, FactCheck.Outcome<T>> verify,
+            BiConsumer<Long, T> store) {
 
         // 결과와 함께 저장할 것이 없는 생성(오답 분석)
         Generation(LlmRequest<T> first, Function<T, List<AnswerGuard.Violation>> check,
-                Function<List<AnswerGuard.Violation>, LlmRequest<T>> retry) {
-            this(first, check, retry, (reviewId, value) -> {
+                Function<List<AnswerGuard.Violation>, LlmRequest<T>> retry, Function<T, FactCheck.Outcome<T>> verify) {
+            this(first, check, retry, verify, (reviewId, value) -> {
             });
         }
     }
 
-    // 저장할 결과. value는 검사를 통과한 응답이고, 차단됐으면 null이다(json은 BLOCKED_CONTENT).
+    // 저장할 결과. json은 사실 검증으로 고친 값과 검증 내역이다. value는 그 고친 값이고, 차단됐으면 null이다(json은 차단 표시).
     private record Outcome<T>(String json, T value) {
     }
 
@@ -55,22 +65,26 @@ class AiReviewRunner {
     private final AiWorker worker;
     private final TransactionTemplate transactions;
     private final Duration pendingTimeout;
+    private final JsonMapper json;
     // 이 서버의 처리기에 넣고 아직 끝나지 않은 ai_reviews.id(분석·리뷰 모두). 대기열에서 오래 기다려도 버려진 것으로 보지 않게 한다.
     // 조회는 review_type으로 거르므로 두 기능의 id가 섞여 있어도 된다.
     private final Set<Long> active = ConcurrentHashMap.newKeySet();
 
     // 결과 저장은 처리기 스레드에서 하므로 바깥 트랜잭션이 없지만, 대기열이 차 요청 스레드에서 바로 끝날 때도 늘 새로 연다.
     AiReviewRunner(AiReviewRepository reviews, AiWorker worker, PlatformTransactionManager transactionManager,
-            @Value("${app.llm.pending-timeout}") Duration pendingTimeout) {
+            @Value("${app.llm.pending-timeout}") Duration pendingTimeout, JsonMapper json) {
         this.reviews = reviews;
         this.worker = worker;
         this.transactions = new TransactionTemplate(transactionManager);
         this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.pendingTimeout = pendingTimeout;
+        this.json = json;
     }
 
     // 처리기에 넣는다. 시도를 잡은 트랜잭션이 커밋된 뒤에 부른다(PENDING 행이 커밋된 뒤라야 처리기가 결과를 쓴다).
     // generation은 입력과 검사 자료를 읽어 요청을 만든다. 여기서 실패해도 행이 PENDING으로 남지 않게 FAILED로 바꾼다.
+    // 사실 검증 자료는 학습자가 낸 코드를 정규식으로 읽으므로 StackOverflowError도 잡는다. 놓치면 행이 active에 남아
+    // pending-timeout으로도 버려진 것으로 보이지 않고, 서버를 다시 시작할 때까지 다시 요청할 수 없다.
     <T> void start(ReviewType type, AiReviewRepository.Claim claim, Supplier<Generation<T>> generation) {
         active.add(claim.id());
         try {
@@ -78,7 +92,7 @@ class AiReviewRunner {
             worker.submit(claim.id(), request.first())
                     .thenCompose(first -> guarded(type, claim, request, first))
                     .whenComplete((outcome, failure) -> finish(type, claim, request, outcome, failure));
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | StackOverflowError e) {
             log.error("{} {}을 시작하지 못했다", label(type), claim.id(), e);
             fail(type, claim, AiReviewRepository.FailureReason.INTERNAL);
         }
@@ -95,14 +109,27 @@ class AiReviewRunner {
         List<AnswerGuard.Violation> violations = request.check().apply(first.value());
         if (violations.isEmpty()) {
             logGuard(type, claim, 1, "PASSED", violations);
-            return CompletableFuture.completedFuture(new Outcome<>(first.json(), first.value()));
+            return CompletableFuture.completedFuture(verified(type, claim, request, first.value()));
         }
         logGuard(type, claim, 1, "REGENERATE", violations);
         return worker.submit(claim.id(), request.retry().apply(violations)).thenApply(second -> {
             List<AnswerGuard.Violation> again = request.check().apply(second.value());
             logGuard(type, claim, 2, again.isEmpty() ? "PASSED" : "BLOCKED", again);
-            return again.isEmpty() ? new Outcome<>(second.json(), second.value()) : new Outcome<>(BLOCKED_CONTENT, null);
+            return again.isEmpty() ? verified(type, claim, request, second.value()) : new Outcome<>(BLOCKED_CONTENT, null);
         });
+    }
+
+    // 사실 검증으로 고친 값과 검증 내역(factCheck)을 담은 결과. 사실 검증으로 차단하면 고친 값 대신 차단 표시를 담는다.
+    // 모델이 준 JSON 원문(LlmResponse.json)이 아니라 고친 값을 다시 쓴 것이다.
+    private <T> Outcome<T> verified(ReviewType type, AiReviewRepository.Claim claim, Generation<T> request, T value) {
+        FactCheck.Outcome<T> checked = request.verify().apply(value);
+        FactCheck.Meta meta = checked.meta();
+        factLog.info("fact-check review={} type={} outcome={} removed={} demoted={} unresolved={} fixes={}", claim.id(),
+                type, checked.label(), meta.removed(), meta.demoted(), meta.unresolved(), FactCheck.describe(checked.fixes()));
+        ObjectNode content = checked.blocked() ? json.createObjectNode().put("blocked", true)
+                : json.valueToTree(checked.result());
+        content.set("factCheck", json.valueToTree(meta));
+        return new Outcome<>(json.writeValueAsString(content), checked.blocked() ? null : checked.result());
     }
 
     // 예: answer-guard review=12 type=CODE_REVIEW attempt=1 outcome=REGENERATE violations=CODE_PATTERN@improvements[1]

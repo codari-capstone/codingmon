@@ -61,7 +61,7 @@ record AnalysisInput(Problem problem, Submission submission, Samples samples, Hi
         }
     }
 
-    // code는 "줄번호| 내용" 꼴이고, codeLines는 자르기 전 전체 줄 수다(줄 번호 범위 검사, #79).
+    // code는 "줄번호| 내용" 꼴이고, codeLines는 자르기 전 전체 줄 수다. 사실 검증(FactCheck, #79)이 줄 번호 범위를 이 값으로 본다.
     record Submission(Language language, Verdict verdict, RuntimeErrorType runtimeErrorType, Integer executionTimeMs,
             Integer memoryUsedKb, int codeLines, String code, String compilerMessage) {
 

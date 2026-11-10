@@ -166,7 +166,8 @@ final class AnswerGuard {
             + "|<<=|>>=|\\*\\*=|//=|->|\\+\\+|--|<<|>>|<=|>=|==|!=|&&|\\|\\||\\+=|-=|\\*=|/=|%=|\\*\\*|//|::"
             + "|[!-/:-@\\[-^`{-~]");
     // 응답 글은 한글 같은 ASCII 밖 글자에서 끊어, 코드처럼 이어진 부분끼리만 정답 코드와 비교한다.
-    private static final Pattern NON_ASCII = Pattern.compile("[^\\x00-\\x7F]+");
+    // 사실 검증(FactCheck)도 같은 방식으로 끊어 비공개 값과 비교한다.
+    static final Pattern NON_ASCII = Pattern.compile("[^\\x00-\\x7F]+");
     // 복잡도 표기. 괄호 안이 두 겹까지 중첩될 수 있다(O(sqrt(n)), O(max(n, m) log n)).
     // max·min은 코드 모양 검사의 함수 이름이기도 해서 "O(max(N, M))"가 호출로 보인다. 이 표기 안에서 시작하는 max·min 호출만
     // 호출로 보지 않는다(MATH_CALL). 글은 지우지 않는다. 표기 안의 다른 호출(O(n, print(a)))은 그대로 찾고, 인용 비교도 원문으로 한다.
