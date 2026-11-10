@@ -26,3 +26,5 @@ CREATE TABLE problem_reports (
 CREATE INDEX problem_reports_status_created_idx ON problem_reports (status, created_at DESC);
 -- 문제를 지울 때 그 문제의 신고를 찾는다(markProblemDeleted)
 CREATE INDEX problem_reports_problem_idx ON problem_reports (problem_id);
+-- 회원 탈퇴 때 FK(SET NULL)가 그 사용자의 신고를 찾는다. 신고는 지우지 않고 쌓여 전체를 훑지 않게 한다
+CREATE INDEX problem_reports_reporter_idx ON problem_reports (reporter_id);
