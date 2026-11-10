@@ -18,7 +18,8 @@ import com.codingmon.api.report.ReportRepository.ReportType;
 @RestController
 class ProblemReportController {
 
-    // DB의 VARCHAR(1000)과 같다. 받은 그대로 잰다(openapi ReportInput.maxLength와 같은 기준).
+    // DB의 VARCHAR(1000)과 같다. 받은 그대로 문자(코드 포인트) 수로 잰다. openapi maxLength·VARCHAR와 같은 기준이다.
+    // String.length()는 이모지를 2로 세어 1,000자보다 일찍 막는다.
     static final int MAX_LENGTH = 1000;
 
     record ReportInput(ReportType type, String content) {
@@ -36,7 +37,7 @@ class ProblemReportController {
         if (input.type() == null || input.content() == null || input.content().indexOf('\0') >= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         }
-        if (input.content().length() > MAX_LENGTH) {
+        if (input.content().codePointCount(0, input.content().length()) > MAX_LENGTH) {
             throw ApiErrors.error(HttpStatus.BAD_REQUEST, "INVALID_REPORT_CONTENT", "신고 내용이 1,000자를 넘어요. 1,000자 이하로 줄여 주세요");
         }
         String content = input.content().strip();

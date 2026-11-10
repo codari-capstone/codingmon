@@ -55,7 +55,7 @@ class AdminReportController {
         if (input.status() == null || (memo != null && memo.indexOf('\0') >= 0)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         }
-        if (memo != null && memo.length() > ProblemReportController.MAX_LENGTH) {
+        if (memo != null && memo.codePointCount(0, memo.length()) > ProblemReportController.MAX_LENGTH) {
             throw ApiErrors.error(HttpStatus.BAD_REQUEST, "INVALID_REPORT_MEMO", "메모가 1,000자를 넘어요. 1,000자 이하로 줄여 주세요");
         }
         if (memo != null) {
