@@ -1145,11 +1145,33 @@ export interface paths {
         /**
          * 신고 상태·메모 저장 (ADM-13)
          * @description 화면은 상태와 메모를 늘 함께 보낸다. 메모를 비우려면 `adminMemo`에 null을 보낸다.
-         *     관리자가 고를 수 있는 상태는 `RECEIVED`·`IN_PROGRESS`·`RESOLVED`·`REJECTED`이고, 이 넷 사이는 자유롭게 바꾼다.
-         *     문제가 지워진 신고(`problemId`가 null)는 `RESOLVED`·`REJECTED` 사이만 바꿀 수 있다. `RECEIVED`·`IN_PROGRESS`로 되돌리면 400 `REPORT_PROBLEM_DELETED`다. 처리할 문제가 없는 신고가 처리 안 한 신고 수에 남지 않게 한다.
-         *     `PROBLEM_DELETED`는 문제를 지울 때 서버만 정한다. 이 상태로 바꾸거나 이 상태에서 다른 상태로 바꾸면 400 `REPORT_PROBLEM_DELETED`다.
-         *     `PROBLEM_DELETED`인 신고도 상태를 그대로 보내면 메모는 고칠 수 있다.
-         *     `PROBLEM_DELETED`는 저장보다 앞선다. 저장 도중 문제가 지워져 신고가 `PROBLEM_DELETED`가 되거나, `RECEIVED`·`IN_PROGRESS`로 바꾸는 도중 문제가 지워지면 그 저장은 400 `REPORT_PROBLEM_DELETED`다. 서버는 상태 확인(`PROBLEM_DELETED`가 아님, 미처리로 바꿀 때는 문제가 있음)과 저장을 한 문장(조건부 UPDATE)으로 한다.
+         *
+         *     **보낼 수 있는 상태**는 신고의 지금 상태와 문제가 남아 있는지에 따라 다르다. 메모는 모든 경우에 고칠 수 있다.
+         *
+         *     1. 문제가 있는 신고(`problemId`가 있음): `RECEIVED`·`IN_PROGRESS`·`RESOLVED`·`REJECTED` 중 아무것이나 보낸다. 넷 사이를 자유롭게 바꾼다.
+         *     2. 문제가 지워진 `RESOLVED`·`REJECTED` 신고: `RESOLVED`·`REJECTED`만 보낼 수 있다. 처리 결과를 바로잡는 것만 허용한다.
+         *        `RECEIVED`·`IN_PROGRESS`로 되돌리면 400 `REPORT_PROBLEM_DELETED`다. 처리할 문제가 없는 신고가 처리 안 한 신고 수에 잡히지 않게 하기 위해서다.
+         *     3. `PROBLEM_DELETED` 신고: `PROBLEM_DELETED`를 그대로 보내야 한다. 상태는 바뀌지 않고 메모만 저장한다.
+         *        다른 상태를 보내면 400 `REPORT_PROBLEM_DELETED`다.
+         *
+         *     `PROBLEM_DELETED`는 문제를 지울 때 서버만 정한다. 1·2의 신고에 `PROBLEM_DELETED`를 보내면 400 `REPORT_PROBLEM_DELETED`다.
+         *     정리하면, 문제가 지워진 뒤에는 어떤 신고도 `RECEIVED`·`IN_PROGRESS`가 될 수 없다.
+         *
+         *     **문제 삭제와 동시에 저장할 때**: 서버는 위 조건 확인과 저장을 한 문장(조건부 UPDATE)으로 해서, 저장하는 순간의 상태로 판단한다.
+         *     그래서 저장 도중 문제가 지워져 조건에 맞지 않게 되면(1의 신고가 `PROBLEM_DELETED`가 됐거나, 미처리로 바꾸는데 문제가 사라짐) 그 저장은 400 `REPORT_PROBLEM_DELETED`다.
+         *     이때 화면은 상세를 다시 불러와 바뀐 상태를 보여 준다.
+         *
+         *     ```sql
+         *     -- 보낸 상태가 PROBLEM_DELETED일 때(3): 메모만
+         *     UPDATE ... SET admin_memo = ?, updated_at = now()
+         *     WHERE id = ? AND status = 'PROBLEM_DELETED'
+         *     -- 그 밖(1·2): 상태와 메모
+         *     UPDATE ... SET status = ?, admin_memo = ?, updated_at = now()
+         *     WHERE id = ? AND status <> 'PROBLEM_DELETED'
+         *       AND (problem_id IS NOT NULL OR ? IN ('RESOLVED', 'REJECTED'))
+         *     -- 0행이면: 신고가 없으면 404, 있으면 400 REPORT_PROBLEM_DELETED
+         *     ```
+         *
          *     `adminMemo`는 받은 그대로 1,000자를 넘으면 400 `INVALID_REPORT_MEMO`다(스키마 `maxLength`와 같은 기준). 저장할 때 앞뒤 공백을 지우고, 지운 뒤 비면 null로 저장한다.
          *     저장하면 `updatedAt`이 지금 시각이 된다. 같은 값을 보내도 바뀐다. 나중 저장이 이긴다.
          */
@@ -2613,7 +2635,7 @@ export interface operations {
             };
             /**
              * @description 오류 `code`: `INVALID_REPORT_CONTENT`(내용이 비었거나 1,000자를 넘음).
-             *     `type`이 목록에 없는 값이거나 `id`가 정수가 아니면 `code` 없는 400이다.
+             *     `type`·`content`가 빠졌거나 null이거나, `type`이 목록에 없는 값이거나, `id`가 정수가 아니면 `code` 없는 400이다. 화면은 늘 두 칸을 채워 보내므로 생기지 않는다.
              */
             400: {
                 headers: {
@@ -3855,8 +3877,8 @@ export interface operations {
                 content?: never;
             };
             /**
-             * @description 오류 `code`: `INVALID_REPORT_MEMO`(메모가 1,000자를 넘음), `REPORT_PROBLEM_DELETED`(삭제된 문제의 신고 상태를 바꾸려 함).
-             *     `status`가 목록에 없는 값이거나 `id`가 정수가 아니면 `code` 없는 400이다.
+             * @description 오류 `code`: `INVALID_REPORT_MEMO`(메모가 1,000자를 넘음), `REPORT_PROBLEM_DELETED`(보낸 상태가 위 1~3 규칙에 맞지 않음).
+             *     `status`가 빠졌거나 null이거나 목록에 없는 값이거나, `adminMemo` 칸이 빠졌거나, `id`가 정수가 아니면 `code` 없는 400이다. `adminMemo`의 null은 '메모 비움'이라 허용한다.
              */
             400: {
                 headers: {
