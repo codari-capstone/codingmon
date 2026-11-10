@@ -139,11 +139,11 @@ API는 코드보다 명세를 먼저 쓴다. 명세가 확정되면 백엔드는
 
 | 항목 | 규칙 | 예시 |
 | --- | --- | --- |
-| 경로 | `/api`로 시작, 복수형 명사, 소문자·하이픈 | `/api/problems/{id}`, `/api/submissions/{id}/ai-review` |
-| JSON 필드 | camelCase | `lineStart`, `evidenceType`, `revealedHintLevel` |
-| 고정된 값(enum) | 대문자 스네이크 | `WRONG_ANSWER`, `FACT`, `HIDDEN` |
+| 경로 | `/api`로 시작, 복수형 명사, 소문자·하이픈 | `/api/problems/{id}`, `/api/submissions/{id}/code-review` |
+| JSON 필드 | camelCase | `suspectLines`, `failureReason`, `revealedHintLevel` |
+| 고정된 값(enum) | 대문자 스네이크 | `WRONG_ANSWER`, `RATE_LIMITED`, `HIDDEN` |
 | 날짜·시간 | ISO 8601, UTC | `2026-10-03T06:15:41Z` |
-| 오류 응답 | RFC 9457 (Problem Details) | `{ "type", "title", "status", "detail" }` |
+| 오류 응답 | RFC 9457 (Problem Details) | `{ "type", "title", "status", "detail", "code" }` (화면은 `code`로 가른다) |
 | 목록 조회 | page·size 쿼리, 응답에 전체 개수 포함 | `?page=0&size=20` |
 
 ## 5. 코드 컨벤션
