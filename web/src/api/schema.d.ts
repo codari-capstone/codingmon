@@ -1144,7 +1144,7 @@ export interface paths {
         get: operations["getAdminReport"];
         /**
          * 신고 상태·메모 저장 (ADM-13)
-         * @description 화면은 상태와 메모를 늘 함께 보낸다. 메모를 비우려면 `adminMemo`에 null을 보낸다.
+         * @description 화면은 상태와 메모를 늘 함께 보낸다. 메모를 비우려면 `adminMemo`에 null을 보낸다. `adminMemo` 칸이 빠져도 null과 같이 메모를 비운다.
          *
          *     **보낼 수 있는 상태**는 신고의 지금 상태와 문제가 남아 있는지에 따라 다르다. 메모는 모든 경우에 고칠 수 있다.
          *
@@ -1864,7 +1864,8 @@ export interface components {
         };
         AdminReportUpdate: {
             status: components["schemas"]["ReportStatus"];
-            adminMemo: string | null;
+            /** @description null이거나 빠지면 메모를 비운다. 화면은 늘 보낸다 */
+            adminMemo?: string | null;
         };
         AccessTokenResponse: {
             accessToken: string;
@@ -3878,7 +3879,7 @@ export interface operations {
             };
             /**
              * @description 오류 `code`: `INVALID_REPORT_MEMO`(메모가 1,000자를 넘음), `REPORT_PROBLEM_DELETED`(보낸 상태가 위 1~3 규칙에 맞지 않음).
-             *     `status`가 빠졌거나 null이거나 목록에 없는 값이거나, `adminMemo` 칸이 빠졌거나, `id`가 정수가 아니면 `code` 없는 400이다. `adminMemo`의 null은 '메모 비움'이라 허용한다.
+             *     `status`가 빠졌거나 null이거나 목록에 없는 값이거나, `id`가 정수가 아니면 `code` 없는 400이다.
              */
             400: {
                 headers: {
