@@ -29,7 +29,7 @@ function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
     <tr
       data-slot="table-row"
       // 줄 사이는 선 대신 여백으로 나누고, 올리면 옅은 면으로 어느 줄인지 보여 준다
-      className={cn('hover:bg-muted/50 transition-colors', className)}
+      className={cn('hover:bg-muted transition-colors', className)}
       {...props}
     />
   )

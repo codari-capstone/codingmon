@@ -48,7 +48,7 @@ export function ErrorState({ problem, onRetry, headingLevel = 2 }: ErrorStatePro
       */}
       <div
         role="alert"
-        className="border-destructive/30 bg-destructive/5 flex gap-3 rounded-xl border p-4"
+        className="border-destructive/30 bg-destructive/5 flex gap-3 rounded-lg border p-4"
       >
         <AlertCircle className="text-destructive mt-0.5 size-5 shrink-0" aria-hidden="true" />
         <div>

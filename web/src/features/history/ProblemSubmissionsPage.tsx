@@ -120,7 +120,7 @@ export function Component() {
           <>
             <div
               aria-busy={list.isFetching}
-              className={cn('bg-card rounded-2xl px-3 py-2', list.isFetching && 'opacity-60')}
+              className={cn('bg-card rounded-lg border px-3 py-2', list.isFetching && 'opacity-60')}
             >
               <Table>
                 <TableHeader>

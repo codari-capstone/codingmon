@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.codingmon.api.Language;
 import com.codingmon.api.Page;
 import com.codingmon.api.problem.ProblemRepository.Difficulty;
+import com.codingmon.api.report.ReportRepository;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 
@@ -124,9 +125,11 @@ class AdminProblemRepository {
     private static final CaseValidation NOT_RUN = new CaseValidation(null, null, null, null);
 
     private final JdbcClient jdbc;
+    private final ReportRepository reports;
 
-    AdminProblemRepository(JdbcClient jdbc) {
+    AdminProblemRepository(JdbcClient jdbc, ReportRepository reports) {
         this.jdbc = jdbc;
+        this.reports = reports;
     }
 
     // count와 목록이 같은 시점을 보게 묶는다(ProblemRepository.findPublished와 같다).
@@ -504,6 +507,8 @@ class AdminProblemRepository {
     // 없는 문제면 비어 있다. 제출·풀이 통계·리포트 추천이 남아 있으면 FK가 막아 DataIntegrityViolationException이 난다.
     // 예제 실행과 관리자 검증은 사용자 기록으로 세지 않고 먼저 지운다(케이스별 결과는 함께 지워진다).
     // 검증 중에는 채점 처리기가 그 제출을 쓰고 있으므로 지우지 않는다.
+    // 신고는 남긴다. 처리 안 한 신고는 문제 행을 지우기 전에 PROBLEM_DELETED로 바꾸고, 문제 칸은 FK가 비운다(SET NULL).
+    // 문제 행을 잠근 뒤라 그사이 새 신고는 FK 검사에서 기다렸다가 실패한다(ReportRepository.create).
     @Transactional
     Optional<DeleteResult> delete(long problemId) {
         Optional<Row> found = lockLatest(problemId);
@@ -516,6 +521,7 @@ class AdminProblemRepository {
         jdbc.sql("delete from submissions where submission_kind in ('SAMPLE_RUN', 'VALIDATION')"
                 + " and problem_version_id in (select id from problem_versions where problem_id = :id)")
                 .param("id", problemId).update();
+        reports.markProblemDeleted(problemId);
         jdbc.sql("delete from problem_versions where problem_id = :id").param("id", problemId).update();
         jdbc.sql("delete from problems where id = :id").param("id", problemId).update();
         return Optional.of(DeleteResult.DELETED);

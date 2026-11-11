@@ -90,7 +90,7 @@ function Output({ title, text }: { title: string; text: string | null | undefine
         공백과 줄바꿈이 뜻을 가진다. 꺾지 않고 가로 스크롤로 보여 준다(Samples와 같은
         이유). 긴 출력은 65,536자까지 올 수 있어 높이도 묶는다.
       */}
-      <pre className="bg-card max-h-48 overflow-auto rounded-lg p-3 text-sm leading-relaxed">
+      <pre className="bg-card max-h-48 overflow-auto rounded-sm p-3 text-sm leading-relaxed">
         {text}
       </pre>
     </div>
@@ -100,7 +100,7 @@ function Output({ title, text }: { title: string; text: string | null | undefine
 /** 예제 하나: 판정·시간·메모리와 기대/실제 출력. */
 function Case({ item, expected }: { item: SampleRunCase; expected: string | undefined }) {
   return (
-    <li className="bg-muted/40 flex flex-col gap-2 rounded-xl p-3">
+    <li className="bg-muted flex flex-col gap-2 rounded-md p-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <span className="font-medium">예제 {item.ordinal}</span>
         {item.verdict === null ? (

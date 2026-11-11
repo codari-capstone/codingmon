@@ -5,7 +5,7 @@ export interface VerdictInfo {
   /** 백준 표기를 따른 한글 이름 (RES-02). */
   label: string
   /**
-   * 판정 색 묶음 (docs/design-system.md 3장): 맞음은 success, 틀림·형식·런타임·컴파일은
+   * 판정 색 묶음 (디자인 시스템 '판정 색', 값은 src/index.css): 맞음은 success, 틀림·형식·런타임·컴파일은
    * danger, 시간·메모리·출력 초과는 warning. 채점 불가는 학습자 잘못이 아니라서 판정 색 없이 muted.
    */
   tone: StatusTone

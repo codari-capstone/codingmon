@@ -4,27 +4,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* 색은 아래 :root·.dark 변수를 가리킨다(테마마다 값이 바뀌므로 inline).
+ * 이름은 shadcn 것을 그대로 쓰고, 디자인 시스템(펭귄 Codingmon)의 토큰 값을 넣었다.
+ * 디자인 원본(tokens.json)은 저장소 밖 자료라, 이 파일이 기준이다.
+ * 대응 이름이 없는 토큰만 새 이름을 붙였다 — 아래 :root의 주석에 원래 토큰 이름이 있다. */
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
-  --color-destructive: var(--destructive);
   /* 판정 색: 채움(기본) · 채움 위 글자(-foreground) · 옅은 면(-soft) · 카드나 옅은 면 위 글자(-text) */
+  --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-soft: var(--destructive-soft);
   --color-destructive-text: var(--destructive-text);
@@ -57,144 +47,202 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-  /* 떠 있는 것(메뉴·대화상자)의 부드러운 그림자. 카드에는 쓰지 않는다 */
-  --shadow-float: var(--elevation-float);
+  --color-body-foreground: var(--body-foreground);
+  --color-disabled-foreground: var(--disabled-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-inverse: var(--inverse);
+  --color-inverse-foreground: var(--inverse-foreground);
+  --color-inverse-muted: var(--inverse-muted);
+  --color-inverse-accent: var(--inverse-accent);
+  --color-inverse-line: var(--inverse-line);
+  --color-inverse-raised: var(--inverse-raised);
+  /* 카드는 그림자 대신 border 선. 그림자는 떠 있는 것과 올린 카드에만 */
+  --shadow-card: var(--elevation-card);
+  --shadow-pop: var(--elevation-pop);
+  --shadow-hover: var(--elevation-hover);
+  --shadow-glow: var(--elevation-glow);
+  --shadow-focus: var(--elevation-focus);
+  --shadow-key: var(--elevation-key);
+}
+
+/* 테마와 관계없는 값. 간격은 따로 두지 않는다 — Tailwind 기본 단계(4px)가 디자인의
+ * space-4~64와 같다(space-24 = p-6, space-64 = p-16). --spacing-24 같은 이름을 만들면
+ * 기존 p-24(96px)가 24px로 바뀐다. */
+@theme {
+  /* index.html이 불러오는 Variable을 앞에 둔다. 정적 Pretendard가 설치된 기기에서도 같은 글꼴로 그린다 */
+  --font-sans: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-display: 60px;
+  --text-display--line-height: 1.15;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.025em;
+  --text-title-1: 44px;
+  --text-title-1--line-height: 1.2;
+  --text-title-1--font-weight: 700;
+  --text-title-1--letter-spacing: -0.02em;
+  --text-title-2: 28px;
+  --text-title-2--line-height: 1.3;
+  --text-title-2--font-weight: 700;
+  --text-title-2--letter-spacing: -0.02em;
+  --text-title-3: 20px;
+  --text-title-3--line-height: 1.35;
+  --text-title-3--font-weight: 600;
+  --text-title-3--letter-spacing: -0.01em;
+  --text-eyebrow: 14px;
+  --text-eyebrow--line-height: 1.4;
+  --text-eyebrow--font-weight: 600;
+  --text-eyebrow--letter-spacing: 0.02em;
+  --text-body-lg: 18px;
+  --text-body-lg--line-height: 1.65;
+  --text-body: 16px;
+  --text-body--line-height: 1.65;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 1.5;
+  --text-label: 15px;
+  --text-label--line-height: 1.2;
+  --text-label--font-weight: 600;
+  --text-caption: 12px;
+  --text-caption--line-height: 1.4;
+  --text-caption--font-weight: 600;
+  --text-code: 14px;
+  --text-code--line-height: 1.6;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-2xl: 40px;
+  /* Tailwind 기본값(24px·32px)이 2xl보다 작아 단계가 거꾸로 된다. 쓰지 않으므로 지운다 */
+  --radius-3xl: initial;
+  --radius-4xl: initial;
+
+  /* 높이·너비: h-control-md, w-sidebar, max-w-content 처럼 쓴다 */
+  --spacing-control-sm: 40px;
+  --spacing-control-md: 48px;
+  --spacing-control-lg: 56px;
+  --spacing-topbar: 64px;
+  --spacing-sidebar: 256px;
+  --container-content: 1200px;
+  --container-form: 420px;
 }
 
 /* 화면 제목(h1). 모든 화면이 같은 크기여야 위계가 맞는다 — 오류·빈 화면의 h1도 이것을 쓴다.
- * 크기를 바꿀 때는 이 한 곳만 고친다 */
+ * 디자인 시스템의 title-2다. 크기를 바꿀 때는 @theme의 --text-title-2를 고친다 */
 @utility page-title {
-  font-size: 1.75rem;
-  line-height: 1.3;
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  font-size: var(--text-title-2);
+  line-height: var(--text-title-2--line-height);
+  font-weight: var(--text-title-2--font-weight);
+  letter-spacing: var(--text-title-2--letter-spacing);
 }
 
-/* 색 값은 디자인 시안 '여백 카드' (docs/design-system.md). 포인트 색 #586FC4 하나에서 단계를 나눴다.
- * 글자·선·입력칸 테두리는 WCAG 대비(글자 4.5:1, 입력칸 테두리 3:1)를 통과하는 단계를 골랐다. */
+/* 괄호 안은 디자인 시스템의 토큰 이름이다.
+ * 대비(글자 4.5:1, 입력칸 테두리 3:1)는 index.css.test.ts가 라이트·다크 모두 계산해 지킨다.
+ * 색을 바꾸거나 글자를 새 면 위에 올리면 그 테스트의 쌍 목록에 더한다. */
 :root {
   /* 브라우저가 그리는 부품(select 옵션 목록·스크롤바·체크박스)도 테마를 따르게 한다.
      없으면 다크 모드에서 select 옵션 목록이 흰 바탕에 밝은 글자로 뜬다(#220 리뷰). */
   color-scheme: light;
-  --background: #f2f4fb;
-  --foreground: #1c1e23;
-  --card: #ffffff;
-  --card-foreground: #1c1e23;
+  --background: #ffffff; /* canvas */
+  --foreground: #1a1f36; /* text */
+  --body-foreground: #2e3450; /* text-body */
+  --disabled-foreground: #a6abbf; /* text-disabled: 읽어야 하는 글자에 쓰지 않는다 */
+  /* 밝은 모드는 카드 면이 바탕과 같아 border 선으로 경계를 만든다 */
+  --card: #ffffff; /* surface */
+  --card-foreground: #1a1f36;
   --popover: #ffffff;
-  --popover-foreground: #1c1e23;
-  --primary: #586fc4;
+  --popover-foreground: #1a1f36;
+  --primary: #3d63dd; /* brand: 화면마다 주 버튼 하나·진행·선택 표시에만 */
   --primary-foreground: #ffffff;
-  /* #586fc4를 글자로 쓰면 회색 바탕 위 4.26:1이라, 링크·강조 글자는 한 단계 진한 색을 쓴다 */
-  --primary-text: #354589;
-  /* 흰 글자를 올린 채 면을 옅게(primary/80) 하면 3.2:1로 떨어져, 올림 면은 한 단계 진하게 한다 */
-  --primary-hover: #465aa9;
-  --secondary: #e5e8ee;
-  --secondary-foreground: #1c1e23;
-  --muted: #e5e8ee;
-  --muted-foreground: #505258;
-  --accent: color-mix(in srgb, #586fc4 10%, transparent);
-  --accent-foreground: #354589;
-  --destructive: #c42837;
-  --destructive-foreground: #ffffff;
-  --destructive-soft: color-mix(in srgb, #c42837 12%, transparent);
-  --destructive-text: #9c1025;
-  --success: #1b892c;
-  --success-foreground: #ffffff;
-  --success-soft: color-mix(in srgb, #1b892c 12%, transparent);
-  --success-text: #006a18;
-  --warning: #eab532;
-  --warning-foreground: #0c0e13;
-  --warning-soft: color-mix(in srgb, #eab532 12%, transparent);
-  --warning-text: #8d6900;
-  --info: #009ab3;
-  --info-foreground: #0c0e13;
-  --info-soft: color-mix(in srgb, #009ab3 12%, transparent);
-  --info-text: #007386;
-  --border: #d2d4da;
-  /* 입력칸 테두리는 선보다 진하다: 입력칸의 경계는 3:1 이상이어야 한다 (WCAG 1.4.11).
-   * 한 단계 옅은 #8d8f95는 흰 카드 위에서는 통과하지만 회색 바탕 위에서 2.94:1이라, 바탕에 바로 놓인 입력칸을 위해 이 값을 쓴다 */
-  --input: #6a6c71;
-  --ring: #586fc4;
-  --elevation-float: 0 12px 32px -12px rgb(12 14 19 / 0.28), 0 2px 6px rgb(12 14 19 / 0.06);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  /* 둥글기 기준 12px: 버튼 rounded-lg 12px, 카드 rounded-2xl 약 22px, 작은 것 rounded-sm 약 7px.
-   * 입력칸은 둥글기 없는 밑줄형(rounded-none)이다 */
-  --radius: 0.75rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --primary-text: #2447b8; /* brand-text */
+  --primary-hover: #2f50c2;
+  --secondary: #f4f6fb; /* surface-subtle */
+  --secondary-foreground: #1a1f36;
+  --muted: #f4f6fb;
+  --muted-foreground: #5b6280; /* text-muted */
+  /* shadcn의 accent는 메뉴 항목 올림 면이다. 디자인의 노랑 accent는 아래 highlight */
+  --accent: #ecf1fe; /* brand-soft */
+  --accent-foreground: #2447b8;
+  --highlight: #ffc533; /* accent: 연속 학습·보상. 판정에 쓰지 않는다 */
+  --highlight-foreground: #1a1f36;
+  --destructive: #e5484d; /* danger */
+  --destructive-foreground: #171717;
+  --destructive-soft: #fdecec;
+  --destructive-text: #c8252c;
+  --success: #22b357;
+  --success-foreground: #171717;
+  --success-soft: #e8f6ed;
+  --success-text: #137a38;
+  --warning: #f5b014; /* 채움 전용. 글자로 쓰면 읽을 수 없다 */
+  --warning-foreground: #171717;
+  --warning-soft: #fdf3dc;
+  --warning-text: #8a5a00;
+  --info: #12a3b8;
+  --info-foreground: #1a1f36;
+  --info-soft: #e3f6f8;
+  --info-text: #0a6e7e;
+  --border: #e3e7f1;
+  --input: #858ba3; /* border-strong: 입력칸의 경계는 3:1 이상 (WCAG 1.4.11) */
+  --ring: #3d63dd;
+  /* 남색 무대(surface-inverse 묶음). 두 테마에서 같다 */
+  --inverse: #1b2140;
+  --inverse-foreground: #ffffff;
+  --inverse-muted: #aeb4cc;
+  --inverse-accent: #9db5ff;
+  --inverse-line: rgba(255, 255, 255, 0.18);
+  --inverse-raised: rgba(255, 255, 255, 0.06);
+  --elevation-card: 0 24px 60px -16px rgba(27, 33, 64, 0.16);
+  --elevation-pop: 0 16px 40px -12px rgba(27, 33, 64, 0.22);
+  --elevation-hover: 0 12px 32px -12px rgba(27, 33, 64, 0.2);
+  --elevation-glow: 0 10px 28px -8px rgba(61, 99, 221, 0.55);
+  --elevation-focus: 0 0 0 4px rgba(61, 99, 221, 0.18);
+  --elevation-key: 0 3px 0 #c9cfdf;
 }
 
 .dark {
   color-scheme: dark;
-  --background: #0c0e13;
+  --background: #0e111d;
   --foreground: #f2f4fb;
-  --card: #1c1e23;
+  --body-foreground: #d7dbea;
+  --disabled-foreground: #575e7a;
+  --card: #171b2c;
   --card-foreground: #f2f4fb;
-  --popover: #1c1e23;
+  --popover: #171b2c;
   --popover-foreground: #f2f4fb;
-  /* 주 버튼은 다크 모드에서도 같은 인디고 + 흰 글자 (4.5:1) */
-  --primary: #586fc4;
-  --primary-foreground: #ffffff;
-  /* 어두운 면 위 글자는 반대로 한 단계 밝은 색 (카드 위 #586fc4는 3.56:1) */
-  --primary-text: #91a3da;
-  --primary-hover: #465aa9;
-  --secondary: #282a30;
+  --primary-text: #9db5ff;
+  --primary-hover: #3558d4;
+  --secondary: #21263a;
   --secondary-foreground: #f2f4fb;
-  --muted: #282a30;
-  --muted-foreground: #b2b4ba;
-  --accent: color-mix(in srgb, #586fc4 16%, transparent);
-  --accent-foreground: #91a3da;
-  --destructive: #ef6667;
-  --destructive-foreground: #0c0e13;
-  --destructive-soft: color-mix(in srgb, #ef6667 16%, transparent);
-  --destructive-text: #f48e8c;
-  --success: #5db562;
-  --success-foreground: #0c0e13;
-  --success-soft: color-mix(in srgb, #5db562 16%, transparent);
-  --success-text: #88c589;
-  --warning: #edc05d;
-  --warning-foreground: #0c0e13;
-  --warning-soft: color-mix(in srgb, #edc05d 16%, transparent);
-  --warning-text: #efcf8b;
-  --info: #5fc8e0;
-  --info-foreground: #0c0e13;
-  --info-soft: color-mix(in srgb, #5fc8e0 16%, transparent);
-  --info-text: #8ed4e5;
-  --border: #3b3d42;
-  --input: #727479;
-  --ring: #7086d0;
-  /* 어두운 바탕에서는 그림자가 잘 안 보여 진하게 하고, 메뉴·대화상자에 얇은 선(ring)을 함께 둔다 */
-  --elevation-float: 0 16px 40px -12px rgb(0 0 0 / 0.65), 0 2px 6px rgb(0 0 0 / 0.4);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --muted: #21263a;
+  --muted-foreground: #9ea5c0;
+  --accent: rgba(74, 112, 234, 0.2);
+  --accent-foreground: #9db5ff;
+  --destructive: #ff7a7f;
+  --destructive-foreground: #0e111d;
+  --destructive-soft: rgba(255, 122, 127, 0.14);
+  --destructive-text: #ff7a7f;
+  --success: #4cc276;
+  --success-foreground: #0e111d;
+  --success-soft: rgba(76, 194, 118, 0.14);
+  --success-text: #4cc276;
+  --warning: #f2c14e;
+  --warning-foreground: #0e111d;
+  --warning-soft: rgba(242, 193, 78, 0.14);
+  --warning-text: #f2c14e;
+  --info: #4fd0e0;
+  --info-foreground: #0e111d;
+  --info-soft: rgba(79, 208, 224, 0.14);
+  --info-text: #4fd0e0;
+  --border: #2a3049;
+  --input: #687090;
+  --ring: #8aa6ff;
+  --elevation-card: 0 24px 60px -12px rgba(0, 0, 0, 0.55);
+  --elevation-pop: 0 16px 40px -8px rgba(0, 0, 0, 0.6);
+  --elevation-hover: 0 12px 32px -10px rgba(0, 0, 0, 0.55);
+  --elevation-glow: 0 10px 32px -6px rgba(61, 99, 221, 0.7);
+  --elevation-focus: 0 0 0 4px rgba(138, 166, 255, 0.25);
+  --elevation-key: 0 3px 0 #0b0e18;
 }
 
 @layer base {

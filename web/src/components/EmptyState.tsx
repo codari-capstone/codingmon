@@ -27,7 +27,7 @@ export function EmptyState({
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
 
   return (
-    <div className="bg-card flex flex-col items-center rounded-2xl px-6 py-12 text-center">
+    <div className="bg-card flex flex-col items-center rounded-lg border px-6 py-12 text-center">
       <Icon className="text-muted-foreground/60 mb-4 size-8" aria-hidden="true" />
       <Heading className={headingLevel === 1 ? 'page-title' : 'text-base font-medium'}>
         {title}

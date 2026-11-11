@@ -141,7 +141,7 @@ function RuntimeError({ result }: { result: SubmissionResult }) {
 
   const info = RUNTIME_ERROR_INFO[runtimeErrorType]
   return (
-    <div className="bg-muted/40 flex flex-col gap-1 rounded-xl p-3">
+    <div className="bg-muted flex flex-col gap-1 rounded-md p-3">
       <p className="text-sm font-medium">{info.label}</p>
       <p className="text-muted-foreground text-sm leading-relaxed">{info.description}</p>
       {runtimeErrorMessage !== null ? <Raw text={runtimeErrorMessage} className="bg-card" /> : null}
@@ -159,7 +159,7 @@ function SubmittedCode({ result }: { result: SubmissionResult }) {
   if (result.sourceCode === null) return null
 
   return (
-    <section className="bg-card flex flex-col gap-2 rounded-2xl p-6">
+    <section className="bg-card flex flex-col gap-2 rounded-lg border p-6">
       <h2 className="text-base font-semibold">제출한 코드</h2>
       <Raw text={result.sourceCode} />
     </section>
@@ -251,7 +251,7 @@ export function Component() {
           </Link>
 
           {/* 판정과 쉬운 설명을 한 장의 흰 카드로 묶는다. 판정 색은 글자에만 쓰고 면은 칠하지 않는다 */}
-          <div className="bg-card flex flex-col gap-3 rounded-2xl p-6">
+          <div className="bg-card flex flex-col gap-3 rounded-lg border p-6">
             <Headline result={data} />
             <Explanation result={data} />
           </div>
