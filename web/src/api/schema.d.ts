@@ -127,6 +127,8 @@ export interface paths {
         /**
          * 이메일 로그인 (COM-07)
          * @description 실패하면 이유와 관계없이 401 `LOGIN_FAILED`와 같은 문구를 준다.
+         *     비밀번호까지 맞았는데 관리자가 정지한 계정이면 403 `ACCOUNT_SUSPENDED`("계정이 정지되었습니다")다(ADM-16).
+         *     비밀번호가 맞아야 이 응답이 나오므로, 이메일만으로 정지 여부를 알아낼 수 없다.
          *     같은 이메일로 5회 연속 실패하면 5분 동안 429 `LOGIN_LOCKED`. 가입되지 않은 이메일도 같다.
          *     프런트는 이 401로 토큰 갱신을 시도하지 않는다.
          */
@@ -257,6 +259,7 @@ export interface paths {
          * @description GitHub OAuth App에 등록하는 콜백 주소다. 처리 후 웹의 `/login/github?result=...`로 보낸다.
          *     - `success`: 이미 가입한 계정이라 로그인됨. 웹은 `POST /api/auth/refresh`로 access token을 받는다.
          *     - `signup`: 처음이라 닉네임 입력 화면을 보여 주고 `POST /api/auth/github/signup`을 호출한다(30분 안).
+         *     - `suspended`: 관리자가 정지한 계정이라 로그인하지 않음(ADM-16). 로그인 화면에 "계정이 정지되었습니다"를 보여 준다.
          *     - `error`: 로그인하지 못함. 로그인 화면에 실패를 알린다. 다음 경우가 모두 여기에 해당한다.
          *       - 사용자가 GitHub에서 취소했거나 `code`·`state`가 없음
          *       - `state`가 쿠키와 다름(다른 사이트가 시작한 로그인) 또는 `state` 쿠키 만료(시작 후 10분)
@@ -1183,6 +1186,186 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 회원 목록 (ADM-14)
+         * @description 최근 가입순(번호 큰 것부터)이다. 정렬은 바꿀 수 없다. 관리자 계정도 나온다.
+         *     정상·정지·관리자 표시는 화면이 `role`과 `suspendedAt`으로 정한다. 관리자는 정지할 수 없어 늘 정상 쪽에 센다.
+         *     `counts`는 탭(전체·정상·정지)의 개수다. `keyword`는 반영하고 `status`는 반영하지 않는다. 그래서 어느 탭을 보든 세 개수가 같다.
+         */
+        get: operations["listAdminUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 회원 목록의 `id` */
+                id: components["parameters"]["AdminUserId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 회원 상세 (ADM-15)
+         * @description 기본 정보, 정지 상태와 사유, 오늘 AI 사용 횟수를 준다. 제출 목록과 푼 문제는 따로 부른다.
+         *     정지 배너의 "24시간이 지나 강제 탈퇴할 수 있어요"는 화면이 `suspendedAt`으로 계산한다.
+         *     오류 `code`: `USER_NOT_FOUND`(없는 회원).
+         */
+        get: operations["getAdminUser"];
+        put?: never;
+        post?: never;
+        /**
+         * 강제 탈퇴 (ADM-16)
+         * @description 정지하고 24시간이 지난 회원만 지울 수 있다. 자동으로 지우지 않고, 관리자가 경고 팝업("해당 회원의 모든 정보가 지워집니다")을 확인한 뒤 부른다.
+         *     지우는 것은 회원 탈퇴(`DELETE /api/users/me`)와 같다. 되돌릴 수 없다. 보낸 문제 신고는 남고 신고자 칸만 비운다.
+         *     회원 행을 잠근 뒤 정지 여부와 24시간을 확인한다. 같은 순간 다른 관리자가 정지를 풀면 먼저 온 쪽만 반영된다.
+         *     오류 `code`: `USER_NOT_FOUND`(없는 회원), `ADMIN_CANNOT_BE_SUSPENDED`(관리자 계정),
+         *     `USER_NOT_SUSPENDED`(정지되지 않은 회원), `SUSPENSION_TOO_RECENT`(정지한 지 24시간이 안 됨).
+         */
+        delete: operations["forceWithdrawUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 회원 목록의 `id` */
+                id: components["parameters"]["AdminUserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 계정 정지 (ADM-16)
+         * @description `suspendedAt`을 지금 시각으로 하고 사유를 저장한다. 로그인 중인 기기도 바로 막는다.
+         *     비밀번호 재설정처럼 `token_version`을 올려 발급된 access token을 무효로 하고, refresh token을 모두 폐기한다.
+         *     그래서 다음 요청은 401, 토큰 갱신도 401이 되어 로그인 화면으로 간다. 다시 로그인하면 403 `ACCOUNT_SUSPENDED`다.
+         *     이미 정지된 회원이면 아무것도 바꾸지 않고 204다. 정지 시각과 사유도 그대로라 24시간을 다시 세지 않는다.
+         *     오류 `code`: `USER_NOT_FOUND`(없는 회원), `ADMIN_CANNOT_BE_SUSPENDED`(관리자 계정).
+         */
+        post: operations["suspendUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{id}/unsuspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 회원 목록의 `id` */
+                id: components["parameters"]["AdminUserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 정지 해제 (ADM-16)
+         * @description `suspendedAt`과 사유를 비운다. 이미 로그아웃된 기기는 다시 로그인하면 된다.
+         *     정지되지 않은 회원이면 아무것도 바꾸지 않고 204다. 해제했다가 다시 정지하면 24시간을 새로 센다.
+         *     오류 `code`: `USER_NOT_FOUND`(없는 회원).
+         */
+        post: operations["unsuspendUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{id}/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 회원 목록의 `id` */
+                id: components["parameters"]["AdminUserId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 회원의 제출 목록 (ADM-15)
+         * @description 문제와 상관없이 그 회원의 채점 제출을 최신순으로 준다. 학습자 제출 기록(`GET /api/submissions`)과 같은 기준이다.
+         *     예제 실행은 넣지 않고, 채점이 끝난 제출(`COMPLETED`·`JUDGE_ERROR`)만 넣는다.
+         *     줄을 펼치면 `GET /api/admin/submissions/{id}`로 코드와 결과를 받는다.
+         *     오류 `code`: `USER_NOT_FOUND`(없는 회원).
+         */
+        get: operations["listAdminUserSubmissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/{id}/solved-problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 회원 목록의 `id` */
+                id: components["parameters"]["AdminUserId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 회원이 맞힌 문제 (ADM-15)
+         * @description 맞힌 문제를 처음 맞힌 날 최신순으로 모두 준다. 페이지로 나누지 않는다. 문제 수만큼이 최대라 화면은 카드 안에서 스크롤한다.
+         *     `title`은 문제가 있으면 최신 버전의 제목이다.
+         *     오류 `code`: `USER_NOT_FOUND`(없는 회원).
+         */
+        get: operations["listAdminUserSolvedProblems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/submissions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 회원 제출의 코드와 결과 (ADM-15)
+         * @description 학습자 결과 조회(`GET /api/submissions/{id}`)와 같은 모양이고, 누구의 제출이든 볼 수 있다.
+         *     화면은 코드, 결과(`verdict`), 시간, 메모리를 보여 준다. 케이스별 결과는 주지 않는다.
+         *     채점 제출(`SUBMIT`)만 준다. 없는 제출·예제 실행·관리자 정답 검증은 404 `SUBMISSION_NOT_FOUND`다.
+         */
+        get: operations["getAdminSubmission"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1811,6 +1994,64 @@ export interface components {
              */
             runtimeErrorType: "INDEX_ERROR" | "ZERO_DIVISION" | "VALUE_ERROR" | "NAME_ERROR" | "TYPE_ERROR" | "RECURSION_ERROR" | "EOF_ERROR" | "OTHER" | null;
         };
+        AdminUserSummary: {
+            /** Format: int64 */
+            id: number;
+            nickname: string;
+            /** @description 가리지 않은 이메일. GitHub 가입 계정은 null이고 화면은 '(GitHub)'로 보여 준다 */
+            email: string | null;
+            /** @enum {string} */
+            role: "USER" | "ADMIN";
+            /**
+             * Format: date-time
+             * @description 가입 시각. 가입일을 기록하기 전에 가입한 회원은 null이고 화면은 '—'로 보여 준다
+             */
+            createdAt: string | null;
+            /**
+             * Format: date-time
+             * @description 정지한 시각. 정지되지 않았으면 null
+             */
+            suspendedAt: string | null;
+        };
+        AdminUserDetail: components["schemas"]["AdminUserSummary"] & {
+            /** @enum {string} */
+            loginMethod: "EMAIL" | "GITHUB";
+            /** @description 정지할 때 관리자가 적은 사유. 관리자끼리만 본다. 적지 않았거나 정지되지 않았으면 null */
+            suspensionReason: string | null;
+            /** @description 이 회원의 오늘 AI 분석·리뷰 사용량. `GET /api/users/me/ai-quota`와 같다. 한국 시각 오전 9시(`resetsAt`)에 다시 채워진다 */
+            aiQuota: components["schemas"]["AiQuota"];
+        };
+        AdminUserSubmission: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            problemId: number;
+            /** @description 제출한 버전의 제목(`SubmissionResult.problemTitle`과 같다) */
+            problemTitle: string;
+            language: components["schemas"]["Language"];
+            /** @enum {string} */
+            status: "COMPLETED" | "JUDGE_ERROR";
+            /**
+             * @description `COMPLETED`일 때만 있다. 채점 불가(`JUDGE_ERROR`)면 null
+             * @enum {string|null}
+             */
+            verdict: "ACCEPTED" | "PRESENTATION_ERROR" | "WRONG_ANSWER" | "TIME_LIMIT_EXCEEDED" | "MEMORY_LIMIT_EXCEEDED" | "OUTPUT_LIMIT_EXCEEDED" | "RUNTIME_ERROR" | "COMPILE_ERROR" | null;
+            /** Format: date-time */
+            submittedAt: string;
+        };
+        AdminSolvedProblem: {
+            /** Format: int64 */
+            problemId: number;
+            title: string;
+            /** Format: date-time */
+            firstSolvedAt: string;
+            /** @description 처음 맞힐 때까지 낸 채점 제출 수(맞힌 제출 포함). `ProblemHistory.attemptCount`와 같다 */
+            attemptCount: number;
+        };
+        SuspendInput: {
+            /** @description 정지 사유. 선택이다. 받은 그대로 1,000자를 넘으면 400. 앞뒤 공백을 지우고, 비면 null로 저장한다 */
+            reason?: string | null;
+        };
         /**
          * @description 문제 설명 오류, 입력/출력 설명 오류, 예제 오류, 테스트케이스 오류, 오탈자, 기타 (SOLVE-12)
          * @enum {string}
@@ -1960,6 +2201,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description 회원 목록의 `id` */
+        AdminUserId: number;
         /** @description 문제 번호 */
         AdminProblemId: number;
     };
@@ -2124,6 +2367,15 @@ export interface operations {
         responses: {
             200: components["responses"]["TokensIssued"];
             401: components["responses"]["Problem"];
+            /** @description 오류 `code`: `ACCOUNT_SUSPENDED`(정지된 계정) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
             429: components["responses"]["Problem"];
         };
     };
@@ -3881,6 +4133,331 @@ export interface operations {
              * @description 오류 `code`: `INVALID_REPORT_MEMO`(메모가 1,000자를 넘음), `REPORT_PROBLEM_DELETED`(보낸 상태가 위 1~3 규칙에 맞지 않음).
              *     `status`가 빠졌거나 null이거나 목록에 없는 값이거나, `id`가 정수가 아니면 `code` 없는 400이다.
              */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listAdminUsers: {
+        parameters: {
+            query?: {
+                /** @description 없으면 전체. `ACTIVE`는 정지되지 않은 회원(관리자 포함), `SUSPENDED`는 정지된 회원 */
+                status?: "ACTIVE" | "SUSPENDED";
+                /**
+                 * @description 닉네임·이메일 부분 일치, 대소문자 무시. `%`·`_`도 글자로 찾는다(`GET /api/admin/problems`와 같다).
+                 *     숫자만이면 그 `id`인 회원도 함께 찾는다.
+                 */
+                keyword?: string;
+                /** @description 0부터 센다 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 회원 목록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        content: components["schemas"]["AdminUserSummary"][];
+                        /** Format: int64 */
+                        totalElements: number;
+                        counts: {
+                            /** Format: int64 */
+                            all: number;
+                            /** Format: int64 */
+                            active: number;
+                            /** Format: int64 */
+                            suspended: number;
+                        };
+                    };
+                };
+            };
+            /** @description `status`가 목록에 없는 값이거나 `page`·`size` 범위 밖 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAdminUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 회원 목록의 `id` */
+                id: components["parameters"]["AdminUserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 회원 상세 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDetail"];
+                };
+            };
+            /** @description `id`가 정수가 아님 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    forceWithdrawUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 회원 목록의 `id` */
+                id: components["parameters"]["AdminUserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 지움 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `id`가 정수가 아님 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description 관리자가 아님(`code` 없음), 또는 `ADMIN_CANNOT_BE_SUSPENDED`(관리자 계정은 지울 수 없음) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    suspendUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 회원 목록의 `id` */
+                id: components["parameters"]["AdminUserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SuspendInput"];
+            };
+        };
+        responses: {
+            /** @description 정지됨 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description 오류 `code`: `INVALID_SUSPENSION_REASON`(사유가 1,000자를 넘음).
+             *     `id`가 정수가 아니면 `code` 없는 400이다.
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description 관리자가 아님(`code` 없음), 또는 `ADMIN_CANNOT_BE_SUSPENDED`(관리자 계정은 정지할 수 없음) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
+    unsuspendUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 회원 목록의 `id` */
+                id: components["parameters"]["AdminUserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 해제됨 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `id`가 정수가 아님 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listAdminUserSubmissions: {
+        parameters: {
+            query?: {
+                /** @description 0부터 센다 */
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description 회원 목록의 `id` */
+                id: components["parameters"]["AdminUserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 제출 목록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        content: components["schemas"]["AdminUserSubmission"][];
+                        /** Format: int64 */
+                        totalElements: number;
+                    };
+                };
+            };
+            /** @description `id`가 정수가 아니거나 `page`·`size` 범위 밖 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listAdminUserSolvedProblems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 회원 목록의 `id` */
+                id: components["parameters"]["AdminUserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 맞힌 문제 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSolvedProblem"][];
+                };
+            };
+            /** @description `id`가 정수가 아님 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getAdminSubmission: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 회원 제출 목록의 `id` */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 제출 결과 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionResult"];
+                };
+            };
+            /** @description `id`가 정수가 아님 */
             400: {
                 headers: {
                     [name: string]: unknown;
