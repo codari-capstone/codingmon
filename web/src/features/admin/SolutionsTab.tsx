@@ -318,7 +318,7 @@ export function SolutionsTab({
           .filter((row): row is typeof row & { result: CaseValidation } => row.result !== null)
 
         return (
-          <div key={language} className="bg-muted/40 flex flex-col gap-3 rounded-xl p-3">
+          <div key={language} className="bg-muted flex flex-col gap-3 rounded-md p-3">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <h3 className="font-medium">{LANGUAGE_LABEL[language]}</h3>
               <p className="text-muted-foreground text-xs">{statusLine(solution, dirty)}</p>

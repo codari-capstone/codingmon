@@ -13,12 +13,14 @@ const buttonVariants = cva(
           // 보조 버튼. 회색 바탕 위에 바로 놓이는 곳이 많아 흰 면 + 얇은 선으로 둔다 (회색 면 secondary는 흰 카드 위에서 쓴다).
           // 다크 모드는 면과 바탕이 거의 같아(1.15:1) 선이 경계를 맡아야 해서, 선(--border 1.8:1) 대신 --input(3.2:1 이상)을 쓴다
           'border-border bg-card hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input',
+        // 밝은 모드 secondary 면(#f4f6fb)은 흰 카드와 1.08:1이라, 선(border)이 버튼 모양을 맡는다
         secondary:
-          'bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
+          'border-border bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
         ghost:
           'hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50',
+        // 면이 진할수록 글자 대비가 떨어진다. hover 면은 밝은 /15, 다크 /20까지 — 그 위에서 4.5:1 (index.css.test.ts)
         destructive:
-          'bg-destructive/10 text-destructive-text hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40',
+          'bg-destructive/10 text-destructive-text hover:bg-destructive/15 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:hover:bg-destructive/20 dark:focus-visible:ring-destructive/40',
         link: 'text-primary-text underline-offset-4 hover:underline',
       },
       size: {

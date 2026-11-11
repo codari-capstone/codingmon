@@ -80,11 +80,11 @@ function Summary({ activity }: { activity: UserActivity }) {
   return (
     <div className="flex flex-col gap-3">
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(2,minmax(0,10rem))]">
-        <div className="bg-muted/60 rounded-xl p-4">
+        <div className="bg-muted rounded-md p-4">
           <dt className="text-muted-foreground text-sm">맞힌 문제</dt>
           <dd className="text-3xl font-bold tracking-tight tabular-nums">{solvedCount}</dd>
         </div>
-        <div className="bg-muted/60 rounded-xl p-4">
+        <div className="bg-muted rounded-md p-4">
           <dt className="text-muted-foreground text-sm">틀린 문제</dt>
           <dd className="text-3xl font-bold tracking-tight tabular-nums">{wrongCount}</dd>
         </div>

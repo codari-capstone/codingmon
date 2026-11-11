@@ -141,7 +141,7 @@ function RuntimeError({ result }: { result: SubmissionResult }) {
 
   const info = RUNTIME_ERROR_INFO[runtimeErrorType]
   return (
-    <div className="bg-muted/40 flex flex-col gap-1 rounded-xl p-3">
+    <div className="bg-muted flex flex-col gap-1 rounded-md p-3">
       <p className="text-sm font-medium">{info.label}</p>
       <p className="text-muted-foreground text-sm leading-relaxed">{info.description}</p>
       {runtimeErrorMessage !== null ? <Raw text={runtimeErrorMessage} className="bg-card" /> : null}

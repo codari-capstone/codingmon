@@ -16,7 +16,7 @@ export function BeginnerGuide({ language }: { language: Language }) {
   const guide = BEGINNER_GUIDE[language]
 
   return (
-    <details className="bg-muted/40 rounded-xl px-3 text-sm">
+    <details className="bg-muted rounded-md px-3 text-sm">
       <summary className="flex min-h-11 cursor-pointer items-center font-medium">
         {`처음이신가요? ${LANGUAGE_LABEL[language]}로 표준 입력 읽는 법`}
       </summary>

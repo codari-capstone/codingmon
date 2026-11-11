@@ -78,7 +78,7 @@ export function StatementTab({
           />
           <div className="min-w-0">
             <p className="text-muted-foreground mb-1 text-xs">미리보기</p>
-            <div className="bg-muted/40 min-h-32 overflow-x-auto rounded-xl p-3">
+            <div className="bg-muted min-h-32 overflow-x-auto rounded-md p-3">
               {statement.trim() === '' ? (
                 <p className="text-muted-foreground text-sm">아직 쓴 내용이 없어요.</p>
               ) : (
@@ -149,7 +149,7 @@ export function StatementTab({
           return (
             // fieldset+legend로 둔다. 두 언어의 칸 이름이 같아('시간 제한 (ms)')
             // 묶음에 이름이 없으면 사람도 스크린 리더도 어느 언어의 칸인지 알 수 없다.
-            <fieldset key={language} className="bg-muted/40 flex flex-col gap-3 rounded-xl p-3">
+            <fieldset key={language} className="bg-muted flex flex-col gap-3 rounded-md p-3">
               {/* float를 주면 legend가 테두리 자리(면의 위 가장자리)가 아니라 면 안 첫 줄에 그려진다 */}
               <legend className="float-left w-full text-sm font-medium">
                 {LANGUAGE_LABEL[language]}

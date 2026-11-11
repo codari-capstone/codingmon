@@ -100,7 +100,7 @@ function Output({ title, text }: { title: string; text: string | null | undefine
 /** 예제 하나: 판정·시간·메모리와 기대/실제 출력. */
 function Case({ item, expected }: { item: SampleRunCase; expected: string | undefined }) {
   return (
-    <li className="bg-muted/40 flex flex-col gap-2 rounded-xl p-3">
+    <li className="bg-muted flex flex-col gap-2 rounded-md p-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <span className="font-medium">예제 {item.ordinal}</span>
         {item.verdict === null ? (
