@@ -16,14 +16,15 @@ export function BeginnerGuide({ language }: { language: Language }) {
   const guide = BEGINNER_GUIDE[language]
 
   return (
-    <details className="bg-muted/40 rounded-xl px-3 text-sm">
+    <details className="bg-muted rounded-md px-3 text-sm">
       <summary className="flex min-h-11 cursor-pointer items-center font-medium">
         {`처음이신가요? ${LANGUAGE_LABEL[language]}로 표준 입력 읽는 법`}
       </summary>
 
       <div className="flex flex-col gap-3 pb-3">
-        {/* pre의 꾸밈은 Markdown과 같은 값을 쓴다. 긴 줄은 자기 안에서 가로로 흐른다 */}
-        <pre className="bg-card overflow-x-auto rounded-lg p-3 text-xs leading-relaxed">
+        {/* pre의 꾸밈은 Markdown과 같되 둥글기만 rounded-sm이다. 12px 면 안에 있어, 카드 위의 코드 블록(20px)처럼
+            크게 두면 안쪽이 바깥보다 둥글다. 긴 줄은 자기 안에서 가로로 흐른다 */}
+        <pre className="bg-card overflow-x-auto rounded-sm p-3 text-xs leading-relaxed">
           {guide.readingExample}
         </pre>
 

@@ -94,7 +94,7 @@ export function Component() {
   const ready = verificationToken !== null && nickname.ok && passwordOk
 
   return (
-    <section className="bg-card mx-auto my-10 flex w-full max-w-md flex-col gap-6 rounded-2xl p-6 sm:p-8">
+    <section className="bg-card mx-auto my-10 flex w-full max-w-md flex-col gap-6 rounded-lg border p-6 sm:p-8">
       <h1 className="page-title">회원가입</h1>
 
       <EmailCodeStep

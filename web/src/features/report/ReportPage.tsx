@@ -29,7 +29,7 @@ function Score({ concept }: { concept: ConceptStat }) {
   return (
     <div className="flex items-center gap-2">
       <span className="w-10 tabular-nums">{concept.weaknessScore}</span>
-      <div aria-hidden className="bg-muted h-2 w-24 overflow-hidden rounded-full">
+      <div aria-hidden className="bg-border h-2 w-24 overflow-hidden rounded-full">
         <div className="bg-primary h-full" style={{ width: `${concept.weaknessScore * 100}%` }} />
       </div>
     </div>
@@ -69,7 +69,7 @@ export function Component() {
               높을수록 더 연습이 필요한 개념이에요.
             </p>
             {/* 순서는 서버가 정했다(취약 점수 높은 순). 다시 정렬하지 않는다. */}
-            <div className="bg-card rounded-2xl px-3 py-2">
+            <div className="bg-card rounded-lg border px-3 py-2">
               <Table>
                 <TableHeader>
                   <TableRow>

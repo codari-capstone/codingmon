@@ -281,7 +281,7 @@ export function TestCasesTab({
           사이에 고친 행이나 지운 행은 안내도 없이 사라진다. */}
       <fieldset disabled={locked || busy} className="contents">
         {rows.fields.length === 0 ? (
-          <p className="text-muted-foreground border-border rounded-xl border border-dashed p-6 text-center text-sm">
+          <p className="text-muted-foreground border-border rounded-md border border-dashed p-6 text-center text-sm">
             케이스가 없어요. ZIP을 올리거나 행을 더해 주세요.
           </p>
         ) : (
@@ -291,7 +291,7 @@ export function TestCasesTab({
               const row = watched[index] ?? field
 
               return (
-                <li key={field.id} className="bg-muted/40 rounded-xl">
+                <li key={field.id} className="bg-muted rounded-md">
                   <details open={form.formState.errors.cases?.[index] !== undefined || undefined}>
                     <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
                       <span className="font-medium">{`${index + 1}. ${CASE_TYPE_LABEL[row.caseType]}`}</span>

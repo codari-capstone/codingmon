@@ -12,13 +12,13 @@ import { cn } from 'cn'
  * 그 자리에 두고 가져다 쓰면 문자열 하나 때문에 풀이 화면 청크가 결과 화면 모듈
  * 전체를 끌고 온다.
  *
- * 옅은 면(`bg-muted/40`) 안에 둘 때는 `className="bg-card"`를 넘긴다 — 같은 회색끼리는 경계가 안 보인다.
+ * 옅은 면(`bg-muted`) 안에 둘 때는 `className="bg-card"`를 넘긴다 — 같은 회색끼리는 경계가 안 보인다.
  */
 export function Raw({ text, className }: { text: string; className?: string }) {
   return (
     <pre
       className={cn(
-        'bg-muted mt-2 overflow-x-auto rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap',
+        'bg-muted mt-2 overflow-x-auto rounded-sm p-3 text-xs leading-relaxed whitespace-pre-wrap',
         className,
       )}
     >

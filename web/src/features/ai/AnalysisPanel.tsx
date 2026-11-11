@@ -158,7 +158,7 @@ export function AnalysisPanel({
   return (
     <section
       aria-labelledby="analysis-heading"
-      className="bg-card flex min-w-0 flex-col gap-3 rounded-2xl p-6"
+      className="bg-card flex min-w-0 flex-col gap-3 rounded-lg border p-6"
     >
       <h2 id="analysis-heading" className="text-base font-medium">
         AI 분석

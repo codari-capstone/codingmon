@@ -23,7 +23,7 @@ function AccountInfo({ user }: { user: CurrentUser }) {
   return (
     <section
       aria-labelledby="account-heading"
-      className="bg-card flex flex-col gap-4 rounded-2xl p-6"
+      className="bg-card flex flex-col gap-4 rounded-lg border p-6"
     >
       <h2 id="account-heading" className="text-lg font-semibold">
         계정 정보
@@ -80,11 +80,11 @@ function Summary({ activity }: { activity: UserActivity }) {
   return (
     <div className="flex flex-col gap-3">
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(2,minmax(0,10rem))]">
-        <div className="bg-muted/60 rounded-xl p-4">
+        <div className="bg-muted rounded-md p-4">
           <dt className="text-muted-foreground text-sm">맞힌 문제</dt>
           <dd className="text-3xl font-bold tracking-tight tabular-nums">{solvedCount}</dd>
         </div>
-        <div className="bg-muted/60 rounded-xl p-4">
+        <div className="bg-muted rounded-md p-4">
           <dt className="text-muted-foreground text-sm">틀린 문제</dt>
           <dd className="text-3xl font-bold tracking-tight tabular-nums">{wrongCount}</dd>
         </div>
@@ -105,7 +105,9 @@ function Summary({ activity }: { activity: UserActivity }) {
   )
 }
 
-const LEVEL_CLASS = ['bg-muted', 'bg-primary/25', 'bg-primary/50', 'bg-primary/75', 'bg-primary']
+// 0단계(제출 없는 날)는 bg-muted가 아니라 bg-border다. muted(#f4f6fb)는 흰 카드 위 1.08:1이라 칸이 사라진다.
+// border는 1.24:1(다크 1.32:1)로 옛 muted(1.23:1) 수준이다. 격자 모양이 보여야 '쉰 날'도 읽힌다
+const LEVEL_CLASS = ['bg-border', 'bg-primary/25', 'bg-primary/50', 'bg-primary/75', 'bg-primary']
 
 /**
  * 최근 1년 잔디 (MY-05). 365칸을 하나하나 읽게 하면 화면 낭독기 사용자가 지나갈 수 없어
@@ -171,7 +173,7 @@ function Activity() {
   return (
     <section
       aria-labelledby="activity-heading"
-      className="bg-card flex flex-col gap-4 rounded-2xl p-6"
+      className="bg-card flex flex-col gap-4 rounded-lg border p-6"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="activity-heading" className="text-lg font-semibold">
@@ -231,7 +233,7 @@ export function Component() {
           <AccountInfo user={user} />
           <section
             aria-labelledby="settings-heading"
-            className="bg-card flex flex-col gap-6 rounded-2xl p-6"
+            className="bg-card flex flex-col gap-6 rounded-lg border p-6"
           >
             <h2 id="settings-heading" className="text-lg font-semibold">
               계정 설정

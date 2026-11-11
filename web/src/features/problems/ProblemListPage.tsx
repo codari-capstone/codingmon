@@ -217,7 +217,7 @@ export function Component() {
             </p>
             <div
               aria-busy={isFetching}
-              className={cn('bg-card rounded-2xl px-3 py-2', isFetching && 'opacity-60')}
+              className={cn('bg-card rounded-lg border px-3 py-2', isFetching && 'opacity-60')}
             >
               <ProblemTable
                 problems={data.content}
