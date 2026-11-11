@@ -119,7 +119,8 @@ class AdminAccountController {
 
     private static void checkWithdrawable(Role role, Instant suspendedAt) {
         if (role == Role.ADMIN) {
-            throw adminForbidden();
+            // code는 정지와 같고(openapi forceWithdrawUser) 문구만 탈퇴에 맞춘다.
+            throw ApiErrors.error(HttpStatus.FORBIDDEN, "ADMIN_CANNOT_BE_SUSPENDED", "관리자 계정은 탈퇴시킬 수 없어요");
         }
         if (suspendedAt == null) {
             throw notSuspended();
