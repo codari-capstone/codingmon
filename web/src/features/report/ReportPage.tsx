@@ -29,7 +29,7 @@ function Score({ concept }: { concept: ConceptStat }) {
   return (
     <div className="flex items-center gap-2">
       <span className="w-10 tabular-nums">{concept.weaknessScore}</span>
-      <div aria-hidden className="bg-muted h-2 w-24 overflow-hidden rounded-full">
+      <div aria-hidden className="bg-border h-2 w-24 overflow-hidden rounded-full">
         <div className="bg-primary h-full" style={{ width: `${concept.weaknessScore * 100}%` }} />
       </div>
     </div>

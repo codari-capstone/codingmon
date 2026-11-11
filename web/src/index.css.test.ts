@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import css from './index.css?raw'
+import raw from './index.css?raw'
 
 /**
  * index.css의 색 대비를 라이트·다크 둘 다 계산한다 (WCAG 2.1 상대 휘도).
@@ -9,8 +9,13 @@ import css from './index.css?raw'
  * hover 면이 빠져 있어 4.5:1 아래로 떨어진 것을 놓쳤다.
  */
 
+// 주석을 걷어낸다. 옛 값을 적어 둔 주석(`/* 이전 값 --muted: #e5e8ee; */`)이 실제 선언을 덮어쓰면
+// 대비 회귀가 있어도 통과하거나, 멀쩡한데 실패한다.
+const css = raw.replace(/\/\*[\s\S]*?\*\//g, '')
+
 function block(selector: string): Record<string, string> {
   const start = css.indexOf(`\n${selector} {`)
+  if (start === -1) throw new Error(`index.css에서 ${selector} 블록을 찾지 못했다`)
   const body = css.slice(start, css.indexOf('\n}', start))
   return Object.fromEntries(
     [...body.matchAll(/--([\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]),

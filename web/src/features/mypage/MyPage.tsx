@@ -105,7 +105,9 @@ function Summary({ activity }: { activity: UserActivity }) {
   )
 }
 
-const LEVEL_CLASS = ['bg-muted', 'bg-primary/25', 'bg-primary/50', 'bg-primary/75', 'bg-primary']
+// 0단계(제출 없는 날)는 bg-muted가 아니라 bg-border다. muted(#f4f6fb)는 흰 카드 위 1.08:1이라 칸이 사라진다.
+// border는 1.24:1(다크 1.32:1)로 옛 muted(1.23:1) 수준이다. 격자 모양이 보여야 '쉰 날'도 읽힌다
+const LEVEL_CLASS = ['bg-border', 'bg-primary/25', 'bg-primary/50', 'bg-primary/75', 'bg-primary']
 
 /**
  * 최근 1년 잔디 (MY-05). 365칸을 하나하나 읽게 하면 화면 낭독기 사용자가 지나갈 수 없어
