@@ -55,7 +55,7 @@ class AnalysisService {
             throw ApiErrors.error(HttpStatus.CONFLICT, "ANALYSIS_NOT_AVAILABLE", "오답 판정을 받은 제출만 분석할 수 있어요");
         }
         String version = version();
-        boolean started = quota.claimWithin(userId, submissionId, runner.abandoned(),
+        boolean started = quota.claimWithin(userId, submissionId, runner::abandoned,
                 () -> reviews.claim(submissionId, ReviewType.ANALYSIS, version, llm.model(), runner.abandoned()))
                 .map(claim -> {
                     runner.start(ReviewType.ANALYSIS, claim, () -> generation(submissionId));

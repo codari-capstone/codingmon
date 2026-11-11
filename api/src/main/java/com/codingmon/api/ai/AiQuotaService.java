@@ -1,5 +1,6 @@
 package com.codingmon.api.ai;
 
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -25,6 +26,8 @@ class AiQuotaService {
     private final TransactionTemplate transactions;
     private final int limit;
     private final int userConcurrency;
+    // 서버가 뜬 시각(DB 시계). 그 전에 시작해 남은 PENDING은 도는 작업이 없으므로 만드는 중으로 세지 않는다.
+    private final OffsetDateTime startedAt;
 
     // 시도를 잡는 트랜잭션은 늘 새로 열고 READ COMMITTED로 둔다. 바깥 트랜잭션에 합류하면 그 커밋 전에 처리기에 넣게 되고,
     // 바깥이 REPEATABLE READ(읽기 저장소 여러 곳이 쓴다)면 잠금을 기다리기 전의 스냅샷으로 세어 앞 요청의 행을 못 본다.
@@ -40,6 +43,7 @@ class AiQuotaService {
         }
         this.limit = limit;
         this.userConcurrency = userConcurrency;
+        this.startedAt = reviews.now();
     }
 
     // 조회용. 잠그지 않는다.
@@ -55,8 +59,9 @@ class AiQuotaService {
     // 한도 안이어도 이 사용자가 만드는 중인 결과가 방금 잡은 것까지 userConcurrency개를 넘으면, 잡은 시도를 FAILED(BUSY)로 바꾸고
     // 잡지 못한 것으로 돌려준다. 대기열이 찼을 때와 같은 응답이고(200 FAILED, BUSY) FAILED라 한도를 쓰지 않는다.
     // 처리기에 넣는 일은 이 메서드가 돌아온(커밋한) 뒤에 부른 쪽이 한다. 커밋 전에 넣으면 처리기가 PENDING 행을 못 봐 결과를 버린다.
-    Optional<AiReviewRepository.Claim> claimWithin(long userId, long submissionId, AiReviewRepository.Abandoned abandoned,
-            Supplier<Optional<AiReviewRepository.Claim>> claim) {
+    // 버려진 행의 기준(abandoned)은 잠금을 잡은 뒤에 받는다. 미리 받으면 기다리는 동안 등록된 처리 중인 행을 모른다.
+    Optional<AiReviewRepository.Claim> claimWithin(long userId, long submissionId,
+            Supplier<AiReviewRepository.Abandoned> abandoned, Supplier<Optional<AiReviewRepository.Claim>> claim) {
         return transactions.execute(status -> {
             if (!reviews.lockSubmission(userId, submissionId)) {
                 // 탈퇴와 겹쳐 제출이 지워졌다.
@@ -70,7 +75,7 @@ class AiQuotaService {
                 if (after > before.used() && after > limit) {
                     throw exceeded(before);
                 }
-                if (reviews.inProgress(userId, abandoned, claimed.get()) > userConcurrency) {
+                if (reviews.inProgress(userId, startedAt, abandoned.get()) > userConcurrency) {
                     reviews.fail(claimed.get(), AiReviewRepository.FailureReason.BUSY);
                     return Optional.empty();
                 }

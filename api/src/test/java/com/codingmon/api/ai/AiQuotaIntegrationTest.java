@@ -422,15 +422,42 @@ class AiQuotaIntegrationTest {
     }
 
     @Test
-    void 서버가_내려가_남은_PENDING은_만드는_중으로_세지_않는다() throws Exception {
-        // 처리기에 없는 PENDING. 방금 만들어 pending-timeout 전이지만 도는 작업이 없다.
-        row(submission(userId), "ANALYSIS", "PENDING", "now()");
-        row(submission(userId), "ANALYSIS", "PENDING", "now()");
-        long fresh = submission(userId);
+    void 서로_다른_제출을_동시에_요청해도_사용자_상한을_넘지_않는다() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        llm.answer = () -> {
+            await(release);
+            return FakeLlm.ok();
+        };
+        List<Supplier<Object>> requests = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            long id = submission(userId);
+            requests.add(() -> requestOrError(id));
+        }
 
-        mvc.perform(post(analysis(fresh)).with(as(userId))).andExpect(status().is2xxSuccessful());
+        List<Object> results = race(requests);
 
-        awaitStatus(fresh, "COMPLETED");
+        // 한도(3)보다 상한(2)이 먼저 막는다. 넘은 요청은 FAILED(BUSY)라 한도를 쓰지 않는다.
+        assertThat(results).allMatch(AnalysisService.Requested.class::isInstance);
+        List<AnalysisService.Requested> all = results.stream().map(AnalysisService.Requested.class::cast).toList();
+        assertThat(all).filteredOn(AnalysisService.Requested::started).hasSize(2);
+        assertThat(all).filteredOn(r -> !r.started())
+                .allMatch(r -> r.view().failureReason() == AiReviewRepository.FailureReason.BUSY);
+        assertThat(rowsToday()).isEqualTo(2);
+        release.countDown();
+        for (AnalysisService.Requested started : all.stream().filter(AnalysisService.Requested::started).toList()) {
+            awaitStatus(started.view().submissionId(), "COMPLETED");
+        }
+    }
+
+    @Test
+    void 서버가_뜨기_전에_시작해_남은_PENDING은_만드는_중으로_세지_않는다() {
+        // 버려진 것으로 보기(15분) 전이지만 이 서버가 뜨기 전에 시작한 행이라 도는 작업이 없다.
+        row(submission(userId), "ANALYSIS", "PENDING", "now() - interval '10 minutes'");
+        row(submission(userId), "ANALYSIS", "PENDING", "now()");
+        OffsetDateTime boot = jdbc.sql("select now() - interval '5 minutes'").query(OffsetDateTime.class).single();
+
+        assertThat(reviews.inProgress(userId, boot, ABANDONED)).isEqualTo(1);
+        assertThat(reviews.inProgress(otherUserId, boot, ABANDONED)).isZero();
     }
 
     @Test
@@ -469,7 +496,7 @@ class AiQuotaIntegrationTest {
         ExecutorService other = Executors.newSingleThreadExecutor();
         try {
             int visible = repeatableRead().execute(status -> {
-                assertThat(quota.claimWithin(userId, id, ABANDONED, () -> claim(id))).isPresent();
+                assertThat(quota.claimWithin(userId, id, () -> ABANDONED, () -> claim(id))).isPresent();
                 // 다른 연결에서 보이면 바깥 트랜잭션과 따로 커밋한 것이다. 그래야 처리기가 PENDING 행을 본다.
                 return on(other, () -> rows(id));
             });
@@ -494,7 +521,7 @@ class AiQuotaIntegrationTest {
                     return null;
                 });
                 try {
-                    return quota.claimWithin(userId, id, ABANDONED, () -> claim(id));
+                    return quota.claimWithin(userId, id, () -> ABANDONED, () -> claim(id));
                 } catch (ErrorResponseException e) {
                     return e.getBody().getProperties().get("code");
                 }

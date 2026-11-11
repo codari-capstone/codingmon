@@ -53,7 +53,7 @@ class CodeReviewService {
             throw ApiErrors.error(HttpStatus.CONFLICT, "CODE_REVIEW_NOT_AVAILABLE", "정답 판정을 받은 제출만 리뷰할 수 있어요");
         }
         String version = version();
-        boolean started = quota.claimWithin(userId, submissionId, runner.abandoned(),
+        boolean started = quota.claimWithin(userId, submissionId, runner::abandoned,
                 () -> reviews.claim(submissionId, ReviewType.CODE_REVIEW, version, llm.model(), runner.abandoned()))
                 .map(claim -> {
                     runner.start(ReviewType.CODE_REVIEW, claim, () -> generation(submissionId));
