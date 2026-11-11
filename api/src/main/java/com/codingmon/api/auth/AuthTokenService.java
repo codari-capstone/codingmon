@@ -10,6 +10,8 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.UUID;
 
+import jakarta.persistence.EntityManager;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -40,11 +42,14 @@ public class AuthTokenService {
     private final JwtEncoder jwtEncoder;
     private final RefreshTokenRepository refreshTokens;
     private final UserRepository users;
+    private final EntityManager entityManager;
 
-    AuthTokenService(JwtEncoder jwtEncoder, RefreshTokenRepository refreshTokens, UserRepository users) {
+    AuthTokenService(JwtEncoder jwtEncoder, RefreshTokenRepository refreshTokens, UserRepository users,
+            EntityManager entityManager) {
         this.jwtEncoder = jwtEncoder;
         this.refreshTokens = refreshTokens;
         this.users = users;
+        this.entityManager = entityManager;
     }
 
     public record IssuedTokens(String accessToken, String refreshToken) {
@@ -55,12 +60,16 @@ public class AuthTokenService {
     // 재설정과 같은 사용자 행을 잠가, 먼저 발급된 토큰은 재설정의 폐기에 함께 걸린다.
     @Transactional
     public IssuedTokens issue(User user) {
+        // 부른 쪽이 같은 요청에서 이미 읽은 User면 JPA가 같은 객체를 돌려주므로, 잠근 뒤 refresh로 DB 값을 다시 읽는다.
+        // 그래야 잠금을 기다리는 사이 커밋된 재설정·정지를 본다. user와 current가 같은 객체일 수 있어 비교할 값은 먼저 담는다.
+        int expectedVersion = user.getTokenVersion();
         User current = users.findForUpdateById(user.getId()).orElseThrow();
-        if (current.getTokenVersion() != user.getTokenVersion()) {
+        entityManager.refresh(current);
+        if (current.getTokenVersion() != expectedVersion) {
             throw unauthorized();
         }
         // 모든 로그인(이메일·GitHub)이 여기서 토큰을 받으므로 정지 검사를 한곳에 둔다(ADM-16).
-        // 행을 잠근 뒤라 같은 순간의 정지와 차례로 실행된다. 정지가 뒤면 정지가 token_version을 올리고 refresh token을 폐기한다.
+        // 행을 잠그고 다시 읽은 뒤라 같은 순간의 정지와 차례로 실행된다. 정지가 뒤면 정지가 token_version을 올리고 refresh token을 폐기한다.
         if (current.getSuspendedAt() != null) {
             throw AuthErrors.error(HttpStatus.FORBIDDEN, SUSPENDED, "계정이 정지되었습니다");
         }
@@ -76,6 +85,12 @@ public class AuthTokenService {
         // 같은 사용자의 갱신을 한 번에 하나씩 처리한다. 묶음 폐기 중에 새 토큰이 생겨 폐기에서 빠지지 않게 한다.
         // 탈퇴하면 토큰 행도 함께 지워지므로 사용자는 항상 있다.
         User user = users.findForUpdateById(userId).orElseThrow(AuthTokenService::unauthorized);
+        entityManager.refresh(user);
+        // 정지할 때 refresh token을 모두 폐기하지만, 그와 겹쳐 발급된 토큰이 남아도 여기서 막는다(ADM-16).
+        // 401이라 화면은 로그인 화면으로 가고, 다시 로그인하면 issue가 403 ACCOUNT_SUSPENDED를 준다.
+        if (user.getSuspendedAt() != null) {
+            throw unauthorized();
+        }
         RefreshToken current = refreshTokens.findByTokenHash(tokenHash).orElseThrow(AuthTokenService::unauthorized);
         if (current.isReplaced()) {
             // 방금 교체된 토큰이면 다른 탭의 동시 요청으로 보고 401만 준다. 프런트는 새 쿠키로 한 번 다시 시도한다.
