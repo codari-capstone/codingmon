@@ -74,6 +74,9 @@ class GitHubLoginController {
         try {
             result = logins.login(github.fetchProfile(code));
         } catch (RuntimeException e) {
+            if (AuthTokenService.isSuspended(e)) {
+                return response.location(web("suspended")).build();
+            }
             log.warn("GitHub 로그인 실패", e);
             return response.location(web("error")).build();
         }

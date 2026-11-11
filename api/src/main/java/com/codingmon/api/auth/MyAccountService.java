@@ -109,13 +109,18 @@ class MyAccountService {
             throw AuthErrors.error(HttpStatus.FORBIDDEN, "ADMIN_CANNOT_WITHDRAW", "관리자는 탈퇴할 수 없어요");
         }
         transactions.executeWithoutResult(status -> {
-            if (user.getEmail() != null) {
-                emailCodes.deleteByEmail(user.getEmail());
-            }
-            // 채점 완료(JudgeRepository.complete)처럼 제출 행을 사용자 행보다 먼저 잠가 교착을 막는다.
-            users.deleteSubmissions(userId);
+            deleteOwnedData(user);
             users.deleteById(userId);
         });
+    }
+
+    // 회원 행을 지우기 전에 부른다. 강제 탈퇴(AdminAccountController)도 같은 순서로 쓴다.
+    // 채점 완료(JudgeRepository.complete)처럼 제출 행을 사용자 행보다 먼저 잠가 교착을 막는다.
+    void deleteOwnedData(User user) {
+        if (user.getEmail() != null) {
+            emailCodes.deleteByEmail(user.getEmail());
+        }
+        users.deleteSubmissions(user.getId());
     }
 
     // ab***@gmail.com. 앞부분이 3자 미만이면 첫 글자만 보여 준다.
