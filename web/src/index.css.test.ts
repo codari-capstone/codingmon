@@ -27,14 +27,21 @@ const THEMES = { light: LIGHT, dark: { ...LIGHT, ...block('.dark') } }
 
 type Rgba = [number, number, number, number]
 
+/**
+ * `#rrggbb`와 `rgb()`·`rgba()`만 읽는다. 3자리·8자리 hex 같은 다른 형식은 NaN이나 알파 누락으로
+ * 조용히 틀린 대비를 내므로 던진다. 형식을 늘리려면 여기를 먼저 고친다.
+ */
 function parse(value: string): Rgba {
-  if (value.startsWith('#')) {
+  if (/^#[0-9a-f]{6}$/i.test(value)) {
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(value.slice(i, i + 2), 16))
     return [r, g, b, 1]
   }
-  const m = /rgba?\(([^)]+)\)/.exec(value)
-  if (!m) throw new Error(`색으로 읽을 수 없는 값: ${value}`)
-  const [r, g, b, a = 1] = m[1].split(',').map(Number)
+  const m = /^rgba?\(([^)]+)\)$/.exec(value)
+  const parts = m?.[1].split(',').map(Number)
+  if (!parts || ![3, 4].includes(parts.length) || parts.some(Number.isNaN)) {
+    throw new Error(`대비 테스트가 읽을 수 없는 색: ${value} (#rrggbb 또는 rgb()·rgba()로 적는다)`)
+  }
+  const [r, g, b, a = 1] = parts
   return [r, g, b, a]
 }
 
@@ -74,6 +81,16 @@ const PAIRS: Pair[] = [
   ['muted-foreground', 'muted', 1, 4.5, 'card'],
   ['primary-text', 'card', 1, 4.5, 'card'],
   ['primary-text', 'muted', 1, 4.5, 'card'],
+  // 아바타 이니셜(AppHeader·MyPage): bg-primary/15 위 text-primary-text. 헤더는 바탕 위, 마이페이지는 카드 위
+  ['primary-text', 'primary', 0.15, 4.5, 'card'],
+  ['primary-text', 'primary', 0.15, 4.5, 'background'],
+  // ErrorState: bg-destructive/5 위 제목·설명 글자와 아이콘(비텍스트 3:1). 카드 위에도 바탕 위에도 놓인다
+  ['foreground', 'destructive', 0.05, 4.5, 'card'],
+  ['foreground', 'destructive', 0.05, 4.5, 'background'],
+  ['muted-foreground', 'destructive', 0.05, 4.5, 'card'],
+  ['muted-foreground', 'destructive', 0.05, 4.5, 'background'],
+  ['destructive', 'destructive', 0.05, 3, 'card'],
+  ['destructive', 'destructive', 0.05, 3, 'background'],
   ['accent-foreground', 'accent', 1, 4.5, 'card'],
   ['primary-foreground', 'primary', 1, 4.5, 'card'],
   ['primary-foreground', 'primary-hover', 1, 4.5, 'card'],
