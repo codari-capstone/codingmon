@@ -187,6 +187,8 @@ paths:
       summary: 이메일 로그인 (COM-07)
       description: |
         실패하면 이유와 관계없이 401 `LOGIN_FAILED`와 같은 문구를 준다.
+        비밀번호까지 맞았는데 관리자가 정지한 계정이면 403 `ACCOUNT_SUSPENDED`("계정이 정지되었습니다")다(ADM-16).
+        비밀번호가 맞아야 이 응답이 나오므로, 이메일만으로 정지 여부를 알아낼 수 없다.
         같은 이메일로 5회 연속 실패하면 5분 동안 429 `LOGIN_LOCKED`. 가입되지 않은 이메일도 같다.
         프런트는 이 401로 토큰 갱신을 시도하지 않는다.
       tags: [auth]
@@ -208,6 +210,12 @@ paths:
           $ref: '#/components/responses/TokensIssued'
         '401':
           $ref: '#/components/responses/Problem'
+        '403':
+          description: '오류 `code`: `ACCOUNT_SUSPENDED`(정지된 계정)'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
         '429':
           $ref: '#/components/responses/Problem'
 
@@ -346,6 +354,7 @@ paths:
         GitHub OAuth App에 등록하는 콜백 주소다. 처리 후 웹의 `/login/github?result=...`로 보낸다.
         - `success`: 이미 가입한 계정이라 로그인됨. 웹은 `POST /api/auth/refresh`로 access token을 받는다.
         - `signup`: 처음이라 닉네임 입력 화면을 보여 주고 `POST /api/auth/github/signup`을 호출한다(30분 안).
+        - `suspended`: 관리자가 정지한 계정이라 로그인하지 않음(ADM-16). 로그인 화면에 "계정이 정지되었습니다"를 보여 준다.
         - `error`: 로그인하지 못함. 로그인 화면에 실패를 알린다. 다음 경우가 모두 여기에 해당한다.
           - 사용자가 GitHub에서 취소했거나 `code`·`state`가 없음
           - `state`가 쿠키와 다름(다른 사이트가 시작한 로그인) 또는 `state` 쿠키 만료(시작 후 10분)
@@ -2106,6 +2115,338 @@ paths:
         '404':
           $ref: '#/components/responses/Problem'
 
+  /api/admin/users:
+    get:
+      operationId: listAdminUsers
+      summary: 회원 목록 (ADM-14)
+      description: |
+        최근 가입순(번호 큰 것부터)이다. 정렬은 바꿀 수 없다. 관리자 계정도 나온다.
+        정상·정지·관리자 표시는 화면이 `role`과 `suspendedAt`으로 정한다. 관리자는 정지할 수 없어 늘 정상 쪽에 센다.
+        `counts`는 탭(전체·정상·정지)의 개수다. `keyword`는 반영하고 `status`는 반영하지 않는다. 그래서 어느 탭을 보든 세 개수가 같다.
+      tags: [admin]
+      parameters:
+        - in: query
+          name: status
+          description: 없으면 전체. `ACTIVE`는 정지되지 않은 회원(관리자 포함), `SUSPENDED`는 정지된 회원
+          schema:
+            type: string
+            enum: [ACTIVE, SUSPENDED]
+        - in: query
+          name: keyword
+          description: |
+            닉네임·이메일 부분 일치, 대소문자 무시. `%`·`_`도 글자로 찾는다(`GET /api/admin/problems`와 같다).
+            숫자만이면 그 `id`인 회원도 함께 찾는다.
+          schema:
+            type: string
+        - in: query
+          name: page
+          description: 0부터 센다
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 20
+      responses:
+        '200':
+          description: 회원 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [content, totalElements, counts]
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminUserSummary'
+                  totalElements:
+                    type: integer
+                    format: int64
+                  counts:
+                    type: object
+                    required: [all, active, suspended]
+                    properties:
+                      all:
+                        type: integer
+                        format: int64
+                      active:
+                        type: integer
+                        format: int64
+                      suspended:
+                        type: integer
+                        format: int64
+        '400':
+          description: '`status`가 목록에 없는 값이거나 `page`·`size` 범위 밖'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/AdminUserId'
+    get:
+      operationId: getAdminUser
+      summary: 회원 상세 (ADM-15)
+      description: |
+        기본 정보, 정지 상태와 사유, 오늘 AI 사용 횟수를 준다. 제출 목록과 푼 문제는 따로 부른다.
+        정지 배너의 "24시간이 지나 강제 탈퇴할 수 있어요"는 화면이 `suspendedAt`으로 계산한다.
+        오류 `code`: `USER_NOT_FOUND`(없는 회원).
+      tags: [admin]
+      responses:
+        '200':
+          description: 회원 상세
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserDetail'
+        '400':
+          description: '`id`가 정수가 아님'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: forceWithdrawUser
+      summary: 강제 탈퇴 (ADM-16)
+      description: |
+        정지하고 24시간이 지난 회원만 지울 수 있다. 자동으로 지우지 않고, 관리자가 경고 팝업("해당 회원의 모든 정보가 지워집니다")을 확인한 뒤 부른다.
+        지우는 것은 회원 탈퇴(`DELETE /api/users/me`)와 같다. 되돌릴 수 없다. 보낸 문제 신고는 남고 신고자 칸만 비운다.
+        회원 행을 잠근 뒤 정지 여부와 24시간을 확인한다. 같은 순간 다른 관리자가 정지를 풀면 먼저 온 쪽만 반영된다.
+        오류 `code`: `USER_NOT_FOUND`(없는 회원), `ADMIN_CANNOT_BE_SUSPENDED`(관리자 계정),
+        `USER_NOT_SUSPENDED`(정지되지 않은 회원), `SUSPENSION_TOO_RECENT`(정지한 지 24시간이 안 됨).
+      tags: [admin]
+      responses:
+        '204':
+          description: 지움
+        '400':
+          description: '`id`가 정수가 아님'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: '관리자가 아님(`code` 없음), 또는 `ADMIN_CANNOT_BE_SUSPENDED`(관리자 계정은 지울 수 없음)'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+
+  /api/admin/users/{id}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/AdminUserId'
+    post:
+      operationId: suspendUser
+      summary: 계정 정지 (ADM-16)
+      description: |
+        `suspendedAt`을 지금 시각으로 하고 사유를 저장한다. 로그인 중인 기기도 바로 막는다.
+        비밀번호 재설정처럼 `token_version`을 올려 발급된 access token을 무효로 하고, refresh token을 모두 폐기한다.
+        그래서 다음 요청은 401, 토큰 갱신도 401이 되어 로그인 화면으로 간다. 다시 로그인하면 403 `ACCOUNT_SUSPENDED`다.
+        이미 정지된 회원이면 아무것도 바꾸지 않고 204다. 정지 시각과 사유도 그대로라 24시간을 다시 세지 않는다.
+        오류 `code`: `USER_NOT_FOUND`(없는 회원), `ADMIN_CANNOT_BE_SUSPENDED`(관리자 계정).
+      tags: [admin]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuspendInput'
+      responses:
+        '204':
+          description: 정지됨
+        '400':
+          description: |
+            오류 `code`: `INVALID_SUSPENSION_REASON`(사유가 1,000자를 넘음).
+            `id`가 정수가 아니면 `code` 없는 400이다.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: '관리자가 아님(`code` 없음), 또는 `ADMIN_CANNOT_BE_SUSPENDED`(관리자 계정은 정지할 수 없음)'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          $ref: '#/components/responses/Problem'
+
+  /api/admin/users/{id}/unsuspend:
+    parameters:
+      - $ref: '#/components/parameters/AdminUserId'
+    post:
+      operationId: unsuspendUser
+      summary: 정지 해제 (ADM-16)
+      description: |
+        `suspendedAt`과 사유를 비운다. 이미 로그아웃된 기기는 다시 로그인하면 된다.
+        정지되지 않은 회원이면 아무것도 바꾸지 않고 204다. 해제했다가 다시 정지하면 24시간을 새로 센다.
+        오류 `code`: `USER_NOT_FOUND`(없는 회원).
+      tags: [admin]
+      responses:
+        '204':
+          description: 해제됨
+        '400':
+          description: '`id`가 정수가 아님'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/Problem'
+
+  /api/admin/users/{id}/submissions:
+    parameters:
+      - $ref: '#/components/parameters/AdminUserId'
+    get:
+      operationId: listAdminUserSubmissions
+      summary: 회원의 제출 목록 (ADM-15)
+      description: |
+        문제와 상관없이 그 회원의 채점 제출을 최신순으로 준다. 학습자 제출 기록(`GET /api/submissions`)과 같은 기준이다.
+        예제 실행은 넣지 않고, 채점이 끝난 제출(`COMPLETED`·`JUDGE_ERROR`)만 넣는다.
+        줄을 펼치면 `GET /api/admin/submissions/{id}`로 코드와 결과를 받는다.
+        오류 `code`: `USER_NOT_FOUND`(없는 회원).
+      tags: [admin]
+      parameters:
+        - in: query
+          name: page
+          description: 0부터 센다
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 20
+      responses:
+        '200':
+          description: 제출 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [content, totalElements]
+                properties:
+                  content:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminUserSubmission'
+                  totalElements:
+                    type: integer
+                    format: int64
+        '400':
+          description: '`id`가 정수가 아니거나 `page`·`size` 범위 밖'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/Problem'
+
+  /api/admin/users/{id}/solved-problems:
+    parameters:
+      - $ref: '#/components/parameters/AdminUserId'
+    get:
+      operationId: listAdminUserSolvedProblems
+      summary: 회원이 맞힌 문제 (ADM-15)
+      description: |
+        맞힌 문제를 처음 맞힌 날 최신순으로 모두 준다. 페이지로 나누지 않는다. 문제 수만큼이 최대라 화면은 카드 안에서 스크롤한다.
+        `title`은 문제가 있으면 최신 버전의 제목이다.
+        오류 `code`: `USER_NOT_FOUND`(없는 회원).
+      tags: [admin]
+      responses:
+        '200':
+          description: 맞힌 문제
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminSolvedProblem'
+        '400':
+          description: '`id`가 정수가 아님'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/Problem'
+
+  /api/admin/submissions/{id}:
+    get:
+      operationId: getAdminSubmission
+      summary: 회원 제출의 코드와 결과 (ADM-15)
+      description: |
+        학습자 결과 조회(`GET /api/submissions/{id}`)와 같은 모양이고, 누구의 제출이든 볼 수 있다.
+        화면은 코드, 결과(`verdict`), 시간, 메모리를 보여 준다. 케이스별 결과는 주지 않는다.
+        채점 제출(`SUBMIT`)만 준다. 없는 제출·예제 실행·관리자 정답 검증은 404 `SUBMISSION_NOT_FOUND`다.
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 회원 제출 목록의 `id`
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 제출 결과
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionResult'
+        '400':
+          description: '`id`가 정수가 아님'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/Problem'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2114,6 +2455,14 @@ components:
       bearerFormat: JWT
 
   parameters:
+    AdminUserId:
+      in: path
+      name: id
+      required: true
+      description: 회원 목록의 `id`
+      schema:
+        type: integer
+        format: int64
     AdminProblemId:
       in: path
       name: id
@@ -3076,6 +3425,98 @@ components:
           type: [string, 'null']
           enum: [INDEX_ERROR, ZERO_DIVISION, VALUE_ERROR, NAME_ERROR, TYPE_ERROR, RECURSION_ERROR, EOF_ERROR, OTHER, null]
           description: '`verdict`가 `RUNTIME_ERROR`일 때만 있다'
+
+    AdminUserSummary:
+      type: object
+      required: [id, nickname, email, role, createdAt, suspendedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        nickname:
+          type: string
+        email:
+          type: [string, 'null']
+          description: 가리지 않은 이메일. GitHub 가입 계정은 null이고 화면은 '(GitHub)'로 보여 준다
+        role:
+          type: string
+          enum: [USER, ADMIN]
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+          description: 가입 시각. 가입일을 기록하기 전에 가입한 회원은 null이고 화면은 '—'로 보여 준다
+        suspendedAt:
+          type: [string, 'null']
+          format: date-time
+          description: 정지한 시각. 정지되지 않았으면 null
+
+    AdminUserDetail:
+      allOf:
+        - $ref: '#/components/schemas/AdminUserSummary'
+        - type: object
+          required: [loginMethod, suspensionReason, aiQuota]
+          properties:
+            loginMethod:
+              type: string
+              enum: [EMAIL, GITHUB]
+            suspensionReason:
+              type: [string, 'null']
+              description: 정지할 때 관리자가 적은 사유. 관리자끼리만 본다. 적지 않았거나 정지되지 않았으면 null
+            aiQuota:
+              $ref: '#/components/schemas/AiQuota'
+              description: 이 회원의 오늘 AI 분석·리뷰 사용량. `GET /api/users/me/ai-quota`와 같다. 한국 시각 오전 9시(`resetsAt`)에 다시 채워진다
+
+    AdminUserSubmission:
+      type: object
+      required: [id, problemId, problemTitle, language, status, verdict, submittedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        problemId:
+          type: integer
+          format: int64
+        problemTitle:
+          type: string
+          description: 제출한 버전의 제목(`SubmissionResult.problemTitle`과 같다)
+        language:
+          $ref: '#/components/schemas/Language'
+        status:
+          type: string
+          enum: [COMPLETED, JUDGE_ERROR]
+        verdict:
+          type: [string, 'null']
+          enum: [ACCEPTED, PRESENTATION_ERROR, WRONG_ANSWER, TIME_LIMIT_EXCEEDED, MEMORY_LIMIT_EXCEEDED,
+            OUTPUT_LIMIT_EXCEEDED, RUNTIME_ERROR, COMPILE_ERROR, null]
+          description: '`COMPLETED`일 때만 있다. 채점 불가(`JUDGE_ERROR`)면 null'
+        submittedAt:
+          type: string
+          format: date-time
+
+    AdminSolvedProblem:
+      type: object
+      required: [problemId, title, firstSolvedAt, attemptCount]
+      properties:
+        problemId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        firstSolvedAt:
+          type: string
+          format: date-time
+        attemptCount:
+          type: integer
+          minimum: 1
+          description: 처음 맞힐 때까지 낸 채점 제출 수(맞힌 제출 포함). `ProblemHistory.attemptCount`와 같다
+
+    SuspendInput:
+      type: object
+      properties:
+        reason:
+          type: [string, 'null']
+          maxLength: 1000
+          description: 정지 사유. 선택이다. 받은 그대로 1,000자를 넘으면 400. 앞뒤 공백을 지우고, 비면 null로 저장한다
 
     ReportType:
       type: string
