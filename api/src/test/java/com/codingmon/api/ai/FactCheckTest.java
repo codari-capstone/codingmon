@@ -116,6 +116,7 @@ class FactCheckTest {
         assertThat(refs("문제는 4번 줄입니다")).containsExactly("4-4");
         // 값이 바뀐다는 말과 코드라고 밝힌 줄은 "다르다"가 뒤에 와도 코드 줄이다
         assertThat(refs("i 값이 45번 줄에서 달라집니다")).containsExactly("45-45");
+        assertThat(refs("sum 값이 35번 줄부터 달라졌습니다")).containsExactly("35-35");
         assertThat(refs("코드의 999번째 줄이 다릅니다")).containsExactly("999-999");
     }
 
