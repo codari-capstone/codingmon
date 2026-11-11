@@ -127,12 +127,16 @@ class AiReviewRepository {
                 .single();
     }
 
-    // 사용자의 채점 제출에서 지금 만드는 중인(대기열에 있거나 처리 중인) 결과 수. 버려진 PENDING은 세지 않는다.
-    // AiQuotaService가 시도를 잡은 트랜잭션 안에서 부르므로 방금 잡은 행도 센다.
-    int inProgress(long userId, Abandoned abandoned) {
-        return abandoned.bind(jdbc.sql("select count(*) from ai_reviews r join submissions s on s.id = r.submission_id"
+    // 사용자의 채점 제출에서 지금 만드는 중인 결과 수. 이 서버의 처리기에 있는(active) 행과 방금 잡은 행만 센다.
+    // 서버가 처리 중에 내려가 남은 PENDING은 pending-timeout이 지나기 전이라도 도는 작업이 없으므로 세지 않는다.
+    // 세면 재시작 뒤 그 시간 동안 이 사용자의 요청이 모두 BUSY가 된다.
+    // 앞 요청이 커밋하고 처리기에 등록하기 전의 짧은 틈에는 그 행을 못 세어 상한을 하나 넘길 수 있다. 대기열을 지키는 상한이라 둔다.
+    int inProgress(long userId, Abandoned abandoned, Claim claimed) {
+        return jdbc.sql("select count(*) from ai_reviews r join submissions s on s.id = r.submission_id"
                 + " where s.user_id = :userId and s.submission_kind = 'SUBMIT' and r.status = 'PENDING'"
-                + "   and not (" + abandoned.condition("r") + ")"))
+                + "   and (r.id = :claimed or r.id = any(cast(:active as bigint[])))")
+                .param("active", abandoned.activeArray())
+                .param("claimed", claimed.id())
                 .param("userId", userId)
                 .query(Integer.class)
                 .single();

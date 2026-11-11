@@ -1,6 +1,7 @@
 package com.codingmon.api.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -414,10 +415,28 @@ class AiQuotaIntegrationTest {
         release.countDown();
         awaitStatus(first, "COMPLETED");
         awaitStatus(second, "COMPLETED");
-        // 앞의 것이 끝나면 같은 행으로 다시 요청할 수 있다.
-        mvc.perform(post(analysis(third)).with(as(userId))).andExpect(status().isAccepted());
+        // 앞의 것이 끝나면 같은 행으로 다시 요청할 수 있다. 가짜 모델이 바로 답하므로 응답이 200(COMPLETED)일 수도 있다.
+        mvc.perform(post(analysis(third)).with(as(userId))).andExpect(status().is2xxSuccessful());
         awaitStatus(third, "COMPLETED");
         assertThat(quotaUsed()).isEqualTo(3);
+    }
+
+    @Test
+    void 서버가_내려가_남은_PENDING은_만드는_중으로_세지_않는다() throws Exception {
+        // 처리기에 없는 PENDING. 방금 만들어 pending-timeout 전이지만 도는 작업이 없다.
+        row(submission(userId), "ANALYSIS", "PENDING", "now()");
+        row(submission(userId), "ANALYSIS", "PENDING", "now()");
+        long fresh = submission(userId);
+
+        mvc.perform(post(analysis(fresh)).with(as(userId))).andExpect(status().is2xxSuccessful());
+
+        awaitStatus(fresh, "COMPLETED");
+    }
+
+    @Test
+    void 동시_진행_상한이_1보다_작으면_만들지_못한다() {
+        assertThatThrownBy(() -> new AiQuotaService(reviews, transactionManager, 3, 0))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

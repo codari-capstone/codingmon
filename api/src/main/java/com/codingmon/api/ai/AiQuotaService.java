@@ -34,6 +34,10 @@ class AiQuotaService {
         this.transactions = new TransactionTemplate(transactionManager);
         this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.transactions.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        // 0 이하면 모든 요청이 BUSY가 된다. 대기열 용량처럼 기동할 때 막는다.
+        if (userConcurrency < 1) {
+            throw new IllegalArgumentException("app.llm.user-concurrency는 1 이상이어야 한다: " + userConcurrency);
+        }
         this.limit = limit;
         this.userConcurrency = userConcurrency;
     }
@@ -66,7 +70,7 @@ class AiQuotaService {
                 if (after > before.used() && after > limit) {
                     throw exceeded(before);
                 }
-                if (reviews.inProgress(userId, abandoned) > userConcurrency) {
+                if (reviews.inProgress(userId, abandoned, claimed.get()) > userConcurrency) {
                     reviews.fail(claimed.get(), AiReviewRepository.FailureReason.BUSY);
                     return Optional.empty();
                 }
