@@ -486,8 +486,14 @@ class AnswerGuardTest {
         assertThat(withProblem(withGuess("큐브 모양으로 쌓을 때 높이를 잘못 센 것 같아요."), List.of("큐"), "상자 쌓기")).isEmpty();
         assertThat(rules(withProblem(withPrinciple("큐에 넣은 순서대로 꺼내면 됩니다."), List.of("큐"), "상자 쌓기")))
                 .containsExactly(Rule.ALGORITHM_NAME);
-        assertThat(rules(withProblem(withPrinciple("큐를 쓰면 됩니다. 우선순위 큐는 아니에요."), List.of("큐"), "상자 쌓기")))
-                .containsExactly(Rule.ALGORITHM_NAME);
+        for (String text : List.of("큐를 쓰면 됩니다. 우선순위 큐는 아니에요.", "핵심은 큐예요.", "큐라는 자료구조를 쓰면 됩니다.",
+                "큐나 덱을 떠올려 보세요.", "이 문제는 큐다.", "큐란 먼저 넣은 것을 먼저 꺼내는 구조입니다.", "큐보다 나은 것이 없어요.",
+                "큐인지 생각해 보세요.", "큐입니다.", "큐랑 비슷해요.", "먼저 큐, 그다음 배열입니다.")) {
+            assertThat(rules(withProblem(withPrinciple(text), List.of("큐"), "상자 쌓기"))).as(text)
+                    .containsExactly(Rule.ALGORITHM_NAME);
+        }
+        // 지문에 이미 나온 이름은 조사가 무엇이든 뺀다
+        assertThat(withProblem(withPrinciple("큐라는 자료구조를 쓰면 됩니다."), List.of("큐"), "큐란 무엇인가")).isEmpty();
     }
 
     @Test
