@@ -112,6 +112,11 @@ class FactCheckTest {
         assertThat(refs("4번 줄이 문제입니다")).containsExactly("4-4");
         assertThat(refs("4번 줄이고 조건이 틀렸습니다")).containsExactly("4-4");
         assertThat(refs("4번 줄에서 5번 줄까지")).containsExactly("4-4", "5-5");
+        assertThat(refs("4번 줄일 것 같습니다")).containsExactly("4-4");
+        assertThat(refs("문제는 4번 줄입니다")).containsExactly("4-4");
+        // 값이 바뀐다는 말과 코드라고 밝힌 줄은 "다르다"가 뒤에 와도 코드 줄이다
+        assertThat(refs("i 값이 45번 줄에서 달라집니다")).containsExactly("45-45");
+        assertThat(refs("코드의 999번째 줄이 다릅니다")).containsExactly("999-999");
     }
 
     @ParameterizedTest
@@ -121,7 +126,8 @@ class FactCheckTest {
             // 예제 출력의 줄인지 코드 줄인지 가릴 수 없어 보지 않는다(놓쳐도 맞는 문장을 지우지 않는 쪽을 고른다).
             "예제 1에서 9번째 줄이 다릅니다",
             // "줄"로 시작하는 다른 말, 출력을 견준 말
-            "반복 횟수가 100번 줄어듭니다", "1000번 줄이면 됩니다", "연산을 50번 줄였습니다", "2번째 줄바꿈이 빠졌습니다",
+            "반복 횟수가 100번 줄어듭니다", "1000번 줄이면 됩니다", "연산을 50번 줄였습니다",
+            "이렇게 하면 반복을 1000번 줄일 수 있습니다", "비교를 100번 줄일 필요가 있습니다", "호출을 30번 줄인다", "2번째 줄바꿈이 빠졌습니다",
             "출력이 틀렸습니다. 12번째 줄부터 다릅니다", "기대한 값과 7번째 줄이 달라요"})
     void 코드_줄이_아닌_수는_줄_번호로_보지_않는다(String text) {
         assertThat(refs(text)).isEmpty();

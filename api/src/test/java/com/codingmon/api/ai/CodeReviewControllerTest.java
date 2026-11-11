@@ -499,7 +499,7 @@ class CodeReviewControllerTest {
                 .andExpect(jsonPath("$.factCheck").doesNotExist());
         assertThat(jdbc.sql("select (content -> 'factCheck')::text from ai_reviews where submission_id = :id")
                 .param("id", id).query(String.class).single())
-                .isEqualTo("{\"fixes\": [\"LINE_OUT_OF_RANGE@improvements[0]\"], \"demoted\": 0, \"removed\": 1, \"version\": 1,"
+                .isEqualTo("{\"fixes\": [\"LINE_OUT_OF_RANGE@improvements[0]\"], \"demoted\": 0, \"removed\": 1, \"version\": 2,"
                         + " \"unresolved\": 0}");
     }
 

@@ -33,7 +33,7 @@ import com.codingmon.api.judge.Verdict;
 final class FactCheck {
 
     // content의 factCheck.version. 규칙을 바꿔 같은 응답의 결과가 달라지면 올린다.
-    static final int VERSION = 1;
+    static final int VERSION = 2;
 
     // 비공개 후보로 삼는 최소 길이(공백 정리 뒤 글자 수). 값 하나짜리 줄은 더 길어야 한다("12345"처럼 흔한 수를 피한다).
     static final int HIDDEN_MIN_CHARS = 6;
@@ -135,11 +135,11 @@ final class FactCheck {
     private static final String NUM = "(?<![\\w.^/:])\\d{1,6}(?!\\d)";
     private static final String NUM_JOIN = "\\s*(?:번째|번)?\\s*(?:,|·|~|〜|-|부터|와|과|및|또는|이나)\\s*";
     // "4번째 줄", "4번 줄", "3~9번 줄", "4, 7번째 줄", "4번째와 7번째 줄", "4부터 6번째 줄"
-    // "줄"로 시작하는 다른 말은 뺀다. "100번 줄어듭니다", "1000번 줄이면", "2번째 줄바꿈"의 수는 횟수나 출력의 자리다.
-    // "4번 줄이 틀렸다", "4번 줄이고", "4번 줄인 것"은 줄 번호로 둔다.
+    // "줄"로 시작하는 다른 말은 뺀다. "100번 줄어듭니다", "1000번 줄이면", "1000번 줄일 수 있습니다", "2번째 줄바꿈"의 수는
+    // 횟수나 출력의 자리다. "4번 줄이 틀렸다", "4번 줄이고", "4번 줄인 것", "4번 줄일 것 같다", "4번 줄입니다"는 줄 번호로 둔다.
     private static final Pattern LINE_REF = Pattern.compile(
             "(" + NUM + "(?:" + NUM_JOIN + NUM + ")*)\\s*(?:번째|번)\\s*(?:줄|라인)"
-                    + "(?!어|여|였|바꿈|이(?:면|는|기|려|세요|자|거나))");
+                    + "(?!어|여|였|바꿈|이(?:면|는|기|려|세요|자|거나)|일\\s*(?:수|필요|때|까)|인다)");
     // "4행". "3행 4열", "행렬" 같은 표 이야기는 뺀다.
     private static final Pattern ROW_REF = Pattern.compile("(" + NUM + ")\\s*행(?![렬동위])(?!\\s*\\d+\\s*열)");
     private static final Pattern RANGE_JOIN = Pattern.compile("~|〜|-|부터");
@@ -148,9 +148,12 @@ final class FactCheck {
     private static final Pattern NOT_CODE_BEFORE = Pattern.compile(
             "(?:출력|입력|결과|메시지|트레이스백|예제\\s*\\d{0,3}\\s*번?)\\s*(?:의|에서|에|은|는|이|가|을|를|과|와|,)?\\s*$");
     // 바로 뒤에 출력 모양이 오면 출력의 줄이다("3번째 줄에는 별이 1개", "2번째 줄 공백").
-    // 줄이 "다르다"는 말도 두 출력을 견준 것이다("12번째 줄부터 다릅니다"). 코드 줄을 두고는 쓰지 않는 말이다.
+    // 줄이 "다르다"는 말도 두 출력을 견준 것이다("12번째 줄부터 다릅니다", "7번째 줄이 달라요").
+    // 값이 바뀐다는 말("45번 줄에서 달라집니다")은 코드 줄 이야기라 넣지 않는다. 앞에서 코드라고 밝힌 줄은 CODE_BEFORE가 먼저 가린다.
     private static final Pattern OUTPUT_AFTER = Pattern.compile("^\\s*(?:(?:에|에는|에서는)?\\s*(?:별|공백|빈\\s*줄|줄바꿈)"
-            + "|(?:이|가|은|는|부터|에서|에서부터)?\\s*(?:다릅|다르|달라))");
+            + "|(?:이|가|은|는|부터)?\\s*(?:다릅|다르|달라(?!지|져|집|질|진)))");
+    // 바로 앞에서 코드의 줄이라고 밝혔으면 뒤에 무엇이 와도 코드 줄이다("코드의 999번째 줄이 다릅니다").
+    private static final Pattern CODE_BEFORE = Pattern.compile("코드\\s*(?:의|에서|에|는|은)?\\s*$");
 
     // ===== 예제·비공개 테스트 =====
 
@@ -416,6 +419,9 @@ final class FactCheck {
     private static boolean codeContext(String text, int start, int end) {
         String before = text.substring(Math.max(0, start - 16), start);
         String after = text.substring(end, Math.min(text.length(), end + 10));
+        if (CODE_BEFORE.matcher(before).find()) {
+            return true;
+        }
         return !NOT_CODE_BEFORE.matcher(before).find() && !OUTPUT_AFTER.matcher(after).find();
     }
 
