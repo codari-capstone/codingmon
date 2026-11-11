@@ -531,6 +531,27 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/users/me/streak:
+    get:
+      operationId: getMyStreak
+      summary: 연속 학습 (STREAK-01, STREAK-02)
+      description: |
+        문제 목록 위 연속 학습 카드와 상단 바 칩에 쓴다. 비로그인이면 화면이 부르지 않고 0일째·빈 달력으로 그린다.
+        잔디(`/api/users/me/activity`)와 같은 기준으로 날을 센다.
+        - 사용자 제출(`SUBMIT`)이 하나라도 있으면 그날을 센다. 판정과 관계없다(틀림, 채점 중, 채점 불가 포함). 예제 실행과 관리자의 정답 코드 검증은 세지 않는다.
+        - 날짜는 한국 시각 자정으로 나눈다.
+        제출이 없으면 `currentStreak`는 0이고 `week`는 모두 `false`다.
+      tags: [users]
+      responses:
+        '200':
+          description: 연속 일수와 이번 주 기록
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserStreak'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/users/me/learning-stats:
     get:
       operationId: getMyLearningStats
@@ -2555,6 +2576,40 @@ components:
         totalActiveDays:
           type: integer
           description: '`from`~`to` 중 제출이 있는 날 수'
+
+    UserStreak:
+      type: object
+      required: [currentStreak, activeToday, today, week]
+      properties:
+        currentStreak:
+          type: integer
+          minimum: 0
+          description: |
+            오늘까지 하루도 빠짐없이 제출한 날 수. 오늘 아직 제출하지 않았어도 어제까지 이어졌으면 그 일수를 준다.
+            예: 월·화·수에 제출했으면 목요일에 제출하기 전에는 3, 제출하면 4다. 목요일에 제출하지 않으면 금요일에 0이다.
+            주가 바뀌어도 초기화하지 않는다
+        activeToday:
+          type: boolean
+          description: 오늘(한국 시각) 제출했는지. `false`이고 `currentStreak`가 1 이상이면 오늘 제출해야 이어진다
+        today:
+          type: string
+          format: date
+          description: 한국 시각으로 오늘. 화면이 `week`에서 오늘 칸을 찾을 때 쓴다
+        week:
+          type: array
+          minItems: 7
+          maxItems: 7
+          description: 이번 주 월요일부터 일요일까지(한국 시각) 날짜순으로 7개. 오늘 이후 날은 늘 `false`다
+          items:
+            type: object
+            required: [date, active]
+            properties:
+              date:
+                type: string
+                format: date
+              active:
+                type: boolean
+                description: 그날 제출했는지
 
     Difficulty:
       type: string
