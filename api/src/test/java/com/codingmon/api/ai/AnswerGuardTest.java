@@ -471,7 +471,8 @@ class AnswerGuardTest {
                 """;
 
         for (String text : List.of("int 대신 long long을 쓰는 것을 생각해 보세요.", "곱이 int 범위를 넘으면 long long으로 바꿔야 합니다.",
-                "unsigned int를 쓰면 음수를 담을 수 없어요.", "long long 타입은 64비트입니다.", "long double은 더 정밀합니다.")) {
+                "unsigned int를 쓰면 음수를 담을 수 없어요.", "long long 타입은 64비트입니다.", "long double은 더 정밀합니다.",
+                "int 대신 unsigned long long을 쓰세요.", "long long int를 쓰세요.")) {
             assertThat(withReference(withPrinciple(text), code, List.of("자료형"))).as(text).isEmpty();
         }
         // 이름까지 쓰면 선언이다
@@ -479,16 +480,21 @@ class AnswerGuardTest {
                 .containsExactly(Rule.CODE_PATTERN);
         assertThat(rules(withReference(withPrinciple("unsigned int total로 선언하세요."), code, List.of("자료형"))))
                 .containsExactly(Rule.CODE_PATTERN);
+        assertThat(rules(withReference(withPrinciple("unsigned long long total로 선언하세요."), code, List.of("자료형"))))
+                .containsExactly(Rule.CODE_PATTERN);
     }
 
     @Test
     void 한_글자_태그_이름은_다른_낱말의_일부면_알고리즘_이름이_아니다() {
         assertThat(withProblem(withGuess("큐브 모양으로 쌓을 때 높이를 잘못 센 것 같아요."), List.of("큐"), "상자 쌓기")).isEmpty();
+        assertThat(withProblem(withGuess("큐빅 퍼즐의 면을 잘못 센 것 같아요."), List.of("큐"), "상자 쌓기")).isEmpty();
         assertThat(rules(withProblem(withPrinciple("큐에 넣은 순서대로 꺼내면 됩니다."), List.of("큐"), "상자 쌓기")))
                 .containsExactly(Rule.ALGORITHM_NAME);
         for (String text : List.of("큐를 쓰면 됩니다. 우선순위 큐는 아니에요.", "핵심은 큐예요.", "큐라는 자료구조를 쓰면 됩니다.",
                 "큐나 덱을 떠올려 보세요.", "이 문제는 큐다.", "큐란 먼저 넣은 것을 먼저 꺼내는 구조입니다.", "큐보다 나은 것이 없어요.",
-                "큐인지 생각해 보세요.", "큐입니다.", "큐랑 비슷해요.", "먼저 큐, 그다음 배열입니다.")) {
+                "큐인지 생각해 보세요.", "큐입니다.", "큐랑 비슷해요.", "먼저 큐, 그다음 배열입니다.",
+                "핵심 자료구조는 큐죠.", "스택이 아니라 큐면 됩니다.", "큐고요.", "큐지만 순서가 달라요.", "큐니까 앞에서 꺼내요.",
+                "큐거나 덱입니다.", "우선순위큐를 쓰세요.")) {
             assertThat(rules(withProblem(withPrinciple(text), List.of("큐"), "상자 쌓기"))).as(text)
                     .containsExactly(Rule.ALGORITHM_NAME);
         }

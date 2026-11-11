@@ -95,7 +95,8 @@ final class AnswerGuard {
             Pattern.compile("\\b(?:int|long|short|unsigned|double|float|char|bool|string|auto|void|size_t|int64_t)"
                     + "\\s+(?!(?:int|long|short|unsigned|double|float|char|bool)\\b)[A-Za-z_]\\w*"
                     + "(?:\\s*[=;\\[({,]|(?=\\s*(?:\\p{IsHangul}|$)))"),
-            Pattern.compile("\\b(?:long\\s+long|unsigned\\s+long|long\\s+double)\\s+[A-Za-z_]\\w*"),
+            Pattern.compile("\\b(?:long\\s+long|unsigned\\s+long|long\\s+double)"
+                    + "\\s+(?!(?:int|long|short|unsigned|double|float|char|bool)\\b)[A-Za-z_]\\w*"),
             Pattern.compile("\\bvector\\s*<"),
             Pattern.compile("\\breturn\\b[^\\n\\p{IsHangul};]{0,40};"),
             // 세미콜론으로 끝나는 문장이 둘 이어진다. 사이에 한글이 있으면 설명 글이다(예: "세미콜론(;)을 ... (;)").
@@ -143,11 +144,6 @@ final class AnswerGuard {
     private static final Pattern PARTICLE = Pattern.compile(
             "(?:으로|로|을|를|이|가|은|는|와|과|의|에|도|만|까지|부터|처럼|이다|입니다|이고|이면|라고|이라고)");
 
-    // 한 글자 태그 이름 뒤에 붙는 말(namePattern). PARTICLE은 코드 낱말용이라 좁다. 이름을 알려 주는 글은 "큐예요", "큐라는",
-    // "큐나 덱"처럼 쓰므로 조사와 "이다"의 활용을 넓게 받는다. 놓치는 쪽보다 더 잡는 쪽이 안전하다.
-    private static final String NAME_SUFFIX = "(?:으로|로|을|를|이|가|은|는|와|과|의|에|도|만|까지|부터|처럼|보다|마다|조차|밖에"
-            + "|나|랑|하고|든|라|란|야|예요|에요|여서|였|다|인|일|임|입)";
-
     // 개념 태그 중 알고리즘 이름이 아닌 것. 반복문·조건문·문자열 같은 말은 오답 설명에 늘 나오므로 검사하지 않는다.
     // "출력 형식"은 판정 이름("출력 형식이 잘못되었습니다")에도 들어 있다.
     // 여기에 없는 태그는 이름 그대로 검사한다(새 알고리즘 태그를 빠뜨리지 않게). 공백을 뺀 이름으로 적는다.
@@ -156,7 +152,10 @@ final class AnswerGuard {
             "자료형범위", "정수범위", "리스트", "함수", "재귀");
 
     // 이름 뒤에 이 말이 오면 알고리즘 이름이 아니다. 런타임 에러 설명의 "스택 오버플로", "스택 영역" 같은 것.
+    // 한 글자 이름 "큐"는 다른 낱말의 첫 글자일 때만 뺀다("큐브"). 뒤에 오는 조사·어미를 받는 쪽으로 만들면 "큐죠", "큐면"처럼
+    // 빠지는 꼴이 계속 나와 이름 노출을 놓친다.
     private static final Map<String, String> NOT_ALGORITHM_AFTER = Map.of(
+            "큐", "(?:브|빅|피드|레이|티)",
             "스택", "\\s*(?:오버플로|오버 플로|넘침|넘쳤|영역|메모리|공간|크기|깊이|프레임)",
             "stack", "\\s*(?:overflow|size|memory|frame)");
 
@@ -585,11 +584,7 @@ final class AnswerGuard {
         if (HANGUL.matcher(key).find()) {
             String spaced = key.codePoints().mapToObj(c -> Pattern.quote(Character.toString(c)))
                     .collect(Collectors.joining("\\s*"));
-            // 한 글자 이름("큐")은 다른 낱말의 첫 글자이기 쉽다("큐브"). 뒤가 한글이면 조사나 "이다"의 활용일 때만 이름으로 본다.
-            String alone = key.codePointCount(0, key.length()) == 1
-                    ? "(?:(?!\\p{IsHangul})|(?=" + NAME_SUFFIX + "))"
-                    : "";
-            return Pattern.compile(spaced + alone + after);
+            return Pattern.compile(spaced + after);
         }
         String words = List.of(name.strip().split("\\s+")).stream().map(Pattern::quote)
                 .collect(Collectors.joining("[\\s_-]*"));
