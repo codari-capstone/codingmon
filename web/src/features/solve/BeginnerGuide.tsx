@@ -23,7 +23,7 @@ export function BeginnerGuide({ language }: { language: Language }) {
 
       <div className="flex flex-col gap-3 pb-3">
         {/* pre의 꾸밈은 Markdown과 같은 값을 쓴다. 긴 줄은 자기 안에서 가로로 흐른다 */}
-        <pre className="bg-card overflow-x-auto rounded-lg p-3 text-xs leading-relaxed">
+        <pre className="bg-card overflow-x-auto rounded-sm p-3 text-xs leading-relaxed">
           {guide.readingExample}
         </pre>
 

@@ -18,9 +18,10 @@ const buttonVariants = cva(
           'border-border bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
         ghost:
           'hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50',
-        // 면이 진할수록 글자 대비가 떨어진다. hover 면은 밝은 /15, 다크 /20까지 — 그 위에서 4.5:1 (index.css.test.ts)
+        // hover는 꽉 찬 면 + on-danger 글자다. 반투명 면을 진하게 하면 놓인 자리(카드·대화상자 Footer의
+        // 옅은 면)에 따라 글자 대비가 4.5:1 아래로 떨어진다(#250 리뷰). 쌍은 index.css.test.ts에 있다
         destructive:
-          'bg-destructive/10 text-destructive-text hover:bg-destructive/15 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:hover:bg-destructive/20 dark:focus-visible:ring-destructive/40',
+          'bg-destructive/10 text-destructive-text hover:bg-destructive hover:text-destructive-foreground focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40',
         link: 'text-primary-text underline-offset-4 hover:underline',
       },
       size: {

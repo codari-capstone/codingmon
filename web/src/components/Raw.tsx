@@ -18,7 +18,7 @@ export function Raw({ text, className }: { text: string; className?: string }) {
   return (
     <pre
       className={cn(
-        'bg-muted mt-2 overflow-x-auto rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap',
+        'bg-muted mt-2 overflow-x-auto rounded-sm p-3 text-xs leading-relaxed whitespace-pre-wrap',
         className,
       )}
     >

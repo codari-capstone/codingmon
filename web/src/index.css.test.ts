@@ -52,58 +52,60 @@ function ratio(a: Rgba, b: Rgba): number {
   return (hi + 0.05) / (lo + 0.05)
 }
 
-/** [글자, 면, 면 투명도, 기준]. 면은 카드(--card) 위에 놓인다고 본다. */
-type Pair = [string, string, number, number]
+/**
+ * [글자(또는 선), 면, 면 투명도, 기준, 면이 놓인 자리].
+ * 반투명 면은 놓인 자리에 따라 결과가 달라진다. 카드뿐 아니라 옅은 면(대화상자 Footer,
+ * 카드 안 묶음) 위에도 놓이면 그 자리를 따로 적는다 — #250 2차 리뷰에서 Footer 위
+ * destructive hover가 이렇게 빠져 있었다.
+ */
+type Pair = [string, string, number, number, string]
 
 const TONES = ['destructive', 'success', 'warning', 'info']
 const PAIRS: Pair[] = [
-  ['foreground', 'card', 1, 4.5],
-  ['foreground', 'background', 1, 4.5],
-  ['body-foreground', 'card', 1, 4.5],
-  ['muted-foreground', 'card', 1, 4.5],
-  ['muted-foreground', 'muted', 1, 4.5],
-  ['primary-text', 'card', 1, 4.5],
-  ['primary-text', 'muted', 1, 4.5],
-  ['accent-foreground', 'accent', 1, 4.5],
-  ['primary-foreground', 'primary', 1, 4.5],
-  ['primary-foreground', 'primary-hover', 1, 4.5],
-  ['highlight-foreground', 'highlight', 1, 4.5],
-  ['inverse-foreground', 'inverse', 1, 4.5],
-  ['inverse-muted', 'inverse', 1, 4.5],
-  ['inverse-accent', 'inverse', 1, 4.5],
+  ['foreground', 'card', 1, 4.5, 'card'],
+  ['foreground', 'background', 1, 4.5, 'card'],
+  ['body-foreground', 'card', 1, 4.5, 'card'],
+  ['muted-foreground', 'card', 1, 4.5, 'card'],
+  ['muted-foreground', 'muted', 1, 4.5, 'card'],
+  ['primary-text', 'card', 1, 4.5, 'card'],
+  ['primary-text', 'muted', 1, 4.5, 'card'],
+  ['accent-foreground', 'accent', 1, 4.5, 'card'],
+  ['primary-foreground', 'primary', 1, 4.5, 'card'],
+  ['primary-foreground', 'primary-hover', 1, 4.5, 'card'],
+  ['highlight-foreground', 'highlight', 1, 4.5, 'card'],
+  ['inverse-foreground', 'inverse', 1, 4.5, 'card'],
+  ['inverse-muted', 'inverse', 1, 4.5, 'card'],
+  ['inverse-accent', 'inverse', 1, 4.5, 'card'],
   ...TONES.flatMap((t): Pair[] => [
-    [`${t}-text`, 'card', 1, 4.5],
-    [`${t}-text`, 'muted', 1, 4.5],
-    [`${t}-text`, `${t}-soft`, 1, 4.5],
-    [`${t}-foreground`, t, 1, 4.5],
+    [`${t}-text`, 'card', 1, 4.5, 'card'],
+    [`${t}-text`, 'muted', 1, 4.5, 'card'],
+    [`${t}-text`, `${t}-soft`, 1, 4.5, 'card'],
+    [`${t}-foreground`, t, 1, 4.5, 'card'],
   ]),
-  // 입력칸 경계 (WCAG 1.4.11)
-  ['input', 'card', 1, 3],
-  ['input', 'background', 1, 3],
-  ['ring', 'card', 1, 3],
+  // destructive 버튼·리포트 취약 칩·메뉴 위험 항목의 기본 면(/10). 버튼은 Footer의 옅은 면에도 놓인다.
+  // 버튼 hover는 꽉 찬 면 + destructive-foreground라 위 쌍이 맡는다
+  ['destructive-text', 'destructive', 0.1, 4.5, 'card'],
+  ['destructive-text', 'destructive', 0.1, 4.5, 'muted'],
+  // 입력칸 경계와 포커스 띠(UNDERLINE_FIELD: --input 밑줄, --ring 포커스, --destructive 오류) (WCAG 1.4.11)
+  ...['input', 'ring', 'destructive'].flatMap((line): Pair[] => [
+    [line, 'card', 1, 3, 'card'],
+    [line, 'background', 1, 3, 'card'],
+    [line, 'muted', 1, 3, 'card'],
+  ]),
 ]
 
-// 투명도 면은 테마마다 다르게 쓰는 곳이 있어 따로 둔다
-const ALPHA_PAIRS: Record<keyof typeof THEMES, Pair[]> = {
-  light: [
-    // destructive 버튼(button.tsx), 메뉴의 위험 항목, 리포트의 취약 칩: 기본 /10, hover /15
-    ['destructive-text', 'destructive', 0.1, 4.5],
-    ['destructive-text', 'destructive', 0.15, 4.5],
-  ],
-  dark: [
-    ['destructive-text', 'destructive', 0.1, 4.5],
-    ['destructive-text', 'destructive', 0.2, 4.5],
-  ],
+// 테마마다 다르게 쓰는 투명도: 메뉴의 위험 항목은 다크에서 focus 면이 /20이다 (dropdown-menu.tsx)
+const THEME_PAIRS: Record<keyof typeof THEMES, Pair[]> = {
+  light: [],
+  dark: [['destructive-text', 'destructive', 0.2, 4.5, 'card']],
 }
 
 describe.each(Object.entries(THEMES))('%s 테마 대비', (theme, vars) => {
-  const card = parse(vars.card)
-  const pairs = [...PAIRS, ...ALPHA_PAIRS[theme as keyof typeof THEMES]]
+  const pairs = [...PAIRS, ...THEME_PAIRS[theme as keyof typeof THEMES]]
 
-  it.each(pairs)('%s 글자 · %s 면 (투명도 %s) ≥ %s', (fg, bg, alpha, min) => {
-    expect(vars[fg], `--${fg}`).toBeDefined()
-    expect(vars[bg], `--${bg}`).toBeDefined()
-    const surface = over(parse(vars[bg]), card, alpha)
+  it.each(pairs)('%s · %s 면 (투명도 %s) ≥ %s, %s 위', (fg, bg, alpha, min, under) => {
+    for (const name of [fg, bg, under]) expect(vars[name], `--${name}`).toBeDefined()
+    const surface = over(parse(vars[bg]), parse(vars[under]), alpha)
     expect(ratio(over(parse(vars[fg]), surface), surface)).toBeGreaterThanOrEqual(min)
   })
 })
