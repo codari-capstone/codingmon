@@ -86,8 +86,8 @@ class AdminAccountController {
     // 마지막 DELETE가 회원 행을 잠근 채 조건을 다시 본다. 그사이 다른 관리자가 정지를 풀었으면 0행이라 전체를 되돌린다.
     @DeleteMapping
     ResponseEntity<Void> forceWithdraw(@PathVariable long id) {
+        checkWithdrawable(state(id));
         User user = users.findById(id).orElseThrow(AdminAccountController::notFound);
-        checkWithdrawable(user.getRole(), user.getSuspendedAt());
         Boolean withdrawn = transactions.execute(status -> {
             accounts.deleteOwnedData(user);
             int deleted = jdbc.sql("delete from users where id = :id and role = 'USER'"
@@ -100,32 +100,38 @@ class AdminAccountController {
             return deleted == 1;
         });
         if (!Boolean.TRUE.equals(withdrawn)) {
-            // 되돌렸다. 그사이 바뀐 상태로 이유를 다시 정한다. JPA 캐시를 거치지 않게 SQL로 읽는다.
-            // 마지막 DELETE와 같은 조건이라 아래 검사를 통과할 수는 없지만, 통과하면 정지가 풀린 것으로 답한다.
-            record State(Role role, Instant suspendedAt) {
-            }
-            State state = jdbc.sql("select role, suspended_at from users where id = :id")
-                    .param("id", id)
-                    .query((rs, n) -> new State(Role.valueOf(rs.getString("role")),
-                            rs.getObject("suspended_at", java.time.OffsetDateTime.class) == null ? null
-                                    : rs.getObject("suspended_at", java.time.OffsetDateTime.class).toInstant()))
-                    .optional()
-                    .orElseThrow(AdminAccountController::notFound);
-            checkWithdrawable(state.role(), state.suspendedAt());
+            // 되돌렸다. 그사이 바뀐 상태로 이유를 다시 정한다. 마지막 DELETE와 같은 조건(DB 시계)이라 통과할 수 없지만,
+            // 통과하면 정지가 풀린 것으로 답한다.
+            checkWithdrawable(state(id));
             throw notSuspended();
         }
         return ResponseEntity.noContent().build();
     }
 
-    private static void checkWithdrawable(Role role, Instant suspendedAt) {
-        if (role == Role.ADMIN) {
+    // 24시간은 DB 시계로 센다. 정지 시각(now())과 마지막 DELETE 조건도 DB 시계라 API 서버 시계와 어긋나도 판정이 갈리지 않는다.
+    // JPA 캐시를 거치지 않게 SQL로 읽는다.
+    private record WithdrawState(Role role, boolean suspended, boolean dayPassed) {
+    }
+
+    private WithdrawState state(long id) {
+        return jdbc.sql("select role, suspended_at is not null as suspended,"
+                + " coalesce(suspended_at <= now() - interval '24 hours', false) as day_passed from users where id = :id")
+                .param("id", id)
+                .query((rs, n) -> new WithdrawState(Role.valueOf(rs.getString("role")), rs.getBoolean("suspended"),
+                        rs.getBoolean("day_passed")))
+                .optional()
+                .orElseThrow(AdminAccountController::notFound);
+    }
+
+    private static void checkWithdrawable(WithdrawState state) {
+        if (state.role() == Role.ADMIN) {
             // code는 정지와 같고(openapi forceWithdrawUser) 문구만 탈퇴에 맞춘다.
             throw ApiErrors.error(HttpStatus.FORBIDDEN, "ADMIN_CANNOT_BE_SUSPENDED", "관리자 계정은 탈퇴시킬 수 없어요");
         }
-        if (suspendedAt == null) {
+        if (!state.suspended()) {
             throw notSuspended();
         }
-        if (suspendedAt.isAfter(Instant.now().minusSeconds(24 * 60 * 60))) {
+        if (!state.dayPassed()) {
             throw ApiErrors.error(HttpStatus.CONFLICT, "SUSPENSION_TOO_RECENT", "정지하고 24시간이 지나야 강제 탈퇴할 수 있어요");
         }
     }
