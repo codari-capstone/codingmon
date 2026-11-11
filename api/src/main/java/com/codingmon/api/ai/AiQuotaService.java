@@ -17,7 +17,7 @@ import com.codingmon.api.ApiErrors;
 // 새 시도를 잡을 때만 1회로 센다. 저장된 결과 재사용, 만드는 중인 결과 재요청, 힌트 열기는 시도를 잡지 않으므로 세지 않는다.
 // 분석(AnalysisService)과 리뷰(CodeReviewService)가 시도를 잡을 때 claimWithin을 쓰고, 응답에 status를 담는다.
 @Service
-class AiQuotaService {
+public class AiQuotaService {
 
     private final AiReviewRepository reviews;
     private final TransactionTemplate transactions;
@@ -34,8 +34,8 @@ class AiQuotaService {
         this.limit = limit;
     }
 
-    // 조회용. 잠그지 않는다.
-    AiQuota status(long userId) {
+    // 조회용. 잠그지 않는다. 관리자 회원 상세(AdminUserController)도 쓴다.
+    public AiQuota status(long userId) {
         return AiQuota.of(limit, reviews.usedToday(userId));
     }
 

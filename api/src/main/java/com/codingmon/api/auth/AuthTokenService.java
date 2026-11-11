@@ -19,6 +19,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.ErrorResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.codingmon.api.user.User;
@@ -29,6 +30,8 @@ public class AuthTokenService {
 
     static final Duration ACCESS_TOKEN_TTL = Duration.ofMinutes(30);
     static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(7);
+    // 정지된 계정의 로그인 거절 code. GitHub 콜백은 이 code로 결과 주소를 suspended로 바꾼다.
+    static final String SUSPENDED = "ACCOUNT_SUSPENDED";
     // 여러 탭이 같은 refresh token으로 동시에 갱신해도 탈취로 보지 않는 시간
     static final Duration REUSE_GRACE = Duration.ofSeconds(10);
 
@@ -55,6 +58,11 @@ public class AuthTokenService {
         User current = users.findForUpdateById(user.getId()).orElseThrow();
         if (current.getTokenVersion() != user.getTokenVersion()) {
             throw unauthorized();
+        }
+        // 모든 로그인(이메일·GitHub)이 여기서 토큰을 받으므로 정지 검사를 한곳에 둔다(ADM-16).
+        // 행을 잠근 뒤라 같은 순간의 정지와 차례로 실행된다. 정지가 뒤면 정지가 token_version을 올리고 refresh token을 폐기한다.
+        if (current.getSuspendedAt() != null) {
+            throw AuthErrors.error(HttpStatus.FORBIDDEN, SUSPENDED, "계정이 정지되었습니다");
         }
         return new IssuedTokens(accessToken(current), saveRefreshToken(current.getId(), UUID.randomUUID()).raw());
     }
@@ -141,5 +149,10 @@ public class AuthTokenService {
 
     private static ResponseStatusException unauthorized() {
         return new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+    }
+
+    static boolean isSuspended(RuntimeException e) {
+        return e instanceof ErrorResponseException error && error.getBody().getProperties() != null
+                && SUSPENDED.equals(error.getBody().getProperties().get("code"));
     }
 }

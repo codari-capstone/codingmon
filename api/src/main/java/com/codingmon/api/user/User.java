@@ -1,5 +1,7 @@
 package com.codingmon.api.user;
 
+import java.time.Instant;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -28,6 +30,10 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     private Role role = Role.USER;
+
+    // 관리자가 정지한 시각(ADM-16). 바꾸는 쪽은 관리자 정지 API의 SQL이다. 가입 INSERT에서는 늘 비어 있다.
+    // created_at·suspension_reason은 DB 기본값과 관리자 SQL이 다뤄 여기에 두지 않는다.
+    private Instant suspendedAt;
 
     protected User() {
     }
@@ -67,6 +73,10 @@ public class User {
 
     public int getTokenVersion() {
         return tokenVersion;
+    }
+
+    public Instant getSuspendedAt() {
+        return suspendedAt;
     }
 
     public Role getRole() {
