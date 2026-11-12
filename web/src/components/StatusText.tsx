@@ -19,7 +19,9 @@ interface StatusTextProps {
   tone: StatusTone
   children: React.ReactNode
   className?: string
-  /** 아이콘에만 붙는 클래스. 채점 중 아이콘을 돌릴 때 쓴다. */
+  /** tone의 아이콘 대신 쓸 아이콘. 채점 중의 돌아가는 아이콘처럼 상태가 다를 때만 */
+  icon?: LucideIcon
+  /** 아이콘에만 붙는 클래스 */
   iconClassName?: string
 }
 
@@ -32,8 +34,9 @@ interface StatusTextProps {
  * 아이콘은 글자 크기를 따라간다(1.1em). 표의 작은 글자와 결과 화면의 큰 판정에 같은 조각을 쓴다.
  * 카드 안 옅은 면(`bg-muted`) 위에서도 네 색 모두 4.5:1을 넘는다(가장 낮은 것이 밝은 모드 성공 5.0:1).
  */
-export function StatusText({ tone, children, className, iconClassName }: StatusTextProps) {
-  const { className: toneClass, icon: Icon } = TONE[tone]
+export function StatusText({ tone, children, className, icon, iconClassName }: StatusTextProps) {
+  const { className: toneClass, icon: toneIcon } = TONE[tone]
+  const Icon = icon ?? toneIcon
   return (
     <span className={cn('inline-flex items-center gap-1.5 font-medium', toneClass, className)}>
       {Icon ? (

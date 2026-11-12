@@ -41,11 +41,9 @@ export function SectionHeading({
           {eyebrow}
         </p>
       ) : null}
+      {/* cn을 거치지 않는다: tailwind-merge는 text-title-*를 글자 크기로 모르고 색으로 보아 text-foreground를 지운다 */}
       <Tag
-        className={cn(
-          'text-foreground m-0 font-bold tracking-[-0.02em] whitespace-pre-line [.bg-inverse_&]:text-inverse-foreground',
-          size === 'sm' ? 'text-title-2' : 'text-title-1',
-        )}
+        className={`text-foreground m-0 font-bold tracking-[-0.02em] whitespace-pre-line [.bg-inverse_&]:text-inverse-foreground ${size === 'sm' ? 'text-title-2' : 'text-title-1'}`}
       >
         {title}
       </Tag>
