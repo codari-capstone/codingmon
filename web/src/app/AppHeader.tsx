@@ -37,7 +37,14 @@ export function AppHeader() {
   const inAdmin = useMatch('/admin/*') !== null
   const { logout } = useLogout()
   const isAdmin = user?.role === 'ADMIN'
-  const menu = isAdmin ? (inAdmin ? ADMIN_MENU : [...MENU, ADMIN_ENTRY]) : MENU
+  // /admin 아래에 남는 사람은 ADMIN뿐이다(아니면 /forbidden으로 간다). 세션을 모르는 동안에도
+  // 관리자 메뉴를 두어야 새로고침 때 학습자 메뉴 3개 -> 1개로 흔들리지 않는다.
+  const menu =
+    inAdmin && (isAdmin || isLoading) ? ADMIN_MENU : isAdmin ? [...MENU, ADMIN_ENTRY] : MENU
+  // 로그인 화면에서 넘어왔다면 그 화면이 들고 있던 돌아갈 주소를 이어 준다. 아니면 지금 주소.
+  // 값은 로그인 화면의 safeRedirect가 검사하므로 여기서는 거르지 않는다.
+  const from =
+    (location.state as { from?: unknown } | null)?.from ?? `${location.pathname}${location.search}`
 
   return (
     <header className="bg-card border-border border-b">
@@ -62,15 +69,16 @@ export function AppHeader() {
           flex-auto(= flex: 1 1 auto)여야 한다. flex-1은 basis가 0%라 줄바꿈 계산에서
           폭이 0으로 취급돼 줄을 넘기지 않고, min-w-0이나 overflow-x-auto가 붙으면
           좁은 화면에서 메뉴가 조용히 잘린다. basis가 auto면 들어갈 자리가 없을 때
-          nav 전체가 둘째 줄로 내려간다 (UX-05).
+          nav 전체가 둘째 줄로 내려간다 (UX-05). 그 줄에도 다 들어가지 않으면(320px의 ADMIN 4개)
+          nav 안에서 링크 단위로 한 번 더 줄을 바꾼다. 링크 글자는 끊지 않는다.
         */}
-        <nav aria-label="주요 메뉴" className="flex flex-auto gap-1 whitespace-nowrap">
+        <nav aria-label="주요 메뉴" className="flex flex-auto flex-wrap gap-1">
           {menu.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `text-label hover:bg-muted hover:text-foreground focus-visible:outline-ring inline-flex h-10 items-center rounded-full px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                `text-label whitespace-nowrap hover:bg-muted hover:text-foreground focus-visible:outline-ring inline-flex h-10 items-center rounded-full px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 ${
                   isActive ? 'bg-muted text-foreground' : 'text-muted-foreground'
                 }`
               }
@@ -125,16 +133,18 @@ export function AppHeader() {
             <>
               <Button asChild variant="secondary" size="sm">
                 {/*
-                  지금 주소를 함께 보낸다. 싣지 않으면 로그인한 뒤 기본 목적지(/problems)로 가서
+                  돌아갈 주소를 함께 보낸다. 싣지 않으면 로그인한 뒤 기본 목적지(/problems)로 가서
                   보고 있던 검색·필터가 사라진다 — COM-07은 '원래 보던 페이지로 돌아감'이다.
-                  로그인 화면에서 이 버튼을 누른 경우는 safeRedirect가 걸러 낸다.
+                  가입도 같은 주소를 싣는다. 가입 화면이 그 값을 로그인 화면으로 넘긴다.
                 */}
-                <Link to="/login" state={{ from: `${location.pathname}${location.search}` }}>
+                <Link to="/login" state={{ from }}>
                   로그인
                 </Link>
               </Button>
               <Button asChild size="sm">
-                <Link to="/signup">무료로 시작하기</Link>
+                <Link to="/signup" state={{ from }}>
+                  무료로 시작하기
+                </Link>
               </Button>
             </>
           )}

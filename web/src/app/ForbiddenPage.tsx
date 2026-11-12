@@ -1,4 +1,4 @@
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 
 import scene from '@/assets/scenes/forbidden.png'
 import { Button } from '@/components/ui/button'
@@ -7,8 +7,10 @@ import { ExceptionPage } from './ExceptionPage'
 
 /** UX-04 권한 없음 페이지. 권한 검사(COM-05)가 여기로 보낸다. */
 export function Component() {
-  // 로그인한 채로는 /login이 원래 화면으로 돌려보낸다. 다른 계정으로 들어가려면 먼저 로그아웃한다
-  const { logout, isPending } = useLogout('/login')
+  // 로그인한 채로는 /login이 원래 화면으로 돌려보낸다. 다른 계정으로 들어가려면 먼저 로그아웃한다.
+  // 막혔던 주소(RequireAdmin이 실어 보낸 from)를 이어 주어, 관리자로 들어가면 그 화면으로 돌아간다
+  const from = (useLocation().state as { from?: unknown } | null)?.from
+  const { logout, isPending } = useLogout('/login', { from })
 
   return (
     <ExceptionPage

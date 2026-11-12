@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router'
+import { Navigate, Outlet, useLocation } from 'react-router'
 
 import { useAuth } from '@/features/auth/useAuth'
 
@@ -10,8 +10,18 @@ import { useAuth } from '@/features/auth/useAuth'
  */
 export function RequireAdmin() {
   const { user } = useAuth()
+  const location = useLocation()
 
-  if (user?.role !== 'ADMIN') return <Navigate to="/forbidden" replace />
+  if (user?.role !== 'ADMIN') {
+    // 403의 '다른 계정으로 로그인'이 이 주소로 돌아오게 싣는다
+    return (
+      <Navigate
+        to="/forbidden"
+        state={{ from: `${location.pathname}${location.search}` }}
+        replace
+      />
+    )
+  }
 
   return <Outlet />
 }

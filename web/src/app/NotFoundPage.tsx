@@ -7,8 +7,11 @@ import { ExceptionPage } from './ExceptionPage'
 /** UX-04 404 페이지 */
 export function Component() {
   const navigate = useNavigate()
-  // 주소를 바로 열고 들어왔으면(key 'default') 돌아갈 앱 안의 페이지가 없다. 뒤로 가면 사이트를 떠난다
-  const canGoBack = useLocation().key !== 'default'
+  useLocation() // 주소가 바뀌면 아래 값을 다시 읽는다
+  // 앱 안에서 쌓은 기록이 있을 때만 뒤로 간다. location.key는 replace 이동(GitHub 로그인 복귀 등)에도
+  // 새로 생겨 믿을 수 없다. BrowserRouter가 history.state에 남기는 idx는 replace하면 그대로라,
+  // 0이면 바로 뒤가 앱 밖(다른 사이트·새 탭)이다.
+  const canGoBack = ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0
 
   return (
     <ExceptionPage

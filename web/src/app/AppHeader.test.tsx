@@ -36,7 +36,7 @@ function renderHeader() {
 }
 
 /** 로그인 링크가 어떤 state를 싣는지 보려면 실제로 이동시켜 봐야 한다. */
-function renderHeaderAt(url: string) {
+function renderHeaderAt(url: string | { pathname: string; state: unknown }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   // path를 '*'로 두면 /login으로 이동해도 같은 헤더가 그려져, 라우트를 더 두지 않아도 된다.
   const router = createMemoryRouter([{ path: '*', element: <AppHeader /> }], {
@@ -108,6 +108,29 @@ describe('AppHeader', () => {
     })
   })
 
+  it('가입 링크도 돌아갈 주소를 싣는다', async () => {
+    // 가입 화면은 받은 from을 로그인 화면으로 넘긴다. 없으면 가입·로그인 뒤 기본 목적지로 간다
+    mockAuth({})
+    const user = userEvent.setup()
+    const router = renderHeaderAt('/problems/42')
+
+    await user.click(screen.getByRole('link', { name: '무료로 시작하기' }))
+
+    expect(router.state.location.pathname).toBe('/signup')
+    expect(router.state.location.state).toEqual({ from: '/problems/42' })
+  })
+
+  it('로그인 화면에서 누르면 그 화면이 들고 있던 돌아갈 주소를 이어 준다', async () => {
+    // 지금 주소(/login)를 실으면 safeRedirect가 버려 원래 보던 /problems/42를 잃는다
+    mockAuth({})
+    const user = userEvent.setup()
+    const router = renderHeaderAt({ pathname: '/login', state: { from: '/problems/42' } })
+
+    await user.click(screen.getByRole('link', { name: '무료로 시작하기' }))
+
+    expect(router.state.location.state).toEqual({ from: '/problems/42' })
+  })
+
   it('USER에게는 관리자 링크를 보여 주지 않는다', () => {
     mockAuth({
       user: {
@@ -141,6 +164,19 @@ describe('AppHeader', () => {
     renderHeader()
 
     expect(screen.getByRole('link', { name: '관리자' })).toHaveAttribute('href', '/admin')
+  })
+
+  it('관리자 화면에서 세션을 모르는 동안에도 관리자 메뉴를 둔다', () => {
+    // 학습자 메뉴를 먼저 보였다가 바꾸면 새로고침마다 메뉴가 3개 -> 1개로 흔들린다
+    mockAuth({ isLoading: true })
+    renderHeaderAt('/admin')
+
+    const nav = screen.getByRole('navigation', { name: '주요 메뉴' })
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['문제'])
   })
 
   it('관리자 화면에서는 관리자 메뉴로 바뀐다 (ADM-10)', () => {

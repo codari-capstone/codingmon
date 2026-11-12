@@ -107,6 +107,8 @@ describe('RequireAdmin', () => {
 
     expect(screen.getByRole('heading', { name: '권한 없음 화면' })).toBeInTheDocument()
     expect(router.state.historyAction).toBe('REPLACE')
+    // 403의 '다른 계정으로 로그인'이 관리자로 들어간 뒤 이 주소로 돌아온다
+    expect(router.state.location.state).toEqual({ from: '/admin' })
   })
 
   it('ADMIN은 통과시킨다', () => {
@@ -132,7 +134,7 @@ describe('RequireAdmin', () => {
     const router = renderAt('/admin')
 
     expect(screen.getByRole('heading', { name: '로그인 화면' })).toBeInTheDocument()
-    // RequireAdmin은 from을 쓰지 않는다. 돌아갈 주소가 있다는 것은 부모가 리다이렉트했다는 뜻이다.
+    expect(router.state.location.pathname).toBe('/login')
     expect(router.state.location.state).toMatchObject({ from: '/admin' })
   })
 })
