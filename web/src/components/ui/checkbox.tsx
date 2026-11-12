@@ -14,11 +14,13 @@ type ChoiceProps = Omit<React.ComponentProps<'input'>, 'type'> & {
 export const CHOICE_LABEL =
   'relative inline-flex min-h-11 cursor-pointer items-start gap-2.5 py-2.5 text-[15px] leading-[1.5] font-medium text-foreground has-disabled:cursor-not-allowed has-disabled:opacity-50'
 
-// 상자 앞의 input이 peer다. 포커스 외곽선은 상자가 그린다
+// 상자 앞의 input이 peer다. 포커스 외곽선은 상자가 그린다.
+// 고대비(forced-colors)에서는 브라우저가 box-shadow를 지워 상자 테두리와 라디오 점이 사라진다.
+// 그 모드에서는 꾸민 상자를 숨기고 네이티브 input을 드러내 시스템 색으로 그리게 한다
 export const CHOICE_INPUT =
-  'peer absolute top-[11px] left-0 m-0 size-[22px] cursor-[inherit] opacity-0'
+  'peer absolute top-[11px] left-0 m-0 size-[22px] cursor-[inherit] opacity-0 forced-colors:static forced-colors:mt-px forced-colors:opacity-100'
 export const CHOICE_BOX =
-  'mt-px inline-flex size-[22px] shrink-0 items-center justify-center bg-card shadow-[inset_0_0_0_1.5px_var(--input)] transition-[background-color,box-shadow] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-solid peer-focus-visible:outline-ring motion-reduce:transition-none'
+  'mt-px inline-flex size-[22px] shrink-0 items-center justify-center bg-card shadow-[inset_0_0_0_1.5px_var(--input)] transition-[background-color,box-shadow] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-solid peer-focus-visible:outline-ring motion-reduce:transition-none forced-colors:hidden'
 
 export function ChoiceText({
   label,

@@ -110,8 +110,8 @@ const PAIRS: Pair[] = [
     [`${t}-text`, `${t}-soft`, 1, 4.5, 'card'],
     [`${t}-foreground`, t, 1, 4.5, 'card'],
   ]),
-  // destructive 버튼·리포트 취약 칩·메뉴 위험 항목의 기본 면(/10). 버튼은 Footer의 옅은 면에도 놓인다.
-  // 버튼 hover는 꽉 찬 면 + destructive-foreground라 위 쌍이 맡는다
+  // 리포트 취약 칩의 면(bg-destructive/10, ReportPage). 위험 버튼·메뉴 위험 항목은 #255·#257부터
+  // destructive-soft 면이라 위 `${t}-text`·`${t}-soft` 쌍이 맡는다. 옅은 면 위 쌍은 칩이 옮겨 가도 깨지지 않게 둔다
   ['destructive-text', 'destructive', 0.1, 4.5, 'card'],
   ['destructive-text', 'destructive', 0.1, 4.5, 'muted'],
   // Button soft(옅은 파랑 면 + 파랑 글자), dark(글자색 면 + 바탕색 글자, hover는 본문색 면), glass(남색 무대 위 반투명 면)

@@ -36,6 +36,13 @@ describe('Checkbox', () => {
     expect(onSubmit).toHaveBeenCalledWith({ agree: true })
   })
 
+  it('고대비(forced-colors)에서는 꾸민 상자를 숨기고 네이티브 input을 드러낸다 (#257 리뷰)', () => {
+    render(<Checkbox label="배열" />)
+    const input = screen.getByRole('checkbox', { name: '배열' })
+    expect(input).toHaveClass('forced-colors:opacity-100', 'forced-colors:static')
+    expect(input.nextElementSibling).toHaveClass('forced-colors:hidden')
+  })
+
   it('disabled면 눌러도 바뀌지 않는다', async () => {
     const onChange = vi.fn()
     render(<Checkbox label="해시" disabled onChange={onChange} />)
@@ -122,6 +129,17 @@ describe('Tabs', () => {
     await userEvent.click(screen.getByRole('tab', { name: '틀린 문제' }))
     expect(screen.getByRole('tab', { name: '틀린 문제' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText('틀린 목록')).toBeInTheDocument()
+  })
+
+  it('pill 탭의 포커스는 알약 둥글기를 바꾸지 않는다 (#257 리뷰)', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList variant="pill">
+          <TabsTrigger value="a">가</TabsTrigger>
+        </TabsList>
+      </Tabs>,
+    )
+    expect(screen.getByRole('tab', { name: '가' })).not.toHaveClass('focus-visible:rounded-sm')
   })
 
   it('포커스 외곽선을 지우지 않는다 (#255 리뷰와 같은 함정)', () => {

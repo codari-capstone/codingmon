@@ -306,8 +306,9 @@ function AdminProblemForm() {
               TabsContent는 Tabs의 context로 동작해 fieldset을 사이에 끼워도 된다. */}
           <fieldset
             disabled={locked}
-            // 읽기 전용은 지난 버전을 읽는 화면이다. 꺼진 칸 글자색(disabled-foreground, 2.1:1)은 읽지 않는 글자용이라 본문 색으로 되돌린다
-            className="contents [&_:is(input,textarea,select):disabled]:text-foreground"
+            // 읽기 전용은 지난 버전을 읽는 화면이다. 꺼진 칸 글자색(disabled-foreground, 2.1:1)은 읽지 않는 글자용이라 본문 색으로 되돌린다.
+            // 체크박스 라벨의 has-disabled:opacity-50(태그·Python 제한)도 같은 이유로 되돌린다(#257 리뷰)
+            className="contents [&_:is(input,textarea,select):disabled]:text-foreground [&_label:has(:disabled)]:opacity-100"
           >
             <TabsContent className="bg-card rounded-lg border p-6" value="basic">
               <BasicInfoTab form={form} />
