@@ -91,9 +91,12 @@ final class AnswerGuard {
             Pattern.compile("\\b(?:cout|cerr)\\s*<<[^;\\n\\p{IsHangul},`]*;?|\\bcin\\s*>>[^;\\n\\p{IsHangul},`]*;?"),
             Pattern.compile("\\bfor\\s*\\([^)\\n\\p{IsHangul}]*;[^)\\n\\p{IsHangul}]*;[^)\\n\\p{IsHangul}]*\\)"),
             Pattern.compile("\\b(?:if|while|switch)\\s*\\([^)\\n]*\\)\\s*\\{"),
+            // 이름 자리에 타입 낱말이 오면 선언이 아니다. "long long을 쓰세요", "unsigned int를"은 타입 이름만 말한 글이다.
             Pattern.compile("\\b(?:int|long|short|unsigned|double|float|char|bool|string|auto|void|size_t|int64_t)"
-                    + "\\s+[A-Za-z_]\\w*(?:\\s*[=;\\[({,]|(?=\\s*(?:\\p{IsHangul}|$)))"),
-            Pattern.compile("\\b(?:long\\s+long|unsigned\\s+long|long\\s+double)\\s+[A-Za-z_]\\w*"),
+                    + "\\s+(?!(?:int|long|short|unsigned|double|float|char|bool)\\b)[A-Za-z_]\\w*"
+                    + "(?:\\s*[=;\\[({,]|(?=\\s*(?:\\p{IsHangul}|$)))"),
+            Pattern.compile("\\b(?:long\\s+long|unsigned\\s+long|long\\s+double)"
+                    + "\\s+(?!(?:int|long|short|unsigned|double|float|char|bool)\\b)[A-Za-z_]\\w*"),
             Pattern.compile("\\bvector\\s*<"),
             Pattern.compile("\\breturn\\b[^\\n\\p{IsHangul};]{0,40};"),
             // 세미콜론으로 끝나는 문장이 둘 이어진다. 사이에 한글이 있으면 설명 글이다(예: "세미콜론(;)을 ... (;)").
@@ -121,8 +124,9 @@ final class AnswerGuard {
                     + "|find|substr|size|length|begin|end|readline|" + LIBRARY_CALLS + ")\\s*\\("));
 
     // 대입. ==, !=, <=, >=, += 같은 연산자는 뺀다.
+    // 첨자는 200자까지만 본다. 상한이 없으면 닫는 대괄호가 없는 줄("a[a[a[…")에서 이름마다 줄 끝까지 훑어 글자 수의 제곱만큼 걸린다.
     private static final Pattern ASSIGNMENT = Pattern.compile(
-            "(?<![\\w.])([A-Za-z_]\\w*)\\s*(?:\\[[^\\]\\n]*\\])?\\s*=(?![=])");
+            "(?<![\\w.])([A-Za-z_]\\w*)\\s*(?:\\[[^\\]\\n]{0,200}+\\])?\\s*=(?![=])");
     private static final Pattern NUMBER = Pattern.compile("-?[0-9]+(?:\\.[0-9]+)?");
 
     // 들여 쓴 줄은 주석(#, //) 앞부분에 한글이 없거나 코드 기호가 있으면 코드 줄로 본다. "n = 3일 때"처럼 들여 쓴 설명 글은
@@ -148,7 +152,10 @@ final class AnswerGuard {
             "자료형범위", "정수범위", "리스트", "함수", "재귀");
 
     // 이름 뒤에 이 말이 오면 알고리즘 이름이 아니다. 런타임 에러 설명의 "스택 오버플로", "스택 영역" 같은 것.
+    // 한 글자 이름 "큐"는 다른 낱말의 첫 글자일 때만 뺀다("큐브"). 뒤에 오는 조사·어미를 받는 쪽으로 만들면 "큐죠", "큐면"처럼
+    // 빠지는 꼴이 계속 나와 이름 노출을 놓친다.
     private static final Map<String, String> NOT_ALGORITHM_AFTER = Map.of(
+            "큐", "(?:브|빅|피드|레이|티)",
             "스택", "\\s*(?:오버플로|오버 플로|넘침|넘쳤|영역|메모리|공간|크기|깊이|프레임)",
             "stack", "\\s*(?:overflow|size|memory|frame)");
 
@@ -699,11 +706,43 @@ final class AnswerGuard {
         return out.toString();
     }
 
+    // 닫히지 않은 따옴표는 기호 하나짜리 토큰이 된다. 그 줄의 같은 따옴표는 뒤에서 시작해도 닫히지 않으므로 리터럴을 다시 찾지 않는다.
+    // 다시 찾으면 따옴표마다 줄 끝까지 훑어, 따옴표만 이어진 64KB 코드에서 글자 수의 제곱만큼 걸린다.
     static List<String> tokens(String code) {
         List<String> tokens = new ArrayList<>();
         Matcher matcher = TOKEN.matcher(code);
-        while (matcher.find()) {
+        int length = code.length();
+        int openSingleUntil = 0;
+        int openDoubleUntil = 0;
+        int at = 0;
+        while (at < length) {
+            char c = code.charAt(at);
+            // TOKEN은 보이는 ASCII 글자에서만 시작한다.
+            if (c <= ' ' || c >= 0x7F) {
+                at++;
+                continue;
+            }
+            if ((c == '\'' && at < openSingleUntil) || (c == '"' && at < openDoubleUntil)) {
+                tokens.add(String.valueOf(c));
+                at++;
+                continue;
+            }
+            matcher.region(at, length);
+            if (!matcher.lookingAt()) {
+                at++;
+                continue;
+            }
+            if ((c == '\'' || c == '"') && matcher.end() == at + 1) {
+                int lineEnd = code.indexOf('\n', at);
+                lineEnd = lineEnd < 0 ? length : lineEnd;
+                if (c == '\'') {
+                    openSingleUntil = lineEnd;
+                } else {
+                    openDoubleUntil = lineEnd;
+                }
+            }
             tokens.add(matcher.group());
+            at = matcher.end();
         }
         return tokens;
     }

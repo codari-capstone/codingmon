@@ -147,7 +147,7 @@ describe('AnalysisPanel', () => {
             {
               status: 409,
               code: 'ANALYSIS_NOT_AVAILABLE',
-              detail: '틀린 제출만 AI 분석을 받을 수 있어요',
+              detail: '오답 판정을 받은 제출만 분석할 수 있어요',
             },
             { status: 409 },
           ),
@@ -158,7 +158,7 @@ describe('AnalysisPanel', () => {
       await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
 
       expect(await screen.findByRole('alert')).toHaveTextContent(
-        '틀린 제출만 AI 분석을 받을 수 있어요',
+        '오답 판정을 받은 제출만 분석할 수 있어요',
       )
       expect(screen.getByText('틀렸습니다')).toBeInTheDocument()
     })

@@ -1341,7 +1341,7 @@ export const handlers: RequestHandler[] = [
     const verdict = found ? (found.polls > 3 ? found.verdict : null) : pastSubmission(id)?.verdict
     if (verdict === undefined) return problem(404, 'SUBMISSION_NOT_FOUND', '제출을 찾을 수 없어요')
     if (verdict === null || verdict === 'ACCEPTED') {
-      return problem(409, 'ANALYSIS_NOT_AVAILABLE', '틀린 제출만 AI 분석을 받을 수 있어요')
+      return problem(409, 'ANALYSIS_NOT_AVAILABLE', '오답 판정을 받은 제출만 분석할 수 있어요')
     }
 
     const existing = mockAnalyses.get(id)

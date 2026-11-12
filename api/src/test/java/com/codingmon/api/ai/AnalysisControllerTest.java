@@ -610,7 +610,7 @@ class AnalysisControllerTest {
         assertThat(jdbc.sql("select (content -> 'factCheck')::text from ai_reviews where submission_id = :id")
                 .param("id", id).query(String.class).single())
                 .isEqualTo("{\"fixes\": [\"LINE_OUT_OF_RANGE@suspectLines[1]\", \"UNMATCHED_VALUE@facts[1]\"], \"demoted\": 1,"
-                        + " \"removed\": 1, \"version\": 1, \"unresolved\": 0}");
+                        + " \"removed\": 1, \"version\": 2, \"unresolved\": 0}");
         assertThat(llm.calls).hasValue(1);
     }
 
@@ -637,7 +637,7 @@ class AnalysisControllerTest {
         assertThat(jdbc.sql("select content::text from ai_reviews where submission_id = :id").param("id", id)
                 .query(String.class).single())
                 .isEqualTo("{\"blocked\": true, \"factCheck\": {\"fixes\": [\"HIDDEN_VALUE@hints.direction(blocked)\"],"
-                        + " \"demoted\": 0, \"removed\": 1, \"version\": 1, \"unresolved\": 0}}");
+                        + " \"demoted\": 0, \"removed\": 1, \"version\": 2, \"unresolved\": 0}}");
     }
 
     private long completedAnalysis() throws Exception {

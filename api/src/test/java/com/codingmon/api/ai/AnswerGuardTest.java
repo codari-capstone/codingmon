@@ -1,7 +1,9 @@
 package com.codingmon.api.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -455,6 +457,64 @@ class AnswerGuardTest {
 
         assertThat(AnswerGuard.describe(violations))
                 .isEqualTo("CODE_PATTERN@hints.principle,ALGORITHM_NAME@hints.principle(동적 계획법)");
+    }
+
+    @Test
+    void 타입_이름만_말한_글은_선언이_아니다() {
+        String code = """
+                #include <iostream>
+                int main() {
+                    int a, b;
+                    std::cin >> a >> b;
+                    int sum = a * b;
+                }
+                """;
+
+        for (String text : List.of("int 대신 long long을 쓰는 것을 생각해 보세요.", "곱이 int 범위를 넘으면 long long으로 바꿔야 합니다.",
+                "unsigned int를 쓰면 음수를 담을 수 없어요.", "long long 타입은 64비트입니다.", "long double은 더 정밀합니다.",
+                "int 대신 unsigned long long을 쓰세요.", "long long int를 쓰세요.")) {
+            assertThat(withReference(withPrinciple(text), code, List.of("자료형"))).as(text).isEmpty();
+        }
+        // 이름까지 쓰면 선언이다
+        assertThat(rules(withReference(withPrinciple("long long sum으로 선언하세요."), code, List.of("자료형"))))
+                .containsExactly(Rule.CODE_PATTERN);
+        assertThat(rules(withReference(withPrinciple("unsigned int total로 선언하세요."), code, List.of("자료형"))))
+                .containsExactly(Rule.CODE_PATTERN);
+        assertThat(rules(withReference(withPrinciple("unsigned long long total로 선언하세요."), code, List.of("자료형"))))
+                .containsExactly(Rule.CODE_PATTERN);
+    }
+
+    @Test
+    void 한_글자_태그_이름은_다른_낱말의_일부면_알고리즘_이름이_아니다() {
+        assertThat(withProblem(withGuess("큐브 모양으로 쌓을 때 높이를 잘못 센 것 같아요."), List.of("큐"), "상자 쌓기")).isEmpty();
+        assertThat(withProblem(withGuess("큐빅 퍼즐의 면을 잘못 센 것 같아요."), List.of("큐"), "상자 쌓기")).isEmpty();
+        assertThat(rules(withProblem(withPrinciple("큐에 넣은 순서대로 꺼내면 됩니다."), List.of("큐"), "상자 쌓기")))
+                .containsExactly(Rule.ALGORITHM_NAME);
+        for (String text : List.of("큐를 쓰면 됩니다. 우선순위 큐는 아니에요.", "핵심은 큐예요.", "큐라는 자료구조를 쓰면 됩니다.",
+                "큐나 덱을 떠올려 보세요.", "이 문제는 큐다.", "큐란 먼저 넣은 것을 먼저 꺼내는 구조입니다.", "큐보다 나은 것이 없어요.",
+                "큐인지 생각해 보세요.", "큐입니다.", "큐랑 비슷해요.", "먼저 큐, 그다음 배열입니다.",
+                "핵심 자료구조는 큐죠.", "스택이 아니라 큐면 됩니다.", "큐고요.", "큐지만 순서가 달라요.", "큐니까 앞에서 꺼내요.",
+                "큐거나 덱입니다.", "우선순위큐를 쓰세요.")) {
+            assertThat(rules(withProblem(withPrinciple(text), List.of("큐"), "상자 쌓기"))).as(text)
+                    .containsExactly(Rule.ALGORITHM_NAME);
+        }
+        // 지문에 이미 나온 이름은 조사가 무엇이든 뺀다
+        assertThat(withProblem(withPrinciple("큐라는 자료구조를 쓰면 됩니다."), List.of("큐"), "큐란 무엇인가")).isEmpty();
+    }
+
+    @Test
+    void 닫히지_않은_따옴표나_대괄호가_이어진_큰_코드도_오래_걸리지_않는다() {
+        // 제출 코드는 64KB까지다. 닫는 짝이 없는 줄을 자리마다 끝까지 다시 훑으면 글자 수의 제곱만큼 걸린다.
+        List<String> codes = List.of("\"\\".repeat(32_000) + "\n", "'".repeat(64_000) + "\n", "a[".repeat(32_000) + "\n",
+                "x [ ".repeat(16_000) + "\n");
+
+        for (String code : codes) {
+            assertTimeout(Duration.ofSeconds(1), () -> withReference(withPrinciple("2번 줄을 보세요."), code,
+                    List.of("문자열"), code));
+        }
+        // 닫히지 않은 따옴표는 기호 하나로, 그 뒤는 전과 같이 나눈다
+        assertThat(AnswerGuard.tokens("a = 'b\nc = \"d\" + \"e\n")).containsExactly("a", "=", "'", "b", "c", "=", "\"d\"",
+                "+", "\"", "e");
     }
 
     private static List<Violation> check(AnalysisResult result) {
