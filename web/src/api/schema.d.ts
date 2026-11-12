@@ -381,6 +381,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/me/streak": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 연속 학습 (STREAK-01, STREAK-02)
+         * @description 문제 목록 위 연속 학습 카드와 상단 바 칩에 쓴다. 비로그인이면 화면이 부르지 않고 0일째·빈 달력으로 그린다.
+         *     무엇을 세는지와 하루를 나누는 시각은 잔디(`/api/users/me/activity`)와 같다. 다만 잔디처럼 최근 365일만 보지 않고 기간 제한 없이 센다.
+         *     - 사용자 제출(`SUBMIT`)이 하나라도 있으면 그날을 센다. 판정과 관계없다(틀림, 채점 중, 채점 불가 포함). 예제 실행과 관리자의 정답 코드 검증은 세지 않는다.
+         *     - 날짜는 한국 시각 자정으로 나눈다.
+         *     제출이 없으면 `currentStreak`는 0이고 `week`는 모두 `false`다.
+         */
+        get: operations["getMyStreak"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/me/learning-stats": {
         parameters: {
             query?: never;
@@ -1425,6 +1449,28 @@ export interface components {
             }[];
             /** @description `from`~`to` 중 제출이 있는 날 수 */
             totalActiveDays: number;
+        };
+        UserStreak: {
+            /**
+             * @description 오늘까지 하루도 빠짐없이 제출한 날 수. 오늘 아직 제출하지 않았어도 어제까지 이어졌으면 그 일수를 준다.
+             *     예: 월·화·수에 제출했으면 목요일에 제출하기 전에는 3, 제출하면 4다. 목요일에 제출하지 않으면 금요일에 0이다.
+             *     주가 바뀌어도 초기화하지 않는다
+             */
+            currentStreak: number;
+            /** @description 오늘(한국 시각) 제출했는지. `false`이고 `currentStreak`가 1 이상이면 오늘 제출해야 이어진다 */
+            activeToday: boolean;
+            /**
+             * Format: date
+             * @description 한국 시각으로 오늘. 화면이 `week`에서 오늘 칸을 찾을 때 쓴다
+             */
+            today: string;
+            /** @description 이번 주 월요일부터 일요일까지(한국 시각) 날짜순으로 7개. 오늘 이후 날은 늘 `false`다 */
+            week: {
+                /** Format: date */
+                date: string;
+                /** @description 그날 제출했는지 */
+                active: boolean;
+            }[];
         };
         /** @enum {string} */
         Difficulty: "EASY" | "MEDIUM" | "HARD";
@@ -2667,6 +2713,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserActivity"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getMyStreak: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 연속 일수와 이번 주 기록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserStreak"];
                 };
             };
             401: components["responses"]["Unauthorized"];
