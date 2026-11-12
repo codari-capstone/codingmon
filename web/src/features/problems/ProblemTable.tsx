@@ -1,17 +1,11 @@
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { Link } from 'react-router'
 
-import type { ProblemSummary } from '@/api/types'
+import type { Difficulty, ProblemSummary } from '@/api/types'
 import { StatusText } from '@/components/StatusText'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Table, type TableColumn } from '@/components/ui/data-table'
 import { DIFFICULTY_LABEL, SOLVE_STATUS_LABEL, SOLVE_STATUS_TONE } from './labels'
 import type { SortDirection, SortField } from './problemListParams'
 
@@ -22,6 +16,26 @@ interface ProblemTableProps {
   sortField: SortField
   sortDirection: SortDirection
   onSort: (field: SortField) => void
+}
+
+const DIFFICULTY_BARS: Record<Difficulty, number> = { EASY: 1, MEDIUM: 2, HARD: 3 }
+
+/** 막대 세 칸 중 몇 칸이 찼는지로 난이도를 보인다. 뜻은 옆 글자가 전하고 막대는 장식이다 */
+function DifficultyLevel({ difficulty }: { difficulty: Difficulty }) {
+  const filled = DIFFICULTY_BARS[difficulty]
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+      <span aria-hidden="true" className="inline-flex gap-[3px]">
+        {[1, 2, 3].map((bar) => (
+          <span
+            key={bar}
+            className={`h-3.5 w-1.5 rounded-[3px] ${bar <= filled ? 'bg-primary' : 'bg-border'}`}
+          />
+        ))}
+      </span>
+      {DIFFICULTY_LABEL[difficulty]}
+    </span>
+  )
 }
 
 function ariaSort(active: boolean, direction: SortDirection) {
@@ -36,71 +50,77 @@ export function ProblemTable({
   sortDirection,
   onSort,
 }: ProblemTableProps) {
-  function sortableHead(field: SortField, label: string, className?: string) {
+  function sortable(field: SortField, label: string, width: string): TableColumn<ProblemSummary> {
     const active = sortField === field
     const Icon = !active ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown
-
-    return (
-      <TableHead aria-sort={ariaSort(active, sortDirection)} className={className}>
-        <Button variant="ghost" size="sm" className="-ml-4" onClick={() => onSort(field)}>
+    return {
+      key: field,
+      width,
+      ariaSort: ariaSort(active, sortDirection),
+      header: (
+        // 머리글 글자 시작선을 다른 열과 맞춘다(버튼 안쪽 여백만큼 당긴다)
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 px-3 text-xs"
+          onClick={() => onSort(field)}
+        >
           {label}
-          <Icon aria-hidden="true" />
+          <Icon aria-hidden="true" className="size-3.5" />
         </Button>
-      </TableHead>
-    )
+      ),
+    }
   }
 
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {sortableHead('id', '번호', 'w-20')}
-          <TableHead>제목</TableHead>
-          {sortableHead('difficulty', '난이도', 'w-28')}
-          <TableHead>개념 태그</TableHead>
-          {showSolveStatus ? <TableHead className="w-24">풀이 상태</TableHead> : null}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {problems.map((problem) => (
-          <TableRow key={problem.id}>
-            <TableCell className="text-muted-foreground tabular-nums">{problem.id}</TableCell>
-            <TableCell className="font-medium">
-              {/* 터치 영역을 44px로 띄우기보다 셀 전체를 누를 수 있게 둔다 */}
-              <Link
-                to={`/problems/${problem.id}`}
-                className="hover:text-primary-text hover:underline"
-              >
-                {problem.title}
-              </Link>
-            </TableCell>
-            <TableCell>{DIFFICULTY_LABEL[problem.difficulty]}</TableCell>
-            <TableCell>
-              <span className="flex flex-wrap gap-1">
-                {problem.tags.map((tag) => (
-                  <span
-                    key={tag.slug}
-                    className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs"
-                  >
-                    {tag.name}
-                  </span>
-                ))}
-              </span>
-            </TableCell>
-            {showSolveStatus ? (
-              <TableCell>
-                {problem.solveStatus ? (
-                  <StatusText tone={SOLVE_STATUS_TONE[problem.solveStatus]}>
-                    {SOLVE_STATUS_LABEL[problem.solveStatus]}
-                  </StatusText>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-            ) : null}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  )
+  const columns: TableColumn<ProblemSummary>[] = [
+    {
+      ...sortable('id', '번호', '88px'),
+      render: (problem) => <span className="text-muted-foreground tabular-nums">{problem.id}</span>,
+    },
+    {
+      key: 'title',
+      header: '제목',
+      render: (problem) => (
+        <Link
+          to={`/problems/${problem.id}`}
+          className="text-foreground hover:text-primary-text font-semibold whitespace-nowrap hover:underline"
+        >
+          {problem.title}
+        </Link>
+      ),
+    },
+    {
+      ...sortable('difficulty', '난이도', '120px'),
+      render: (problem) => <DifficultyLevel difficulty={problem.difficulty} />,
+    },
+    {
+      key: 'tags',
+      header: '개념',
+      render: (problem) => (
+        <span className="flex flex-wrap gap-1.5">
+          {problem.tags.map((tag) => (
+            <Badge key={tag.slug}>{tag.name}</Badge>
+          ))}
+        </span>
+      ),
+    },
+  ]
+
+  if (showSolveStatus) {
+    columns.push({
+      key: 'solveStatus',
+      header: '풀이 상태',
+      width: '110px',
+      render: (problem) =>
+        problem.solveStatus ? (
+          <StatusText tone={SOLVE_STATUS_TONE[problem.solveStatus]}>
+            {SOLVE_STATUS_LABEL[problem.solveStatus]}
+          </StatusText>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    })
+  }
+
+  return <Table columns={columns} rows={problems} />
 }

@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import { DIFFICULTIES, SOLVE_STATUSES } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Icon } from '@/components/ui/icon'
 import { useAuth } from '@/features/auth/useAuth'
+import { cn } from '@/lib/utils'
 import { DIFFICULTY_LABEL, SOLVE_STATUS_LABEL } from './labels'
 import {
   hasActiveFilter,
@@ -37,12 +39,15 @@ function toggled<T extends string>(list: T[], value: T): T[] {
 
 function FilterGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div>
-      <h2 className="text-muted-foreground mb-1 text-xs font-semibold tracking-wide">{title}</h2>
+    <fieldset className="m-0 flex flex-col border-0 p-0">
+      <legend className="text-muted-foreground mb-1 p-0 text-[13px] font-semibold">{title}</legend>
       {children}
-    </div>
+    </fieldset>
   )
 }
+
+/** 개념은 이만큼만 먼저 보이고 나머지는 [더 보기]로 편다 */
+const CONCEPTS_SHOWN = 5
 
 /**
  * 사이드바 필터 (LIST-03).
@@ -56,6 +61,11 @@ export function ProblemFilters() {
   const params = useMemo(() => parseParams(searchParams), [searchParams])
   const { isAuthenticated } = useAuth()
   const { data: tags = [], error: tagsError, refetch: refetchTags } = useQuery(conceptTagsQuery())
+  const [conceptsOpen, setConceptsOpen] = useState(false)
+  // 접혀 있어도 걸려 있는 개념은 보인다. 숨기면 ?tag=로 들어온 필터를 보지도 풀지도 못한다
+  const visibleTags = conceptsOpen
+    ? tags
+    : tags.filter((tag, i) => i < CONCEPTS_SHOWN || params.tag.includes(tag.slug))
 
   function apply(next: Partial<ProblemListParams>) {
     // withChanges를 거쳐야 필터를 바꿀 때 1페이지로 돌아간다. 3페이지에서 필터를 걸면
@@ -64,7 +74,7 @@ export function ProblemFilters() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <FilterGroup title="난이도">
         {DIFFICULTIES.map((difficulty) => (
           <FilterCheckbox
@@ -76,7 +86,7 @@ export function ProblemFilters() {
         ))}
       </FilterGroup>
 
-      <FilterGroup title="개념 태그">
+      <FilterGroup title="개념">
         {tagsError && tags.length === 0 ? (
           /*
            * 캐시된 태그가 있으면 오류 줄 대신 그걸 계속 그린다. 오래 열어 둔 탭에서 재연결 뒤
@@ -101,14 +111,33 @@ export function ProblemFilters() {
             </Button>
           </div>
         ) : (
-          tags.map((tag) => (
-            <FilterCheckbox
-              key={tag.slug}
-              label={tag.name}
-              checked={params.tag.includes(tag.slug)}
-              onChange={() => apply({ tag: toggled(params.tag, tag.slug) })}
-            />
-          ))
+          <>
+            {visibleTags.map((tag) => (
+              <FilterCheckbox
+                key={tag.slug}
+                label={tag.name}
+                checked={params.tag.includes(tag.slug)}
+                onChange={() => apply({ tag: toggled(params.tag, tag.slug) })}
+              />
+            ))}
+            {tags.length > CONCEPTS_SHOWN ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="self-start"
+                aria-expanded={conceptsOpen}
+                onClick={() => setConceptsOpen((open) => !open)}
+              >
+                <Icon
+                  name="chevron-down"
+                  size={16}
+                  className={cn('transition-transform', conceptsOpen && 'rotate-180')}
+                />
+                {conceptsOpen ? '접기' : '더 보기'}
+              </Button>
+            ) : null}
+          </>
         )}
       </FilterGroup>
 
@@ -130,7 +159,7 @@ export function ProblemFilters() {
       ) : null}
 
       {hasActiveFilter(params) ? (
-        <Button asChild variant="secondary" className="min-h-11">
+        <Button asChild variant="ghost" size="sm" fullWidth>
           {/*
             기본값을 URL에 쓰지 않으므로 쿼리 없는 주소가 곧 초기화 상태다. 이 링크는
             일부러 깨끗한 '/problems'로 돌아간다 — 단순하고 공유하기 쉽다는 이유로

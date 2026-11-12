@@ -1,6 +1,5 @@
 import { createBrowserRouter, redirect } from 'react-router'
 
-import { ProblemsLayout } from './ProblemsLayout'
 import { RequireAdmin } from './RequireAdmin'
 import { RequireAuth } from './RequireAuth'
 import { RootLayout } from './RootLayout'
@@ -13,15 +12,15 @@ export const router = createBrowserRouter([
     path: '/',
     // 모든 화면이 lazy 청크다. 배포 후 옛 청크가 404가 되는 경우를 여기서 받는다.
     ErrorBoundary: RouteErrorBoundary,
-    // 화면을 옮기면 맨 위에서, 뒤로 가기는 떠났던 위치에서 연다 (#190). RootLayout이 아니라
-    // 여기 둔다 — /problems는 형제인 ProblemsLayout 아래라 RootLayout에 두면 닿지 않는다.
+    // 화면을 옮기면 맨 위에서, 뒤로 가기는 떠났던 위치에서 연다 (#190)
     Component: ScrollRoot,
     children: [
       {
-        // 사이드바가 없는 화면들
         Component: RootLayout,
         children: [
           { index: true, loader: () => redirect('/problems') },
+          // 필터는 화면 안에 둔다. 제목·검색칸이 필터와 표 위 전체 폭에 걸친다 (#235)
+          { path: 'problems', lazy: () => import('@/features/problems/ProblemListPage') },
           { path: 'login', lazy: () => import('@/features/auth/LoginPage') },
           // GitHub 로그인이 돌아오는 자리 (COM-02). 주소는 계약이 정했다.
           { path: 'login/github', lazy: () => import('@/features/auth/GitHubCallbackPage') },
@@ -82,11 +81,6 @@ export const router = createBrowserRouter([
           },
           { path: '*', lazy: () => import('@/app/NotFoundPage') },
         ],
-      },
-      {
-        // 사이드바에 필터가 붙는 화면 (#21). #46도 숙련도 사이드바로 같은 방식을 쓴다.
-        Component: ProblemsLayout,
-        children: [{ path: 'problems', lazy: () => import('@/features/problems/ProblemListPage') }],
       },
     ],
   },

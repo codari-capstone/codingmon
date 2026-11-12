@@ -6,7 +6,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/app/queryClient'
-import { ProblemsLayout } from '@/app/ProblemsLayout'
+import { RootLayout } from '@/app/RootLayout'
 import { ScrollRoot } from '@/app/ScrollRoot'
 import { ThemeProvider } from '@/app/ThemeProvider'
 import * as useAuthModule from '@/features/auth/useAuth'
@@ -26,7 +26,7 @@ function renderPage(initialUrl = '/problems') {
         Component: ScrollRoot,
         children: [
           {
-            Component: ProblemsLayout,
+            Component: RootLayout,
             children: [{ path: '/problems', Component: ProblemListPage }],
           },
           // 안내 링크를 눌러 보는 테스트가 있다. 라우트가 없으면 이동이 404로 떨어진다.
@@ -402,7 +402,11 @@ describe('ProblemListPage', () => {
       const box = screen.getByRole('searchbox', { name: '제목으로 검색' })
 
       fireEvent.change(box, { target: { value: '합' } })
-      fireEvent.click(within(screen.getByRole('main')).getByRole('link', { name: '필터 초기화' }))
+      fireEvent.click(
+        within(screen.getByRole('region', { name: '문제' })).getByRole('link', {
+          name: '필터 초기화',
+        }),
+      )
       await act(async () => {
         await vi.advanceTimersByTimeAsync(400)
       })
@@ -451,9 +455,9 @@ describe('ProblemListPage', () => {
     renderPage('/problems?keyword=없는제목')
 
     expect(await screen.findByText('조건에 맞는 문제가 없습니다')).toBeInTheDocument()
-    // ProblemFilters 사이드바도 필터가 걸리면 같은 이름의 초기화 링크를 둔다.
-    // 본문으로 좁히지 않으면 두 개가 걸려 getByRole이 바로 실패한다.
-    const main = screen.getByRole('main')
+    // 필터 칸(ProblemFilters)도 필터가 걸리면 같은 이름의 초기화 링크를 둔다.
+    // 문제 영역으로 좁히지 않으면 두 개가 걸려 getByRole이 바로 실패한다.
+    const main = screen.getByRole('region', { name: '문제' })
     expect(within(main).getByRole('link', { name: '필터 초기화' })).toHaveAttribute(
       'href',
       '/problems',
@@ -508,7 +512,7 @@ describe('ProblemListPage', () => {
 
     // 헤더에도 '로그인' 링크가 있다. 본문으로 좁혀야 이 화면의 안내문을 집는다.
     // 세션을 확인하기 전에는 안내를 그리지 않으므로(위 테스트) 나타날 때까지 기다린다.
-    const main = screen.getByRole('main')
+    const main = screen.getByRole('region', { name: '문제' })
     expect(await within(main).findByRole('link', { name: /로그인/ })).toBeInTheDocument()
   })
 
@@ -518,7 +522,7 @@ describe('ProblemListPage', () => {
     const user = userEvent.setup()
     const router = renderPage('/problems?difficulty=EASY')
 
-    const main = screen.getByRole('main')
+    const main = screen.getByRole('region', { name: '문제' })
     await user.click(await within(main).findByRole('link', { name: /로그인/ }))
 
     expect(router.state.location.pathname).toBe('/login')
@@ -558,7 +562,9 @@ describe('ProblemListPage', () => {
 
     expect(listCalls).toBe(0)
     // 기다리는 중임이 모양으로 보여야 한다. 빈 화면을 두면 고장으로 읽힌다.
-    expect(within(screen.getByRole('main')).getByRole('status')).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('region', { name: '문제' })).getByRole('status'),
+    ).toBeInTheDocument()
   })
 
   it('로그인하면 안내가 사라지고 풀이 상태 열이 보인다', async () => {
@@ -585,7 +591,7 @@ describe('ProblemListPage', () => {
     // AppHeader도 자기 자신의 '로그인' 링크를 두므로(이땐 로그인 상태라 없지만) main으로
     // 좁혀, 이 화면의 안내문이 로그인하면 사라지는지까지 확인한다.
     expect(
-      within(screen.getByRole('main')).queryByRole('link', { name: '로그인' }),
+      within(screen.getByRole('region', { name: '문제' })).queryByRole('link', { name: '로그인' }),
     ).not.toBeInTheDocument()
   })
 })
