@@ -110,7 +110,7 @@ Tailwind는 `p-4 text-sm bg-red-50`처럼 미리 정해진 클래스를 조합�
 
 #### 부품을 받을지, 직접 만들지
 
-`src/components/ui/`에는 디자인 시스템 부품(Button·Input·Checkbox 같은 것)을 둔다. 디자인 원본(부품별 README·`tokens.json`)은 **저장소에 올리지 않는다** — 각자 로컬 `docs/design-handoff/`에 두고 `.git/info/exclude`로 뺀다. 없으면 프론트엔드 담당에게 받는다. 부품은 둘로 나뉜다.
+`src/components/ui/`에는 디자인 시스템 부품(Button·Input·Checkbox 같은 것)을 둔다. 디자인 원본(부품별 README·`tokens.json`)은 **저장소에 올리지 않는다** — 각자 로컬 `docs/design-handoff/`에 둔다. 이 경로는 저장소 `.gitignore`가 빼 두므로 `git add .`에도 섞이지 않는다. 없으면 프론트엔드 담당에게 받는다. 부품은 둘로 나뉜다.
 
 - **`shadcn add`로 받아 새 디자인으로 다시 꾸민 것**: `button`·`input`·`table`·`dropdown-menu`·`skeleton`·`tabs`·`alert-dialog`
 - **직접 만든 것**: `textarea`·`select`·`search-input`·`checkbox`·`radio-group`·`switch`·`pagination`. 네이티브 요소로 충분하거나(선택 부품은 네이티브 input을 겹쳐 꾸민다) 아래 2번 기준에 걸리는 것이다

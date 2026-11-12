@@ -307,8 +307,13 @@ function AdminProblemForm() {
           <fieldset
             disabled={locked}
             // 읽기 전용은 지난 버전을 읽는 화면이다. 꺼진 칸 글자색(disabled-foreground, 2.1:1)은 읽지 않는 글자용이라 본문 색으로 되돌린다.
-            // 체크박스 라벨의 has-disabled:opacity-50(태그·Python 제한)도 같은 이유로 되돌린다(#257 리뷰)
-            className="contents [&_:is(input,textarea,select):disabled]:text-foreground [&_label:has(:disabled)]:opacity-100"
+            // 체크박스 라벨의 has-disabled:opacity-50(태그·Python 제한)도 같은 이유로 되돌린다(#257 리뷰).
+            // 잠겼을 때만 붙인다. 편집 중에도 태그 상한(3개)에 걸린 체크박스는 꺼지는데, 그건 흐려야 고를 수 없는 줄 안다
+            className={
+              locked
+                ? 'contents [&_:is(input,textarea,select):disabled]:text-foreground [&_label:has(:disabled)]:opacity-100'
+                : 'contents'
+            }
           >
             <TabsContent className="bg-card rounded-lg border p-6" value="basic">
               <BasicInfoTab form={form} />

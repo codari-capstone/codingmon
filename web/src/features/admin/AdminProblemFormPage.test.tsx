@@ -182,6 +182,32 @@ describe('AdminProblemFormPage', () => {
     expect(screen.queryByRole('button', { name: '저장' })).not.toBeInTheDocument()
   })
 
+  /**
+   * 읽기 전용에서는 꺼진 칸을 흐리지 않게 되돌리지만(지난 버전을 읽는 화면), 그 규칙이 편집 중에도
+   * 걸리면 태그 상한(3개)에 걸려 꺼진 체크박스가 켤 수 있는 것과 똑같이 보인다 (#257 리뷰).
+   */
+  it('꺼진 칸의 흐림 되돌리기는 잠긴 화면에만 건다', async () => {
+    const user = userEvent.setup()
+    const RESTORE = '[&_label:has(:disabled)]:opacity-100'
+    renderPage('/admin/problems/new')
+
+    for (const name of ['배열', '문자열', '해시']) {
+      await user.click(await screen.findByRole('checkbox', { name }))
+    }
+    const capped = screen.getByRole('checkbox', { name: '동적 계획법' })
+    expect(capped).toBeDisabled()
+    expect(capped.closest('fieldset.contents')).not.toHaveClass(RESTORE)
+  })
+
+  it('지난 버전에서는 꺼진 칸을 흐리지 않는다', async () => {
+    renderPage('/admin/problems/9/versions/1')
+
+    await waitForLoaded('연습 문제 9')
+    expect(field('제목').closest('fieldset.contents')).toHaveClass(
+      '[&_label:has(:disabled)]:opacity-100',
+    )
+  })
+
   it('새 문제를 저장하면 수정 주소로 넘어간다', async () => {
     const user = userEvent.setup()
     const { router } = renderPage('/admin/problems/new')

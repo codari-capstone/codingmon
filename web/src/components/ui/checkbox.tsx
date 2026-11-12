@@ -52,11 +52,11 @@ export function ChoiceText({
   )
 }
 
-/** 켜고 끄는 선택 하나. 바로 적용되는 설정에는 Switch, 하나만 고르는 선택지에는 RadioGroup */
 /** ChoiceText와 짝인 input 속성. 설명이 없으면 label이 이름을 맡으니 아무것도 붙이지 않는다 */
 export const choiceAria = (id: string, description: React.ReactNode) =>
   description ? { 'aria-labelledby': `${id}-label`, 'aria-describedby': `${id}-desc` } : {}
 
+/** 켜고 끄는 선택 하나. 바로 적용되는 설정에는 Switch, 하나만 고르는 선택지에는 RadioGroup */
 function Checkbox({ label, description, className, ...props }: ChoiceProps) {
   const id = useId()
   return (
