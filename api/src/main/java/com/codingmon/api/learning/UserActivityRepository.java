@@ -123,8 +123,10 @@ public class UserActivityRepository {
     UserStreak findStreak(long userId) {
         record Row(int streakDays, LocalDate lastActiveDate, LocalDate today) {
         }
+        // 오늘은 now()(트랜잭션 시작)가 아니라 이 문장이 도는 시각이다. 스냅숏을 잡은 뒤의 시각이라, 보이는 제출의
+        // submitted_at(잠금 뒤 clock_timestamp)보다 늦다. 그래서 last_active_date가 오늘보다 뒤일 수 없다.
         Row row = jdbc.sql("""
-                select streak_days, last_active_date, (now() at time zone 'Asia/Seoul')::date as today
+                select streak_days, last_active_date, (clock_timestamp() at time zone 'Asia/Seoul')::date as today
                 from users where id = :userId
                 """)
                 .param("userId", userId)
