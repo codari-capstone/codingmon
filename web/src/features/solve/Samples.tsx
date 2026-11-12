@@ -20,6 +20,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       type="button"
       variant="ghost"
       size="sm"
+      className="min-h-11"
       aria-label={`${label} ${copied ? '복사됨' : '복사'}`}
       onClick={() => void copy()}
     >

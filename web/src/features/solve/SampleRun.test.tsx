@@ -80,7 +80,23 @@ describe('SampleRun (SOLVE-08)', () => {
     renderRun(fake({}), [])
 
     expect(screen.queryByRole('button', { name: '실행' })).not.toBeInTheDocument()
-    expect(screen.queryByText('예제 실행')).not.toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('실행 전에는 결과 카드를 그리지 않고 live region만 둔다', () => {
+    // 빈 카드가 뜨면 안 되지만, live region은 처음부터 있어야 결과가 안내된다
+    renderRun(fake({}))
+
+    expect(screen.queryByRole('heading', { name: '예제 실행 결과' })).not.toBeInTheDocument()
+    expect(liveRegion()).toBeEmptyDOMElement()
+    expect(liveRegion().closest('section')).toHaveClass('sr-only')
+  })
+
+  it('실행하면 결과 카드와 제목이 보인다', () => {
+    renderRun(fake({ pending: true }))
+
+    expect(screen.getByRole('heading', { name: '예제 실행 결과' })).toBeInTheDocument()
+    expect(liveRegion().closest('section')).not.toHaveClass('sr-only')
   })
 
   it('코드가 비어 있으면 누를 수 없다', () => {

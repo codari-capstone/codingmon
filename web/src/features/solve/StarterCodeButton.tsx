@@ -56,6 +56,7 @@ export function StarterCodeButton({
         <Button
           variant="secondary"
           size="sm"
+          className="min-h-11"
           onClick={(event) => {
             if (!drafted) {
               event.preventDefault()

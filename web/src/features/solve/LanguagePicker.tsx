@@ -26,7 +26,7 @@ export function LanguagePicker({
       {languages.map(({ language }) => (
         <label
           key={language}
-          className="text-muted-foreground hover:text-foreground has-checked:bg-card has-checked:text-foreground has-checked:shadow-card has-focus-visible:outline-ring relative inline-flex h-control-sm cursor-pointer items-center rounded-full px-4 text-[15px] font-semibold transition-colors has-focus-visible:outline-2 has-focus-visible:outline-offset-2 forced-colors:has-checked:outline-2"
+          className="text-muted-foreground hover:text-foreground has-checked:bg-card has-checked:text-foreground has-checked:shadow-card has-focus-visible:outline-ring relative inline-flex min-h-11 cursor-pointer items-center rounded-full px-4 text-[15px] font-semibold transition-colors has-focus-visible:outline-2 has-focus-visible:outline-offset-2 forced-colors:has-checked:outline-2"
         >
           <input
             type="radio"

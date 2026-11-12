@@ -214,7 +214,11 @@ export function SampleRun({ run, samples }: Pick<SampleRunProps, 'run' | 'sample
   const active = run.pending || result !== undefined || failed
 
   return (
-    <section className={active ? 'bg-card flex flex-col gap-3.5 rounded-lg border px-6 py-5' : ''}>
+    // 실행 전에는 sr-only로 둔다. 빈 블록이 남으면 부모 flex의 gap이 한 번 더 들어가 간격이 두 배가 되고,
+    // sr-only(절대 위치)는 flex 항목이 아니라 gap을 만들지 않는다. live region은 그대로 접근성 트리에 남는다
+    <section
+      className={active ? 'bg-card flex flex-col gap-3.5 rounded-lg border px-6 py-5' : 'sr-only'}
+    >
       {active ? <h2 className="text-foreground text-base font-semibold">예제 실행 결과</h2> : null}
 
       {/*

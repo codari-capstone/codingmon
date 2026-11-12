@@ -5,7 +5,6 @@ import { useParams, useSearchParams } from 'react-router'
 import type { Language, ProblemDetailView } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
-import { Breadcrumb } from '@/components/ui/breadcrumb'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/features/auth/useAuth'
@@ -27,7 +26,13 @@ import { SubmitButton, SubmitError } from './SubmitButton'
 import { Statement } from './Statement'
 import { useWideLayout } from './useWideLayout'
 
-/** 경로·제목·난이도·태그·제한 (SOLVE-01). */
+/**
+ * 제목·난이도·태그·제한 (SOLVE-01).
+ *
+ * 디자인 화면에는 '문제 목록 > N. 제목' 경로가 있지만 넣지 않는다. Breadcrumb 부품 규칙이
+ * "두 단계뿐인 화면에는 쓰지 않는다"이고, 마지막 항목이 바로 아래 h1과 같아 화면 낭독기가
+ * 같은 제목을 두 번 읽는다(#266 리뷰). 목록으로는 상단 바의 '문제'로 간다.
+ */
 function Header({
   problem,
   current,
@@ -36,27 +41,19 @@ function Header({
   current: ProblemDetailView['languages'][number] | undefined
 }) {
   return (
-    <div className="flex flex-col gap-3.5">
-      <Breadcrumb
-        items={[
-          { label: '문제 목록', href: '/problems' },
-          { label: `${problem.id}. ${problem.title}` },
-        ]}
-      />
-      <div className="flex flex-col gap-2.5">
-        <h1 className="page-title">{problem.title}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="outline">{DIFFICULTY_LABEL[problem.difficulty]}</Badge>
-          {problem.tags.map((tag) => (
-            <Badge key={tag.slug}>{tag.name}</Badge>
-          ))}
-          {current ? (
-            // 제한은 고른 언어의 것이다 (SOLVE-04). Python이 C++보다 느려 제한이 다르다.
-            // 한 문자열로 둔다 — 조각으로 나누면 텍스트 노드가 쪼개져 "Python · 2초 · 256MB"를
-            // 한 덩어리로 찾는 테스트가 못 찾는다.
-            <span className="text-muted-foreground text-sm">{`${LANGUAGE_LABEL[current.language]} · ${formatTimeLimit(current.timeLimitMs)} · ${current.memoryLimitMb}MB`}</span>
-          ) : null}
-        </div>
+    <div className="flex flex-col gap-2.5">
+      <h1 className="page-title">{problem.title}</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone="outline">{DIFFICULTY_LABEL[problem.difficulty]}</Badge>
+        {problem.tags.map((tag) => (
+          <Badge key={tag.slug}>{tag.name}</Badge>
+        ))}
+        {current ? (
+          // 제한은 고른 언어의 것이다 (SOLVE-04). Python이 C++보다 느려 제한이 다르다.
+          // 한 문자열로 둔다 — 조각으로 나누면 텍스트 노드가 쪼개져 "Python · 2초 · 256MB"를
+          // 한 덩어리로 찾는 테스트가 못 찾는다.
+          <span className="text-muted-foreground text-sm">{`${LANGUAGE_LABEL[current.language]} · ${formatTimeLimit(current.timeLimitMs)} · ${current.memoryLimitMb}MB`}</span>
+        ) : null}
       </div>
     </div>
   )

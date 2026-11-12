@@ -1,8 +1,11 @@
 import type { ProblemDetailView } from '@/api/types'
 import { Markdown } from '@/components/Markdown'
 
-/** 지문 본문은 16px. Markdown 기본(14px)은 안내·용어 설명처럼 작은 자리에 맞춰져 있다 */
-const BODY = 'text-base leading-[1.7]'
+/**
+ * 지문 본문은 16px. Markdown 기본(14px)은 안내·용어 설명처럼 작은 자리에 맞춰져 있다.
+ * 소제목도 한 단계씩 올린다 — 루트만 키우면 `#`(h2)이 본문과 같고 `##`(h3) 이하는 본문보다 작아진다.
+ */
+const BODY = 'text-base leading-[1.7] [&_h2]:text-lg [&_:is(h3,h4,h5,h6)]:text-base'
 
 /** 지문 하단의 출처·라이선스·버전 (SOLVE-03). */
 function Source({ problem }: { problem: ProblemDetailView }) {
