@@ -56,7 +56,7 @@ export function Table<Row extends { id: string | number }>({
   className,
 }: TableProps<Row>) {
   return (
-    <div className={cn('w-full overflow-x-auto', className)}>
+    <div data-slot="table-container" className={cn('w-full overflow-x-auto', className)}>
       <table className="text-body-foreground w-full border-separate border-spacing-0 text-sm">
         {caption ? <caption className="sr-only">{caption}</caption> : null}
         <thead>

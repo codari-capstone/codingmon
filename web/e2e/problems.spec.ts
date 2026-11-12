@@ -94,7 +94,7 @@ test.describe('문제 목록', () => {
 
     const layout = await page.evaluate(() => {
       const aside = document.querySelector('aside')
-      const main = document.querySelector('main')
+      const main = document.querySelector('section[aria-label="문제"]')
       if (!aside || !main) return null
 
       return {
@@ -106,7 +106,7 @@ test.describe('문제 목록', () => {
     })
 
     expect(layout).not.toBeNull()
-    // 2열이면 asideBottom > mainTop 이다. 쌓였으면 사이드바가 본문 위에서 끝난다.
+    // 2열이면 asideBottom > mainTop 이다. 쌓였으면 필터 칸이 표 영역 위에서 끝난다.
     expect(layout!.asideBottom).toBeLessThanOrEqual(layout!.mainTop + 1)
     // 문서 자체가 가로로 넘치면 화면 전체가 흔들린다. 다만 이 단언만으로는 표가
     // 컨테이너로 스크롤을 받고 있다는 것까지는 증명하지 못한다 — 아래에서 따로 본다.

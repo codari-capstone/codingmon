@@ -60,6 +60,50 @@ describe('ProblemFilters', () => {
     expect(await screen.findByRole('checkbox', { name: '동적 계획법' })).toBeInTheDocument()
   })
 
+  describe('개념이 5개를 넘으면', () => {
+    const SEVEN = ['배열', '문자열', '해시', '동적 계획법', '정렬', '스택', '그래프'].map(
+      (name, i) => ({ slug: `t${i}`, name }),
+    )
+    const conceptBoxes = () =>
+      screen
+        .getAllByRole('checkbox')
+        .map((box) => box.closest('label')?.textContent)
+        .filter((name) => !['쉬움', '보통', '어려움'].includes(name ?? ''))
+
+    it('5개만 보이고 더 보기·접기로 편다', async () => {
+      server.use(http.get('*/api/concept-tags', () => HttpResponse.json(SEVEN)))
+      const user = userEvent.setup()
+      renderFilters()
+
+      const more = await screen.findByRole('button', { name: '더 보기' })
+      expect(more).toHaveAttribute('aria-expanded', 'false')
+      expect(conceptBoxes()).toEqual(['배열', '문자열', '해시', '동적 계획법', '정렬'])
+
+      await user.click(more)
+      expect(conceptBoxes()).toHaveLength(7)
+      expect(screen.getByRole('button', { name: '접기' })).toHaveAttribute('aria-expanded', 'true')
+
+      await user.click(screen.getByRole('button', { name: '접기' }))
+      expect(conceptBoxes()).toHaveLength(5)
+    })
+
+    it('접혀 있어도 걸려 있는 개념은 보인다', async () => {
+      // 숨기면 ?tag=로 들어온 필터를 보지도 풀지도 못한다
+      server.use(http.get('*/api/concept-tags', () => HttpResponse.json(SEVEN)))
+      renderFilters('/problems?tag=t6')
+
+      expect(await screen.findByRole('checkbox', { name: '그래프' })).toBeChecked()
+      expect(screen.queryByRole('checkbox', { name: '스택' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('개념이 5개 이하면 더 보기가 없다', async () => {
+    renderFilters()
+
+    await screen.findByRole('checkbox', { name: '동적 계획법' })
+    expect(screen.queryByRole('button', { name: '더 보기' })).not.toBeInTheDocument()
+  })
+
   // 태그 목록이 비는 것과 "못 불러온 것"이 구분되지 않으면, ?tag=dp로 들어온
   // 사용자가 자신의 결과를 좁히는 필터를 보거나 해제할 방법이 없어진다.
   it('태그를 못 불러오면 체크박스 대신 안내와 다시 시도를 보여 준다', async () => {

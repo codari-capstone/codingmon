@@ -1,12 +1,12 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { Search } from 'lucide-react'
+
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
 
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
-import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/ui/search-input'
 import { useAuth } from '@/features/auth/useAuth'
 import { cn } from '@/lib/utils'
 import {
@@ -23,6 +23,7 @@ import {
 } from './problemListParams'
 import { problemListQuery } from './problemsQuery'
 import { Pagination } from '@/components/ui/pagination'
+import { ProblemFilters } from './ProblemFilters'
 import { ProblemTable } from './ProblemTable'
 
 /** 검색어를 URL에 반영하기까지 기다리는 시간. */
@@ -150,90 +151,105 @@ export function Component() {
     setSearchParams(serializeParams(withChanges(params, { page: pages })), { replace: true })
   }, [outOfRange, pages, params, setSearchParams])
 
-  return (
-    <section className="flex flex-col gap-4">
-      <h1 className="page-title">문제 목록</h1>
+  const showList = data !== undefined && !error && !waiting && data.content.length > 0
 
-      <div className="relative">
-        <Search
-          aria-hidden="true"
-          className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
-        />
-        <Input
-          type="search"
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-wrap items-end justify-between gap-6">
+        <div className="flex flex-col gap-2">
+          <p className="text-eyebrow text-primary-text">코딩테스트 연습</p>
+          <h1 className="page-title">문제 목록</h1>
+          {/* 알림 영역은 늘 두고 내용만 바꾼다. 내용과 함께 생기면 화면 낭독기가 바뀐 수를 읽지 않는다 */}
+          <p className="text-muted-foreground min-h-[1.5em] text-[15px]" aria-live="polite">
+            {showList ? `${filtered ? '조건에 맞는 문제' : '문제'} ${data.totalElements}개` : null}
+          </p>
+        </div>
+        <SearchInput
           aria-label="제목으로 검색"
           placeholder="제목으로 검색"
-          className="pl-9"
+          className="w-[360px] max-w-full"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
         />
       </div>
 
       {/*
+        필터와 표는 flex-wrap으로 나란히 둔다. 표에 flex-[999]를 줘서 좁아지면 필터가
+        먼저 밀려 위로 쌓인다 (UX-05). 그래서 필터를 sticky나 100vh로 두지 않는다.
+      */}
+      <div className="flex flex-wrap items-start gap-6">
+        <aside
+          aria-label="필터"
+          className="bg-card max-w-[280px] min-w-0 flex-[1_1_232px] rounded-lg border p-6"
+        >
+          <ProblemFilters />
+        </aside>
+
+        <section aria-label="문제" className="flex min-w-0 flex-[999_1_560px] flex-col gap-6">
+          {/*
         비로그인에게 풀이 상태는 없는 데이터다. 열과 필터를 숨기는 대신
         왜 안 보이는지 한 줄로 알려 준다 (COM-05).
       */}
-      {!isAuthenticated && !isSessionLoading ? (
-        <p className="text-muted-foreground text-sm">
-          {/* 헤더의 로그인 버튼과 같은 이유로 지금 주소를 싣는다 (AppHeader.tsx). */}
-          <Link
-            to="/login"
-            state={{ from: `${location.pathname}${location.search}` }}
-            className="text-primary-text hover:underline"
-          >
-            로그인
-          </Link>
-          하면 내 풀이 상태가 함께 보입니다.
-        </p>
-      ) : null}
+          {!isAuthenticated && !isSessionLoading ? (
+            <p className="text-muted-foreground text-sm">
+              {/* 헤더의 로그인 버튼과 같은 이유로 지금 주소를 싣는다 (AppHeader.tsx). */}
+              <Link
+                to="/login"
+                state={{ from: `${location.pathname}${location.search}` }}
+                className="text-primary-text hover:underline"
+              >
+                로그인
+              </Link>
+              하면 내 풀이 상태가 함께 보입니다.
+            </p>
+          ) : null}
 
-      {/*
+          {/*
         error와 함께 켜지지 않게 막는다. isPending만 보던 때는 둘이 동시에 참일 수 없었지만,
         세션 확인이 조건에 들어오면서 "목록은 오류로 끝났는데 /api/users/me는 아직"인 구간이
         생겨 스켈레톤과 오류가 나란히 그려진다.
       */}
-      {waiting && !error ? <ListSkeleton rows={PAGE_SIZE} /> : null}
+          {waiting && !error ? <ListSkeleton rows={PAGE_SIZE} /> : null}
 
-      {error ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
+          {error ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
 
-      {data && !error && !waiting ? (
-        data.content.length === 0 ? (
-          filtered ? (
-            <EmptyState
-              title="조건에 맞는 문제가 없습니다"
-              description="검색어나 필터를 바꿔 보세요."
-              action={{ label: '필터 초기화', to: '/problems', state: RESET_FILTERS_STATE }}
-            />
-          ) : (
-            <EmptyState
-              title="아직 등록된 문제가 없습니다"
-              description="관리자가 문제를 공개하면 여기에 보입니다."
-            />
-          )
-        ) : (
-          <>
-            <p className="text-muted-foreground text-sm" aria-live="polite">
-              {filtered ? '조건에 맞는 문제' : '문제'} {data.totalElements}개
-            </p>
-            <div
-              aria-busy={isFetching}
-              className={cn('bg-card rounded-lg border px-3 py-2', isFetching && 'opacity-60')}
-            >
-              <ProblemTable
-                problems={data.content}
-                showSolveStatus={isAuthenticated}
-                sortField={params.sortField}
-                sortDirection={params.sortDirection}
-                onSort={handleSort}
-              />
-            </div>
-            {/* 한 페이지로 끝나면 이동할 곳이 없다. 꺼진 버튼만 둘 띄우지 않는다. */}
-            {pages > 1 ? (
-              <Pagination page={params.page} total={pages} onChange={handlePageChange} />
-            ) : null}
-          </>
-        )
-      ) : null}
-    </section>
+          {data && !error && !waiting ? (
+            data.content.length === 0 ? (
+              filtered ? (
+                <EmptyState
+                  title="조건에 맞는 문제가 없습니다"
+                  description="검색어나 필터를 바꿔 보세요."
+                  action={{ label: '필터 초기화', to: '/problems', state: RESET_FILTERS_STATE }}
+                />
+              ) : (
+                <EmptyState
+                  title="아직 등록된 문제가 없습니다"
+                  description="관리자가 문제를 공개하면 여기에 보입니다."
+                />
+              )
+            ) : (
+              <>
+                <div
+                  aria-busy={isFetching}
+                  className={cn('bg-card rounded-lg border px-3 py-2', isFetching && 'opacity-60')}
+                >
+                  <ProblemTable
+                    problems={data.content}
+                    showSolveStatus={isAuthenticated}
+                    sortField={params.sortField}
+                    sortDirection={params.sortDirection}
+                    onSort={handleSort}
+                  />
+                </div>
+                {/* 한 페이지로 끝나면 이동할 곳이 없다. 꺼진 버튼만 둘 띄우지 않는다. */}
+                {pages > 1 ? (
+                  <Pagination page={params.page} total={pages} onChange={handlePageChange} />
+                ) : null}
+              </>
+            )
+          ) : null}
+        </section>
+      </div>
+    </div>
   )
 }
