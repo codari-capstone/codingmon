@@ -43,6 +43,12 @@ window.scrollTo = () => {}
 Range.prototype.getClientRects = () => [] as unknown as DOMRectList
 Range.prototype.getBoundingClientRect = () => new DOMRect()
 
+// jsdom에는 포인터 캡처가 없다. Radix Toast가 밀어 닫기를 위해 pointerdown에서 이걸 불러,
+// 알림 안의 버튼을 누르는 테스트가 Unhandled Error로 실패한다(단언은 통과해도).
+Element.prototype.hasPointerCapture ??= () => false
+Element.prototype.setPointerCapture ??= () => {}
+Element.prototype.releasePointerCapture ??= () => {}
+
 // jsdom에는 matchMedia가 없다. 테마 초기값 조회가 던지지 않게 기본값(라이트)을 준다.
 if (!window.matchMedia) {
   window.matchMedia = (query: string) =>
