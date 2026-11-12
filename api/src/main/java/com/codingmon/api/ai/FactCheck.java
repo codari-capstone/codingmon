@@ -135,11 +135,14 @@ final class FactCheck {
     private static final String NUM = "(?<![\\w.^/:])\\d{1,6}(?!\\d)";
     private static final String NUM_JOIN = "\\s*(?:번째|번)?\\s*(?:,|·|~|〜|-|부터|와|과|및|또는|이나)\\s*";
     // "4번째 줄", "4번 줄", "3~9번 줄", "4, 7번째 줄", "4번째와 7번째 줄", "4부터 6번째 줄"
-    // "줄"로 시작하는 다른 말은 뺀다. "100번 줄어듭니다", "1000번 줄이면", "1000번 줄일 수 있습니다", "2번째 줄바꿈"의 수는
-    // 횟수나 출력의 자리다. "4번 줄이 틀렸다", "4번 줄이고", "4번 줄인 것", "4번 줄일 것 같다", "4번 줄입니다"는 줄 번호로 둔다.
+    // 둘째 묶음은 "줄"인지 "라인"인지다. "줄"은 뒤에 따라 다른 말일 수 있어 codeContext가 OTHER_WORD_AFTER로 가린다.
     private static final Pattern LINE_REF = Pattern.compile(
-            "(" + NUM + "(?:" + NUM_JOIN + NUM + ")*)\\s*(?:번째|번)\\s*(?:줄|라인)"
-                    + "(?!어|여|였|바꿈|이(?:면|는|기|려|세요|자|거나)|일\\s*(?:수|필요|때|까)|인다)");
+            "(" + NUM + "(?:" + NUM_JOIN + NUM + ")*)\\s*(?:번째|번)\\s*(줄|라인)");
+    // "줄" 바로 뒤에 이 말이 오면 "줄다·줄이다·줄바꿈"이다. "100번 줄어듭니다", "100번 줄었습니다", "30번 줄면", "1000번 줄이면",
+    // "1000번 줄일 수 있습니다", "2번째 줄바꿈"의 수는 횟수나 출력의 자리다. "4번 줄이 틀렸다", "4번 줄이고", "4번 줄인 것",
+    // "4번 줄일 것 같다", "4번 줄입니다"는 줄 번호로 둔다. "라인"에는 쓰지 않는다("999번 라인일 수 있습니다"는 줄 번호다).
+    private static final Pattern OTHER_WORD_AFTER = Pattern.compile(
+            "^(?:어|여|였|었|고|면|지\\s*않|바꿈|이(?:면|는|기|려|세요|자|거나)|일\\s*(?:수|필요|때|까)|인다)");
     // "4행". "3행 4열", "행렬" 같은 표 이야기는 뺀다.
     private static final Pattern ROW_REF = Pattern.compile("(" + NUM + ")\\s*행(?![렬동위])(?!\\s*\\d+\\s*열)");
     private static final Pattern RANGE_JOIN = Pattern.compile("~|〜|-|부터");
@@ -402,13 +405,13 @@ final class FactCheck {
         List<int[]> refs = new ArrayList<>();
         Matcher matcher = LINE_REF.matcher(normalized);
         while (matcher.find()) {
-            if (codeContext(normalized, matcher.start(), matcher.end())) {
+            if (codeContext(normalized, matcher.start(), matcher.end(), "줄".equals(matcher.group(2)))) {
                 refs.addAll(ranges(matcher.group(1)));
             }
         }
         Matcher rows = ROW_REF.matcher(normalized);
         while (rows.find()) {
-            if (codeContext(normalized, rows.start(), rows.end())) {
+            if (codeContext(normalized, rows.start(), rows.end(), false)) {
                 int n = parse(rows.group(1));
                 refs.add(new int[] {n, n});
             }
@@ -416,11 +419,15 @@ final class FactCheck {
         return refs;
     }
 
-    private static boolean codeContext(String text, int start, int end) {
+    // 앞에서 코드라고 밝혔으면 뒤가 무엇이든 코드 줄이다("코드의 999번 줄일 수 있습니다"). 그다음에 "줄"로 시작하는 다른 말을 뺀다.
+    private static boolean codeContext(String text, int start, int end, boolean lineWord) {
         String before = text.substring(Math.max(0, start - 16), start);
         String after = text.substring(end, Math.min(text.length(), end + 10));
         if (CODE_BEFORE.matcher(before).find()) {
             return true;
+        }
+        if (lineWord && OTHER_WORD_AFTER.matcher(after).find()) {
+            return false;
         }
         return !NOT_CODE_BEFORE.matcher(before).find() && !OUTPUT_AFTER.matcher(after).find();
     }
