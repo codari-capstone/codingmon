@@ -3137,7 +3137,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 이미 있는 분석(만드는 중 포함), 또는 대기열이 차서 시작하지 못함(`FAILED`, `BUSY`) */
+            /** @description 이미 있는 분석(만드는 중 포함), 또는 대기열이 찼거나 이 사용자가 만드는 중인 것이 상한이라 시작하지 못함(`FAILED`, `BUSY`) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3301,7 +3301,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 이미 있는 리뷰(만드는 중 포함), 또는 대기열이 차서 시작하지 못함(`FAILED`, `BUSY`) */
+            /** @description 이미 있는 리뷰(만드는 중 포함), 또는 대기열이 찼거나 이 사용자가 만드는 중인 것이 상한이라 시작하지 못함(`FAILED`, `BUSY`) */
             200: {
                 headers: {
                     [name: string]: unknown;
