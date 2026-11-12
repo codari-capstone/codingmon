@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useState } from 'react'
 import { X } from 'lucide-react'
 import { cn } from 'cn'
 import { Dialog as DialogPrimitive } from 'radix-ui'
@@ -12,8 +12,12 @@ import { Button } from '@/components/ui/button'
  */
 export const MODAL_OVERLAY =
   'fixed inset-0 z-50 bg-[rgba(14,17,29,0.5)] backdrop-blur-[4px] data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none'
-export const MODAL_PANEL =
-  'fixed top-1/2 left-1/2 z-50 max-h-[calc(100%-3rem)] w-[calc(100%-3rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl bg-card p-6 text-foreground shadow-pop outline-hidden sm:p-8 dark:shadow-[var(--elevation-pop),inset_0_0_0_1px_var(--border)] forced-colors:border data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 motion-reduce:animate-none'
+// 떠 있는 틀(자리·크기·면)과 스크롤되는 안쪽을 나눈다. Modal의 X 버튼은 틀에 붙어 있어야 본문을 내려도
+// 함께 밀려 사라지지 않는다(#258 리뷰). 확인 창(alert-dialog)은 X가 없어 둘을 합친 MODAL_PANEL을 쓴다
+export const MODAL_FRAME =
+  'fixed top-1/2 left-1/2 z-50 max-h-[calc(100%-3rem)] w-[calc(100%-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-card text-foreground shadow-pop outline-hidden dark:shadow-[var(--elevation-pop),inset_0_0_0_1px_var(--border)] forced-colors:border data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 motion-reduce:animate-none'
+export const MODAL_SCROLL = 'min-h-0 overflow-y-auto p-6 sm:p-8'
+export const MODAL_PANEL = `${MODAL_FRAME} ${MODAL_SCROLL}`
 export const MODAL_SIZE = {
   sm: 'max-w-[360px]',
   md: 'max-w-[460px]',
@@ -35,6 +39,10 @@ export const MODAL_FOOTER = 'mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:jus
  * 닫기는 X·바깥 누르기·Esc. 포커스를 가두는 일은 Radix가 맡는다. 닫힌 뒤 연 버튼으로 돌려놓는 일은
  * Radix가 자기 Trigger로 열었을 때만 해 준다 — 이 Modal은 open을 밖에서 받으니 열 때 포커스가 있던 곳을
  * 기억했다가 돌려놓는다.
+ *
+ * 기억은 open이 켜지는 렌더에서 한다. Radix의 onOpenAutoFocus는 본문에 autoFocus가 있으면 불리지 않는다 —
+ * React가 커밋 때 먼저 포커스를 옮기고, Radix는 포커스가 이미 안에 있다고 보고 건너뛴다(#258 리뷰).
+ * 렌더는 커밋보다 앞이라 그때의 activeElement는 아직 연 버튼이다.
  */
 function Modal({
   open,
@@ -62,24 +70,26 @@ function Modal({
   className?: string
 }) {
   const center = align === 'center'
-  const opener = useRef<HTMLElement | null>(null)
+  // 렌더 중 상태 갱신으로 '이전 값과 달라졌을 때'를 잡는 React 문서의 방식이다(effect는 커밋 뒤라 늦다)
+  const [wasOpen, setWasOpen] = useState(open)
+  const [opener, setOpener] = useState<HTMLElement | null>(null)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setOpener(document.activeElement as HTMLElement | null)
+  }
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className={MODAL_OVERLAY} />
         <DialogPrimitive.Content
           data-slot="modal"
-          className={cn(MODAL_PANEL, MODAL_SIZE[size], center && 'text-center', className)}
+          className={cn(MODAL_FRAME, 'flex flex-col', MODAL_SIZE[size], className)}
           // 설명이 없으면 Radix가 찾는 aria-describedby를 끊는다(없는 id를 가리키지 않게)
           {...(description ? {} : { 'aria-describedby': undefined })}
-          // 포커스를 옮기기 직전이라 activeElement가 아직 연 버튼이다
-          onOpenAutoFocus={() => {
-            opener.current = document.activeElement as HTMLElement | null
-          }}
           onCloseAutoFocus={(event) => {
-            if (opener.current?.isConnected) {
+            if (opener?.isConnected) {
               event.preventDefault()
-              opener.current.focus()
+              opener.focus()
             }
           }}
         >
@@ -89,27 +99,29 @@ function Modal({
               size="sm"
               shape="circle"
               aria-label="닫기"
-              className="absolute top-3.5 right-3.5"
+              className="absolute top-3.5 right-3.5 z-10"
             >
               <X aria-hidden />
             </Button>
           </DialogPrimitive.Close>
-          {media ? (
-            <div className={cn(MODAL_MEDIA, center && 'justify-center')}>{media}</div>
-          ) : null}
-          {/* 닫기 버튼(40px)과 제목이 겹치지 않게 오른쪽을 비운다 */}
-          <DialogPrimitive.Title className={cn(MODAL_TITLE, center ? 'px-8' : 'pr-8')}>
-            {title}
-          </DialogPrimitive.Title>
-          {description ? (
-            <DialogPrimitive.Description className={MODAL_DESC}>
-              {description}
-            </DialogPrimitive.Description>
-          ) : null}
-          {children ? <div className={MODAL_BODY}>{children}</div> : null}
-          {footer ? (
-            <div className={cn(MODAL_FOOTER, center && 'sm:justify-center')}>{footer}</div>
-          ) : null}
+          <div className={cn(MODAL_SCROLL, center && 'text-center')}>
+            {media ? (
+              <div className={cn(MODAL_MEDIA, center && 'justify-center')}>{media}</div>
+            ) : null}
+            {/* 닫기 버튼(40px)과 제목이 겹치지 않게 오른쪽을 비운다 */}
+            <DialogPrimitive.Title className={cn(MODAL_TITLE, center ? 'px-8' : 'pr-8')}>
+              {title}
+            </DialogPrimitive.Title>
+            {description ? (
+              <DialogPrimitive.Description className={MODAL_DESC}>
+                {description}
+              </DialogPrimitive.Description>
+            ) : null}
+            {children ? <div className={MODAL_BODY}>{children}</div> : null}
+            {footer ? (
+              <div className={cn(MODAL_FOOTER, center && 'sm:justify-center')}>{footer}</div>
+            ) : null}
+          </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

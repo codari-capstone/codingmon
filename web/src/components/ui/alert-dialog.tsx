@@ -55,7 +55,9 @@ function AlertDialogContent({
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
         data-size={size}
-        className={cn(MODAL_PANEL, MODAL_SIZE[size], className)}
+        // 자식(Header·본문·Footer) 사이를 16px씩 띄운다. 회원 탈퇴 창처럼 Header와 Footer 사이에 입력 묶음이 오는
+        // 창이 있어, 간격이 없으면 그 묶음이 설명문에 붙는다(#258 리뷰)
+        className={cn(MODAL_PANEL, MODAL_SIZE[size], 'flex flex-col gap-4', className)}
         {...props}
       />
     </AlertDialogPortal>
@@ -69,7 +71,13 @@ function AlertDialogHeader({ className, ...props }: React.ComponentProps<'div'>)
 }
 
 function AlertDialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="alert-dialog-footer" className={cn(MODAL_FOOTER, className)} {...props} />
+  return (
+    <div
+      data-slot="alert-dialog-footer" // gap-4(16px)에 mt-2를 더해 Footer 위는 Modal과 같은 24px
+      className={cn(MODAL_FOOTER, 'mt-2', className)}
+      {...props}
+    />
+  )
 }
 
 function AlertDialogMedia({ className, ...props }: React.ComponentProps<'div'>) {

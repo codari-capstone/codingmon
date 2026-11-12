@@ -26,7 +26,39 @@ function ModalHarness({ description }: { description?: string }) {
   )
 }
 
+/** 버튼 둘이 같은 Modal을 연다. 본문에 autoFocus 입력칸이 있다 */
+function AutoFocusHarness() {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>닉네임 바꾸기</Button>
+      <Button onClick={() => setOpen(true)}>이름 바꾸기</Button>
+      <Modal open={open} onClose={() => setOpen(false)} title="새 이름">
+        <input aria-label="새 이름" autoFocus />
+      </Modal>
+    </>
+  )
+}
+
 describe('Modal', () => {
+  /**
+   * autoFocus 자식이 있으면 React가 커밋 때 먼저 포커스를 옮겨, Radix의 onOpenAutoFocus가 불리지 않는다.
+   * 그러면 연 버튼을 기억하지 못하거나 지난번 것을 기억한다 (#258 리뷰).
+   */
+  it('본문에 autoFocus가 있어도 닫으면 이번에 연 버튼으로 돌아간다', async () => {
+    const user = userEvent.setup()
+    render(<AutoFocusHarness />)
+
+    await user.click(screen.getByRole('button', { name: '닉네임 바꾸기' }))
+    expect(screen.getByRole('textbox', { name: '새 이름' })).toHaveFocus()
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('button', { name: '닉네임 바꾸기' })).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: '이름 바꾸기' }))
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('button', { name: '이름 바꾸기' })).toHaveFocus()
+  })
+
   it('제목·설명으로 이름과 설명이 붙고, X로 닫으면 연 버튼으로 포커스가 돌아간다', async () => {
     const user = userEvent.setup()
     render(<ModalHarness description="배지를 받았어요" />)
@@ -38,6 +70,15 @@ describe('Modal', () => {
     await user.click(screen.getByRole('button', { name: '닫기' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '배지 보기' })).toHaveFocus()
+  })
+
+  it('닫기 버튼은 스크롤되는 본문 밖에 있어 내려도 사라지지 않는다 (#258 리뷰)', async () => {
+    const user = userEvent.setup()
+    render(<ModalHarness />)
+
+    await user.click(screen.getByRole('button', { name: '배지 보기' }))
+    expect(screen.getByText('본문').closest('.overflow-y-auto')).not.toBeNull()
+    expect(screen.getByRole('button', { name: '닫기' }).closest('.overflow-y-auto')).toBeNull()
   })
 
   it('Esc로 닫힌다', async () => {
