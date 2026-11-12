@@ -42,7 +42,7 @@ export function ProblemTable({
 
     return (
       <TableHead aria-sort={ariaSort(active, sortDirection)} className={className}>
-        <Button variant="ghost" size="sm" className="-ml-2.5" onClick={() => onSort(field)}>
+        <Button variant="ghost" size="sm" className="-ml-4" onClick={() => onSort(field)}>
           {label}
           <Icon aria-hidden="true" />
         </Button>

@@ -33,7 +33,7 @@ export function NicknameField({
       <label htmlFor="nickname" className="text-sm font-medium">
         닉네임
       </label>
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <Input
           id="nickname"
           ref={inputRef}

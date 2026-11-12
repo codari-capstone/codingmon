@@ -160,7 +160,7 @@ export function EmailCodeStep({
         <label htmlFor="email" className="text-sm font-medium">
           이메일
         </label>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           {/*
             요청이 오가는 동안에도 잠근다. 보낸 주소와 화면의 주소가 갈라지면, 응답이
             지금 입력값에 대한 것인지 알 수 없다. 확인 요청 중에 주소를 B로 고치면 A용
@@ -209,7 +209,7 @@ export function EmailCodeStep({
           <label htmlFor="code" className="text-sm font-medium">
             인증번호
           </label>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               id="code"
               inputMode="numeric"

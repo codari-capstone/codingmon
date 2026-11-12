@@ -79,6 +79,8 @@ const PAIRS: Pair[] = [
   ['body-foreground', 'card', 1, 4.5, 'card'],
   ['muted-foreground', 'card', 1, 4.5, 'card'],
   ['muted-foreground', 'muted', 1, 4.5, 'card'],
+  // 관리자 읽기 전용(fieldset disabled)의 꺼진 칸: muted 면 위 본문 글자 (AdminProblemFormPage)
+  ['foreground', 'muted', 1, 4.5, 'card'],
   ['primary-text', 'card', 1, 4.5, 'card'],
   ['primary-text', 'muted', 1, 4.5, 'card'],
   // 아바타 이니셜(AppHeader·MyPage): bg-primary/15 위 text-primary-text. 헤더는 바탕 위, 마이페이지는 카드 위
