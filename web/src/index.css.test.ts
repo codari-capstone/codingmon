@@ -90,13 +90,6 @@ const PAIRS: Pair[] = [
   // 아바타 이니셜(AppHeader·MyPage): bg-primary/15 위 text-primary-text. 헤더는 바탕 위, 마이페이지는 카드 위
   ['primary-text', 'primary', 0.15, 4.5, 'card'],
   ['primary-text', 'primary', 0.15, 4.5, 'background'],
-  // ErrorState: bg-destructive/5 위 제목·설명 글자와 아이콘(비텍스트 3:1). 카드 위에도 바탕 위에도 놓인다
-  ['foreground', 'destructive', 0.05, 4.5, 'card'],
-  ['foreground', 'destructive', 0.05, 4.5, 'background'],
-  ['muted-foreground', 'destructive', 0.05, 4.5, 'card'],
-  ['muted-foreground', 'destructive', 0.05, 4.5, 'background'],
-  ['destructive', 'destructive', 0.05, 3, 'card'],
-  ['destructive', 'destructive', 0.05, 3, 'background'],
   ['accent-foreground', 'accent', 1, 4.5, 'card'],
   ['primary-foreground', 'primary', 1, 4.5, 'card'],
   ['primary-foreground', 'primary-hover', 1, 4.5, 'card'],
@@ -118,7 +111,16 @@ const PAIRS: Pair[] = [
   ['primary-text', 'accent', 1, 4.5, 'card'],
   ['background', 'foreground', 1, 4.5, 'card'],
   ['background', 'body-foreground', 1, 4.5, 'card'],
+  // inverse-raised는 반투명이라 남색 무대(inverse) 위에서 계산한다. glass 버튼과 CodeBlock 강조 줄(#233)이 쓴다
   ['inverse-foreground', 'inverse-raised', 1, 4.5, 'inverse'],
+  ['inverse-muted', 'inverse-raised', 1, 4.5, 'inverse'],
+  // 표시 부품(#233): Alert·HintBox 본문은 옅은 색 면 위의 본문 글자다. ErrorState도 Alert(destructive-soft)를 쓴다.
+  // HintBox neutral(muted 면)은 위 메뉴 항목 쌍이 맡는다
+  ...['accent', 'info-soft', 'success-soft', 'warning-soft', 'destructive-soft'].map(
+    (soft): Pair => ['body-foreground', soft, 1, 4.5, 'card'],
+  ),
+  // StatCard inverse의 변화량(굵은 13px 글자)
+  ['highlight', 'inverse', 1, 4.5, 'card'],
   // 입력칸 경계와 포커스 띠(FIELD_BOX: --input 테두리, --ring 포커스, --destructive 오류) (WCAG 1.4.11)
   ...['input', 'ring', 'destructive'].flatMap((line): Pair[] => [
     [line, 'card', 1, 3, 'card'],
@@ -128,10 +130,20 @@ const PAIRS: Pair[] = [
 ]
 
 // 테마마다 다른 쌍
+// Progress·LoadingState 막대는 바탕과 3:1이어야 한다(비텍스트). 바탕은 밝은 모드 muted, 다크 background다.
+// 디자인 시스템의 success 막대(--success)는 밝은 모드에서, 다크의 막대·바탕(border)은 3:1에 못 미쳐
+// 막대는 success-text, 다크 바탕은 background로 쓴다 (#233).
 const THEME_PAIRS: Record<keyof typeof THEMES, Pair[]> = {
-  light: [],
-  // pill 탭의 지금 탭: 다크는 칩 면이 --border다 (tabs.tsx)
-  dark: [['foreground', 'border', 1, 4.5, 'card']],
+  light: [
+    ['primary', 'muted', 1, 3, 'card'],
+    ['success-text', 'muted', 1, 3, 'card'],
+  ],
+  dark: [
+    // pill 탭의 지금 탭: 다크는 칩 면이 --border다 (tabs.tsx)
+    ['foreground', 'border', 1, 4.5, 'card'],
+    ['primary', 'background', 1, 3, 'card'],
+    ['success-text', 'background', 1, 3, 'card'],
+  ],
 }
 
 describe.each(Object.entries(THEMES))('%s 테마 대비', (theme, vars) => {

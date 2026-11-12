@@ -1,5 +1,4 @@
-import { AlertCircle } from 'lucide-react'
-
+import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { toUserMessage } from '@/constants/errors'
 
@@ -43,31 +42,29 @@ export function ErrorState({ problem, onRetry, headingLevel = 2 }: ErrorStatePro
   return (
     <div>
       {/*
-        role="alert"이 있어야 스켈레톤이 오류로 바뀌는 순간 스크린 리더가 알린다.
-        제목과 설명이 이 영역 안에 있어 삽입될 때 함께 읽힌다.
+        디자인의 Alert tone="danger"다. role="alert"이 있어야 스켈레톤이 오류로 바뀌는 순간
+        스크린 리더가 알린다. 제목과 설명이 이 영역 안에 있어 삽입될 때 함께 읽힌다.
       */}
-      <div
-        role="alert"
-        className="border-destructive/30 bg-destructive/5 flex gap-3 rounded-lg border p-4"
-      >
-        <AlertCircle className="text-destructive mt-0.5 size-5 shrink-0" aria-hidden="true" />
-        <div>
-          {/* h1은 404·403 화면의 제목과 같은 크기여야 한다. 전체 화면 오류인데
-              16px이면 다른 화면 제목(page-title 28px)보다 작아 위계가 뒤집힌다. */}
-          <Heading className={headingLevel === 1 ? 'page-title' : 'text-sm font-medium'}>
+      <Alert
+        tone="danger"
+        title={
+          // h1은 404·403 화면의 제목과 같은 크기여야 한다. 전체 화면 오류인데
+          // 16px이면 다른 화면 제목(page-title 28px)보다 작아 위계가 뒤집힌다.
+          <Heading className={headingLevel === 1 ? 'page-title' : undefined}>
             {message.title}
           </Heading>
-          <p className="text-muted-foreground mt-1 text-sm">{message.description}</p>
-          {onRetry && message.retryable ? (
-            // type이 없으면 button의 기본값은 submit이다. 이 블록이 <form> 안에 들어가는
-            // 화면(관리자 문제 수정의 버전 탭)에서는 '다시 시도'가 폼을 제출해, 작성 중인
-            // 수정이 공개 중인 버전에 그대로 저장된다.
-            <Button type="button" variant="secondary" onClick={onRetry} className="mt-3 min-h-11">
-              다시 시도
-            </Button>
-          ) : null}
-        </div>
-      </div>
+        }
+      >
+        <p>{message.description}</p>
+        {onRetry && message.retryable ? (
+          // type이 없으면 button의 기본값은 submit이다. 이 블록이 <form> 안에 들어가는
+          // 화면(관리자 문제 수정의 버전 탭)에서는 '다시 시도'가 폼을 제출해, 작성 중인
+          // 수정이 공개 중인 버전에 그대로 저장된다.
+          <Button type="button" variant="secondary" onClick={onRetry} className="mt-3 min-h-11">
+            다시 시도
+          </Button>
+        ) : null}
+      </Alert>
       {raw ? (
         <details className="text-muted-foreground mt-3 text-xs">
           <summary className="flex min-h-8 cursor-pointer items-center">서버 응답 원문</summary>
