@@ -6,7 +6,7 @@ import { Slot } from 'radix-ui'
 
 // 디자인 시스템 Button (docs/design-handoff/design-system/components/Button). 모든 버튼은 알약이다.
 const buttonVariants = cva(
-  "group/button relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full border-0 font-semibold whitespace-nowrap transition-[background-color,box-shadow,transform,color] duration-150 select-none outline-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-ring active:not-disabled:scale-[.97] disabled:cursor-not-allowed disabled:bg-muted disabled:text-disabled-foreground disabled:shadow-none aria-busy:cursor-progress motion-reduce:transition-none motion-reduce:active:scale-100 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[18px]",
+  "group/button relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full border-0 font-semibold whitespace-nowrap transition-[background-color,box-shadow,translate,scale,color] duration-150 select-none outline-hidden focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-3 focus-visible:outline-ring active:not-disabled:scale-[.97] disabled:cursor-not-allowed disabled:bg-muted disabled:text-disabled-foreground disabled:shadow-none aria-busy:cursor-progress motion-reduce:transition-none motion-reduce:active:scale-100 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[18px]",
   {
     variants: {
       variant: {
@@ -38,6 +38,8 @@ const buttonVariants = cva(
       size: {
         sm: 'h-control-sm px-[18px] text-[14px] [&_svg:not([class*="size-"])]:size-4',
         md: 'h-control-md px-6 text-[15px]',
+        // 글자 링크(link)는 문장 속에 놓이므로 크기를 받지 않는다. tailwind-merge가 h-auto와 h-control-md를 같은 속성으로 알아보지 못해 클래스로는 덮을 수 없다
+        none: '',
         lg: 'h-control-lg px-8 text-[17px] [&_svg:not([class*="size-"])]:size-5',
       },
       // 아이콘만 쓰는 둥근 버튼. aria-label을 함께 준다
@@ -79,7 +81,15 @@ function Button({
   children,
   ...props
 }: ButtonProps) {
-  const classes = cn(buttonVariants({ variant, size, shape, fullWidth, className }))
+  const classes = cn(
+    buttonVariants({
+      variant,
+      size: variant === 'link' ? 'none' : size,
+      shape,
+      fullWidth,
+      className,
+    }),
+  )
   if (asChild) {
     return (
       <Slot.Root
@@ -87,7 +97,8 @@ function Button({
         data-variant={variant ?? 'primary'}
         data-size={size ?? 'md'}
         className={classes}
-        {...props}
+        // 자식이 버튼 계열 컴포넌트면 type·disabled가 그대로 가야 한다
+        {...{ ...props, type, disabled }}
       >
         {children}
       </Slot.Root>

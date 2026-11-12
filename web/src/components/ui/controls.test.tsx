@@ -45,6 +45,34 @@ describe('Button', () => {
     expect(onClick).not.toHaveBeenCalled()
   })
 
+  it('포커스 외곽선을 지우지 않는다 — Tailwind v4의 outline-none은 style을 none으로 고정한다', () => {
+    render(<Button>저장</Button>)
+    const button = screen.getByRole('button', { name: '저장' })
+    expect(button).toHaveClass(
+      'outline-hidden',
+      'focus-visible:outline-solid',
+      'focus-visible:outline-2',
+    )
+    expect(button).not.toHaveClass('outline-none')
+  })
+
+  it('link는 크기 클래스에 밀리지 않고 글자 링크 모양을 지킨다', () => {
+    render(<Button variant="link">약관 보기</Button>)
+    const button = screen.getByRole('button', { name: '약관 보기' })
+    expect(button).toHaveClass('px-0.5', 'h-auto')
+    expect(button).not.toHaveClass('px-6')
+    expect(button).not.toHaveClass('h-control-md')
+  })
+
+  it('asChild도 disabled를 자식에게 넘긴다', () => {
+    render(
+      <Button asChild disabled>
+        <button type="button">자식 버튼</button>
+      </Button>,
+    )
+    expect(screen.getByRole('button', { name: '자식 버튼' })).toBeDisabled()
+  })
+
   it('asChild는 링크에 모양만 입힌다', () => {
     render(
       <Button asChild variant="secondary">
@@ -67,6 +95,7 @@ describe('입력류', () => {
     )
     expect(screen.getByLabelText('닉네임')).toBeInTheDocument()
     expect(screen.getByText('2~16자')).toBeInTheDocument()
+    expect(screen.getByLabelText('닉네임')).toHaveAccessibleDescription('2~16자')
     expect(screen.queryByRole('alert')).toBeNull()
 
     rerender(
@@ -77,6 +106,7 @@ describe('입력류', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('이미 쓰는 닉네임이에요')
     expect(screen.queryByText('2~16자')).toBeNull()
     expect(screen.getByLabelText('닉네임')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('닉네임')).toHaveAccessibleDescription('이미 쓰는 닉네임이에요')
   })
 
   it('FieldRow 안의 칸은 늘어나고 버튼은 바닥에 맞춘다', () => {

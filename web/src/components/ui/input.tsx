@@ -1,3 +1,4 @@
+import { cloneElement, isValidElement } from 'react'
 import { cn } from 'cn'
 
 /**
@@ -19,6 +20,21 @@ function Input({ className, type = 'text', ...props }: React.ComponentProps<'inp
       {...props}
     />
   )
+}
+
+/** 입력칸 하나를 children으로 받았을 때 도움말·오류 문구를 aria-describedby로 잇는다. 그래야 포커스할 때 스크린 리더가 문구도 읽는다 */
+function withFieldAria(
+  children: React.ReactNode,
+  describedBy: string | undefined,
+  invalid: boolean,
+) {
+  if (!isValidElement<{ 'aria-describedby'?: string; 'aria-invalid'?: boolean }>(children))
+    return children
+  const own = children.props['aria-describedby']
+  return cloneElement(children, {
+    'aria-describedby': [own, describedBy].filter(Boolean).join(' ') || undefined,
+    ...(invalid ? { 'aria-invalid': true } : {}),
+  })
 }
 
 /**
@@ -47,7 +63,11 @@ function Field({
       <label htmlFor={htmlFor} className="text-sm leading-[1.4] font-semibold text-foreground">
         {label}
       </label>
-      {children}
+      {withFieldAria(
+        children,
+        error ? `${htmlFor}-error` : hint ? `${htmlFor}-hint` : undefined,
+        !!error,
+      )}
       {error ? <FieldError id={`${htmlFor}-error`}>{error}</FieldError> : null}
       {hint && !error ? <FieldHint id={`${htmlFor}-hint`}>{hint}</FieldHint> : null}
     </div>

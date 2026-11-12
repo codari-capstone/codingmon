@@ -182,7 +182,8 @@ export function EmailCodeStep({
           ) : (
             <Button
               type="button"
-              className="shrink-0"
+              // 꺼진 글자색(disabled-foreground)은 읽지 않는 글자용이다. 카운트다운은 읽어야 하는 글자라 대비가 나은 색을 쓴다
+              className="shrink-0 disabled:text-muted-foreground"
               // 확인 요청과 겹치지 않게 막는다. 겹치면 서버가 이전 번호를 무효로 만든 뒤
               // 확인이 도착해 CODE_MISMATCH가 되거나, 늦게 온 발송 성공이 비워 둔 칸을
               // 다시 열고 쿨다운을 돌린다.
