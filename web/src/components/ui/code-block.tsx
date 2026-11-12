@@ -3,6 +3,12 @@ import { cn } from 'cn'
 
 import { Icon } from '@/components/ui/icon'
 
+/** 끝 개행 하나는 줄로 세지 않는다. 에디터가 저장한 `print(1)\n`이 빈 2번 줄을 만들지 않게 한다 */
+function toLines(code: string): string[] {
+  const lines = code.split('\n')
+  return lines.length > 1 && lines[lines.length - 1] === '' ? lines.slice(0, -1) : lines
+}
+
 interface CodeBlockProps {
   code: string
   /** 머리줄 글자. title이 우선 */
@@ -74,22 +80,27 @@ export function CodeBlock({
         className="focus-visible:outline-inverse-accent m-0 overflow-x-auto px-[18px] py-4 font-mono text-sm leading-[1.7] whitespace-pre focus-visible:outline-2 focus-visible:-outline-offset-2"
       >
         <code>
-          {lineNumbers
-            ? code.split('\n').map((line, i) => (
+          {/* 줄 번호와 강조 줄은 서로 따로 쓸 수 있다. 둘 중 하나라도 있으면 줄마다 그린다 */}
+          {lineNumbers || highlight?.length
+            ? toLines(code).map((line, i) => (
                 <span
                   key={i}
+                  data-highlighted={highlight?.includes(i + 1) || undefined}
                   className={cn(
                     '-mx-[18px] block px-[18px]',
+                    // 고대비에서는 배경·그림자가 지워지므로 왼쪽 테두리로 강조를 남긴다. 테두리만큼 여백을 줄여 글자 줄을 맞춘다
                     highlight?.includes(i + 1) &&
-                      'bg-inverse-raised shadow-[inset_3px_0_0_var(--highlight)]',
+                      'bg-inverse-raised shadow-[inset_3px_0_0_var(--highlight)] forced-colors:border-l-4 forced-colors:border-solid forced-colors:pl-[14px]',
                   )}
                 >
-                  <span
-                    aria-hidden="true"
-                    className="text-inverse-muted mr-3.5 inline-block w-7 text-right select-none"
-                  >
-                    {i + 1}
-                  </span>
+                  {lineNumbers ? (
+                    <span
+                      aria-hidden="true"
+                      className="text-inverse-muted mr-3.5 inline-block w-7 text-right select-none"
+                    >
+                      {i + 1}
+                    </span>
+                  ) : null}
                   {line + '\n'}
                 </span>
               ))

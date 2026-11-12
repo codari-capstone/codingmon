@@ -56,11 +56,13 @@ export function Stepper({
               />
             )}
             <span
+              data-step-dot=""
               className={cn(
-                'inline-flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+                // 고대비에서는 배경·그림자가 지워져 원이 사라진다. 원은 테두리로, 현재 단계는 바깥 띠로 남긴다
+                'inline-flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold forced-colors:border',
                 state === 'done' && 'bg-primary text-primary-foreground',
                 state === 'current' &&
-                  'bg-card text-primary-text shadow-[inset_0_0_0_2px_var(--primary),0_0_0_4px_var(--accent)]',
+                  'bg-card text-primary-text shadow-[inset_0_0_0_2px_var(--primary),0_0_0_4px_var(--accent)] forced-colors:outline-2 forced-colors:outline-offset-2 forced-colors:outline-solid',
                 state === 'todo' && 'bg-muted text-muted-foreground',
               )}
             >

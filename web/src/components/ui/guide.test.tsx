@@ -37,6 +37,18 @@ describe('Stepper', () => {
     expect(items[1]).toHaveAttribute('aria-current', 'step')
     expect(items[0]).not.toHaveAttribute('aria-current')
   })
+
+  // 고대비에서는 배경·그림자가 지워져 현재 단계가 남은 단계와 같아 보인다 (#261 리뷰)
+  it('고대비에서도 원은 테두리로, 현재 단계는 바깥 띠로 구분된다', () => {
+    const { container } = render(
+      <Stepper current={1} steps={[{ label: '관찰' }, { label: '방향' }, { label: '원리' }]} />,
+    )
+
+    const dots = container.querySelectorAll('[data-step-dot]')
+    dots.forEach((d) => expect(d).toHaveClass('forced-colors:border'))
+    expect(dots[1]).toHaveClass('forced-colors:outline-2')
+    expect(dots[2]).not.toHaveClass('forced-colors:outline-2')
+  })
 })
 
 describe('Accordion', () => {
@@ -72,6 +84,32 @@ describe('CodeBlock', () => {
     expect(lines[1]).toHaveClass('bg-inverse-raised')
     expect(lines[0]).not.toHaveClass('bg-inverse-raised')
     expect(lines[0].querySelector('[aria-hidden="true"]')).toHaveTextContent('1')
+  })
+
+  // 줄 번호 없이 강조만 넘겨도 강조가 조용히 빠지지 않아야 한다 (#261 리뷰)
+  it('줄 번호 없이 highlight만 줘도 그 줄을 강조하고 번호는 그리지 않는다', () => {
+    const { container } = render(<CodeBlock code={'a\nb\nc'} highlight={[3]} />)
+
+    const lines = container.querySelectorAll('code > span')
+    expect(lines).toHaveLength(3)
+    expect(lines[2]).toHaveAttribute('data-highlighted', 'true')
+    expect(lines[2]).toHaveClass('forced-colors:border-l-4')
+    expect(lines[0].querySelector('[aria-hidden="true"]')).toBeNull()
+  })
+
+  it('끝 개행은 빈 줄로 세지 않고, 복사할 때는 원문 그대로 쓴다', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const { container } = render(<CodeBlock code={'print(1)\n'} lineNumbers />)
+
+    expect(container.querySelectorAll('code > span')).toHaveLength(1)
+    await userEvent.click(screen.getByRole('button', { name: '복사' }))
+    expect(writeText).toHaveBeenCalledWith('print(1)\n')
+  })
+
+  it('가운데 빈 줄은 그대로 센다', () => {
+    const { container } = render(<CodeBlock code={'a\n\nb'} lineNumbers />)
+    expect(container.querySelectorAll('code > span')).toHaveLength(3)
   })
 
   it('복사를 누르면 코드를 클립보드에 쓰고 복사됨으로 바뀐다', async () => {
