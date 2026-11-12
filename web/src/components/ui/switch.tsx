@@ -1,6 +1,7 @@
+import { useId } from 'react'
 import { cn } from 'cn'
 
-import { ChoiceText } from '@/components/ui/checkbox'
+import { ChoiceText, choiceAria } from '@/components/ui/checkbox'
 
 /**
  * 누르는 즉시 적용되는 설정. 저장 버튼을 눌러야 적용되는 폼에는 Checkbox를 쓴다.
@@ -17,6 +18,7 @@ function Switch({
   label: React.ReactNode
   description?: React.ReactNode
 }) {
+  const id = useId()
   return (
     <label
       data-slot="switch"
@@ -25,10 +27,11 @@ function Switch({
         className,
       )}
     >
-      <ChoiceText label={label} description={description} />
+      <ChoiceText id={id} label={label} description={description} />
       <input
         type="checkbox"
         role="switch"
+        {...choiceAria(id, description)}
         className="peer absolute top-1/2 right-0 m-0 h-[26px] w-11 -translate-y-1/2 cursor-[inherit] opacity-0 forced-colors:static forced-colors:translate-y-0 forced-colors:opacity-100"
         {...props}
       />

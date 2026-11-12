@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { cn } from 'cn'
 
 import {
@@ -5,14 +6,16 @@ import {
   CHOICE_INPUT,
   ChoiceText,
   CHOICE_LABEL,
+  choiceAria,
   type ChoiceProps,
 } from '@/components/ui/checkbox'
 
 /** 라디오 하나. 묶음 제목이 따로 있으면(fieldset·legend) 이것만 써도 된다 */
 function Radio({ label, description, className, ...props }: ChoiceProps) {
+  const id = useId()
   return (
     <label data-slot="radio" className={cn(CHOICE_LABEL, className)}>
-      <input type="radio" className={CHOICE_INPUT} {...props} />
+      <input type="radio" className={CHOICE_INPUT} {...choiceAria(id, description)} {...props} />
       <span
         aria-hidden
         className={cn(
@@ -20,7 +23,7 @@ function Radio({ label, description, className, ...props }: ChoiceProps) {
           'rounded-full peer-checked:shadow-[inset_0_0_0_6.5px_var(--primary)]',
         )}
       />
-      <ChoiceText label={label} description={description} />
+      <ChoiceText id={id} label={label} description={description} />
     </label>
   )
 }

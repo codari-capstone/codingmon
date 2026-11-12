@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { Check } from 'lucide-react'
 import { cn } from 'cn'
 
@@ -22,18 +23,28 @@ export const CHOICE_INPUT =
 export const CHOICE_BOX =
   'mt-px inline-flex size-[22px] shrink-0 items-center justify-center bg-card shadow-[inset_0_0_0_1.5px_var(--input)] transition-[background-color,box-shadow] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-solid peer-focus-visible:outline-ring motion-reduce:transition-none forced-colors:hidden'
 
+/**
+ * 라벨 글자와 설명. 설명도 <label> 안에 있어 그대로 두면 이름에 합쳐진다('C++ GCC 13').
+ * 설명이 있으면 input이 aria-labelledby로 라벨 글자만 이름으로 잡고, 설명은 aria-describedby로 잇는다.
+ * id는 choiceAria와 같은 규칙(`${id}-label`·`${id}-desc`)을 쓴다
+ */
 export function ChoiceText({
+  id,
   label,
   description,
 }: {
+  id: string
   label: React.ReactNode
   description?: React.ReactNode
 }) {
   return (
     <span className="flex flex-col">
-      {label}
+      <span id={`${id}-label`}>{label}</span>
       {description ? (
-        <span className="text-[13px] leading-[1.5] font-normal text-muted-foreground">
+        <span
+          id={`${id}-desc`}
+          className="text-[13px] leading-[1.5] font-normal text-muted-foreground"
+        >
           {description}
         </span>
       ) : null}
@@ -42,10 +53,15 @@ export function ChoiceText({
 }
 
 /** 켜고 끄는 선택 하나. 바로 적용되는 설정에는 Switch, 하나만 고르는 선택지에는 RadioGroup */
+/** ChoiceText와 짝인 input 속성. 설명이 없으면 label이 이름을 맡으니 아무것도 붙이지 않는다 */
+export const choiceAria = (id: string, description: React.ReactNode) =>
+  description ? { 'aria-labelledby': `${id}-label`, 'aria-describedby': `${id}-desc` } : {}
+
 function Checkbox({ label, description, className, ...props }: ChoiceProps) {
+  const id = useId()
   return (
     <label data-slot="checkbox" className={cn(CHOICE_LABEL, className)}>
-      <input type="checkbox" className={CHOICE_INPUT} {...props} />
+      <input type="checkbox" className={CHOICE_INPUT} {...choiceAria(id, description)} {...props} />
       <span
         aria-hidden
         className={cn(
@@ -55,7 +71,7 @@ function Checkbox({ label, description, className, ...props }: ChoiceProps) {
       >
         <Check className="size-4" strokeWidth={3} />
       </span>
-      <ChoiceText label={label} description={description} />
+      <ChoiceText id={id} label={label} description={description} />
     </label>
   )
 }

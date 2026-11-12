@@ -9,9 +9,10 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 describe('Checkbox', () => {
-  it('라벨 글자를 눌러도 켜지고, 설명은 라벨과 함께 읽힌다', async () => {
+  it('라벨 글자를 눌러도 켜지고, 설명은 이름에 섞이지 않고 설명으로 읽힌다', async () => {
     render(<Checkbox label="배열" description="인덱스로 접근하는 묶음" />)
-    const box = screen.getByRole('checkbox', { name: /배열/ })
+    const box = screen.getByRole('checkbox', { name: '배열' })
+    expect(box).toHaveAccessibleDescription('인덱스로 접근하는 묶음')
     await userEvent.click(screen.getByText('배열'))
     expect(box).toBeChecked()
     expect(screen.getByText('인덱스로 접근하는 묶음')).toBeInTheDocument()
@@ -70,7 +71,9 @@ describe('RadioGroup', () => {
     )
     expect(screen.getByRole('group', { name: '언어' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Python' })).toBeChecked()
-    await userEvent.click(screen.getByRole('radio', { name: /C\+\+/ }))
+    // 설명(GCC 13)은 이름에 섞이지 않고 설명으로 읽힌다 (#257 리뷰)
+    expect(screen.getByRole('radio', { name: 'C++' })).toHaveAccessibleDescription('GCC 13')
+    await userEvent.click(screen.getByRole('radio', { name: 'C++' }))
     expect(onChange).toHaveBeenCalledWith('CPP')
   })
 
@@ -85,7 +88,7 @@ describe('RadioGroup', () => {
         onChange={() => {}}
       />,
     )
-    expect(screen.getByRole('radio', { name: /C\+\+/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'C++' })).toBeChecked()
   })
 
   it('Radio 하나만 써도 같은 name끼리 하나만 켜진다', async () => {

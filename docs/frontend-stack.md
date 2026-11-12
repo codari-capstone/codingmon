@@ -110,7 +110,7 @@ Tailwind는 `p-4 text-sm bg-red-50`처럼 미리 정해진 클래스를 조합�
 
 #### 부품을 받을지, 직접 만들지
 
-`src/components/ui/`에는 디자인 시스템 부품(`docs/design-handoff/design-system/components/`의 Button·Input·Checkbox 같은 것)을 둔다. 둘로 나뉜다.
+`src/components/ui/`에는 디자인 시스템 부품(Button·Input·Checkbox 같은 것)을 둔다. 디자인 원본(부품별 README·`tokens.json`)은 **저장소에 올리지 않는다** — 각자 로컬 `docs/design-handoff/`에 두고 `.git/info/exclude`로 뺀다. 없으면 프론트엔드 담당에게 받는다. 부품은 둘로 나뉜다.
 
 - **`shadcn add`로 받아 새 디자인으로 다시 꾸민 것**: `button`·`input`·`table`·`dropdown-menu`·`skeleton`·`tabs`·`alert-dialog`
 - **직접 만든 것**: `textarea`·`select`·`search-input`·`checkbox`·`radio-group`·`switch`·`pagination`. 네이티브 요소로 충분하거나(선택 부품은 네이티브 input을 겹쳐 꾸민다) 아래 2번 기준에 걸리는 것이다
@@ -126,7 +126,7 @@ shadcn에 같은 이름의 부품이 있어도 받지 않는 경우가 있다. �
 
 직접 만들 때도 색·간격·포커스 모양은 `components/ui/`의 부품을 거쳐 쓴다. 받은 부품을 고친 뒤에는 `npm run format`을 돌린다 — 생성 코드가 쌍따옴표를 쓴다.
 
-`components/ui/`는 ESLint의 `react-refresh/only-export-components` 규칙에서 빼 둔다(`eslint.config.js`). 받은 코드가 컴포넌트와 함께 cva variants(`buttonVariants`·`tabsListVariants`)를 내보내 규칙이 늘 걸리기 때문이다. 이 폴더의 직접 만든 부품도 같은 예외 안에 있으니, 부품끼리 나누는 클래스 상수(`FIELD_BOX`·`CHOICE_BOX`) 말고 함수를 내보내지 않는다. 순수 계산은 `src/lib/`에 둔다(`lib/pagination.ts`의 `pageItems`).
+`components/ui/`는 ESLint의 `react-refresh/only-export-components` 규칙에서 빼 둔다(`eslint.config.js`). 받은 코드가 컴포넌트와 함께 cva variants(`buttonVariants`·`tabsListVariants`)를 내보내 규칙이 늘 걸리기 때문이다. 이 폴더의 직접 만든 부품도 같은 예외 안에 있으니, 부품끼리 나누는 것(클래스 상수 `FIELD_BOX`·`CHOICE_BOX`, 속성 도우미 `choiceAria`)만 함께 내보낸다. 부품과 상관없는 순수 계산은 `src/lib/`에 두고 테스트도 그 옆에 둔다(`lib/pagination.ts`의 `pageItems`).
 
 ### React Hook Form + Zod
 
