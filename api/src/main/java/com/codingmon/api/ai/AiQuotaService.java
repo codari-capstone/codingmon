@@ -20,7 +20,7 @@ import com.codingmon.api.ApiErrors;
 // 한 사용자가 동시에 만들 수 있는 결과 수도 여기서 묶는다. 하루 한도만 있으면 한 사용자가 서로 다른 제출로 AI 대기열을 혼자 채워
 // 다른 사용자의 요청이 모두 BUSY가 된다.
 @Service
-class AiQuotaService {
+public class AiQuotaService {
 
     private final AiReviewRepository reviews;
     private final TransactionTemplate transactions;
@@ -46,8 +46,8 @@ class AiQuotaService {
         this.startedAt = reviews.now();
     }
 
-    // 조회용. 잠그지 않는다.
-    AiQuota status(long userId) {
+    // 조회용. 잠그지 않는다. 관리자 회원 상세(AdminUserController)도 쓴다.
+    public AiQuota status(long userId) {
         return AiQuota.of(limit, reviews.usedToday(userId));
     }
 

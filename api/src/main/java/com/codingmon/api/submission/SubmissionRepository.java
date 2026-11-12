@@ -4,7 +4,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -95,6 +97,20 @@ class SubmissionRepository {
     // 케이스는 SAMPLE부터 ordinal 순으로 채점하고 처음 틀린 케이스가 판정을 낸다(judge-verdict-mapping.md 제출 판정 합치기).
     // 그래서 틀린 SAMPLE 케이스가 있으면 그게 판정을 낸 케이스고, 런타임 에러면 그 원문을 보여 준다(RES-04).
     Optional<SubmissionResult> findResult(long userId, long submissionId) {
+        return findResult(submissionId, " and s.user_id = :userId", userId);
+    }
+
+    // 관리자가 회원의 제출을 볼 때(ADM-15). 누구의 제출이든 SUBMIT이면 준다.
+    Optional<SubmissionResult> findAnyResult(long submissionId) {
+        return findResult(submissionId, "", null);
+    }
+
+    private Optional<SubmissionResult> findResult(long submissionId, String ownerFilter, Long userId) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("id", submissionId);
+        if (userId != null) {
+            params.put("userId", userId);
+        }
         return jdbc.sql("select s.id, v.problem_id, v.title, s.language,"
                 + " case when s.job_status in ('COMPLETED', 'JUDGE_ERROR') then s.source_code end as source_code,"
                 + " s.job_status, s.progress, s.verdict,"
@@ -104,9 +120,8 @@ class SubmissionRepository {
                 + "   where r.submission_id = s.id and c.case_type = 'SAMPLE' and r.verdict <> 'ACCEPTED'"
                 + "   order by c.ordinal limit 1) end as sample_stderr"
                 + " from submissions s join problem_versions v on v.id = s.problem_version_id"
-                + " where s.id = :id and s.user_id = :userId and s.submission_kind = 'SUBMIT'")
-                .param("id", submissionId)
-                .param("userId", userId)
+                + " where s.id = :id and s.submission_kind = 'SUBMIT'" + ownerFilter)
+                .params(params)
                 .query((rs, n) -> new SubmissionResult(rs.getLong("id"), rs.getLong("problem_id"), rs.getString("title"),
                         Language.valueOf(rs.getString("language")), rs.getString("source_code"), rs.getString("job_status"),
                         rs.getInt("progress"), rs.getString("verdict"), rs.getString("runtime_error_type"),
