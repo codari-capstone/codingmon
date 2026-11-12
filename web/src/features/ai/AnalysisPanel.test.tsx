@@ -173,7 +173,7 @@ describe('AnalysisPanel', () => {
       const guess = screen.getByText('짐작 하나').closest('li')
       expect(fact).toHaveTextContent('실행 결과')
       expect(guess).toHaveTextContent('코드 분석')
-      expect(screen.getByText(/의심되는 줄/).closest('p')).toHaveTextContent(/^의심되는 줄: 2번$/)
+      expect(screen.getByText(/의심되는 줄/)).toHaveTextContent(/^의심되는 줄 · 2번$/)
     })
 
     /** 계약: 서버가 범위를 검사하기(#79) 전에 저장된 분석이 남아 있다. 제출 코드는 4줄이다. */
@@ -181,18 +181,25 @@ describe('AnalysisPanel', () => {
       stored(analysis({ suspectLines: [4, 5, 99] }))
       renderResult(WRONG)
 
-      expect((await screen.findByText(/의심되는 줄/)).closest('p')).toHaveTextContent(
-        /^의심되는 줄: 4번$/,
-      )
+      expect(await screen.findByText(/의심되는 줄/)).toHaveTextContent(/^의심되는 줄 · 4번$/)
     })
 
     it('0·음수·정수가 아닌 줄 번호는 버리고 겹치면 하나로 줄인다', async () => {
       stored(analysis({ suspectLines: [0, -1, 2, 2, 1.5, 3] }))
       renderResult(WRONG)
 
-      expect((await screen.findByText(/의심되는 줄/)).closest('p')).toHaveTextContent(
-        /^의심되는 줄: 2번, 3번$/,
-      )
+      expect(await screen.findByText(/의심되는 줄/)).toHaveTextContent(/^의심되는 줄 · 2번, 3번$/)
+    })
+
+    it('제출한 코드에서 의심되는 줄을 칠한다. 범위 밖 번호는 칠하지 않는다', async () => {
+      // 패널 문구와 같은 목록(suspectLines)을 쓴다. 없는 줄을 칠하면 학생이 그 줄을 찾아 헤맨다
+      stored(analysis({ suspectLines: [2, 99] }))
+      renderResult(WRONG)
+
+      expect(await screen.findByText('빨간 줄은 AI가 의심한 줄이에요.')).toBeInTheDocument()
+      const marked = document.querySelectorAll('[data-highlighted]')
+      expect(marked).toHaveLength(1)
+      expect([...marked[0].parentElement!.children].indexOf(marked[0])).toBe(1)
     })
 
     it('남은 줄 번호가 없으면 줄 안내를 그리지 않는다', async () => {

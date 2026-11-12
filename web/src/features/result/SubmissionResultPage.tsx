@@ -2,16 +2,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { Link, useParams } from 'react-router'
 
-import type { SubmissionResult } from '@/api/types'
+import type { Language, SubmissionResult } from '@/api/types'
+import errorScene from '@/assets/scenes/error.png'
+import successScene from '@/assets/scenes/success.png'
 import { ErrorState } from '@/components/ErrorState'
 import { Raw } from '@/components/Raw'
 import { ListSkeleton } from '@/components/ListSkeleton'
-import { StatusText } from '@/components/StatusText'
+import { Verdict } from '@/components/Verdict'
+import { Badge } from '@/components/ui/badge'
+import { CodeBlock } from '@/components/ui/code-block'
 import { Button } from '@/components/ui/button'
 import { RUNTIME_ERROR_INFO, STATUS_LABEL, VERDICT_INFO } from '@/constants/verdicts'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import { solvePath } from '@/features/solve/solvePath'
 import { AnalysisPanel } from '@/features/ai/AnalysisPanel'
+import { analysisQuery } from '@/features/ai/analysisQuery'
+import { suspectLines } from '@/features/ai/countLines'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { parsePathId } from '@/lib/pathId'
 import { nextActions } from './nextActions'
@@ -65,38 +71,33 @@ function Headline({ result }: { result: SubmissionResult }) {
             그려 주는데, flex로 바꾸면 그 표식이 사라져 펼칠 수 있다는 단서가 마우스를
             올렸을 때의 커서뿐이 된다.
           */}
-          <summary className="min-h-11 cursor-pointer py-2 text-xl font-bold">
+          <summary className="min-h-11 cursor-pointer py-1">
             {/* summary 자체가 아니라 안쪽 글자만 칠한다. summary를 flex로 바꾸지 않기 위해서다(위 주석) */}
-            <StatusText tone={VERDICT_INFO[key].tone} className="font-bold">
-              {VERDICT_INFO[key].label}
-            </StatusText>
+            <Verdict verdict={key} size="lg" />
           </summary>
-          <Raw text={compilerMessage ?? ''} />
+          <Raw text={compilerMessage ?? ''} className="mt-2" />
         </details>
       ) : (
-        <p className="text-xl font-bold">
-          <StatusText tone={VERDICT_INFO[key].tone} className="font-bold">
-            {VERDICT_INFO[key].label}
-          </StatusText>
+        <p>
+          <Verdict verdict={key} size="lg" />
         </p>
       )}
     </div>
   )
 }
 
-/** 제출 번호·언어·시간·메모리. */
+/** 언어·시간·메모리. 제출 번호는 판정 위 소제목이 들고 있다. */
 function Meta({ result }: { result: SubmissionResult }) {
   const { language, executionTimeMs, memoryUsedKb } = result
   return (
-    <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-      <span>제출 #{result.id}</span>
-      <span>{LANGUAGE_LABEL[language]}</span>
+    <div className="flex flex-wrap gap-2">
+      <Badge>{LANGUAGE_LABEL[language]}</Badge>
       {/*
         컴파일 에러와 채점 불가는 실행 자체를 못 해 둘 다 null이다(계약). 없는 값을
-        '0ms'로 적으면 "아주 빨랐다"로 읽히므로 줄을 아예 뺀다.
+        '0ms'로 적으면 "아주 빨랐다"로 읽히므로 칩을 아예 뺀다.
       */}
-      {executionTimeMs !== null ? <span>{executionTimeMs}ms</span> : null}
-      {memoryUsedKb !== null ? <span>{memoryUsedKb.toLocaleString('ko-KR')}KB</span> : null}
+      {executionTimeMs !== null ? <Badge>{executionTimeMs}ms</Badge> : null}
+      {memoryUsedKb !== null ? <Badge>{memoryUsedKb.toLocaleString('ko-KR')}KB</Badge> : null}
     </div>
   )
 }
@@ -115,12 +116,15 @@ function Explanation({ result }: { result: SubmissionResult }) {
 
   const info = VERDICT_INFO[key]
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3.5">
       <Meta result={result} />
-      <p className="text-sm leading-relaxed">{info.description}</p>
-      <p className="text-muted-foreground text-sm leading-relaxed">
-        <span className="font-medium">먼저 확인해 볼 것: </span>
-        {info.checkFirst}
+      <p className="text-body-foreground mt-1 text-[17px] leading-[1.65]">{info.description}</p>
+      <p className="bg-muted text-body-foreground rounded-[12px] px-[18px] py-3.5 text-[15px] leading-[1.6]">
+        {/* 맞혔으면 고칠 것이 없다. 같은 자리에서 다음 걸음을 권한다 */}
+        <b className="text-foreground font-semibold">
+          {key === 'ACCEPTED' ? '다음으로' : '먼저 확인해 볼 것'}
+        </b>{' '}
+        · {info.checkFirst}
       </p>
       {verdict === 'RUNTIME_ERROR' ? <RuntimeError result={result} /> : null}
     </div>
@@ -141,10 +145,12 @@ function RuntimeError({ result }: { result: SubmissionResult }) {
 
   const info = RUNTIME_ERROR_INFO[runtimeErrorType]
   return (
-    <div className="bg-muted flex flex-col gap-1 rounded-md p-3">
-      <p className="text-sm font-medium">{info.label}</p>
-      <p className="text-muted-foreground text-sm leading-relaxed">{info.description}</p>
-      {runtimeErrorMessage !== null ? <Raw text={runtimeErrorMessage} className="bg-card" /> : null}
+    <div className="bg-destructive-soft flex flex-col gap-1.5 rounded-[16px] px-5 py-[18px]">
+      <p className="text-destructive-text text-[17px] font-bold">{info.label}</p>
+      <p className="text-body-foreground text-[15px] leading-[1.6]">{info.description}</p>
+      {runtimeErrorMessage !== null ? (
+        <Raw text={runtimeErrorMessage} className="bg-card mt-1.5" />
+      ) : null}
     </div>
   )
 }
@@ -155,24 +161,65 @@ function RuntimeError({ result }: { result: SubmissionResult }) {
  * 코드는 채점이 끝난 제출에만 온다(계약). 폴링 중에는 null이라 이 구역 자체가 없다.
  * 글자 그대로 보여 준다 — 학생이 쓴 `<`나 `&`가 해석되면 코드가 달라진다(`Raw`).
  */
-function SubmittedCode({ result }: { result: SubmissionResult }) {
-  if (result.sourceCode === null) return null
+function SubmittedCode({ result, suspect }: { result: SubmissionResult; suspect: number[] }) {
+  // 계약은 string | null이지만 응답에 필드가 빠진 경우도 막는다. CodeBlock은 없는 코드를 줄로 나누다 깨진다
+  if (result.sourceCode === null || result.sourceCode === undefined) return null
 
   return (
-    <section className="bg-card flex flex-col gap-2 rounded-lg border p-6">
-      <h2 className="text-base font-semibold">제출한 코드</h2>
-      <Raw text={result.sourceCode} />
+    <section className="flex min-w-0 flex-[1_1_480px] flex-col gap-3">
+      <h2 className="text-foreground text-lg font-semibold">제출한 코드</h2>
+      {/* CodeBlock은 React가 글자로 넣어 `<`·`&`가 해석되지 않는다(Raw와 같은 보장) */}
+      <CodeBlock
+        code={result.sourceCode}
+        title={FILE_NAME[result.language]}
+        lineNumbers
+        highlight={suspect}
+      />
+      {suspect.length > 0 ? (
+        <p className="text-muted-foreground text-[13px]">빨간 줄은 AI가 의심한 줄이에요.</p>
+      ) : null}
     </section>
   )
 }
 
-/** 다음 행동 (RES-06·07). */
+/** AI 분석은 판정이 난 오답에만 있다(계약: 정답·채점 중·채점 불가는 409). 코드는 끝난 제출에만 온다. */
+function canAnalyze(result: SubmissionResult | undefined): boolean {
+  return (
+    result !== undefined &&
+    result.status === 'COMPLETED' &&
+    result.verdict !== null &&
+    result.verdict !== 'ACCEPTED' &&
+    result.sourceCode !== null
+  )
+}
+
+const FILE_NAME = { PYTHON: 'solution.py', CPP: 'main.cpp' } satisfies Record<Language, string>
+
+/** 판정 옆 펭귄 장면. 장식이라 alt를 비운다. 채점 중에는 두지 않는다 */
+function Scene({ result }: { result: SubmissionResult }) {
+  if (!isFinished(result.status)) return null
+  const accepted = result.verdict === 'ACCEPTED'
+  return (
+    <img
+      src={accepted ? successScene : errorScene}
+      alt=""
+      width={210}
+      height={190}
+      // 좁은 화면에서는 뺀다. 판정 아래 그림 한 장이 코드와 AI 분석을 한 화면 넘게 밀어낸다
+      className="mx-auto hidden h-auto max-w-full flex-none sm:block"
+    />
+  )
+}
+
+/** 다음 행동 (RES-06·07)과 이 문제의 제출 기록. 주 동작(primary)은 첫 버튼 하나다. */
 function NextActions({ result }: { result: SubmissionResult }) {
   const actions = nextActions(result)
-  if (actions.length === 0) return null
+  // 끝난 제출만 기록 목록에 있다(계약). 채점 중에는 갈 곳이 없다.
+  const history = isFinished(result.status)
+  if (actions.length === 0 && !history) return null
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="mt-1.5 flex flex-wrap gap-2.5">
       {actions.map((action) =>
         action.to ? (
           <Button key={action.label} asChild className="min-h-11">
@@ -191,6 +238,11 @@ function NextActions({ result }: { result: SubmissionResult }) {
           </Button>
         ),
       )}
+      {history ? (
+        <Button asChild variant="secondary" className="min-h-11">
+          <Link to={problemSubmissionsPath(result.problemId)}>이 문제의 제출 기록</Link>
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -203,6 +255,15 @@ export function Component() {
     ...submissionResultQuery(submissionId ?? 0),
     enabled: submissionId !== null,
   })
+  const analyzable = canAnalyze(data)
+  // 제출한 코드에 의심 줄을 칠하려고 AI 패널과 같은 쿼리를 읽는다. 같은 키라 요청은 한 번이다
+  const { data: analysis } = useQuery({
+    ...analysisQuery(submissionId ?? 0),
+    enabled: analyzable,
+  })
+  const shown = analysis?.status === 'COMPLETED' && !analysis.blocked
+  const suspect =
+    shown && data?.sourceCode ? suspectLines(analysis.suspectLines, data.sourceCode) : []
 
   /**
    * 세션이 끊겼으면 로그인 화면으로 보낸다 (session.ts).
@@ -233,58 +294,53 @@ export function Component() {
     )
   }
 
-  // AI 분석은 판정이 난 오답에만 있다(계약: 정답·채점 중·채점 불가는 409). 코드는 끝난 제출에만 온다.
-  const analyzable =
-    data.status === 'COMPLETED' &&
-    data.verdict !== null &&
-    data.verdict !== 'ACCEPTED' &&
-    data.sourceCode !== null
-
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="page-title">제출 결과</h1>
+    <div className="flex flex-col gap-5">
+      {/*
+        디자인은 판정 글자가 화면의 제목 노릇을 한다. 판정은 live region 안에서 바뀌므로
+        h1로 삼지 않고, 화면 제목은 낭독기용으로 둔다. 두 단계 경로 표시는 쓰지 않는다(#266 리뷰).
+      */}
+      <h1 className="sr-only">제출 결과</h1>
 
-      {/* 화면 2: 넓으면 왼쪽 결과, 오른쪽 AI 패널. 좁으면 아래로 쌓는다(UX-05). */}
-      <div className={analyzable ? 'grid items-start gap-6 lg:grid-cols-2' : undefined}>
-        <div className="flex min-w-0 flex-col gap-4">
-          {/* 다시 풀기와 같은 주소를 쓴다 (solvePath) */}
-          <Link
-            to={solvePath(data.problemId, data.language)}
-            className="text-primary-text text-sm underline"
-          >
-            {data.problemTitle}
-          </Link>
-
-          {/* 판정과 쉬운 설명을 한 장의 흰 카드로 묶는다. 판정 색은 글자에만 쓰고 면은 칠하지 않는다 */}
-          <div className="bg-card flex flex-col gap-3 rounded-lg border p-6">
-            <Headline result={data} />
-            <Explanation result={data} />
-          </div>
-          <SubmittedCode result={data} />
-          <NextActions result={data} />
-
-          {/* 끝난 제출만 기록 목록에 있다(계약). 채점 중에는 갈 곳이 없다. */}
-          {isFinished(data.status) ? (
-            <Link
-              to={problemSubmissionsPath(data.problemId)}
-              className="text-primary-text text-sm underline"
-            >
-              이 문제의 제출 기록
+      {/* 판정 카드. 판정 색은 글자에만 쓰고 면은 칠하지 않는다 */}
+      <section
+        aria-label="채점 결과"
+        className="bg-card shadow-card flex flex-wrap items-center gap-8 rounded-[28px] px-6 py-8 sm:px-10 sm:py-9 dark:border"
+      >
+        <div className="flex min-w-0 flex-[999_1_480px] flex-col gap-3.5">
+          <p className="text-eyebrow text-primary-text">
+            {/* 다시 풀기와 같은 주소를 쓴다 (solvePath) */}
+            <Link to={solvePath(data.problemId, data.language)} className="hover:underline">
+              {data.problemTitle}
             </Link>
-          ) : null}
+            {' · '}
+            <span>제출 #{data.id}</span>
+          </p>
+          <Headline result={data} />
+          <Explanation result={data} />
+          <NextActions result={data} />
         </div>
+        <Scene result={data} />
+      </section>
 
+      {/* 넓으면 왼쪽 코드, 오른쪽 AI 패널. 좁으면 아래로 쌓는다(UX-05). */}
+      <div className="flex flex-wrap items-start gap-5">
+        <SubmittedCode result={data} suspect={suspect} />
         {analyzable ? (
-          // key: 제출이 바뀌면 다른 패널이다. 이어 쓰면 진행 중인 요청의 응답이 새 제출의
-          // 캐시에 들어간다(mutation이 마지막 렌더의 onSuccess로 끝나서).
-          <AnalysisPanel
-            key={data.id}
-            submissionId={data.id}
-            sourceCode={data.sourceCode ?? ''}
-            retryPath={solvePath(data.problemId, data.language)}
-          />
+          <div className="min-w-0 flex-[1_1_560px]">
+            {/*
+              key: 제출이 바뀌면 다른 패널이다. 이어 쓰면 진행 중인 요청의 응답이 새 제출의
+              캐시에 들어간다(mutation이 마지막 렌더의 onSuccess로 끝나서).
+            */}
+            <AnalysisPanel
+              key={data.id}
+              submissionId={data.id}
+              sourceCode={data.sourceCode ?? ''}
+              retryPath={solvePath(data.problemId, data.language)}
+            />
+          </div>
         ) : null}
       </div>
-    </section>
+    </div>
   )
 }
