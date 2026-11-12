@@ -42,7 +42,7 @@ test.describe('문제 목록', () => {
     // 문자열 정렬(EASY, HARD, MEDIUM)이면 여기서 '어려움'이 보인다.
     await expect(cells.last()).toHaveText('보통')
 
-    await page.getByRole('button', { name: '다음' }).click()
+    await page.getByRole('button', { name: '다음 페이지' }).click()
 
     await expect(page).toHaveURL(/page=2/)
     // 정렬이 페이지를 넘어가도 유지된다 — page만 바뀌므로 1페이지로 돌아가지 않는다.
@@ -54,7 +54,7 @@ test.describe('문제 목록', () => {
     await page.goto('/problems')
     await expect(page.getByRole('row')).toHaveCount(21)
 
-    await page.getByRole('button', { name: '다음' }).click()
+    await page.getByRole('button', { name: '다음 페이지' }).click()
 
     await expect(page).toHaveURL(/page=2/)
     // 25개 중 나머지 5개 + 머리 1

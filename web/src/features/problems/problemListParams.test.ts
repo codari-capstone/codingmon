@@ -8,11 +8,11 @@ import {
   serializeParams,
   PAGE_SIZE,
   pageCount,
-  pageItems,
   toQuery,
   withChanges,
   type ProblemListParams,
 } from './problemListParams'
+import { pageItems } from '@/lib/pagination'
 
 function parse(search: string) {
   return parseParams(new URLSearchParams(search))

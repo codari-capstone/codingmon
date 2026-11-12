@@ -1,0 +1,61 @@
+import { Check } from 'lucide-react'
+import { cn } from 'cn'
+
+/**
+ * 디자인 시스템 Checkbox와 Radio의 공통 모양. 네이티브 input을 투명하게 겹쳐 두고 옆의 상자를 꾸민다.
+ * 역할·상태·방향키 이동·폼 등록(react-hook-form register)이 모두 네이티브 그대로 따라온다.
+ * 44px 터치 영역(WCAG 2.5.5)은 라벨 전체(min-h-11)가 맡는다.
+ */
+type ChoiceProps = Omit<React.ComponentProps<'input'>, 'type'> & {
+  label: React.ReactNode
+  description?: React.ReactNode
+}
+
+export const CHOICE_LABEL =
+  'relative inline-flex min-h-11 cursor-pointer items-start gap-2.5 py-2.5 text-[15px] leading-[1.5] font-medium text-foreground has-disabled:cursor-not-allowed has-disabled:opacity-50'
+
+// 상자 앞의 input이 peer다. 포커스 외곽선은 상자가 그린다
+export const CHOICE_INPUT =
+  'peer absolute top-[11px] left-0 m-0 size-[22px] cursor-[inherit] opacity-0'
+export const CHOICE_BOX =
+  'mt-px inline-flex size-[22px] shrink-0 items-center justify-center bg-card shadow-[inset_0_0_0_1.5px_var(--input)] transition-[background-color,box-shadow] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-solid peer-focus-visible:outline-ring motion-reduce:transition-none'
+
+export function ChoiceText({
+  label,
+  description,
+}: {
+  label: React.ReactNode
+  description?: React.ReactNode
+}) {
+  return (
+    <span className="flex flex-col">
+      {label}
+      {description ? (
+        <span className="text-[13px] leading-[1.5] font-normal text-muted-foreground">
+          {description}
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
+/** 켜고 끄는 선택 하나. 바로 적용되는 설정에는 Switch, 하나만 고르는 선택지에는 RadioGroup */
+function Checkbox({ label, description, className, ...props }: ChoiceProps) {
+  return (
+    <label data-slot="checkbox" className={cn(CHOICE_LABEL, className)}>
+      <input type="checkbox" className={CHOICE_INPUT} {...props} />
+      <span
+        aria-hidden
+        className={cn(
+          CHOICE_BOX,
+          'rounded-[7px] text-transparent peer-checked:bg-primary peer-checked:text-primary-foreground peer-checked:shadow-none',
+        )}
+      >
+        <Check className="size-4" strokeWidth={3} />
+      </span>
+      <ChoiceText label={label} description={description} />
+    </label>
+  )
+}
+
+export { Checkbox, type ChoiceProps }

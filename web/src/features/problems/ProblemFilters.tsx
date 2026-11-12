@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 
 import { DIFFICULTIES, SOLVE_STATUSES } from '@/api/types'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useAuth } from '@/features/auth/useAuth'
 import { DIFFICULTY_LABEL, SOLVE_STATUS_LABEL } from './labels'
 import {
@@ -16,10 +17,7 @@ import {
 } from './problemListParams'
 import { conceptTagsQuery } from './problemsQuery'
 
-/**
- * 체크박스 하나. 네이티브 input을 쓰는 이유는 Radix 래퍼 없이도 역할·상태·키보드
- * 조작이 전부 따라오기 때문이다. 꾸미기만 Tailwind로 한다.
- */
+/** 필터 체크박스 하나. 세로로 쌓이도록 줄 하나를 다 차지한다 */
 function FilterCheckbox({
   label,
   checked,
@@ -29,18 +27,7 @@ function FilterCheckbox({
   checked: boolean
   onChange: () => void
 }) {
-  return (
-    // 44px 터치 영역(2.5.5)을 라벨 전체로 확보한다
-    <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onChange}
-        className="accent-primary size-4"
-      />
-      {label}
-    </label>
-  )
+  return <Checkbox label={label} checked={checked} onChange={onChange} className="flex" />
 }
 
 /** 이미 고른 값이면 빼고, 아니면 더한다. */

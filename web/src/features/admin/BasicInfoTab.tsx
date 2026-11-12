@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { DIFFICULTIES } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
@@ -69,22 +70,15 @@ export function BasicInfoTab({ form }: { form: ProblemFormApi }) {
             {tags.data.map((tag) => {
               const checked = chosen.includes(tag.slug)
               return (
-                // 44px 터치 영역을 라벨 전체로 확보한다 (ProblemFilters와 같은 모양).
-                <label
+                <Checkbox
                   key={tag.slug}
-                  className="flex min-h-11 cursor-pointer items-center gap-2 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    // 다 골랐으면 더 켤 수 없게 막는다. 스키마가 받아 주지 않는 값을
-                    // 넣게 두면 저장을 눌러야 알게 된다.
-                    disabled={!checked && chosen.length >= MAX_TAGS}
-                    onChange={() => toggle(tag.slug)}
-                    className="accent-primary size-4"
-                  />
-                  {tag.name}
-                </label>
+                  label={tag.name}
+                  checked={checked}
+                  // 다 골랐으면 더 켤 수 없게 막는다. 스키마가 받아 주지 않는 값을
+                  // 넣게 두면 저장을 눌러야 알게 된다.
+                  disabled={!checked && chosen.length >= MAX_TAGS}
+                  onChange={() => toggle(tag.slug)}
+                />
               )
             })}
           </div>

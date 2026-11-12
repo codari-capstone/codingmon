@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/table'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
-import { ProblemPagination } from '@/features/problems/ProblemPagination'
+import { Pagination } from '@/components/ui/pagination'
 import { ADMIN_PAGE_SIZE, adminProblemListQuery } from './adminProblemQuery'
 import { problemStateLabel } from './labels'
 
@@ -171,7 +171,7 @@ export function Component() {
         결과가 0개)에서 '이전'으로 돌아갈 유일한 길이다.
       */}
       {data && !error && !isPending && (pages > 1 || page > 1) ? (
-        <ProblemPagination page={page} pageCount={pages} onPageChange={handlePageChange} />
+        <Pagination page={page} total={pages} onChange={handlePageChange} />
       ) : null}
     </section>
   )

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 
 import { Markdown } from '@/components/Markdown'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
@@ -116,15 +117,12 @@ export function StatementTab({
           시간 초과**가 된다. 버튼으로 두면 안 눌러도 저장되고, 말없이 덮으면 관리자가
           일부러 넣은 값이 사라진다. 그래서 기본은 읽기 전용이고 열려면 체크한다.
         */}
-        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={manualPython}
-            onChange={(event) => onManualPythonChange(event.target.checked)}
-            className="accent-primary size-4"
-          />
-          Python 제한을 직접 입력
-        </label>
+        <Checkbox
+          label="Python 제한을 직접 입력"
+          checked={manualPython}
+          onChange={(event) => onManualPythonChange(event.target.checked)}
+          className="self-start"
+        />
 
         {FORM_LANGUAGES.map((language, index) => {
           const locked = index === PYTHON && !manualPython

@@ -106,7 +106,7 @@ describe('ProblemListPage', () => {
       const router = renderPage()
       await screen.findByRole('link', { name: '두 수의 합' })
 
-      await user.click(screen.getByRole('button', { name: '다음' }))
+      await user.click(screen.getByRole('button', { name: '다음 페이지' }))
 
       expect(
         await screen.findByRole('link', { name: `연습 문제 ${PAGE_SIZE + 1}` }),
@@ -206,7 +206,7 @@ describe('ProblemListPage', () => {
       renderPage()
       await screen.findByRole('link', { name: '두 수의 합' })
 
-      await user.click(screen.getByRole('button', { name: '다음' }))
+      await user.click(screen.getByRole('button', { name: '다음 페이지' }))
 
       expect(screen.getByRole('navigation', { name: '페이지' })).toBeInTheDocument()
 

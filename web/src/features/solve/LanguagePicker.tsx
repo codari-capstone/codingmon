@@ -1,4 +1,5 @@
 import type { Language, ProblemDetailView } from '@/api/types'
+import { Radio } from '@/components/ui/radio-group'
 import { LANGUAGE_LABEL } from './labels'
 
 /**
@@ -23,18 +24,14 @@ export function LanguagePicker({
     <fieldset className="flex items-center gap-4">
       <legend className="sr-only">언어</legend>
       {languages.map(({ language }) => (
-        // 44px 터치 영역(2.5.5)을 라벨 전체로 확보한다
-        <label key={language} className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
-          <input
-            type="radio"
-            name="solve-language"
-            value={language}
-            checked={language === value}
-            onChange={() => onChange(language)}
-            className="accent-primary size-4"
-          />
-          {LANGUAGE_LABEL[language]}
-        </label>
+        <Radio
+          key={language}
+          name="solve-language"
+          value={language}
+          label={LANGUAGE_LABEL[language]}
+          checked={language === value}
+          onChange={() => onChange(language)}
+        />
       ))}
     </fieldset>
   )

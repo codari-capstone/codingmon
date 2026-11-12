@@ -97,7 +97,11 @@ export function AppHeader() {
               <DropdownMenuItem asChild>
                 <Link to="/me/report">내 학습</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={logout}>로그아웃</DropdownMenuItem>
+              {/* 디자인 시스템 Menu: 로그아웃은 구분선 뒤 맨 아래에 위험 항목으로 */}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="danger" onSelect={logout}>
+                로그아웃
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (

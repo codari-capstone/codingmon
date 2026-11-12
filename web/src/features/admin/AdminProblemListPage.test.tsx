@@ -134,7 +134,7 @@ describe('AdminProblemListPage', () => {
       renderPage()
       await screen.findByRole('row', { name: /두 수의 합/ })
 
-      await user.click(screen.getByRole('button', { name: '다음' }))
+      await user.click(screen.getByRole('button', { name: '다음 페이지' }))
       expect(await screen.findByRole('button', { name: '2페이지' })).toHaveAttribute(
         'aria-current',
         'page',
@@ -188,14 +188,14 @@ describe('AdminProblemListPage', () => {
         })
       }),
     )
-    await user.click(screen.getByRole('button', { name: '다음' }))
+    await user.click(screen.getByRole('button', { name: '다음 페이지' }))
 
     expect(
       await screen.findByRole('heading', { name: '이 페이지에는 문제가 없습니다' }),
     ).toBeInTheDocument()
 
     // 빈 표에서도 이동이 남아 있어야 나갈 수 있다.
-    await user.click(screen.getByRole('button', { name: '이전' }))
+    await user.click(screen.getByRole('button', { name: '이전 페이지' }))
 
     expect(await screen.findByRole('row', { name: /두 수의 합/ })).toBeInTheDocument()
   })
@@ -205,7 +205,7 @@ describe('AdminProblemListPage', () => {
     renderPage()
     await screen.findByRole('row', { name: /두 수의 합/ })
 
-    await user.click(screen.getByRole('button', { name: '다음' }))
+    await user.click(screen.getByRole('button', { name: '다음 페이지' }))
 
     // 25개 중 1페이지 20개를 뺀 나머지다.
     await waitFor(() =>

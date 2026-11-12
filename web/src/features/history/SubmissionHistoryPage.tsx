@@ -17,7 +17,7 @@ import {
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { pageCount, PAGE_SIZE } from '@/features/problems/problemListParams'
-import { ProblemPagination } from '@/features/problems/ProblemPagination'
+import { Pagination } from '@/components/ui/pagination'
 import { cn } from '@/lib/utils'
 import { problemSubmissionsPath } from './historyPath'
 import { problemHistoryListQuery } from './historyQuery'
@@ -112,10 +112,10 @@ export function Component() {
               시도 횟수와 힌트 단계는 처음 맞힐 때까지(못 맞혔으면 지금까지) 기준이에요.
             </p>
             {pages > 1 ? (
-              <ProblemPagination
+              <Pagination
                 page={page}
-                pageCount={pages}
-                onPageChange={(next) => {
+                total={pages}
+                onChange={(next) => {
                   if (next === page) return
                   setPage(next)
                 }}
