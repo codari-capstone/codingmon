@@ -20,7 +20,7 @@ export function ProblemPagination({ page, pageCount, onPageChange }: ProblemPagi
       {/* 320px 폭에서 번호가 gap-1로 붙으므로 다른 버튼과 같은 44px 터치 영역을 준다. */}
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         className="min-h-11"
         disabled={page <= 1}
         onClick={() => onPageChange(page - 1)}
@@ -42,7 +42,7 @@ export function ProblemPagination({ page, pageCount, onPageChange }: ProblemPagi
           <Button
             key={item}
             type="button"
-            variant={item === page ? 'default' : 'ghost'}
+            variant={item === page ? 'primary' : 'ghost'}
             // 번호만으로는 무엇의 번호인지 읽히지 않는다. 지금 페이지는 aria-current로 알린다.
             aria-label={`${item}페이지`}
             aria-current={item === page ? 'page' : undefined}
@@ -56,7 +56,7 @@ export function ProblemPagination({ page, pageCount, onPageChange }: ProblemPagi
 
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         className="min-h-11"
         disabled={page >= pageCount}
         onClick={() => onPageChange(page + 1)}

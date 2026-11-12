@@ -1,71 +1,113 @@
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
+import { Loader2 } from 'lucide-react'
 import { cn } from 'cn'
 import { Slot } from 'radix-ui'
 
+// 디자인 시스템 Button (docs/design-handoff/design-system/components/Button). 모든 버튼은 알약이다.
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-semibold whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full border-0 font-semibold whitespace-nowrap transition-[background-color,box-shadow,transform,color] duration-150 select-none outline-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-ring active:not-disabled:scale-[.97] disabled:cursor-not-allowed disabled:bg-muted disabled:text-disabled-foreground disabled:shadow-none aria-busy:cursor-progress motion-reduce:transition-none motion-reduce:active:scale-100 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[18px]",
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary-hover',
-        outline:
-          // 보조 버튼. 회색 바탕 위에 바로 놓이는 곳이 많아 흰 면 + 얇은 선으로 둔다 (회색 면 secondary는 흰 카드 위에서 쓴다).
-          // 다크 모드는 면과 바탕이 거의 같아(1.15:1) 선이 경계를 맡아야 해서, 선(--border 1.8:1) 대신 --input(3.2:1 이상)을 쓴다
-          'border-border bg-card hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input',
-        // 밝은 모드 secondary 면(#f4f6fb)은 흰 카드와 1.08:1이라, 선(border)이 버튼 모양을 맡는다
+        // 화면의 주 동작 하나. 한 영역에 둘을 두지 않는다
+        primary:
+          'bg-primary text-primary-foreground hover:not-disabled:-translate-y-px hover:not-disabled:bg-primary-hover hover:not-disabled:shadow-glow active:not-disabled:shadow-none',
+        // 흰 면 + 머리카락 선. 다크 모드는 면과 바탕이 거의 같아(1.15:1) 선이 경계를 맡아야 해서
+        // 선(--border 1.8:1) 대신 --input(3.2:1 이상)을 쓴다. 쌍은 index.css.test.ts에 있다
         secondary:
-          'border-border bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
+          'bg-card text-foreground shadow-[inset_0_0_0_1px_var(--border)] hover:not-disabled:shadow-[inset_0_0_0_1px_var(--muted-foreground)] dark:shadow-[inset_0_0_0_1px_var(--input)] dark:hover:not-disabled:shadow-[inset_0_0_0_1px_var(--muted-foreground)]',
+        // 남색 무대(inverse) 위의 보조 동작. 무대 밖에서는 쓰지 않는다
+        glass:
+          'bg-inverse-raised text-inverse-foreground shadow-[inset_0_0_0_1px_var(--inverse-line)] hover:not-disabled:shadow-[inset_0_0_0_1px_var(--inverse-muted)]',
+        // 학습 보조 — 힌트 보기, AI 분석
+        soft: 'bg-accent text-primary-text hover:not-disabled:shadow-[inset_0_0_0_1px_var(--primary)]',
+        // 축하·보상 순간에만, 한 화면에 하나
+        accent:
+          'bg-highlight text-highlight-foreground hover:not-disabled:-translate-y-px hover:not-disabled:shadow-[0_10px_28px_-8px_rgba(224,161,11,0.6)]',
+        // 흰 바탕에서 primary를 이미 쓴 영역의 두 번째 강조
+        dark: 'bg-foreground text-background hover:not-disabled:bg-body-foreground',
         ghost:
-          'hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50',
-        // hover는 꽉 찬 면 + on-danger 글자다. 반투명 면을 진하게 하면 놓인 자리(카드·대화상자 Footer의
-        // 옅은 면)에 따라 글자 대비가 4.5:1 아래로 떨어진다(#250 리뷰). 쌍은 index.css.test.ts에 있다
-        destructive:
-          'bg-destructive/10 text-destructive-text hover:bg-destructive hover:text-destructive-foreground focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40',
-        link: 'text-primary-text underline-offset-4 hover:underline',
+          'bg-transparent text-body-foreground hover:not-disabled:bg-muted hover:not-disabled:text-foreground',
+        // 꽉 찬 면 + on-danger 글자로 바꾸면 놓인 자리(옅은 면)에 따라 글자 대비가 4.5:1 아래로 떨어진다(#250 리뷰).
+        // 그래서 올림은 면을 바꾸지 않고 선만 더한다. 쌍은 index.css.test.ts에 있다
+        danger:
+          'bg-destructive-soft text-destructive-text hover:not-disabled:shadow-[inset_0_0_0_1px_var(--destructive)]',
+        link: 'h-auto rounded-[4px] bg-transparent px-0.5 text-primary-text hover:not-disabled:underline hover:not-disabled:decoration-2 hover:not-disabled:underline-offset-4 active:not-disabled:scale-100 disabled:bg-transparent',
       },
       size: {
-        // 기본 40px. 화면에서 가장 중요한 버튼(제출·다시 풀기)만 lg 48px
-        default:
-          'h-10 gap-2 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3',
-        xs: "h-7 gap-1 rounded-[min(var(--radius-md),10px)] px-2.5 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 gap-1 rounded-[min(var(--radius-md),12px)] px-3 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: 'h-12 gap-2 px-5 has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4',
-        icon: 'size-10',
-        'icon-xs':
-          "size-7 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-        'icon-sm':
-          'size-8 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg',
-        'icon-lg': 'size-12',
+        sm: 'h-control-sm px-[18px] text-[14px] [&_svg:not([class*="size-"])]:size-4',
+        md: 'h-control-md px-6 text-[15px]',
+        lg: 'h-control-lg px-8 text-[17px] [&_svg:not([class*="size-"])]:size-5',
+      },
+      // 아이콘만 쓰는 둥근 버튼. aria-label을 함께 준다
+      shape: {
+        pill: '',
+        circle: 'aspect-square px-0',
+      },
+      fullWidth: {
+        true: 'flex w-full',
+        false: '',
       },
     },
     defaultVariants: {
-      variant: 'default',
-      size: 'default',
+      variant: 'primary',
+      size: 'md',
+      shape: 'pill',
+      fullWidth: false,
     },
   },
 )
 
-function Button({
-  className,
-  variant = 'default',
-  size = 'default',
-  asChild = false,
-  ...props
-}: React.ComponentProps<'button'> &
+type ButtonProps = React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
-  }) {
-  const Comp = asChild ? Slot.Root : 'button'
+    /** 기다리는 동안 누르지 못하게 하고 돌아가는 아이콘을 보인다. asChild와는 함께 쓰지 않는다 */
+    loading?: boolean
+  }
 
+function Button({
+  className,
+  variant,
+  size,
+  shape,
+  fullWidth,
+  asChild = false,
+  loading = false,
+  type,
+  disabled,
+  children,
+  ...props
+}: ButtonProps) {
+  const classes = cn(buttonVariants({ variant, size, shape, fullWidth, className }))
+  if (asChild) {
+    return (
+      <Slot.Root
+        data-slot="button"
+        data-variant={variant ?? 'primary'}
+        data-size={size ?? 'md'}
+        className={classes}
+        {...props}
+      >
+        {children}
+      </Slot.Root>
+    )
+  }
   return (
-    <Comp
+    <button
       data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+      data-variant={variant ?? 'primary'}
+      data-size={size ?? 'md'}
+      // 폼 안에서 type 없는 button은 submit이 된다(#149). 제출 버튼만 type="submit"을 적는다
+      type={type ?? 'button'}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      className={classes}
       {...props}
-    />
+    >
+      {loading && <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />}
+      {children}
+    </button>
   )
 }
 

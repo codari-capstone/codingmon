@@ -108,7 +108,12 @@ const PAIRS: Pair[] = [
   // 버튼 hover는 꽉 찬 면 + destructive-foreground라 위 쌍이 맡는다
   ['destructive-text', 'destructive', 0.1, 4.5, 'card'],
   ['destructive-text', 'destructive', 0.1, 4.5, 'muted'],
-  // 입력칸 경계와 포커스 띠(UNDERLINE_FIELD: --input 밑줄, --ring 포커스, --destructive 오류) (WCAG 1.4.11)
+  // Button soft(옅은 파랑 면 + 파랑 글자), dark(글자색 면 + 바탕색 글자, hover는 본문색 면), glass(남색 무대 위 반투명 면)
+  ['primary-text', 'accent', 1, 4.5, 'card'],
+  ['background', 'foreground', 1, 4.5, 'card'],
+  ['background', 'body-foreground', 1, 4.5, 'card'],
+  ['inverse-foreground', 'inverse-raised', 1, 4.5, 'inverse'],
+  // 입력칸 경계와 포커스 띠(FIELD_BOX: --input 테두리, --ring 포커스, --destructive 오류) (WCAG 1.4.11)
   ...['input', 'ring', 'destructive'].flatMap((line): Pair[] => [
     [line, 'card', 1, 3, 'card'],
     [line, 'background', 1, 3, 'card'],
