@@ -16,7 +16,7 @@ test.describe('제출 결과 화면', () => {
     const editor = page.getByRole('textbox', { name: '코드 편집기' })
     await editor.click()
     await page.keyboard.type('print(1)')
-    await page.getByRole('button', { name: '제출' }).click()
+    await page.getByRole('button', { name: '제출하기' }).click()
 
     await expect(page).toHaveURL(/\/submissions\/\d+$/)
     // 중간 상태를 잡지 않는다. 목은 조회마다 한 걸음 나아가므로 QUEUED는 다음 폴링까지
@@ -39,7 +39,7 @@ test.describe('제출 결과 화면', () => {
     await page.goto('/problems/1')
     await expect(page.getByRole('textbox', { name: '코드 편집기' })).toBeVisible()
 
-    await page.getByRole('button', { name: '제출' }).click()
+    await page.getByRole('button', { name: '제출하기' }).click()
     await expect(page.getByText('틀렸습니다')).toBeVisible({ timeout: 15_000 })
 
     // [AI 분석]은 결과 옆 AI 패널의 버튼이다(#41). 오답이라 누를 수 있다.
@@ -72,7 +72,7 @@ test.describe('제출 결과 화면', () => {
     )
 
     // 시작 코드를 그대로 내면 목이 오답을 준다 (handlers.ts).
-    await page.getByRole('button', { name: '제출' }).click()
+    await page.getByRole('button', { name: '제출하기' }).click()
     await expect(page.getByText('틀렸습니다')).toBeVisible({ timeout: 15_000 })
 
     await page.getByRole('link', { name: '다시 풀기' }).click()

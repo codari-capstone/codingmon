@@ -143,7 +143,7 @@ test.describe('문제 풀이 화면', () => {
     await editor.click()
     await page.keyboard.type('print(1)')
 
-    await page.getByRole('button', { name: '제출' }).click()
+    await page.getByRole('button', { name: '제출하기' }).click()
 
     await expect(page).toHaveURL(/\/submissions\/\d+$/)
   })

@@ -11,7 +11,7 @@ import { ThemeProvider } from '@/app/ThemeProvider'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { resetSampleRuns } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
-import { SampleRun } from './SampleRun'
+import { RunButton, SampleRun } from './SampleRun'
 import type { SampleRunState } from './sampleRunQuery'
 import { Component as SolvePage } from './SolvePage'
 
@@ -62,9 +62,13 @@ function sampleCase(over: Partial<SampleRunCase> = {}): SampleRunCase {
   }
 }
 
+/** 화면처럼 버튼과 결과를 함께 그린다. 둘은 다른 자리(버튼 줄·결과 카드)에 놓인다 */
 function renderRun(run: SampleRunState, samples = SAMPLES, code = 'print(1)') {
   return render(
-    <SampleRun run={run} samples={samples} problemId={1} language="PYTHON" code={code} />,
+    <>
+      <RunButton run={run} samples={samples} problemId={1} language="PYTHON" code={code} />
+      <SampleRun run={run} samples={samples} />
+    </>,
   )
 }
 
@@ -76,7 +80,23 @@ describe('SampleRun (SOLVE-08)', () => {
     renderRun(fake({}), [])
 
     expect(screen.queryByRole('button', { name: '실행' })).not.toBeInTheDocument()
-    expect(screen.queryByText('예제 실행')).not.toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('실행 전에는 결과 카드를 그리지 않고 live region만 둔다', () => {
+    // 빈 카드가 뜨면 안 되지만, live region은 처음부터 있어야 결과가 안내된다
+    renderRun(fake({}))
+
+    expect(screen.queryByRole('heading', { name: '예제 실행 결과' })).not.toBeInTheDocument()
+    expect(liveRegion()).toBeEmptyDOMElement()
+    expect(liveRegion().closest('section')).toHaveClass('sr-only')
+  })
+
+  it('실행하면 결과 카드와 제목이 보인다', () => {
+    renderRun(fake({ pending: true }))
+
+    expect(screen.getByRole('heading', { name: '예제 실행 결과' })).toBeInTheDocument()
+    expect(liveRegion().closest('section')).not.toHaveClass('sr-only')
   })
 
   it('코드가 비어 있으면 누를 수 없다', () => {

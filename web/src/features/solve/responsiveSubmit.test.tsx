@@ -87,7 +87,7 @@ describe('폭 전환 중 제출', () => {
     )
     await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
 
-    await user.click(screen.getByRole('button', { name: '제출' }))
+    await user.click(screen.getByRole('button', { name: '제출하기' }))
     // 응답이 오기 전에 넓은 화면으로 넘어간다 (창 크기 조절·기기 회전).
     await act(async () => {
       wide = true

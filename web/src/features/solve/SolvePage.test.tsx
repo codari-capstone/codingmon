@@ -83,7 +83,7 @@ describe('SolvePage', () => {
   })
 
   describe('제출 (SOLVE-09)', () => {
-    const submitButton = () => screen.getByRole('button', { name: '제출' })
+    const submitButton = () => screen.getByRole('button', { name: '제출하기' })
 
     it('제출하면 결과 화면으로 간다', async () => {
       const user = userEvent.setup()

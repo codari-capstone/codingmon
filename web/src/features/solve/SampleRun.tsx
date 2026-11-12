@@ -162,8 +162,41 @@ function Cases({ result, samples }: { result: SampleRunResult; samples: Samples 
   )
 }
 
+interface SampleRunProps {
+  run: SampleRunState
+  samples: Samples
+  problemId: number
+  language: ProblemDetailView['languages'][number]['language']
+  code: string
+}
+
 /**
- * 예제 실행 (SOLVE-08).
+ * 예제 실행 버튼 (SOLVE-08). 디자인은 [실행]·[제출하기]를 한 줄에 같은 크기로 두므로
+ * 결과(`SampleRun`)와 떼어 두고, 화면이 제출 버튼 옆에 놓는다.
+ */
+export function RunButton({ run, samples, problemId, language, code }: SampleRunProps) {
+  // 돌릴 예제가 없으면 자리째로 뺀다. 계약은 공개 예제가 없는 문제를 막지 않는다.
+  if (samples.length === 0) return null
+  // 공백뿐인 코드는 서버가 `SOURCE_EMPTY`로 거절한다 (SubmitButton과 같은 편의).
+  const empty = code.trim() === ''
+
+  return (
+    // 비활성 버튼은 클릭도 Enter도 받지 않아 disabled 하나로 중복 실행이 막힌다
+    <Button
+      type="button"
+      variant="secondary"
+      size="lg"
+      fullWidth
+      disabled={empty || run.pending}
+      onClick={() => run.start({ problemId, language, sourceCode: code })}
+    >
+      {run.pending ? '실행 중…' : '실행'}
+    </Button>
+  )
+}
+
+/**
+ * 예제 실행 결과 (SOLVE-08).
  *
  * 결과를 **에디터 아래**에 둔다. 지문 쪽 `Samples`에 끼우지 않는다 — 좁은 화면에서는
  * 지문과 에디터가 다른 탭이라(SOLVE-10), 에디터 탭에서 누른 결과를 보려고 탭을 옮겨야
@@ -172,45 +205,21 @@ function Cases({ result, samples }: { result: SampleRunResult; samples: Samples 
  * 상태는 받아 쓴다. 이 컴포넌트는 반응형 분기 안에 있어 폭이 64rem을 넘나들면 새로
  * 마운트되므로, 실행 번호를 여기서 들고 있으면 진행 중인 실행을 잃는다(sampleRunQuery 주석).
  */
-export function SampleRun({
-  run,
-  samples,
-  problemId,
-  language,
-  code,
-}: {
-  run: SampleRunState
-  samples: Samples
-  problemId: number
-  language: ProblemDetailView['languages'][number]['language']
-  code: string
-}) {
-  // 돌릴 예제가 없으면 자리째로 뺀다. 계약은 공개 예제가 없는 문제를 막지 않는다.
+export function SampleRun({ run, samples }: Pick<SampleRunProps, 'run' | 'samples'>) {
   if (samples.length === 0) return null
 
   const result = run.result
-  // 공백뿐인 코드는 서버가 `SOURCE_EMPTY`로 거절한다 (SubmitButton과 같은 편의).
-  const empty = code.trim() === ''
+  const failed = run.error !== null && run.error !== undefined
+  // 한 번도 안 돌렸으면 빈 카드를 띄우지 않는다. 아래 live region은 그래도 늘 둔다
+  const active = run.pending || result !== undefined || failed
 
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">예제 실행</h2>
-        {/* 비활성 버튼은 클릭도 Enter도 받지 않아 disabled 하나로 중복 실행이 막힌다 */}
-        <Button
-          type="button"
-          variant="secondary"
-          className="min-h-11"
-          disabled={empty || run.pending}
-          onClick={() => run.start({ problemId, language, sourceCode: code })}
-        >
-          {run.pending ? '실행 중…' : '실행'}
-        </Button>
-      </div>
-
-      <p className="text-muted-foreground text-sm">
-        문제에 적힌 공개 예제로만 돌려 봐요. 시도 횟수에 들어가지 않아요.
-      </p>
+    // 실행 전에는 sr-only로 둔다. 빈 블록이 남으면 부모 flex의 gap이 한 번 더 들어가 간격이 두 배가 되고,
+    // sr-only(절대 위치)는 flex 항목이 아니라 gap을 만들지 않는다. live region은 그대로 접근성 트리에 남는다
+    <section
+      className={active ? 'bg-card flex flex-col gap-3.5 rounded-lg border px-6 py-5' : 'sr-only'}
+    >
+      {active ? <h2 className="text-foreground text-base font-semibold">예제 실행 결과</h2> : null}
 
       {/*
         분기마다 래퍼를 바꾸지 않는다. React가 live region 노드를 지우고 새로 붙이면
@@ -222,7 +231,7 @@ export function SampleRun({
       </div>
 
       {/* 접수·조회 실패는 한 자리로 모은다. 사용자에게는 "실행이 안 됐다" 하나다 */}
-      {run.error !== null && run.error !== undefined ? (
+      {failed ? (
         <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(run.error)}
         </p>

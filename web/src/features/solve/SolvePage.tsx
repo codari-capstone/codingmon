@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from 'react-router'
 
 import type { Language, ProblemDetailView } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
+import { Badge } from '@/components/ui/badge'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/features/auth/useAuth'
@@ -13,7 +14,7 @@ import { BeginnerGuide } from './BeginnerGuide'
 import { CodeEditor } from './CodeEditor'
 import { LanguagePicker } from './LanguagePicker'
 import { formatTimeLimit, LANGUAGE_LABEL } from './labels'
-import { SampleRun } from './SampleRun'
+import { RunButton, SampleRun } from './SampleRun'
 import { useSampleRun } from './sampleRunQuery'
 import { Samples } from './Samples'
 import { readSavedCode, storeSavedCode } from './savedCode'
@@ -21,11 +22,17 @@ import { askedLanguage } from './solvePath'
 import { problemDetailQuery } from './solveQuery'
 import { StarterCodeButton } from './StarterCodeButton'
 import { useSubmit } from './submitQuery'
-import { SubmitButton } from './SubmitButton'
+import { SubmitButton, SubmitError } from './SubmitButton'
 import { Statement } from './Statement'
 import { useWideLayout } from './useWideLayout'
 
-/** 제목 줄: 난이도·제한·태그 (SOLVE-01). */
+/**
+ * 제목·난이도·태그·제한 (SOLVE-01).
+ *
+ * 디자인 화면에는 '문제 목록 > N. 제목' 경로가 있지만 넣지 않는다. Breadcrumb 부품 규칙이
+ * "두 단계뿐인 화면에는 쓰지 않는다"이고, 마지막 항목이 바로 아래 h1과 같아 화면 낭독기가
+ * 같은 제목을 두 번 읽는다(#266 리뷰). 목록으로는 상단 바의 '문제'로 간다.
+ */
 function Header({
   problem,
   current,
@@ -34,23 +41,19 @@ function Header({
   current: ProblemDetailView['languages'][number] | undefined
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5">
       <h1 className="page-title">{problem.title}</h1>
-      <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        <span>{DIFFICULTY_LABEL[problem.difficulty]}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone="outline">{DIFFICULTY_LABEL[problem.difficulty]}</Badge>
+        {problem.tags.map((tag) => (
+          <Badge key={tag.slug}>{tag.name}</Badge>
+        ))}
         {current ? (
           // 제한은 고른 언어의 것이다 (SOLVE-04). Python이 C++보다 느려 제한이 다르다.
           // 한 문자열로 둔다 — 조각으로 나누면 텍스트 노드가 쪼개져 "Python · 2초 · 256MB"를
           // 한 덩어리로 찾는 테스트가 못 찾는다.
-          <span>{`${LANGUAGE_LABEL[current.language]} · ${formatTimeLimit(current.timeLimitMs)} · ${current.memoryLimitMb}MB`}</span>
+          <span className="text-muted-foreground text-sm">{`${LANGUAGE_LABEL[current.language]} · ${formatTimeLimit(current.timeLimitMs)} · ${current.memoryLimitMb}MB`}</span>
         ) : null}
-        <span className="flex flex-wrap gap-1">
-          {problem.tags.map((tag) => (
-            <span key={tag.slug} className="bg-muted rounded-md px-2 py-0.5 text-xs">
-              {tag.name}
-            </span>
-          ))}
-        </span>
       </div>
     </div>
   )
@@ -124,27 +127,30 @@ function Workspace({ problem }: { problem: ProblemDetailView }) {
     [user?.id, problem.id, language, current],
   )
 
+  const code = language ? (codeByLanguage[language] ?? opening) : ''
+
   const editor =
     language && current ? (
-      <div className="bg-card flex flex-col gap-3 rounded-lg border p-6">
-        <div className="flex flex-wrap items-center justify-between gap-x-4">
-          <LanguagePicker
-            languages={problem.languages}
-            value={language}
-            onChange={(next) => setChosen(next)}
-          />
-          <StarterCodeButton
-            starterCode={current.starterCode}
-            code={codeByLanguage[language] ?? opening}
-            onLoad={() => {
-              setCodeByLanguage((prev) => ({ ...prev, [language]: current.starterCode }))
-              // 저장도 함께 지운다. 안 하면 새로고침에 방금 버린 코드가 돌아온다.
-              storeSavedCode(user?.id, problem.id, language, current.starterCode)
-              setGeneration((it) => it + 1)
-            }}
-          />
-        </div>
-        {/*
+      <div className="flex flex-col gap-4">
+        <div className="bg-card flex flex-col gap-4 rounded-lg border p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <LanguagePicker
+              languages={problem.languages}
+              value={language}
+              onChange={(next) => setChosen(next)}
+            />
+            <StarterCodeButton
+              starterCode={current.starterCode}
+              code={code}
+              onLoad={() => {
+                setCodeByLanguage((prev) => ({ ...prev, [language]: current.starterCode }))
+                // 저장도 함께 지운다. 안 하면 새로고침에 방금 버린 코드가 돌아온다.
+                storeSavedCode(user?.id, problem.id, language, current.starterCode)
+                setGeneration((it) => it + 1)
+              }}
+            />
+          </div>
+          {/*
           한 번도 손대지 않은 언어는 그 언어의 시작 코드로 연다 (SOLVE-06). 계약은
           시작 코드가 없으면 빈 문자열을 준다.
 
@@ -158,48 +164,64 @@ function Workspace({ problem }: { problem: ProblemDetailView }) {
           같은 코드를 계속 쓰는 중이라 undo 이력이 자산이고, 여기서는 코드 자체가
           바뀌는 일이라 버리는 것이 맞다 — 그래서 덮어쓰기 전에 확인을 받는다.
         */}
-        <CodeEditor
-          key={`${language}:${generation}`}
-          language={language}
-          value={codeByLanguage[language] ?? opening}
-          onChange={(next) => {
-            setCodeByLanguage((prev) => ({ ...prev, [language]: next }))
-            // shortcut: 입력마다 저장한다. 코드가 수십 KB로 커져 입력이 버벅이면
-            // 저장을 늦출 자리는 여기다. 지금은 잃는 글자가 없는 쪽을 택한다.
-            storeSavedCode(user?.id, problem.id, language, next)
-          }}
-        />
-        <SampleRun
-          run={sampleRun}
-          samples={problem.samples}
-          problemId={problem.id}
-          language={language}
-          code={codeByLanguage[language] ?? opening}
-        />
-        <SubmitButton
-          submit={submit}
-          problemId={problem.id}
-          language={language}
-          code={codeByLanguage[language] ?? opening}
-        />
+          <CodeEditor
+            key={`${language}:${generation}`}
+            language={language}
+            value={code}
+            onChange={(next) => {
+              setCodeByLanguage((prev) => ({ ...prev, [language]: next }))
+              // shortcut: 입력마다 저장한다. 코드가 수십 KB로 커져 입력이 버벅이면
+              // 저장을 늦출 자리는 여기다. 지금은 잃는 글자가 없는 쪽을 택한다.
+              storeSavedCode(user?.id, problem.id, language, next)
+            }}
+          />
+          {/*
+          [실행]·[제출하기]는 같은 크기(128px 두 칸)로 두고 무게는 variant로만 나눈다.
+          파란 버튼은 이 영역에 제출 하나다. 좁은 폭(sm 미만)은 128px 둘이 카드에 들어가지 않아 반씩 나눈다.
+        */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {problem.samples.length > 0 ? (
+              <p className="text-muted-foreground text-sm">
+                실행은 공개 예제로만 돌려요. 시도 횟수에 들어가지 않아요.
+              </p>
+            ) : null}
+            <div className="grid w-full auto-cols-fr grid-flow-col gap-2.5 sm:ml-auto sm:w-auto sm:auto-cols-[128px]">
+              <RunButton
+                run={sampleRun}
+                samples={problem.samples}
+                problemId={problem.id}
+                language={language}
+                code={code}
+              />
+              <SubmitButton
+                submit={submit}
+                problemId={problem.id}
+                language={language}
+                code={code}
+              />
+            </div>
+          </div>
+          <SubmitError submit={submit} language={language} code={code} />
+        </div>
+        <SampleRun run={sampleRun} samples={problem.samples} />
         <BeginnerGuide language={language} />
       </div>
     ) : null
 
   const statement = (
-    <div className="bg-card flex flex-col gap-6 rounded-lg border p-6">
+    <article className="bg-card text-body-foreground flex min-w-0 flex-col gap-8 rounded-lg border p-6 text-base leading-[1.7] sm:p-8">
       <Statement problem={problem} />
       <Samples samples={problem.samples} />
-    </div>
+    </article>
   )
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-6">
       <Header problem={problem} current={current} />
 
       {/* 넓은 화면은 좌우 분할, 좁은 화면은 탭 전환 (SOLVE-10). 가르는 이유는 useWideLayout 주석 */}
       {wide ? (
-        <div className="grid grid-cols-2 items-start gap-6">
+        <div className="grid grid-cols-2 items-start gap-5">
           {statement}
           {/*
             에디터 칸을 화면에 붙여 둔다. 지문은 에디터보다 훨씬 길어서(측정: 1280px
