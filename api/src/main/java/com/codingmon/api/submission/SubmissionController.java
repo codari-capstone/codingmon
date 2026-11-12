@@ -21,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.codingmon.api.ApiErrors;
 import com.codingmon.api.Language;
 import com.codingmon.api.Page;
+import com.codingmon.api.learning.UserActivityRepository;
 
 // 코드 제출(SOLVE-09)과 예제 실행(SOLVE-08). QUEUED로 저장하는 데까지만 하고, 이후 상태·판정은 채점 처리기(#71)가 갱신한다.
 @RestController
@@ -35,16 +36,22 @@ class SubmissionController {
 
     private final SubmissionRepository submissions;
     private final ApplicationEventPublisher events;
+    private final UserActivityRepository activity;
 
-    SubmissionController(SubmissionRepository submissions, ApplicationEventPublisher events) {
+    SubmissionController(SubmissionRepository submissions, ApplicationEventPublisher events, UserActivityRepository activity) {
         this.submissions = submissions;
         this.events = events;
+        this.activity = activity;
     }
 
     @PostMapping("/api/submissions")
     @Transactional
     ResponseEntity<Map<String, Long>> submit(@RequestBody SubmitRequest body, @AuthenticationPrincipal Jwt jwt) {
+        // 연속 학습(STREAK)은 사용자 제출만 센다. 예제 실행은 여기를 지나지 않는다.
+        long userId = Long.parseLong(jwt.getSubject());
+        activity.lockForSubmission(userId);
         long id = queue(body, jwt, SubmissionRepository.Kind.SUBMIT);
+        activity.recordSubmission(userId, id);
         return ResponseEntity.accepted().location(URI.create("/api/submissions/" + id)).body(Map.of("id", id));
     }
 

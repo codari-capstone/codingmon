@@ -13,7 +13,7 @@ PostgreSQL용 초안이다. DDL은 `api/src/main/resources/db/migration/`의 `V1
 | `refresh_tokens` | 사용자, 토큰 해시, 토큰 묶음 ID, 만료·폐기 시각 | 로그인 유지, 갱신, 로그아웃 및 토큰 폐기 |
 | `email_tokens` | 이메일, 용도, 인증번호 해시, 시도 횟수, 만료·사용 시각 | 가입·비밀번호 재설정 이메일 인증번호 발송·확인과 재발송 제한 |
 
-일반 가입은 이메일과 `password_hash`를 사용하고, OAuth 가입은 `oauth_accounts`에 계정 연결을 만든다. OAuth access token과 refresh token 원문은 저장하지 않는다. `nickname`은 사용자 요청에 따라 대소문자 구분 없이 중복을 허용하지 않는다. 사용자 행에는 가입 시각(`created_at`, ADM-14)과 정지 시각·사유(`suspended_at`·`suspension_reason`, ADM-16)만 두고 변경 시각은 두지 않는다. 가입일을 기록하기 전에 가입한 회원은 `created_at`이 비어 있다. 토큰 무효화에는 시각 대신 `token_version` 번호를 쓴다. 정지할 때도 `token_version`을 올리고 refresh token을 폐기해 로그인 중인 기기를 막는다.
+일반 가입은 이메일과 `password_hash`를 사용하고, OAuth 가입은 `oauth_accounts`에 계정 연결을 만든다. OAuth access token과 refresh token 원문은 저장하지 않는다. `nickname`은 사용자 요청에 따라 대소문자 구분 없이 중복을 허용하지 않는다. 사용자 행에는 가입 시각(`created_at`, ADM-14)과 정지 시각·사유(`suspended_at`·`suspension_reason`, ADM-16), 연속 학습(`streak_days`·`last_active_date`, STREAK)만 두고 변경 시각은 두지 않는다. 가입일을 기록하기 전에 가입한 회원은 `created_at`이 비어 있다. 연속 학습은 제출할 때 갱신해 두어, 조회할 때 제출 기록 전체를 거슬러 세지 않는다. 토큰 무효화에는 시각 대신 `token_version` 번호를 쓴다. 정지할 때도 `token_version`을 올리고 refresh token을 폐기해 로그인 중인 기기를 막는다.
 
 `users` 행은 가입 완료 시점에만 만든다. 인증하지 않은 사용자는 `users`에 남지 않는다.
 
