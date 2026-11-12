@@ -223,9 +223,11 @@ class SubmissionRepository {
     }
 
     // QUEUED로 저장한다. 이후 상태는 채점 처리기(#71)가 갱신한다.
+    // 제출 시각은 트랜잭션 시작(now())이 아니라 이 문장이 도는 시각이다. 연속 학습 잠금 뒤의 시각이어야 해서다
+    // (UserActivityRepository.lockForSubmission).
     long insertQueued(long userId, long versionId, Kind kind, Language language, String source) {
-        return jdbc.sql("insert into submissions (user_id, problem_version_id, submission_kind, language, source_code)"
-                + " values (:userId, :versionId, :kind, :language, :source) returning id")
+        return jdbc.sql("insert into submissions (user_id, problem_version_id, submission_kind, language, source_code, submitted_at)"
+                + " values (:userId, :versionId, :kind, :language, :source, clock_timestamp()) returning id")
                 .param("userId", userId)
                 .param("versionId", versionId)
                 .param("kind", kind.name())

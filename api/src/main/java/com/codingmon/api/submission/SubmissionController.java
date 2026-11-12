@@ -47,9 +47,11 @@ class SubmissionController {
     @PostMapping("/api/submissions")
     @Transactional
     ResponseEntity<Map<String, Long>> submit(@RequestBody SubmitRequest body, @AuthenticationPrincipal Jwt jwt) {
-        long id = queue(body, jwt, SubmissionRepository.Kind.SUBMIT);
         // 연속 학습(STREAK)은 사용자 제출만 센다. 예제 실행은 여기를 지나지 않는다.
-        activity.recordSubmission(Long.parseLong(jwt.getSubject()));
+        long userId = Long.parseLong(jwt.getSubject());
+        activity.lockForSubmission(userId);
+        long id = queue(body, jwt, SubmissionRepository.Kind.SUBMIT);
+        activity.recordSubmission(userId, id);
         return ResponseEntity.accepted().location(URI.create("/api/submissions/" + id)).body(Map.of("id", id));
     }
 

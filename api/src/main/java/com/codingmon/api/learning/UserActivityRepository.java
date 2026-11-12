@@ -88,22 +88,33 @@ public class UserActivityRepository {
         return new UserActivity(summary.solved(), summary.wrong(), summary.byDifficulty(), from, to, days, days.size());
     }
 
+    // 사용자 제출을 저장하기 전에 부른다. 같은 사용자의 제출을 한 줄로 세워, 먼저 잠근 제출이 먼저 제출 시각을 받고
+    // 먼저 연속 일수를 갱신하게 한다. 제출 시각(submitted_at)은 잠근 뒤의 clock_timestamp()라 날짜 순서와 갱신 순서가 같다.
+    // now()(트랜잭션 시작 시각)로 정하면 자정 전에 시작한 제출이 자정 뒤 제출보다 늦게 갱신돼 연속 일수가 1로 줄 수 있다.
+    // 제출 행이 거는 FOR KEY SHARE와 충돌하지 않게 FOR NO KEY UPDATE로 잠근다. 예제 실행은 기다리지 않는다.
+    public void lockForSubmission(long userId) {
+        jdbc.sql("select id from users where id = :userId for no key update")
+                .param("userId", userId)
+                .query(Long.class)
+                .single();
+    }
+
     // 사용자 제출을 저장한 트랜잭션 안에서 부른다. 저장이 실패하면 연속 일수도 바뀌지 않는다.
-    // 한 문장으로 갱신해 같은 순간에 두 번 제출해도 두 번 더하지 않는다.
-    // 오늘은 DB 시계로 정한다. now()는 트랜잭션 시작 시각이라 방금 저장한 submitted_at과 같은 날이 된다.
-    // 그래서 자정 전에 시작한 제출이 자정 뒤 제출보다 늦게 커밋될 수 있다. 마지막 날이 오늘보다 뒤면 건드리지 않는다.
-    public void recordSubmission(long userId) {
+    // 오늘은 그 제출의 submitted_at 날짜(한국 시각)라 잔디·이번 주 달력과 같은 날을 본다.
+    public void recordSubmission(long userId, long submissionId) {
         jdbc.sql("""
                 update users set
                   streak_days = case
-                    when last_active_date >= t.today then streak_days
+                    when last_active_date = t.today then streak_days
                     when last_active_date = t.today - 1 then streak_days + 1
                     else 1 end,
-                  last_active_date = greatest(last_active_date, t.today)
-                from (select (now() at time zone 'Asia/Seoul')::date as today) t
+                  last_active_date = t.today
+                from (select (submitted_at at time zone 'Asia/Seoul')::date as today
+                      from submissions where id = :submissionId) t
                 where id = :userId
                 """)
                 .param("userId", userId)
+                .param("submissionId", submissionId)
                 .update();
     }
 
