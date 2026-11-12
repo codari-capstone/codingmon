@@ -73,6 +73,14 @@ describe('Accordion', () => {
     expect(screen.getByRole('button', { name: '첫째' })).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByRole('button', { name: '둘째' })).toHaveAttribute('aria-expanded', 'true')
   })
+
+  // 하나만 여는 모드에 값을 둘 넘기면 하나가 조용히 버려진다. 타입에서 막는다 (#261 리뷰)
+  it('multiple 없이 defaultOpen에 값을 둘 넘기면 타입 오류다', () => {
+    // @ts-expect-error 하나만 여는 모드는 defaultOpen을 하나까지만 받는다
+    const twoOpen = <Accordion items={items} defaultOpen={['a', 'b']} />
+    const multi = <Accordion items={items} multiple defaultOpen={['a', 'b']} />
+    expect([twoOpen, multi]).toHaveLength(2)
+  })
 })
 
 describe('CodeBlock', () => {
@@ -112,15 +120,23 @@ describe('CodeBlock', () => {
     expect(container.querySelectorAll('code > span')).toHaveLength(3)
   })
 
-  it('복사를 누르면 코드를 클립보드에 쓰고 복사됨으로 바뀐다', async () => {
+  // 한 화면에 블록이 여럿이면 '복사, 복사'로만 읽힌다. 머리글자를 이름에 붙인다 (#261 리뷰)
+  it('복사를 누르면 코드를 클립보드에 쓰고, 버튼 이름에 머리글자가 붙는다', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     render(<CodeBlock code="print(1)" language="python" />)
 
-    await userEvent.click(screen.getByRole('button', { name: '복사' }))
+    await userEvent.click(screen.getByRole('button', { name: 'python 복사' }))
 
     expect(writeText).toHaveBeenCalledWith('print(1)')
-    expect(await screen.findByRole('button', { name: '복사됨' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'python 복사됨' })).toBeInTheDocument()
+  })
+
+  // 가로로 스크롤한 곳에서도 강조 줄 배경이 끊기지 않게, code가 가장 긴 줄까지 늘어난다 (#261 리뷰)
+  it('code는 가장 긴 줄 너비로 늘어나 줄 배경이 스크롤 영역 끝까지 간다', () => {
+    const { container } = render(<CodeBlock code={'a'.repeat(300)} highlight={[1]} />)
+
+    expect(container.querySelector('code')).toHaveClass('inline-block', 'min-w-full')
   })
 
   it('클립보드를 못 쓰면 복사됨으로 바꾸지 않는다', async () => {
