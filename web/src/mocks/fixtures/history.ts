@@ -110,5 +110,6 @@ export function pastSubmission(id: number): SubmissionResult | null {
     memoryUsedKb: summary.memoryUsedKb,
     submittedAt: summary.submittedAt,
     judgedAt: summary.submittedAt,
+    unlockedBadges: [],
   }
 }
