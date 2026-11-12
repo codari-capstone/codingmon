@@ -1,39 +1,18 @@
 import { Check, Copy } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
 
 import type { ProblemDetailView } from '@/api/types'
 import { Button } from '@/components/ui/button'
-
-/** 복사됨 표시를 유지하는 시간. */
-const COPIED_MS = 1500
+import { useCopy } from '@/lib/useCopy'
 
 /**
  * 예제 하나를 클립보드로 (SOLVE-02).
  *
  * 눌렀는데 아무 일도 안 일어나면 복사됐는지 알 수 없어서 라벨을 잠깐 바꾼다. 색이나
  * 아이콘만 바꾸면 스크린 리더가 알 수 없으므로 글도 함께 바꾼다.
- *
- * `navigator.clipboard`는 https와 localhost에서만 있다. 없거나 권한이 거절되면 아무
- * 표시도 하지 않는다 — "복사됨"이라고 거짓말하는 쪽이 더 나쁘다.
+ * 복사·'복사됨' 유지 시간·실패 처리는 CodeBlock과 같은 `useCopy`가 맡는다.
  */
 function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = useState(false)
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
-
-  // 복사 직후 다른 예제로 넘어가 이 버튼이 사라지면 타이머가 사라진 state를 건드린다.
-  useEffect(() => () => clearTimeout(timer.current), [])
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      return
-    }
-    setCopied(true)
-    clearTimeout(timer.current)
-    timer.current = setTimeout(() => setCopied(false), COPIED_MS)
-  }
-
+  const { copied, copy } = useCopy(text)
   const Icon = copied ? Check : Copy
 
   return (
