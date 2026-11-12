@@ -29,4 +29,10 @@ class LearningStatsController {
     UserActivityRepository.UserActivity activity(@AuthenticationPrincipal Jwt jwt) {
         return activity.find(Long.parseLong(jwt.getSubject()));
     }
+
+    // STREAK-01·02
+    @GetMapping("/api/users/me/streak")
+    UserActivityRepository.UserStreak streak(@AuthenticationPrincipal Jwt jwt) {
+        return activity.findStreak(Long.parseLong(jwt.getSubject()));
+    }
 }
