@@ -2,12 +2,12 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import { ProblemPagination } from './ProblemPagination'
+import { Pagination } from '@/components/ui/pagination'
 
-describe('ProblemPagination', () => {
+describe('Pagination', () => {
   function renderPagination(page: number, pageCount: number) {
     const onPageChange = vi.fn()
-    render(<ProblemPagination page={page} pageCount={pageCount} onPageChange={onPageChange} />)
+    render(<Pagination page={page} total={pageCount} onChange={onPageChange} />)
     return { onPageChange }
   }
 
@@ -22,15 +22,15 @@ describe('ProblemPagination', () => {
   it('첫 페이지에서는 이전을 누를 수 없다', () => {
     renderPagination(1, 3)
 
-    expect(screen.getByRole('button', { name: '이전' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '다음' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '이전 페이지' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '다음 페이지' })).toBeEnabled()
   })
 
   it('마지막 페이지에서는 다음을 누를 수 없다', () => {
     renderPagination(3, 3)
 
-    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '이전' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '다음 페이지' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '이전 페이지' })).toBeEnabled()
   })
 
   it('번호를 누르면 그 페이지를 올린다', async () => {
@@ -46,7 +46,7 @@ describe('ProblemPagination', () => {
     const user = userEvent.setup()
     const { onPageChange } = renderPagination(2, 3)
 
-    await user.click(screen.getByRole('button', { name: '다음' }))
+    await user.click(screen.getByRole('button', { name: '다음 페이지' }))
 
     expect(onPageChange).toHaveBeenCalledWith(3)
   })
@@ -55,5 +55,17 @@ describe('ProblemPagination', () => {
     renderPagination(1, 3)
 
     expect(screen.getByRole('navigation', { name: '페이지' })).toBeInTheDocument()
+  })
+
+  it('한 페이지뿐이면 그리지 않는다', () => {
+    renderPagination(1, 1)
+
+    expect(screen.queryByRole('navigation', { name: '페이지' })).not.toBeInTheDocument()
+  })
+
+  it('결과보다 뒤인 페이지에 있으면 돌아갈 길로 남긴다', () => {
+    renderPagination(3, 1)
+
+    expect(screen.getByRole('button', { name: '이전 페이지' })).toBeEnabled()
   })
 })

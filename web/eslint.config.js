@@ -38,15 +38,16 @@ export default tseslint.config(
     },
   },
 
-  // shadcn add로 받은 부품 (frontend-stack.md §4: 이 폴더에는 받은 부품만 둔다)
+  // 디자인 시스템 부품: shadcn add로 받아 꾸민 것 + 직접 만든 것 (frontend-stack.md '부품을 받을지, 직접 만들지')
   {
     files: ['src/components/ui/**/*.{ts,tsx}'],
     rules: {
       // 생성 코드가 컴포넌트와 cva variants를 함께 내보내서 이 규칙이 늘 걸린다
       // (button의 buttonVariants, tabs의 tabsListVariants — 둘 다 우리는 쓰지 않는다).
       // 고쳐도 다음 `shadcn add`에 되돌아오므로, 우리가 지킬 수 없는 경고를 띄우지 않는다.
-      // 규칙의 대상은 우리가 직접 만든 컴포넌트다. 이 폴더 파일을 직접 고칠 일이 생기면
-      // 그 파일의 HMR 문제도 함께 가려지는 것이 비용이다.
+      // 이 폴더의 직접 만든 부품(checkbox·pagination 등)도 이 예외 안에 있다. 그래서 부품끼리 나누는
+      // 것(클래스 상수 FIELD_BOX·CHOICE_*, 속성 도우미 choiceAria)만 내보내고, 순수 계산은 src/lib/에 둔다.
+      // 비용은 이 폴더 파일의 HMR 문제가 함께 가려지는 것이다. 예외를 좁히면 위 상수 내보내기에 경고가 다시 붙는다.
       'react-refresh/only-export-components': 'off',
     },
   },

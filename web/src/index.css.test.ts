@@ -81,6 +81,10 @@ const PAIRS: Pair[] = [
   ['muted-foreground', 'muted', 1, 4.5, 'card'],
   // 관리자 읽기 전용(fieldset disabled)의 꺼진 칸: muted 면 위 본문 글자 (AdminProblemFormPage)
   ['foreground', 'muted', 1, 4.5, 'card'],
+  // 메뉴 항목(본문색)과 그 focus 면, 카드형 라디오의 선택 면(옅은 파랑) 위 설명 글자
+  ['body-foreground', 'muted', 1, 4.5, 'card'],
+  ['foreground', 'accent', 1, 4.5, 'card'],
+  ['muted-foreground', 'accent', 1, 4.5, 'card'],
   ['primary-text', 'card', 1, 4.5, 'card'],
   ['primary-text', 'muted', 1, 4.5, 'card'],
   // 아바타 이니셜(AppHeader·MyPage): bg-primary/15 위 text-primary-text. 헤더는 바탕 위, 마이페이지는 카드 위
@@ -106,8 +110,8 @@ const PAIRS: Pair[] = [
     [`${t}-text`, `${t}-soft`, 1, 4.5, 'card'],
     [`${t}-foreground`, t, 1, 4.5, 'card'],
   ]),
-  // destructive 버튼·리포트 취약 칩·메뉴 위험 항목의 기본 면(/10). 버튼은 Footer의 옅은 면에도 놓인다.
-  // 버튼 hover는 꽉 찬 면 + destructive-foreground라 위 쌍이 맡는다
+  // 리포트 취약 칩의 면(bg-destructive/10, ReportPage). 위험 버튼·메뉴 위험 항목은 #255·#257부터
+  // destructive-soft 면이라 위 `${t}-text`·`${t}-soft` 쌍이 맡는다. 옅은 면 위 쌍은 칩이 옮겨 가도 깨지지 않게 둔다
   ['destructive-text', 'destructive', 0.1, 4.5, 'card'],
   ['destructive-text', 'destructive', 0.1, 4.5, 'muted'],
   // Button soft(옅은 파랑 면 + 파랑 글자), dark(글자색 면 + 바탕색 글자, hover는 본문색 면), glass(남색 무대 위 반투명 면)
@@ -123,10 +127,11 @@ const PAIRS: Pair[] = [
   ]),
 ]
 
-// 테마마다 다르게 쓰는 투명도: 메뉴의 위험 항목은 다크에서 focus 면이 /20이다 (dropdown-menu.tsx)
+// 테마마다 다른 쌍
 const THEME_PAIRS: Record<keyof typeof THEMES, Pair[]> = {
   light: [],
-  dark: [['destructive-text', 'destructive', 0.2, 4.5, 'card']],
+  // pill 탭의 지금 탭: 다크는 칩 면이 --border다 (tabs.tsx)
+  dark: [['foreground', 'border', 1, 4.5, 'card']],
 }
 
 describe.each(Object.entries(THEMES))('%s 테마 대비', (theme, vars) => {

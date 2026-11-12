@@ -19,7 +19,7 @@ import { VERDICT_INFO } from '@/constants/verdicts'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { pageCount } from '@/features/problems/problemListParams'
-import { ProblemPagination } from '@/features/problems/ProblemPagination'
+import { Pagination } from '@/components/ui/pagination'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import { parsePathId } from '@/lib/pathId'
 import { cn } from '@/lib/utils'
@@ -166,10 +166,10 @@ export function Component() {
               </Table>
             </div>
             {pages > 1 ? (
-              <ProblemPagination
+              <Pagination
                 page={page}
-                pageCount={pages}
-                onPageChange={(next) => {
+                total={pages}
+                onChange={(next) => {
                   if (next === page) return
                   setPage(next)
                 }}

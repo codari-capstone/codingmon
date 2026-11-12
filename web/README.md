@@ -41,7 +41,7 @@ npm run dev:mock
 | `src/api/` | `schema.d.ts`(자동 생성), `client.ts`, 쿼리 훅 |
 | `src/features/` | 화면별 기능. 기능명세서 ID와 폴더가 1:1로 맞는다 |
 | `src/components/` | 직접 만든 화면 조각. 받을지 만들지의 기준은 [docs/frontend-stack.md](../docs/frontend-stack.md)의 '부품을 받을지, 직접 만들지' |
-| `src/components/ui/` | `shadcn add`로 받은 부품 |
+| `src/components/ui/` | 디자인 시스템 부품. `shadcn add`로 받아 꾸민 것과 직접 만든 것이 함께 있다 — 같은 이름을 `shadcn add`로 받으면 덮어쓴다 ([docs/frontend-stack.md](../docs/frontend-stack.md)) |
 | `src/constants/` | 판정별 쉬운 설명 (RES-03·RES-04) |
 | `src/mocks/` | MSW 가짜 응답 |
 | `e2e/` | Playwright 테스트 |

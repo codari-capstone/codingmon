@@ -42,3 +42,6 @@ out/
 
 # 로그
 *.log
+
+# 디자인 원본(부품별 README·tokens.json·그림). 저장소에 올리지 않는다 (docs/frontend-stack.md)
+docs/design-handoff/

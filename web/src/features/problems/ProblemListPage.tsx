@@ -22,7 +22,7 @@ import {
   type SortField,
 } from './problemListParams'
 import { problemListQuery } from './problemsQuery'
-import { ProblemPagination } from './ProblemPagination'
+import { Pagination } from '@/components/ui/pagination'
 import { ProblemTable } from './ProblemTable'
 
 /** 검색어를 URL에 반영하기까지 기다리는 시간. */
@@ -229,11 +229,7 @@ export function Component() {
             </div>
             {/* 한 페이지로 끝나면 이동할 곳이 없다. 꺼진 버튼만 둘 띄우지 않는다. */}
             {pages > 1 ? (
-              <ProblemPagination
-                page={params.page}
-                pageCount={pages}
-                onPageChange={handlePageChange}
-              />
+              <Pagination page={params.page} total={pages} onChange={handlePageChange} />
             ) : null}
           </>
         )
