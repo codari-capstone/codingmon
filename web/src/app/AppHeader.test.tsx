@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router'
@@ -58,7 +58,7 @@ describe('AppHeader', () => {
   it('로고와 메뉴 3개를 보여 준다', () => {
     renderHeader()
 
-    expect(screen.getByRole('link', { name: 'Codingmon' })).toHaveAttribute('href', '/problems')
+    expect(screen.getByRole('link', { name: 'Codingmon' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: '문제' })).toHaveAttribute('href', '/problems')
     expect(screen.getByRole('link', { name: '제출 기록' })).toHaveAttribute('href', '/submissions')
     expect(screen.getByRole('link', { name: '내 학습' })).toHaveAttribute('href', '/me/report')
@@ -74,6 +74,7 @@ describe('AppHeader', () => {
     renderHeader()
 
     expect(screen.getByRole('link', { name: '로그인' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '무료로 시작하기' })).toHaveAttribute('href', '/signup')
     expect(screen.queryByRole('button', { name: /사용자 메뉴/ })).not.toBeInTheDocument()
   })
 
@@ -85,12 +86,12 @@ describe('AppHeader', () => {
     expect(screen.queryByRole('button', { name: /사용자 메뉴/ })).not.toBeInTheDocument()
   })
 
-  it('세션을 모르는 동안에는 로그인 버튼 자리만큼 빈 칸을 잡아 둔다', () => {
+  it('세션을 모르는 동안에는 버튼 자리만큼 빈 칸을 잡아 둔다', () => {
     mockAuth({ isLoading: true })
     const { container } = renderHeader()
 
     // jsdom에는 레이아웃이 없어 크기를 잴 수 없다. 자리 잡는 요소의 클래스로 확인한다.
-    expect(container.querySelector('[aria-hidden="true"].min-h-11.w-14')).toBeInTheDocument()
+    expect(container.querySelector('[aria-hidden="true"].h-control-sm.w-24')).toBeInTheDocument()
   })
 
   it('로그인 링크에 지금 주소를 실어 보낸다 (COM-07)', async () => {
@@ -140,6 +141,26 @@ describe('AppHeader', () => {
     renderHeader()
 
     expect(screen.getByRole('link', { name: '관리자' })).toHaveAttribute('href', '/admin')
+  })
+
+  it('관리자 화면에서는 관리자 메뉴로 바뀐다 (ADM-10)', () => {
+    mockAuth({
+      user: {
+        id: 2,
+        nickname: '관리자',
+        role: 'ADMIN',
+        email: 'ad***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
+      isAuthenticated: true,
+    })
+    renderHeaderAt('/admin/problems/3')
+
+    const nav = screen.getByRole('navigation', { name: '주요 메뉴' })
+    const links = within(nav).getAllByRole('link')
+    expect(links.map((link) => link.textContent)).toEqual(['문제'])
+    expect(links[0]).toHaveAttribute('href', '/admin')
   })
 
   it('비로그인에게도 제출 기록·내 학습 링크는 보인다', () => {

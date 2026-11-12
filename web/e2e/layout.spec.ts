@@ -97,7 +97,7 @@ test('권한 없음 화면이 뜬다', async ({ page }) => {
   await page.goto('/forbidden')
 
   await expect(page.getByText('403')).toBeVisible()
-  await expect(page.getByRole('heading', { name: '권한이 없습니다' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '이 화면을 볼 권한이 없어요' })).toBeVisible()
 })
 
 /**

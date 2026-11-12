@@ -24,7 +24,7 @@ import { logoutRequest } from './authQuery'
  * 수도 있지만, 그러면 공용 컴퓨터에서 "로그아웃됐다"고 본 사람의 세션이 실제로는 살아
  * 있게 된다. 사실과 다른 쪽이 위험하므로 화면이 사실을 따른다. 다시 누르면 다시 보낸다.
  */
-export function useLogout() {
+export function useLogout(to = '/problems') {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
@@ -33,7 +33,7 @@ export function useLogout() {
     onSettled: () => {
       queryClient.clear()
       clearSavedCode()
-      void navigate('/problems', { replace: true })
+      void navigate(to, { replace: true })
     },
   })
 

@@ -16,5 +16,5 @@ test('없는 주소는 404 화면을 보여 준다 (새로고침해도 404가 �
   // Nginx try_files와 같은 동작: 실제 파일이 없어도 index.html을 돌려주고
   // 라우터가 404 화면을 고른다. HTTP 자체는 200이어야 한다.
   expect(response?.status()).toBe(200)
-  await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없습니다' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '페이지를 찾을 수 없어요' })).toBeVisible()
 })
