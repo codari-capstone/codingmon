@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 /** 0은 옅은 면, 1~4는 파랑 28·52·78·100% (카드 위 색 섞기). 파랑 외의 색으로 칠하지 않는다. */
 const LEVEL = [

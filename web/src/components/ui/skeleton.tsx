@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 type SkeletonProps = React.ComponentProps<'div'> & {
   /** 원형 자리표시자 (아바타) */

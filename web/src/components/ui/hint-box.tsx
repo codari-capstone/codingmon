@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 const TONE = {
   brand: { box: 'bg-accent', step: 'bg-card text-primary-text' },

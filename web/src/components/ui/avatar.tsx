@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 import { Mascot, type MascotExpression } from '@/components/ui/mascot'
 

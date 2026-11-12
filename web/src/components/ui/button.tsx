@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { Loader2 } from 'lucide-react'
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 import { Slot } from 'radix-ui'
 
 // 디자인 시스템 Button (docs/design-handoff/design-system/components/Button). 모든 버튼은 알약이다.

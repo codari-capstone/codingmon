@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 import { Icon } from '@/components/ui/icon'
 

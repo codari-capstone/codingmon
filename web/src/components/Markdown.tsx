@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
 
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 /**
  * 지문의 제목을 한 단계씩 내린다.

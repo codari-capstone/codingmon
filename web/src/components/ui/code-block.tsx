@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 import { Icon } from '@/components/ui/icon'
 import { useCopy } from '@/lib/useCopy'

@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { Link } from 'react-router'
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 const TONE = {
   default: 'bg-card border',

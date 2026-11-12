@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 /** 디자인 시스템의 선 아이콘 29개 (24px 격자, 선 2px, 둥근 끝). 경로는 design-system의 Icon과 같다. */
 const PATHS = {

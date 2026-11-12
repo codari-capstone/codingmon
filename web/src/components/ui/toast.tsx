@@ -1,5 +1,5 @@
 import { CircleAlert, CircleCheck, CircleX, Info, X } from 'lucide-react'
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 import { Toast as ToastPrimitive } from 'radix-ui'
 
 import { Button } from '@/components/ui/button'

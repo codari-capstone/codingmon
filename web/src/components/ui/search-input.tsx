@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react'
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 /**
  * 목록을 찾는 알약 검색칸. 폼의 일반 입력에는 Input을 쓴다. 한 화면에 둘을 두지 않는다.

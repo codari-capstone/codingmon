@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 /**
  * 표는 줄바꿈이 되지 않으므로 좁은 화면에서는 가로 스크롤이 정답이다.

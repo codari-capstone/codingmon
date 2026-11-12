@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 import { Icon, type IconName } from '@/components/ui/icon'
 
