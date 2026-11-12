@@ -11,6 +11,7 @@ import java.util.Set;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 // MY-05 풀이 요약과 잔디, STREAK-01·02 연속 학습. 맞힌·틀린 수는 판정이 난 제출만 쌓이는 user_problem_stats로,
@@ -92,6 +93,7 @@ public class UserActivityRepository {
     // 먼저 연속 일수를 갱신하게 한다. 제출 시각(submitted_at)은 잠근 뒤의 clock_timestamp()라 날짜 순서와 갱신 순서가 같다.
     // now()(트랜잭션 시작 시각)로 정하면 자정 전에 시작한 제출이 자정 뒤 제출보다 늦게 갱신돼 연속 일수가 1로 줄 수 있다.
     // 제출 행이 거는 FOR KEY SHARE와 충돌하지 않게 FOR NO KEY UPDATE로 잠근다. 예제 실행은 기다리지 않는다.
+    @Transactional(propagation = Propagation.MANDATORY)
     public void lockForSubmission(long userId) {
         jdbc.sql("select id from users where id = :userId for no key update")
                 .param("userId", userId)
@@ -101,6 +103,7 @@ public class UserActivityRepository {
 
     // 사용자 제출을 저장한 트랜잭션 안에서 부른다. 저장이 실패하면 연속 일수도 바뀌지 않는다.
     // 오늘은 그 제출의 submitted_at 날짜(한국 시각)라 잔디·이번 주 달력과 같은 날을 본다.
+    @Transactional(propagation = Propagation.MANDATORY)
     public void recordSubmission(long userId, long submissionId) {
         jdbc.sql("""
                 update users set
