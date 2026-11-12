@@ -91,14 +91,15 @@ public class UserActivityRepository {
     // 사용자 제출을 저장한 트랜잭션 안에서 부른다. 저장이 실패하면 연속 일수도 바뀌지 않는다.
     // 한 문장으로 갱신해 같은 순간에 두 번 제출해도 두 번 더하지 않는다.
     // 오늘은 DB 시계로 정한다. now()는 트랜잭션 시작 시각이라 방금 저장한 submitted_at과 같은 날이 된다.
+    // 그래서 자정 전에 시작한 제출이 자정 뒤 제출보다 늦게 커밋될 수 있다. 마지막 날이 오늘보다 뒤면 건드리지 않는다.
     public void recordSubmission(long userId) {
         jdbc.sql("""
                 update users set
                   streak_days = case
-                    when last_active_date = t.today then streak_days
+                    when last_active_date >= t.today then streak_days
                     when last_active_date = t.today - 1 then streak_days + 1
                     else 1 end,
-                  last_active_date = t.today
+                  last_active_date = greatest(last_active_date, t.today)
                 from (select (now() at time zone 'Asia/Seoul')::date as today) t
                 where id = :userId
                 """)
