@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { SubmitButton } from './SubmitButton'
+import { SubmitButton, SubmitError } from './SubmitButton'
 import type { useSubmit } from './submitQuery'
 
 type Submit = ReturnType<typeof useSubmit>
@@ -25,7 +25,12 @@ function fake(over: Partial<Submit>): Submit {
 }
 
 function renderButton(submit: Submit, code = 'print(1)') {
-  render(<SubmitButton submit={submit} problemId={1} language="PYTHON" code={code} />)
+  render(
+    <>
+      <SubmitButton submit={submit} problemId={1} language="PYTHON" code={code} />
+      <SubmitError submit={submit} language="PYTHON" code={code} />
+    </>,
+  )
   return screen.getByRole('button', { name: /제출/ })
 }
 

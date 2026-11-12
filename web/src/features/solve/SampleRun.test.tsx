@@ -11,7 +11,7 @@ import { ThemeProvider } from '@/app/ThemeProvider'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { resetSampleRuns } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
-import { SampleRun } from './SampleRun'
+import { RunButton, SampleRun } from './SampleRun'
 import type { SampleRunState } from './sampleRunQuery'
 import { Component as SolvePage } from './SolvePage'
 
@@ -62,9 +62,13 @@ function sampleCase(over: Partial<SampleRunCase> = {}): SampleRunCase {
   }
 }
 
+/** 화면처럼 버튼과 결과를 함께 그린다. 둘은 다른 자리(버튼 줄·결과 카드)에 놓인다 */
 function renderRun(run: SampleRunState, samples = SAMPLES, code = 'print(1)') {
   return render(
-    <SampleRun run={run} samples={samples} problemId={1} language="PYTHON" code={code} />,
+    <>
+      <RunButton run={run} samples={samples} problemId={1} language="PYTHON" code={code} />
+      <SampleRun run={run} samples={samples} />
+    </>,
   )
 }
 

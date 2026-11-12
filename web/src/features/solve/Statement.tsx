@@ -1,6 +1,9 @@
 import type { ProblemDetailView } from '@/api/types'
 import { Markdown } from '@/components/Markdown'
 
+/** 지문 본문은 16px. Markdown 기본(14px)은 안내·용어 설명처럼 작은 자리에 맞춰져 있다 */
+const BODY = 'text-base leading-[1.7]'
+
 /** 지문 하단의 출처·라이선스·버전 (SOLVE-03). */
 function Source({ problem }: { problem: ProblemDetailView }) {
   const { sourceName, sourceUrl, license, versionNo } = problem
@@ -54,23 +57,23 @@ function Source({ problem }: { problem: ProblemDetailView }) {
 export function Statement({ problem }: { problem: ProblemDetailView }) {
   return (
     <div className="flex flex-col gap-6">
-      <Markdown>{problem.statementMarkdown}</Markdown>
+      <Markdown className={BODY}>{problem.statementMarkdown}</Markdown>
 
       <section>
-        <h2 className="mb-2 text-base font-semibold">입력</h2>
-        <Markdown>{problem.inputDescription}</Markdown>
+        <h2 className="text-foreground mb-2 text-lg font-semibold">입력</h2>
+        <Markdown className={BODY}>{problem.inputDescription}</Markdown>
       </section>
 
       <section>
-        <h2 className="mb-2 text-base font-semibold">출력</h2>
-        <Markdown>{problem.outputDescription}</Markdown>
+        <h2 className="text-foreground mb-2 text-lg font-semibold">출력</h2>
+        <Markdown className={BODY}>{problem.outputDescription}</Markdown>
       </section>
 
       {/* 제약은 없으면 빈 문자열로 온다(계약). 빈 제목만 남기지 않는다. */}
       {problem.constraintsMarkdown.trim() ? (
         <section>
-          <h2 className="mb-2 text-base font-semibold">제약</h2>
-          <Markdown>{problem.constraintsMarkdown}</Markdown>
+          <h2 className="text-foreground mb-2 text-lg font-semibold">제약</h2>
+          <Markdown className={BODY}>{problem.constraintsMarkdown}</Markdown>
         </section>
       ) : null}
 

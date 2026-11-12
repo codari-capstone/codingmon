@@ -55,7 +55,7 @@ export function StarterCodeButton({
       <AlertDialogTrigger asChild>
         <Button
           variant="secondary"
-          className="min-h-11"
+          size="sm"
           onClick={(event) => {
             if (!drafted) {
               event.preventDefault()
