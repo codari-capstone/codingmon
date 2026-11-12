@@ -117,7 +117,7 @@ test('USER가 관리자 화면에 가면 권한 없음으로 떨어진다', asyn
 
   await page.goto('/admin')
 
-  await expect(page.getByRole('heading', { name: '권한이 없습니다' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '이 화면을 볼 권한이 없어요' })).toBeVisible()
   await expect(page).toHaveURL(/\/forbidden$/)
   await expect(page.getByRole('banner').getByRole('link', { name: '관리자' })).toBeHidden()
 })

@@ -16,7 +16,8 @@ export function AppShell({ sidebar, children }: AppShellProps) {
   return (
     <div className="bg-background text-foreground min-h-dvh">
       <AppHeader />
-      <div className="mx-auto flex max-w-7xl flex-wrap gap-6 px-6 py-6">
+      {/* 페이지 폭: 내용 1200px + 좌우 24px (box-content로 padding을 폭 밖에 둔다) */}
+      <div className="max-w-content mx-auto box-content flex flex-wrap gap-6 px-6 py-6">
         {sidebar ? <aside className="min-w-0 flex-[1_1_13rem]">{sidebar}</aside> : null}
         <main className="min-w-0 flex-[999_1_40rem]">{children}</main>
       </div>

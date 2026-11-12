@@ -1,19 +1,35 @@
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 
+import scene from '@/assets/scenes/forbidden.png'
 import { Button } from '@/components/ui/button'
+import { useLogout } from '@/features/auth/useLogout'
+import { ExceptionPage } from './ExceptionPage'
 
 /** UX-04 권한 없음 페이지. 권한 검사(COM-05)가 여기로 보낸다. */
 export function Component() {
+  // 로그인한 채로는 /login이 원래 화면으로 돌려보낸다. 다른 계정으로 들어가려면 먼저 로그아웃한다.
+  // 막혔던 주소(RequireAdmin이 실어 보낸 from)를 이어 주어, 관리자로 들어가면 그 화면으로 돌아간다
+  const from = (useLocation().state as { from?: unknown } | null)?.from
+  const { logout, isPending } = useLogout('/login', { from })
+
   return (
-    <section className="flex flex-col items-center py-20 text-center">
-      <p className="text-muted-foreground font-mono text-4xl font-medium">403</p>
-      <h1 className="page-title mt-3">권한이 없습니다</h1>
-      <p className="text-muted-foreground mt-2 text-sm">
-        이 화면을 볼 수 있는 권한이 없습니다. 로그인 계정을 확인해 주세요.
-      </p>
-      <Button asChild variant="secondary" className="mt-6 min-h-11">
-        <Link to="/problems">문제 목록으로</Link>
-      </Button>
-    </section>
+    <ExceptionPage
+      scene={scene}
+      sceneWidth={380}
+      sceneHeight={230}
+      code="403"
+      title="이 화면을 볼 권한이 없어요"
+      description="관리자만 들어갈 수 있는 화면이에요. 로그인한 계정을 확인해 주세요."
+      actions={
+        <>
+          <Button asChild>
+            <Link to="/problems">문제 목록으로</Link>
+          </Button>
+          <Button type="button" variant="secondary" loading={isPending} onClick={logout}>
+            다른 계정으로 로그인
+          </Button>
+        </>
+      }
+    />
   )
 }

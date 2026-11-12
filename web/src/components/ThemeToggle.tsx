@@ -9,17 +9,13 @@ export function ThemeToggle() {
 
   return (
     <Button
-      variant="secondary"
+      variant="ghost"
       size="sm"
+      shape="circle"
       onClick={toggle}
       aria-label={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}
     >
-      {isDark ? (
-        <Sun className="size-4" aria-hidden="true" />
-      ) : (
-        <Moon className="size-4" aria-hidden="true" />
-      )}
-      <span className="hidden sm:inline">{isDark ? '라이트' : '다크'}</span>
+      {isDark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
     </Button>
   )
 }
