@@ -62,7 +62,7 @@ export function ErrorState({ problem, onRetry, headingLevel = 2 }: ErrorStatePro
             // type이 없으면 button의 기본값은 submit이다. 이 블록이 <form> 안에 들어가는
             // 화면(관리자 문제 수정의 버전 탭)에서는 '다시 시도'가 폼을 제출해, 작성 중인
             // 수정이 공개 중인 버전에 그대로 저장된다.
-            <Button type="button" variant="outline" onClick={onRetry} className="mt-3 min-h-11">
+            <Button type="button" variant="secondary" onClick={onRetry} className="mt-3 min-h-11">
               다시 시도
             </Button>
           ) : null}

@@ -9,7 +9,7 @@ export function Component() {
       <p className="text-muted-foreground font-mono text-4xl font-medium">404</p>
       <h1 className="page-title mt-3">페이지를 찾을 수 없습니다</h1>
       <p className="text-muted-foreground mt-2 text-sm">주소가 바뀌었거나 삭제된 페이지입니다.</p>
-      <Button asChild variant="outline" className="mt-6 min-h-11">
+      <Button asChild variant="secondary" className="mt-6 min-h-11">
         <Link to="/problems">문제 목록으로</Link>
       </Button>
     </section>

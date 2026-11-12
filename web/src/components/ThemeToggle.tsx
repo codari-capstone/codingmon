@@ -9,7 +9,7 @@ export function ThemeToggle() {
 
   return (
     <Button
-      variant="outline"
+      variant="secondary"
       size="sm"
       onClick={toggle}
       aria-label={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}

@@ -1,13 +1,11 @@
 import { useEffect } from 'react'
 
 import { Markdown } from '@/components/Markdown'
-import { Input, UNDERLINE_FIELD } from '@/components/ui/input'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import { Field } from './Field'
 import { FORM_LANGUAGES, pythonLimits, type ProblemFormApi } from './problemInputSchema'
-
-/** 지문 입력칸의 꾸밈. @/components/ui에 textarea가 없어 Input과 같은 밑줄을 쓴다. */
-const TEXTAREA = `${UNDERLINE_FIELD} min-h-32 py-2`
 
 const PYTHON = FORM_LANGUAGES.indexOf('PYTHON')
 const CPP = FORM_LANGUAGES.indexOf('CPP')
@@ -70,10 +68,10 @@ export function StatementTab({
       >
         {/* min-w-0이 없으면 칸이 안쪽 pre의 min-content 폭까지 늘어나 화면이 가로로 밀린다 */}
         <div className="grid gap-3 md:grid-cols-2">
-          <textarea
+          <Textarea
             id="statementMarkdown"
             rows={14}
-            className={`${TEXTAREA} min-w-0 font-mono`}
+            className="min-w-0 font-mono"
             {...register('statementMarkdown')}
           />
           <div className="min-w-0">
@@ -90,21 +88,11 @@ export function StatementTab({
       </Field>
 
       <Field id="inputDescription" label="입력 형식" error={errors.inputDescription?.message}>
-        <textarea
-          id="inputDescription"
-          rows={4}
-          className={TEXTAREA}
-          {...register('inputDescription')}
-        />
+        <Textarea id="inputDescription" rows={4} {...register('inputDescription')} />
       </Field>
 
       <Field id="outputDescription" label="출력 형식" error={errors.outputDescription?.message}>
-        <textarea
-          id="outputDescription"
-          rows={4}
-          className={TEXTAREA}
-          {...register('outputDescription')}
-        />
+        <Textarea id="outputDescription" rows={4} {...register('outputDescription')} />
       </Field>
 
       <Field
@@ -113,12 +101,7 @@ export function StatementTab({
         hint="없으면 비워 둬요."
         error={errors.constraintsMarkdown?.message}
       >
-        <textarea
-          id="constraintsMarkdown"
-          rows={4}
-          className={TEXTAREA}
-          {...register('constraintsMarkdown')}
-        />
+        <Textarea id="constraintsMarkdown" rows={4} {...register('constraintsMarkdown')} />
       </Field>
 
       <fieldset className="flex flex-col gap-3">
@@ -194,10 +177,10 @@ export function StatementTab({
                 label="시작 코드"
                 error={errors.languages?.[index]?.starterCode?.message}
               >
-                <textarea
+                <Textarea
                   id={`starter-${language}`}
                   rows={6}
-                  className={`${TEXTAREA} font-mono`}
+                  className="font-mono"
                   {...register(`languages.${index}.starterCode`)}
                 />
               </Field>

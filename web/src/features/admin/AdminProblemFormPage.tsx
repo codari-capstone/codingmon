@@ -304,7 +304,11 @@ function AdminProblemForm() {
         >
           {/* disabled 하나로 모든 입력칸이 잠긴다. 링크는 걸리지 않는다.
               TabsContent는 Tabs의 context로 동작해 fieldset을 사이에 끼워도 된다. */}
-          <fieldset disabled={locked} className="contents">
+          <fieldset
+            disabled={locked}
+            // 읽기 전용은 지난 버전을 읽는 화면이다. 꺼진 칸 글자색(disabled-foreground, 2.1:1)은 읽지 않는 글자용이라 본문 색으로 되돌린다
+            className="contents [&_:is(input,textarea,select):disabled]:text-foreground"
+          >
             <TabsContent className="bg-card rounded-lg border p-6" value="basic">
               <BasicInfoTab form={form} />
             </TabsContent>

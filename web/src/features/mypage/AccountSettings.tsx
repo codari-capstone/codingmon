@@ -303,7 +303,7 @@ export function WithdrawSection({ user }: { user: CurrentUser }) {
         }}
       >
         <AlertDialogTrigger asChild>
-          <Button variant="destructive" className="min-h-11 self-start">
+          <Button variant="danger" className="min-h-11 self-start">
             회원 탈퇴
           </Button>
         </AlertDialogTrigger>
@@ -338,7 +338,7 @@ export function WithdrawSection({ user }: { user: CurrentUser }) {
               이유를 보여 줄 자리가 없어진다. 성공하면 화면을 떠나므로 닫을 일이 없다.
             */}
             <Button
-              variant="destructive"
+              variant="danger"
               disabled={typed !== phrase || submit.isPending}
               onClick={() => submit.mutate()}
             >

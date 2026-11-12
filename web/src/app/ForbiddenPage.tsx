@@ -11,7 +11,7 @@ export function Component() {
       <p className="text-muted-foreground mt-2 text-sm">
         이 화면을 볼 수 있는 권한이 없습니다. 로그인 계정을 확인해 주세요.
       </p>
-      <Button asChild variant="outline" className="mt-6 min-h-11">
+      <Button asChild variant="secondary" className="mt-6 min-h-11">
         <Link to="/problems">문제 목록으로</Link>
       </Button>
     </section>

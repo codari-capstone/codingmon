@@ -109,7 +109,7 @@ export function ProblemFilters() {
               활성화해 주지만 버튼은 자기 크기가 곧 터치 영역이다 (2.5.5).
               ErrorState의 다시 시도 버튼도 같은 방식이다.
             */}
-            <Button variant="outline" className="min-h-11" onClick={() => void refetchTags()}>
+            <Button variant="secondary" className="min-h-11" onClick={() => void refetchTags()}>
               다시 시도
             </Button>
           </div>
@@ -143,7 +143,7 @@ export function ProblemFilters() {
       ) : null}
 
       {hasActiveFilter(params) ? (
-        <Button asChild variant="outline" className="min-h-11">
+        <Button asChild variant="secondary" className="min-h-11">
           {/*
             기본값을 URL에 쓰지 않으므로 쿼리 없는 주소가 곧 초기화 상태다. 이 링크는
             일부러 깨끗한 '/problems'로 돌아간다 — 단순하고 공유하기 쉽다는 이유로

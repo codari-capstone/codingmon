@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 
 import { DIFFICULTIES } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
-import { Input, UNDERLINE_FIELD } from '@/components/ui/input'
+import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { conceptTagsQuery } from '@/features/problems/problemsQuery'
 import { Field } from './Field'
@@ -42,18 +43,13 @@ export function BasicInfoTab({ form }: { form: ProblemFormApi }) {
       </Field>
 
       <Field id="difficulty" label="난이도" error={errors.difficulty?.message}>
-        {/* @/components/ui에 select가 없다. 네이티브를 Input과 같은 꾸밈으로 쓴다. */}
-        <select
-          id="difficulty"
-          {...register('difficulty')}
-          className={`${UNDERLINE_FIELD} min-h-11`}
-        >
+        <Select id="difficulty" {...register('difficulty')}>
           {DIFFICULTIES.map((value) => (
             <option key={value} value={value}>
               {DIFFICULTY_LABEL[value]}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
 
       <fieldset className="flex flex-col gap-1.5">

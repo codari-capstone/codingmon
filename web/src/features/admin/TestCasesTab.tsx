@@ -7,7 +7,8 @@ import type { CaseType } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Button } from '@/components/ui/button'
-import { UNDERLINE_FIELD } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { problemMessage } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { adminTestCasesQuery, readTestCaseZip, saveTestCases } from './adminProblemQuery'
@@ -313,27 +314,26 @@ export function TestCasesTab({
                         <label htmlFor={`cases.${index}.caseType`} className="text-sm font-medium">
                           {`${index + 1}번 종류`}
                         </label>
-                        <select
+                        <Select
                           id={`cases.${index}.caseType`}
                           {...form.register(`cases.${index}.caseType`)}
-                          className={`${UNDERLINE_FIELD} min-h-11`}
                         >
                           <option value="SAMPLE">공개 예제 (문제 화면에 보여요)</option>
                           <option value="HIDDEN">비공개 (채점에만 써요)</option>
-                        </select>
+                        </Select>
                       </div>
 
                       <div className="flex flex-col gap-1.5">
                         <label htmlFor={`cases.${index}.input`} className="text-sm font-medium">
                           {`${index + 1}번 입력`}
                         </label>
-                        <textarea
+                        <Textarea
                           id={`cases.${index}.input`}
                           rows={4}
                           {...form.register(`cases.${index}.input`, {
                             onChange: () => forgetMeta(index),
                           })}
-                          className={`${UNDERLINE_FIELD} py-2 font-mono`}
+                          className="font-mono"
                         />
                         {form.formState.errors.cases?.[index]?.input ? (
                           <p className="text-destructive-text text-sm">
@@ -346,13 +346,13 @@ export function TestCasesTab({
                         <label htmlFor={`cases.${index}.output`} className="text-sm font-medium">
                           {`${index + 1}번 기대 출력`}
                         </label>
-                        <textarea
+                        <Textarea
                           id={`cases.${index}.output`}
                           rows={4}
                           {...form.register(`cases.${index}.output`, {
                             onChange: () => forgetMeta(index),
                           })}
-                          className={`${UNDERLINE_FIELD} py-2 font-mono`}
+                          className="font-mono"
                         />
                         {form.formState.errors.cases?.[index]?.output ? (
                           <p className="text-destructive-text text-sm">
@@ -364,7 +364,7 @@ export function TestCasesTab({
                       <div>
                         <Button
                           type="button"
-                          variant="outline"
+                          variant="secondary"
                           className="min-h-11"
                           onClick={() => rows.remove(index)}
                         >
