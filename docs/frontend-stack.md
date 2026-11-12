@@ -113,11 +113,11 @@ Tailwind는 `p-4 text-sm bg-red-50`처럼 미리 정해진 클래스를 조합�
 `src/components/ui/`에는 디자인 시스템 부품(Button·Input·Checkbox 같은 것)을 둔다. 디자인 원본(부품별 README·`tokens.json`)은 **저장소에 올리지 않는다** — 각자 로컬 `docs/design-handoff/`에 둔다. 이 경로는 저장소 `.gitignore`가 빼 두므로 `git add .`에도 섞이지 않는다. 없으면 프론트엔드 담당에게 받는다. 부품은 둘로 나뉜다.
 
 - **`shadcn add`로 받아 새 디자인으로 다시 꾸민 것**: `button`·`input`·`table`·`dropdown-menu`·`skeleton`·`tabs`·`alert-dialog`
-- **직접 만든 것**: `textarea`·`select`·`search-input`·`checkbox`·`radio-group`·`switch`·`pagination`, Radix 위에 직접 쓴 `dialog`(Modal)·`toast`·`tooltip`. 네이티브 요소로 충분하거나(선택 부품은 네이티브 input을 겹쳐 꾸민다) 아래 2번 기준에 걸리는 것이다
+- **직접 만든 것**: `textarea`·`select`·`search-input`·`checkbox`·`radio-group`·`switch`·`pagination`, Radix 위에 직접 쓴 `dialog`(Modal)·`toast`·`tooltip`·`accordion`, 표시 부품 `icon`·`badge`·`card`·`stat-card`·`section-heading`·`breadcrumb`·`data-table`·`alert`·`avatar`·`progress`·`heatmap`·`mascot`·`code-block`·`hint-box`·`stepper`. 네이티브 요소로 충분하거나(선택 부품은 네이티브 input을 겹쳐 꾸민다) 아래 2번 기준에 걸리는 것이다
 
 **이 폴더에서 `shadcn add`로 같은 이름을 받지 않는다.** 직접 만든 파일을 덮어쓴다. 받아야 하면 먼저 파일을 옮기거나 `--path`로 다른 곳에 받는다.
 
-그 부품을 조합해 만드는 화면 조각은 `src/components/`나 기능 폴더에 직접 만든다(`EmptyState`, `ErrorState`, `ListSkeleton`, `ThemeToggle`).
+그 부품을 조합해 만드는 화면 조각은 `src/components/`나 기능 폴더에 직접 만든다(`EmptyState`, `ErrorState`, `LoadingState`, `ListSkeleton`, `Verdict`, `ThemeToggle`).
 
 shadcn에 같은 이름의 부품이 있어도 받지 않는 경우가 있다. 기준은 둘이다.
 
