@@ -9,7 +9,8 @@ interface LoadingStateProps {
 /**
  * 달리는 펭귄과 흐르는 막대로 화면 전체나 큰 영역이 불러오는 중임을 알린다.
  * 1초 넘게 걸리는 첫 화면·목록·리포트에 쓰고, 표 몇 줄이나 버튼 안처럼 작은 곳에는 쓰지 않는다
- * (그런 곳은 Skeleton). 한 화면에 둘 이상 두지 않고, 진행률을 알면 Progress를 쓴다.
+ * (그런 곳은 Skeleton). 한 화면에 둘 이상 두지 않는다. 얼마나 남았는지 아는 작업(업로드 등)은
+ * 이것 대신 Progress로 진행률을 보인다 — Progress가 쓰지 말라는 것은 진행률을 모르는 기다림이다.
  * 움직임 줄이기에서는 막대가 멈춘다.
  */
 export function LoadingState({ label = '불러오는 중…', mascotSize = 112 }: LoadingStateProps) {

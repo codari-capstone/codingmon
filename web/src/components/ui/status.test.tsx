@@ -31,13 +31,42 @@ describe('Alert', () => {
 })
 
 describe('Progress', () => {
-  it('값과 범위를 progressbar로 알리고 폭은 0~100%로 자른다', () => {
+  it('값과 범위를 progressbar로 알린다', () => {
+    render(<Progress label="배열" value={6} max={10} />)
+
+    const bar = screen.getByRole('progressbar', { name: '배열' })
+    expect(bar).toHaveAttribute('aria-valuenow', '6')
+    expect(bar).toHaveAttribute('aria-valuemax', '10')
+    expect(bar).not.toHaveAttribute('aria-valuetext')
+    expect(bar.firstElementChild).toHaveStyle({ width: '60%' })
+  })
+
+  // 막대는 100%로 잘리는데 보조기기는 150을 읽으면 둘이 다르다
+  it('범위를 넘는 값은 막대와 aria-valuenow를 같이 자르고 원래 값은 valuetext로 알린다', () => {
     render(<Progress label="배열" value={150} max={100} showValue />)
 
     const bar = screen.getByRole('progressbar', { name: '배열' })
-    expect(bar).toHaveAttribute('aria-valuenow', '150')
+    expect(bar).toHaveAttribute('aria-valuenow', '100')
+    expect(bar).toHaveAttribute('aria-valuetext', '150 / 100')
     expect(bar.firstElementChild).toHaveStyle({ width: '100%' })
     expect(screen.getByText('150 / 100')).toBeInTheDocument()
+  })
+
+  it('0이면 최소 폭 없이 빈 막대다', () => {
+    render(<Progress label="배열" value={0} />)
+
+    const fill = screen.getByRole('progressbar').firstElementChild
+    expect(fill).toHaveStyle({ width: '0%' })
+    expect(fill).not.toHaveClass('min-w-2.5')
+  })
+
+  // 0/0은 NaN%라 폭이 버려지고 블록이 가득 찬다
+  it('max가 0이면(문제가 없는 유형) 가득 찬 막대가 아니라 빈 막대다', () => {
+    render(<Progress label="배열" value={0} max={0} showValue />)
+
+    const bar = screen.getByRole('progressbar')
+    expect(bar.firstElementChild).toHaveStyle({ width: '0%' })
+    expect(bar).toHaveAttribute('aria-valuenow', '0')
   })
 })
 
@@ -58,11 +87,21 @@ describe('Heatmap', () => {
 })
 
 describe('Avatar', () => {
-  it('사진이 없으면 이름 첫 글자, 상태는 점으로 보인다', () => {
-    const { container } = render(<Avatar name="chan" status="online" />)
+  it('사진이 없으면 이름 첫 글자, 상태는 점의 색과 함께 이름으로도 알린다', () => {
+    const { container } = render(<Avatar name="chan" status="away" />)
 
-    expect(screen.getByRole('img', { name: 'chan' })).toHaveTextContent('C')
-    expect(container.querySelector('[data-status="online"]')).toHaveClass('bg-success')
+    const avatar = screen.getByRole('img', { name: 'chan, 자리 비움' })
+    expect(avatar).toHaveTextContent('C')
+    expect(avatar).toHaveAttribute('title', '자리 비움')
+    expect(container.querySelector('[data-status="away"]')).toHaveClass('bg-warning')
+  })
+
+  it('이름이 없어도 상태가 있으면 상태를 읽고, 둘 다 없으면 장식이다', () => {
+    const { rerender } = render(<Avatar status="online" />)
+    expect(screen.getByRole('img', { name: '접속 중' })).toBeInTheDocument()
+
+    rerender(<Avatar />)
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
 })
 

@@ -90,13 +90,6 @@ const PAIRS: Pair[] = [
   // 아바타 이니셜(AppHeader·MyPage): bg-primary/15 위 text-primary-text. 헤더는 바탕 위, 마이페이지는 카드 위
   ['primary-text', 'primary', 0.15, 4.5, 'card'],
   ['primary-text', 'primary', 0.15, 4.5, 'background'],
-  // ErrorState: bg-destructive/5 위 제목·설명 글자와 아이콘(비텍스트 3:1). 카드 위에도 바탕 위에도 놓인다
-  ['foreground', 'destructive', 0.05, 4.5, 'card'],
-  ['foreground', 'destructive', 0.05, 4.5, 'background'],
-  ['muted-foreground', 'destructive', 0.05, 4.5, 'card'],
-  ['muted-foreground', 'destructive', 0.05, 4.5, 'background'],
-  ['destructive', 'destructive', 0.05, 3, 'card'],
-  ['destructive', 'destructive', 0.05, 3, 'background'],
   ['accent-foreground', 'accent', 1, 4.5, 'card'],
   ['primary-foreground', 'primary', 1, 4.5, 'card'],
   ['primary-foreground', 'primary-hover', 1, 4.5, 'card'],
@@ -121,11 +114,11 @@ const PAIRS: Pair[] = [
   // inverse-raised는 반투명이라 남색 무대(inverse) 위에서 계산한다. glass 버튼과 CodeBlock 강조 줄(#233)이 쓴다
   ['inverse-foreground', 'inverse-raised', 1, 4.5, 'inverse'],
   ['inverse-muted', 'inverse-raised', 1, 4.5, 'inverse'],
-  // 표시 부품(#233): Alert·HintBox 본문은 옅은 색 면 위의 본문 글자다
+  // 표시 부품(#233): Alert·HintBox 본문은 옅은 색 면 위의 본문 글자다. ErrorState도 Alert(destructive-soft)를 쓴다.
+  // HintBox neutral(muted 면)은 위 메뉴 항목 쌍이 맡는다
   ...['accent', 'info-soft', 'success-soft', 'warning-soft', 'destructive-soft'].map(
     (soft): Pair => ['body-foreground', soft, 1, 4.5, 'card'],
   ),
-  ['body-foreground', 'muted', 1, 4.5, 'card'],
   // StatCard inverse의 변화량(굵은 13px 글자)
   ['highlight', 'inverse', 1, 4.5, 'card'],
   // 입력칸 경계와 포커스 띠(FIELD_BOX: --input 테두리, --ring 포커스, --destructive 오류) (WCAG 1.4.11)
