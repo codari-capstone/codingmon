@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 const TONE = {
   neutral: 'bg-muted text-muted-foreground',

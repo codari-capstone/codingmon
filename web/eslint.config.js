@@ -35,7 +35,25 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+      // 'cn'을 바로 쓰면 프로젝트 글자 크기(text-title-1 등)가 글자색을 지운다 (#262)
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'cn',
+              message: "프로젝트 글자 크기를 아는 cn을 쓴다: import { cn } from '@/lib/utils'",
+            },
+          ],
+        },
+      ],
     },
+  },
+
+  // 위 규칙의 예외: 설정한 cn을 만드는 곳
+  {
+    files: ['src/lib/utils.ts'],
+    rules: { 'no-restricted-imports': 'off' },
   },
 
   // 디자인 시스템 부품: shadcn add로 받아 꾸민 것 + 직접 만든 것 (frontend-stack.md '부품을 받을지, 직접 만들지')

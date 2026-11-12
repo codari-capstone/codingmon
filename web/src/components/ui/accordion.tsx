@@ -1,5 +1,5 @@
 import { Accordion as AccordionPrimitive } from 'radix-ui'
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 import { Icon } from '@/components/ui/icon'
 

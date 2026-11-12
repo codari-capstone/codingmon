@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react'
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 import type { Verdict as VerdictCode } from '@/api/types'
 import { StatusText, type StatusTone } from '@/components/StatusText'

@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement } from 'react'
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 /**
  * 상자형 입력칸 (디자인 시스템 Input). 높이 48px, 1.5px 테두리(--input = border-strong), 반지름 12px, 좌우 18px.

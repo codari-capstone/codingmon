@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 import { FIELD_BOX } from '@/components/ui/input'
 

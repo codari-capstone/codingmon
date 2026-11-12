@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import { Check } from 'lucide-react'
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 /**
  * 디자인 시스템 Checkbox와 Radio의 공통 모양. 네이티브 input을 투명하게 겹쳐 두고 옆의 상자를 꾸민다.

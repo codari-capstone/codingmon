@@ -1,5 +1,5 @@
 import { CircleCheck, CircleX, Clock, Info, type LucideIcon } from 'lucide-react'
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 /**
  * 판정 색 묶음 (디자인 시스템 '판정 색', 값은 src/index.css). 판정·풀이 상태는 이 다섯 가지로만 칠한다.

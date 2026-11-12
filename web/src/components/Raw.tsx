@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 /**
  * 학생 코드가 만든 원문 (RES-04·05, SOLVE-08).

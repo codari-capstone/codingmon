@@ -1,4 +1,4 @@
-import { cn } from 'cn'
+import { cn } from '@/lib/utils'
 
 // 그림 파일은 src/assets/mascot/<묶음>/<이름>.png. 번들러가 주소로 바꿔 준다.
 const FILES = import.meta.glob('/src/assets/mascot/**/*.png', {
