@@ -45,22 +45,23 @@ const step = (name: string) => screen.findByRole('button', { name: `${name} 보�
 describe('HintSteps', () => {
   afterEach(() => resetSubmissions())
 
-  it('1단계만 켜져 있고 앞 단계를 열어야 다음 단계가 켜진다 (AI-04)', async () => {
+  it('다음 단계 하나만 열 수 있고, 열면 그다음 단계로 넘어간다 (AI-04)', async () => {
     const user = userEvent.setup()
     await analyzed()
     renderResult()
 
     expect(await step('1단계 관찰')).toBeEnabled()
-    expect(screen.getByRole('button', { name: '2단계 방향 보기' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '3단계 원리 보기' })).toBeDisabled()
+    // 뒤 단계는 버튼 없이 단계 표시로만 보인다. 앞 단계를 건너뛰어 열 길이 없다
+    expect(screen.queryByRole('button', { name: '2단계 방향 보기' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '3단계 원리 보기' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '1단계 관찰 보기' }))
 
     const hint = await screen.findByText(/첫 줄과 마지막 줄 별 개수/)
-    // 누른 버튼이 사라지므로 포커스를 방금 연 힌트로 옮긴다.
+    // 새 힌트가 버튼 위에 열린다. 무엇이 열렸는지 바로 읽도록 포커스를 옮긴다.
     await waitFor(() => expect(hint).toHaveFocus())
     expect(screen.getByRole('button', { name: '2단계 방향 보기' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: '3단계 원리 보기' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: '3단계 원리 보기' })).not.toBeInTheDocument()
   })
 
   it('세 단계를 다 열면 마지막 안내를 띄운다', async () => {

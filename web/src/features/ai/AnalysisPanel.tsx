@@ -4,66 +4,71 @@ import { useEffect } from 'react'
 import type { SubmissionAnalysis } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import codingmonFace from '@/assets/brand/codingmon_face.png'
+import thinkingScene from '@/assets/scenes/thinking.png'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+
 import { problemMessage } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { isDeadEnd } from '@/features/result/resultQuery'
 import { analysisQuery, useRequestAnalysis } from './analysisQuery'
-import { countLines } from './countLines'
+import { suspectLines } from './countLines'
 import { HintSteps } from './HintSteps'
 
-/** [실행 결과]/[코드 분석] 항목 하나 (AI-03). 모델이 만든 문장이라 글자 그대로 보여 준다(계약). */
+/** [실행 결과]/[코드 분석] 근거 하나 (AI-03). 모델이 만든 문장이라 글자 그대로 보여 준다(계약). */
 function Item({ badge, text }: { badge: '실행 결과' | '코드 분석'; text: string }) {
   return (
-    <li className="flex flex-col items-start gap-1">
-      <span
-        className={
-          badge === '실행 결과'
-            ? 'bg-muted text-foreground rounded-md px-2 py-0.5 text-xs font-medium'
-            : 'border-border text-muted-foreground rounded-md border px-2 py-0.5 text-xs font-medium'
-        }
-      >
-        {badge}
-      </span>
-      <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{text}</p>
+    <li className="flex flex-wrap items-start gap-3 rounded-[14px] border px-4 py-3.5">
+      {/* 사실(실행 결과)과 짐작(코드 분석)을 색으로도 가른다. 글자가 뜻을 전한다 */}
+      <Badge tone={badge === '실행 결과' ? 'info' : 'brand'}>{badge}</Badge>
+      <p className="text-body-foreground min-w-0 flex-1 text-[15px] leading-[1.6] whitespace-pre-wrap [overflow-wrap:anywhere]">
+        {text}
+      </p>
     </li>
   )
 }
 
-/**
- * 원인 설명 (AI-03).
- *
- * 줄 번호는 1부터 제출 코드의 줄 수까지만 남기고 겹치면 하나로 줄인다. 계약: 서버가 범위 밖
- * 번호를 지우고 저장하지만(#79) 그 전에 저장된 분석이 남아 있다. 없는 줄을 짚으면 학생이 그 줄을 찾아 헤맨다.
- */
-function Explanation({ analysis, lineCount }: { analysis: SubmissionAnalysis; lineCount: number }) {
-  const lines = [...new Set(analysis.suspectLines)].filter(
-    (line) => Number.isInteger(line) && line >= 1 && line <= lineCount,
-  )
+/** 원인 설명 (AI-03). 줄 번호를 거르는 규칙은 `suspectLines` 주석. */
+function Explanation({
+  analysis,
+  sourceCode,
+}: {
+  analysis: SubmissionAnalysis
+  sourceCode: string
+}) {
+  const lines = suspectLines(analysis.suspectLines, sourceCode)
   return (
-    <div className="flex flex-col gap-3">
-      {analysis.summary !== null ? (
-        <p className="text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">
-          {analysis.summary}
-        </p>
-      ) : null}
-      {lines.length > 0 ? (
-        <p className="text-sm">
-          <span className="font-medium">의심되는 줄: </span>
-          {lines.map((line) => `${line}번`).join(', ')}
-        </p>
+    <>
+      {analysis.summary !== null || lines.length > 0 ? (
+        <div className="bg-muted flex flex-col items-start gap-2.5 rounded-[16px] p-5">
+          {analysis.summary !== null ? (
+            <p className="text-foreground text-lg leading-normal font-semibold whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {analysis.summary}
+            </p>
+          ) : null}
+          {lines.length > 0 ? (
+            <Badge
+              tone="danger"
+              className="h-auto min-h-[26px] py-1 whitespace-normal"
+            >{`의심되는 줄 · ${lines.map((line) => `${line}번`).join(', ')}`}</Badge>
+          ) : null}
+        </div>
       ) : null}
       {analysis.facts.length + analysis.guesses.length > 0 ? (
-        <ul className="flex flex-col gap-3">
-          {analysis.facts.map((text, index) => (
-            <Item key={`fact-${index}`} badge="실행 결과" text={text} />
-          ))}
-          {analysis.guesses.map((text, index) => (
-            <Item key={`guess-${index}`} badge="코드 분석" text={text} />
-          ))}
-        </ul>
+        <div className="flex flex-col gap-2.5">
+          <h3 className="text-muted-foreground text-sm font-semibold">근거</h3>
+          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+            {analysis.facts.map((text, index) => (
+              <Item key={`fact-${index}`} badge="실행 결과" text={text} />
+            ))}
+            {analysis.guesses.map((text, index) => (
+              <Item key={`guess-${index}`} badge="코드 분석" text={text} />
+            ))}
+          </ul>
+        </div>
       ) : null}
-    </div>
+    </>
   )
 }
 
@@ -110,60 +115,105 @@ export function AnalysisPanel({
     forgetSessionIfUnauthorized(queryClient, error)
   }, [queryClient, error])
 
-  let body: React.ReactNode
   // 오류를 띄우는 때와 폴링을 멈추는 때가 같다 (resultQuery의 isDeadEnd). 데이터만 보면
   // `PENDING`을 든 채 403이 와서 폴링이 멈춰도 '분석하고 있어요'에 갇힌다.
-  if (isDeadEnd(error, data !== undefined)) {
-    body = <ErrorState problem={error} onRetry={() => void refetch()} />
-  } else if (isPending || data === undefined) {
-    body = <ListSkeleton rows={2} />
-  } else {
-    const working = request.isPending || data?.status === 'PENDING'
-    const done = !working && data?.status === 'COMPLETED' && !data.blocked
-    // 요청한 적이 없거나 실패했을 때만 누를 수 있다. 끝난 분석은 다시 만들지 않는다(계약).
-    const canRequest = !working && (data === null || data.status === 'FAILED')
+  const deadEnd = isDeadEnd(error, data !== undefined)
+  const loaded = !deadEnd && !isPending && data !== undefined
+  const working = request.isPending || data?.status === 'PENDING'
+  const done = loaded && !working && data?.status === 'COMPLETED' && !data.blocked
+  // 요청한 적이 없거나 실패했을 때만 누를 수 있다. 끝난 분석은 다시 만들지 않는다(계약).
+  const canRequest = loaded && !working && (data === null || data.status === 'FAILED')
+  // 한 번도 요청하지 않은 오답은 남색 안내 카드로 권한다(디자인 ResultRuntime)
+  const invite = loaded && data === null && !working
 
-    body = (
-      <>
-        <p role="status" className={done ? 'sr-only' : 'text-muted-foreground text-sm'}>
-          {statusText(working, data)}
-        </p>
-        {data === null && !working ? (
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            틀린 이유와 의심되는 줄을 AI가 짚어 줘요. 정답 코드는 알려 주지 않아요.
-          </p>
-        ) : null}
-        {done ? (
-          <>
-            <Explanation analysis={data} lineCount={countLines(sourceCode)} />
-            <HintSteps submissionId={submissionId} analysis={data} retryPath={retryPath} />
-          </>
-        ) : null}
-        {request.isError ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {problemMessage(request.error)}
-          </p>
-        ) : null}
-        {canRequest ? (
-          <div>
-            <Button type="button" className="min-h-11" onClick={() => request.mutate()}>
-              {data === null ? 'AI 분석' : '다시 시도'}
-            </Button>
-          </div>
-        ) : null}
-      </>
-    )
-  }
+  const requestError = request.isError ? (
+    <p
+      role="alert"
+      className={invite ? 'text-inverse-foreground text-sm' : 'text-destructive-text text-sm'}
+    >
+      {problemMessage(request.error)}
+    </p>
+  ) : null
+  const requestButton = canRequest ? (
+    <Button
+      type="button"
+      size={invite ? 'lg' : 'md'}
+      fullWidth={invite}
+      className="min-h-11 self-start"
+      onClick={() => request.mutate()}
+    >
+      {data === null ? 'AI 분석' : '다시 시도'}
+    </Button>
+  ) : null
 
   return (
+    /*
+      안내 카드(남색)와 분석 패널(흰색)이 **같은 section**이다. 둘을 다른 요소로 그리면 [AI 분석]을
+      누르는 순간 live region이 '분석하고 있어요'를 담은 채 새로 붙어 안내되지 않는다(결과 화면
+      Headline 주석). 그래서 live region을 늘 첫 자식에 두고, 머리줄은 order로 그 위에 보인다.
+    */
     <section
       aria-labelledby="analysis-heading"
-      className="bg-card flex min-w-0 flex-col gap-3 rounded-lg border p-6"
+      className={
+        invite
+          ? 'bg-inverse text-inverse-foreground flex min-w-0 flex-col gap-3 rounded-lg p-7 dark:border'
+          : 'bg-card flex min-w-0 flex-col gap-5 rounded-lg border p-6 sm:p-7'
+      }
     >
-      <h2 id="analysis-heading" className="text-base font-medium">
-        AI 분석
-      </h2>
-      {body}
+      <p
+        role="status"
+        className={done || invite || !loaded ? 'sr-only' : 'text-muted-foreground text-sm'}
+      >
+        {loaded ? statusText(working, data) : ''}
+      </p>
+
+      {invite ? (
+        <>
+          <img
+            src={thinkingScene}
+            alt=""
+            width={170}
+            height={150}
+            className="-order-1 mx-auto block h-auto max-w-full"
+          />
+          <h2 id="analysis-heading" className="text-eyebrow text-inverse-accent mt-2">
+            AI 분석
+          </h2>
+          <p className="text-[22px] leading-[1.35] font-bold tracking-[-0.02em]">
+            틀린 이유를 같이 찾아볼까요?
+          </p>
+          <p className="text-inverse-muted text-[15px] leading-[1.65]">
+            틀린 이유와 의심되는 줄을 AI가 짚어 줘요. 정답 코드는 알려 주지 않아요.
+          </p>
+        </>
+      ) : (
+        <div className="-order-1 flex items-center gap-3">
+          {/* 디자인의 화자 표시: 옅은 파랑 원 안의 펭귄 얼굴. 장식이라 alt를 비운다 */}
+          <span className="bg-accent inline-flex size-11 flex-none overflow-hidden rounded-full">
+            <img src={codingmonFace} alt="" width={44} height={44} className="block" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 id="analysis-heading" className="text-foreground text-lg font-bold">
+              AI 분석
+            </h2>
+            <p className="text-muted-foreground mt-0.5 text-[13px]">
+              채점 결과를 근거로 원인을 짚어요. 정답 코드는 알려 주지 않아요.
+            </p>
+          </div>
+          {done ? <Badge tone="success">분석 완료</Badge> : null}
+        </div>
+      )}
+
+      {deadEnd ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
+      {!deadEnd && !loaded ? <ListSkeleton rows={2} /> : null}
+      {done ? (
+        <>
+          <Explanation analysis={data} sourceCode={sourceCode} />
+          <HintSteps submissionId={submissionId} analysis={data} retryPath={retryPath} />
+        </>
+      ) : null}
+      {requestError}
+      {requestButton}
     </section>
   )
 }
