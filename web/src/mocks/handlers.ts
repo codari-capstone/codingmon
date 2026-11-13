@@ -1282,7 +1282,6 @@ export const handlers: RequestHandler[] = [
       runtimeErrorMessage: null,
       compilerMessage: null,
       sourceCode: null,
-      unlockedBadges: [],
     }
     if (step === 0) {
       return HttpResponse.json({

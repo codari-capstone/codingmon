@@ -63,7 +63,6 @@ function completed(over: Record<string, unknown> = {}) {
         memoryUsedKb: 31204,
         submittedAt: '2026-10-24T05:00:00Z',
         judgedAt: '2026-10-24T05:00:03Z',
-        unlockedBadges: [],
         ...over,
       }),
     ),
