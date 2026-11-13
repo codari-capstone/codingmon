@@ -30,7 +30,8 @@ function Farewell() {
         </p>
         <p className="text-muted-foreground text-[15px] leading-[1.65]">
           {data
-            ? `지금까지 맞힌 문제 ${data.solvedCount}개와 ${data.totalActiveDays}일 동안의 기록이 있어요. `
+            ? // 맞힌 수는 전체 기간, 활동일은 최근 365일 안에서 센다(계약). 기간을 따로 밝힌다
+              `지금까지 맞힌 문제가 ${data.solvedCount}개, 최근 1년 동안 공부한 날이 ${data.totalActiveDays}일이에요. `
             : null}
           탈퇴하면 아래 내용이 모두 지워져요.
         </p>

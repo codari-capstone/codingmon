@@ -64,7 +64,7 @@ describe('계정 설정 /me/account (MY-01~03)', () => {
     expect(screen.getByLabelText('닉네임')).toBeInTheDocument()
     // 가린 이메일을 바꿀 수 없는 칸으로 보여 준다
     expect(screen.getByLabelText('이메일')).toHaveValue('us***@codari.test')
-    expect(screen.getByLabelText('이메일')).toBeDisabled()
+    expect(screen.getByLabelText('이메일')).toHaveAttribute('readonly')
     expect(screen.getByLabelText('현재 비밀번호')).toBeInTheDocument()
 
     const login = screen.getByRole('region', { name: '로그인 방법' })
@@ -118,7 +118,7 @@ describe('회원 탈퇴 /me/withdraw (MY-04)', () => {
     expect(
       await screen.findByText(
         new RegExp(
-          `맞힌 문제 ${activity.solvedCount}개와 ${activity.totalActiveDays}일 동안의 기록`,
+          `맞힌 문제가 ${activity.solvedCount}개, 최근 1년 동안 공부한 날이 ${activity.totalActiveDays}일`,
         ),
       ),
     ).toBeInTheDocument()

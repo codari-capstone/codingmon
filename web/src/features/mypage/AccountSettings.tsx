@@ -105,7 +105,7 @@ export function NicknameForm({ user }: { user: CurrentUser }) {
           <label htmlFor="email" className="text-sm font-semibold">
             이메일
           </label>
-          <Input id="email" value={user.email} disabled readOnly />
+          <Input id="email" value={user.email} readOnly />
           <p className="text-muted-foreground text-sm">이메일은 바꿀 수 없어요.</p>
         </div>
       ) : null}
