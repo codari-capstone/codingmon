@@ -30,5 +30,6 @@ export function streakQuery() {
 export function useStreak() {
   const { isAuthenticated, isLoading } = useAuth()
   const { data } = useQuery({ ...streakQuery(), enabled: isAuthenticated })
-  return { streak: data, guest: !isLoading && !isAuthenticated }
+  // enabled가 꺼져도 캐시는 남는다. 세션이 401로 끊기면 ['me']만 비워지므로 앞사람 달력을 버린다
+  return { streak: isAuthenticated ? data : undefined, guest: !isLoading && !isAuthenticated }
 }

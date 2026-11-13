@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -27,13 +27,16 @@ function respond(streak: UserStreak) {
   server.use(http.get('*/api/users/me/streak', () => HttpResponse.json(streak)))
 }
 
-function renderIt(ui: React.ReactNode) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function renderIt(
+  ui: React.ReactNode,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter>{ui}</MemoryRouter>
     </QueryClientProvider>,
   )
+  return client
 }
 
 // 2026-11-13(금) 정오, 한국 시각. 이번 주 월요일은 11-09다
@@ -95,6 +98,17 @@ describe('StreakCard (STREAK-01)', () => {
     ).toEqual(['월', '화', '수', '목', '금', '토', '일'].map((d) => `${d} 제출 안 함`))
     expect(called).not.toHaveBeenCalled()
   })
+
+  it('세션이 끊겨 비로그인이 되면 캐시에 남은 앞사람의 달력을 그리지 않는다', () => {
+    signedIn(false)
+    const client = new QueryClient()
+    client.setQueryData(['streak'], { ...streakFor(1, NOW), activeToday: true })
+    renderIt(<StreakCard />, client)
+
+    const card = screen.getByRole('region', { name: '연속 학습' })
+    expect(within(card).queryByText(/제출함/)).not.toBeInTheDocument()
+    expect(within(card).queryByText('오늘')).not.toBeInTheDocument()
+  })
 })
 
 describe('StreakChip (STREAK-02)', () => {
@@ -115,9 +129,9 @@ describe('StreakChip (STREAK-02)', () => {
   it('로그인했는데 받지 못했으면 0일로 그리지 않고 칩을 두지 않는다', async () => {
     signedIn(true)
     server.use(http.get('*/api/users/me/streak', () => new HttpResponse(null, { status: 500 })))
-    renderIt(<StreakChip />)
-    // 실패가 확정될 때까지 기다릴 표식이 없어 짧게 기다린다
-    await new Promise((r) => setTimeout(r, 50))
+    const client = renderIt(<StreakChip />)
+    // 응답 전에도 링크는 없다. 실패가 확정된 뒤에 단언해야 '실패하면 0일' 회귀를 잡는다
+    await waitFor(() => expect(client.getQueryState(['streak'])?.status).toBe('error'))
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
 })
