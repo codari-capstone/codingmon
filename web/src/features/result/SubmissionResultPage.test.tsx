@@ -219,14 +219,17 @@ describe('SubmissionResultPage', () => {
   })
 
   describe('다음 행동 (RES-07)', () => {
-    it('정답이면 AI 리뷰와 다음 문제를 둔다', async () => {
+    it('정답이면 다음 문제와 AI 리뷰 패널을 둔다', async () => {
       completed({ verdict: 'ACCEPTED' })
       renderResult()
       await screen.findByText('맞았습니다!!')
 
-      // 아직 열 곳이 없어 비활성이다. 왜 안 되는지 글자로 적는다 (#42·#44).
-      expect(screen.getByRole('button', { name: 'AI 리뷰 (준비 중)' })).toBeDisabled()
+      // 다음 문제는 아직 열 곳이 없어 비활성이다. 왜 안 되는지 글자로 적는다 (#44).
       expect(screen.getByRole('button', { name: '다음 문제 (준비 중)' })).toBeDisabled()
+      // AI 리뷰는 카드가 아니라 패널의 버튼이다 (AI 분석과 같다)
+      // 리뷰를 불러오는 동안의 머리줄은 안내 카드로 바뀌며 새 요소가 된다. 마지막 상태인 버튼을 기다린다
+      expect(await screen.findByRole('button', { name: 'AI 리뷰' })).toBeEnabled()
+      expect(screen.queryByRole('heading', { name: 'AI 분석' })).not.toBeInTheDocument()
       expect(screen.queryByRole('link', { name: '다시 풀기' })).not.toBeInTheDocument()
     })
 

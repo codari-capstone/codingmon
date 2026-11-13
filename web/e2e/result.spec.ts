@@ -28,9 +28,9 @@ test.describe('제출 결과 화면', () => {
     await expect(page.getByText(/^제출 #\d+$/)).toBeVisible()
     await expect(page.getByText('Python')).toBeVisible()
 
-    // 정답이면 AI 리뷰·다음 문제다 (RES-07). 둘 다 아직 열 곳이 없어 비활성이다.
-    await expect(page.getByRole('button', { name: 'AI 리뷰 (준비 중)' })).toBeDisabled()
+    // 정답이면 다음 문제(아직 열 곳이 없어 비활성)와 AI 리뷰 패널이다 (RES-07, AI-05).
     await expect(page.getByRole('button', { name: '다음 문제 (준비 중)' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'AI 리뷰' })).toBeEnabled()
   })
 
   /** 시작 코드를 그대로 내면 목이 오답을 준다(handlers.ts) — 오답 쪽 버튼을 본다. */
@@ -103,6 +103,33 @@ test.describe('제출 결과 화면', () => {
 
       const sizes = await page.evaluate(() => {
         const panel = document.querySelector('section[aria-labelledby="analysis-heading"]')
+        if (!panel) return null
+        return {
+          panelScroll: panel.scrollWidth,
+          panelClient: panel.clientWidth,
+          panelRight: panel.getBoundingClientRect().right,
+          documentWidth: document.documentElement.scrollWidth,
+          viewportWidth: window.innerWidth,
+        }
+      })
+
+      expect(sizes).not.toBeNull()
+      expect(sizes!.documentWidth).toBeLessThanOrEqual(sizes!.viewportWidth + 1)
+      expect(sizes!.panelScroll).toBeLessThanOrEqual(sizes!.panelClient + 1)
+      expect(sizes!.panelRight).toBeLessThanOrEqual(sizes!.viewportWidth + 1)
+    })
+
+    /** 리뷰도 모델이 쓴 글이다. 목의 리뷰에 긴 공간 표기와 긴 개념 이름이 있다(handlers.ts, #273 리뷰). */
+    test(`${width}px에서 AI 리뷰의 긴 값이 패널 밖으로 넘치지 않는다`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await login(page)
+      // 지난 제출 11: 맞았습니다 (fixtures/history.ts)
+      await page.goto('/submissions/11')
+      await page.getByRole('button', { name: 'AI 리뷰' }).click()
+      await expect(page.getByText(/구간 쿼리 처리 패턴/)).toBeVisible({ timeout: 10_000 })
+
+      const sizes = await page.evaluate(() => {
+        const panel = document.querySelector('section[aria-labelledby="review-heading"]')
         if (!panel) return null
         return {
           panelScroll: panel.scrollWidth,

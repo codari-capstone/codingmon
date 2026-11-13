@@ -25,6 +25,7 @@ describe('adoptSession', () => {
     ['learning-stats', ['learning-stats']],
     ['activity', ['activity']],
     ['ai-quota', ['ai-quota']],
+    ['code-review', ['code-review', 11]],
   ])('이전 사용자의 %s 캐시를 지운다', async (_name, key) => {
     const client = new QueryClient()
     client.setQueryData(key, { owner: 'A' })

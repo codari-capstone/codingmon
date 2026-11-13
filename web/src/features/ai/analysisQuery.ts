@@ -28,7 +28,8 @@ const ANALYSIS_SLOWEST_AFTER_MS = 60_000
  */
 export function analysisPollingInterval(
   error: unknown,
-  analysis: SubmissionAnalysis | null | undefined,
+  // 리뷰(codeReviewQuery)도 같은 규칙으로 묻는다. 둘 다 status·createdAt만 본다
+  analysis: Pick<SubmissionAnalysis, 'status' | 'createdAt'> | null | undefined,
   now = Date.now(),
 ): number | false {
   if (analysis?.status !== 'PENDING') return false
@@ -119,16 +120,19 @@ export function useRequestAnalysis(submissionId: number) {
       queryClient.setQueryData(analysisQueryKey(submissionId), analysis)
       await adoptQuota(queryClient, analysis.quota)
     },
-    onError: async (error) => {
-      forgetSessionIfUnauthorized(queryClient, error)
-      // 한도 초과(429)는 본문에 거절한 시점의 quota(remaining 0)를 싣는다(계약). fail()이 본문을 펼쳐 던진다
-      if (problemCode(error) === 'AI_DAILY_LIMIT_EXCEEDED') {
-        const quota = (error as { quota?: AiQuota }).quota
-        if (quota) await adoptQuota(queryClient, quota)
-        else void queryClient.invalidateQueries({ queryKey: AI_QUOTA_QUERY_KEY })
-      }
-    },
+    onError: (error) => onAiRequestError(queryClient, error),
   })
+}
+
+/** 분석·리뷰 요청이 실패했을 때. 둘은 하루 한도를 함께 쓴다(계약 `AiQuota`). */
+export async function onAiRequestError(client: QueryClient, error: unknown) {
+  forgetSessionIfUnauthorized(client, error)
+  // 한도 초과(429)는 본문에 거절한 시점의 quota(remaining 0)를 싣는다(계약). fail()이 본문을 펼쳐 던진다
+  if (problemCode(error) === 'AI_DAILY_LIMIT_EXCEEDED') {
+    const quota = (error as { quota?: AiQuota }).quota
+    if (quota) await adoptQuota(client, quota)
+    else void client.invalidateQueries({ queryKey: AI_QUOTA_QUERY_KEY })
+  }
 }
 
 /**

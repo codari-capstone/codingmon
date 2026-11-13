@@ -9,6 +9,7 @@ import type {
   ProblemInput,
   SolutionInput,
   SubmissionAnalysis,
+  SubmissionCodeReview,
   TestCaseInput,
 } from '@/api/types'
 import { DIFFICULTY_RANK, type Difficulty, type SolveStatus } from '@/api/types'
@@ -234,6 +235,9 @@ interface MockAnalysis {
 
 const mockAnalyses = new Map<number, MockAnalysis>()
 
+/** AI 코드 리뷰 (AI-05). 값은 요청한 시각이다. 분석처럼 요청 응답만 `PENDING`이다. */
+const mockReviews = new Map<number, string>()
+
 /** 힌트 3단계. AI_FEATURES 5절의 역방향 피라미드 예시다. */
 const MOCK_HINTS = [
   // 공백 없는 긴 토큰을 하나 둔다. 분석 문장과 같이 e2e가 넘침을 본다(result.spec.ts).
@@ -246,6 +250,7 @@ const MOCK_HINTS = [
 export function resetSubmissions(): void {
   mockSubmissions.clear()
   mockAnalyses.clear()
+  mockReviews.clear()
   nextSubmissionId = 1
 }
 
@@ -258,7 +263,9 @@ const AI_DAILY_LIMIT = 20
  */
 function mockQuota(now = new Date()): AiQuota {
   const today = now.toISOString().slice(0, 10)
-  const used = [...mockAnalyses.values()].filter((a) => a.createdAt.slice(0, 10) === today).length
+  // 분석과 리뷰는 한도를 함께 쓴다(계약 `AiQuota`)
+  const created = [...[...mockAnalyses.values()].map((a) => a.createdAt), ...mockReviews.values()]
+  const used = created.filter((at) => at.slice(0, 10) === today).length
   const resetsAt = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
   ).toISOString()
@@ -299,6 +306,55 @@ function analysisView(
       `큰 입력의 마지막 줄 출력이 ${'*'.repeat(120)}처럼 별 120개로 나옵니다.`,
     ],
     guesses: ['2번째 줄의 반복과 별 개수 식이 정방향 기준으로 작성된 것 같습니다.'],
+    completedAt: createdAt,
+  }
+}
+
+/** 리뷰 응답. 내용은 AI_FEATURES 6절의 예시 모양을 따른 A+B 리뷰다. */
+function reviewView(
+  submissionId: number,
+  createdAt: string,
+  pending = false,
+): SubmissionCodeReview {
+  const base = { submissionId, failureReason: null, blocked: false, createdAt, quota: mockQuota() }
+  if (pending) {
+    return {
+      ...base,
+      status: 'PENDING',
+      summary: null,
+      complexity: null,
+      improvements: [],
+      nextConcepts: [],
+      completedAt: null,
+    }
+  }
+  return {
+    ...base,
+    status: 'COMPLETED',
+    summary: '입력을 한 줄로 받아 바로 더해 출력했어요. 필요한 일만 하는 깔끔한 풀이예요.',
+    complexity: {
+      basis: '1번 줄에서 두 수를 한 번 읽고 2번 줄에서 한 번 더합니다. 반복이 없습니다.',
+      time: 'O(1)',
+      // 공백 없는 긴 표기. 분석의 별 120개처럼 e2e가 리뷰 패널의 넘침을 이 값으로 본다(result.spec.ts)
+      space: `O(1)_${'input_buffer_'.repeat(8)}`,
+      intendedTime: 'O(1)',
+      comparison: '문제가 의도한 복잡도와 같아 더 줄일 곳이 없어요.',
+      meetsIntended: true,
+    },
+    improvements: [
+      '변수 이름 a, b는 짧은 문제라 괜찮지만, 긴 문제에서는 뜻이 드러나는 이름이 읽기 쉬워요.',
+    ],
+    nextConcepts: [
+      {
+        name: '입출력 최적화',
+        reason: '입력이 많아지면 sys.stdin.readline으로 읽는 속도가 차이를 만들어요.',
+      },
+      // 모델이 길게 지은 개념 이름. 배지가 한 줄로 늘어나 넘치지 않는지 e2e가 본다
+      {
+        name: '분할 정복과 동적 계획법을 결합한 구간 쿼리 처리 패턴 (세그먼트 트리·희소 테이블)',
+        reason: '여러 구간의 합을 빠르게 묻는 문제로 이어져요.',
+      },
+    ],
     completedAt: createdAt,
   }
 }
@@ -1349,6 +1405,34 @@ export const handlers: RequestHandler[] = [
     const created = { createdAt: new Date().toISOString(), revealed: 0 }
     mockAnalyses.set(id, created)
     return HttpResponse.json(analysisView(id, created, true), { status: 202 })
+  }),
+
+  /** AI 코드 리뷰 요청 (AI-05). 분석 요청과 같은 순서로 검사한다: 없는 제출 404 → 정답이 아니면 409. */
+  http.post('*/api/submissions/:id/code-review', ({ params }) => {
+    const id = Number(params.id)
+    if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
+
+    const found = mockSubmissions.get(id)
+    const verdict = found ? (found.polls > 3 ? found.verdict : null) : pastSubmission(id)?.verdict
+    if (verdict === undefined) return problem(404, 'SUBMISSION_NOT_FOUND', '제출을 찾을 수 없어요')
+    if (verdict !== 'ACCEPTED') {
+      return problem(409, 'CODE_REVIEW_NOT_AVAILABLE', '정답 판정을 받은 제출만 리뷰할 수 있어요')
+    }
+
+    const existing = mockReviews.get(id)
+    if (existing) return HttpResponse.json(reviewView(id, existing))
+    const createdAt = new Date().toISOString()
+    mockReviews.set(id, createdAt)
+    return HttpResponse.json(reviewView(id, createdAt, true), { status: 202 })
+  }),
+
+  /** 저장된 AI 코드 리뷰 (AI-05). 요청한 적이 없으면 계약대로 404 `CODE_REVIEW_NOT_FOUND`다. */
+  http.get('*/api/submissions/:id/code-review', ({ params }) => {
+    const id = Number(params.id)
+    if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
+    const createdAt = mockReviews.get(id)
+    if (!createdAt) return problem(404, 'CODE_REVIEW_NOT_FOUND', 'AI 리뷰를 찾을 수 없어요')
+    return HttpResponse.json(reviewView(id, createdAt))
   }),
 
   /** 저장된 AI 오답 분석 (AI-02·03). 요청한 적이 없으면 계약대로 404 `ANALYSIS_NOT_FOUND`다. */
