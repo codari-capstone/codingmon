@@ -39,6 +39,8 @@ describe('ReportPage (REP-01·02)', () => {
       '/problems',
     )
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    // 통계가 없어도 화면 제목은 있다
+    expect(screen.getByRole('heading', { level: 1, name: '학습 리포트' })).toBeInTheDocument()
   })
 
   it('개념별 통계를 서버 순서와 값 그대로 보여 주고, 해결률만 백분율로 적는다', async () => {
@@ -55,13 +57,41 @@ describe('ReportPage (REP-01·02)', () => {
     ])
 
     const dp = within(rows[0]).getAllByRole('cell')
-    expect(dp[1]).toHaveTextContent('25%(1/4)')
+    expect(dp[1]).toHaveTextContent('25%1 / 4')
     expect(dp[2]).toHaveTextContent('2.5')
     expect(dp[3]).toHaveTextContent('4.5')
     expect(dp[4]).toHaveTextContent('0.8')
 
     // 서버가 둘째 자리까지 반올림한 값(0.33)을 다시 계산하지 않고 33%로 옮긴다
-    expect(within(rows[1]).getAllByRole('cell')[1]).toHaveTextContent('33%(1/3)')
+    expect(within(rows[1]).getAllByRole('cell')[1]).toHaveTextContent('33%1 / 3')
+  })
+
+  it('가장 취약한 개념을 제목으로 권하고 그 개념의 문제 목록으로 보낸다', async () => {
+    renderReport()
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: '동적 계획법 개념을 조금 더 연습해 볼까요?',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '동적 계획법 문제 풀기' })).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^\/problems\?tag=/),
+    )
+  })
+
+  it('내 학습 탭: 학습 리포트가 지금 화면이고 배지는 아직 꺼져 있다', async () => {
+    renderReport()
+    const nav = await screen.findByRole('navigation', { name: '내 학습 메뉴' })
+    expect(within(nav).getByRole('link', { name: '학습 리포트' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(nav).queryByRole('link', { name: /배지/ })).not.toBeInTheDocument()
+    expect(within(nav).getByText('배지').closest('[aria-disabled]')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
   })
 
   // 취약 여부는 서버의 `weak`만 따른다. 상위 2개·0점 규칙은 서버가 판단한다(계약).
