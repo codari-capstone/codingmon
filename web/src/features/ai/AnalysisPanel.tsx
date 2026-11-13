@@ -48,7 +48,10 @@ function Explanation({
             </p>
           ) : null}
           {lines.length > 0 ? (
-            <Badge tone="danger">{`의심되는 줄 · ${lines.map((line) => `${line}번`).join(', ')}`}</Badge>
+            <Badge
+              tone="danger"
+              className="h-auto min-h-[26px] py-1 whitespace-normal"
+            >{`의심되는 줄 · ${lines.map((line) => `${line}번`).join(', ')}`}</Badge>
           ) : null}
         </div>
       ) : null}

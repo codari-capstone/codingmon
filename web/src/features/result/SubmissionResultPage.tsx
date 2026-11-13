@@ -189,25 +189,27 @@ function canAnalyze(result: SubmissionResult | undefined): boolean {
     result.status === 'COMPLETED' &&
     result.verdict !== null &&
     result.verdict !== 'ACCEPTED' &&
-    result.sourceCode !== null
+    // SubmittedCode와 같은 방어: 필드가 빠진 응답이면 코드 없이 빈 문자열로 분석을 그리게 된다
+    typeof result.sourceCode === 'string'
   )
 }
 
 const FILE_NAME = { PYTHON: 'solution.py', CPP: 'main.cpp' } satisfies Record<Language, string>
+
+/** 투명한 1×1 GIF. 좁은 화면의 장면 자리에 들어가 요청을 만들지 않는다 */
+const BLANK_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
 
 /** 판정 옆 펭귄 장면. 장식이라 alt를 비운다. 채점 중에는 두지 않는다 */
 function Scene({ result }: { result: SubmissionResult }) {
   if (!isFinished(result.status)) return null
   const accepted = result.verdict === 'ACCEPTED'
   return (
-    <img
-      src={accepted ? successScene : errorScene}
-      alt=""
-      width={210}
-      height={190}
-      // 좁은 화면에서는 뺀다. 판정 아래 그림 한 장이 코드와 AI 분석을 한 화면 넘게 밀어낸다
-      className="mx-auto hidden h-auto max-w-full flex-none sm:block"
-    />
+    // 좁은 화면에서는 뺀다. 판정 아래 그림 한 장이 코드와 AI 분석을 한 화면 넘게 밀어낸다.
+    // CSS로 숨기기만 하면 브라우저가 그래도 받으므로, sm 이상에서만 진짜 그림을 고르게 한다(#268 리뷰)
+    <picture className="mx-auto hidden flex-none sm:block">
+      <source media="(min-width: 40rem)" srcSet={accepted ? successScene : errorScene} />
+      <img src={BLANK_PIXEL} alt="" width={210} height={190} className="block h-auto max-w-full" />
+    </picture>
   )
 }
 

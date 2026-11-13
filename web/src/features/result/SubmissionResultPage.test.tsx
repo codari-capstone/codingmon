@@ -207,6 +207,17 @@ describe('SubmissionResultPage', () => {
     })
   })
 
+  it('좁은 화면에서는 장면 그림을 받지 않는다', async () => {
+    // CSS로 숨기기만 하면 브라우저가 그래도 받는다. 진짜 그림은 sm 이상의 source에만 있다(#268 리뷰)
+    completed({ verdict: 'ACCEPTED' })
+    renderResult()
+    await screen.findByText('맞았습니다!!')
+
+    const picture = document.querySelector('picture')
+    expect(picture?.querySelector('source')).toHaveAttribute('media', '(min-width: 40rem)')
+    expect(picture?.querySelector('img')?.getAttribute('src')).toMatch(/^data:image\/gif/)
+  })
+
   describe('다음 행동 (RES-07)', () => {
     it('정답이면 AI 리뷰와 다음 문제를 둔다', async () => {
       completed({ verdict: 'ACCEPTED' })

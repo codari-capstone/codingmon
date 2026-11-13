@@ -31,7 +31,9 @@ export function HintSteps({
   retryPath: string
 }) {
   const reveal = useRevealHint(submissionId)
-  const revealed = analysis.hints.length
+  // 단계는 셋뿐이다(계약: 길이 = revealedHintLevel ≤ 3). 넘쳐 와도 이름 없는 단계를 그리지 않는다
+  const hints = analysis.hints.slice(0, HINT_STEPS.length)
+  const revealed = hints.length
   const next = revealed + 1
 
   const [justOpened, setJustOpened] = useState<number | null>(null)
@@ -57,7 +59,7 @@ export function HintSteps({
       {/* 연 단계만 글로 보인다. 서버가 연 단계까지만 힌트를 준다(계약) */}
       {revealed > 0 ? (
         <ol className="m-0 flex list-none flex-col gap-3 p-0">
-          {analysis.hints.map((hint, index) => {
+          {hints.map((hint, index) => {
             const level = index + 1
             return (
               <li key={level}>

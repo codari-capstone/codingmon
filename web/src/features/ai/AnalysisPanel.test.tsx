@@ -164,6 +164,16 @@ describe('AnalysisPanel', () => {
     })
   })
 
+  it('힌트가 세 개를 넘어 와도 세 단계까지만 그린다', async () => {
+    // 계약은 길이 ≤ 3이다. 어기면 '힌트 4 · undefined'가 찍혔다(#268 리뷰)
+    stored(analysis({ revealedHintLevel: 3, hints: ['한나', '두나', '세나', '네나'] }))
+    renderResult(WRONG)
+
+    expect(await screen.findByText('세나')).toBeInTheDocument()
+    expect(screen.queryByText('네나')).not.toBeInTheDocument()
+    expect(screen.queryByText(/undefined/)).not.toBeInTheDocument()
+  })
+
   describe('원인 설명 (AI-03)', () => {
     it('항목을 [실행 결과]/[코드 분석] 배지로 나누고 의심되는 줄을 보여 준다', async () => {
       stored(analysis({ facts: ['사실 하나'], guesses: ['짐작 하나'] }))
