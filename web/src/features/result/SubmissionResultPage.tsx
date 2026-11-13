@@ -17,6 +17,7 @@ import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import { solvePath } from '@/features/solve/solvePath'
 import { AnalysisPanel } from '@/features/ai/AnalysisPanel'
 import { analysisQuery } from '@/features/ai/analysisQuery'
+import { CodeReviewPanel } from '@/features/ai/CodeReviewPanel'
 import { suspectLines } from '@/features/ai/countLines'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { parsePathId } from '@/lib/pathId'
@@ -194,6 +195,11 @@ function canAnalyze(result: SubmissionResult | undefined): boolean {
   )
 }
 
+/** AI 리뷰는 판정이 난 정답에만 있다(계약: 그 밖은 409). */
+function canReview(result: SubmissionResult | undefined): boolean {
+  return result?.status === 'COMPLETED' && result.verdict === 'ACCEPTED'
+}
+
 const FILE_NAME = { PYTHON: 'solution.py', CPP: 'main.cpp' } satisfies Record<Language, string>
 
 /** 투명한 1×1 GIF. 좁은 화면의 장면 자리에 들어가 요청을 만들지 않는다 */
@@ -340,6 +346,12 @@ export function Component() {
               sourceCode={data.sourceCode ?? ''}
               retryPath={solvePath(data.problemId, data.language)}
             />
+          </div>
+        ) : null}
+        {canReview(data) ? (
+          <div className="min-w-0 flex-[1_1_560px]">
+            {/* key는 AnalysisPanel과 같은 이유 */}
+            <CodeReviewPanel key={data.id} submissionId={data.id} />
           </div>
         ) : null}
       </div>

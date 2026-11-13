@@ -59,6 +59,8 @@ export async function adoptSession(client: QueryClient, user: CurrentUser): Prom
   client.removeQueries({ queryKey: ['activity'] })
   // AI 오답 분석(AI-03)도 본인 제출의 것만 온다.
   client.removeQueries({ queryKey: ['analysis'] })
+  // AI 코드 리뷰(AI-05)도 같다.
+  client.removeQueries({ queryKey: ['code-review'] })
   // 오늘 남은 AI 횟수(AI-01)도 본인 것이다. 남기면 B에게 A의 0회가 보여 [AI 분석]이 꺼진다.
   client.removeQueries({ queryKey: ['ai-quota'] })
 }
