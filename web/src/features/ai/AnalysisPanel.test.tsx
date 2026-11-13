@@ -194,6 +194,50 @@ describe('AnalysisPanel', () => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
 
+    it('마지막 1회로 요청한 분석이 만들다 실패하면 돌아온 횟수로 다시 시도할 수 있다', async () => {
+      // 계약: FAILED는 세지 않는다. 요청 응답의 remaining 0이 남으면 [다시 시도]가 꺼졌다(#272 리뷰)
+      const user = userEvent.setup()
+      quotaLeft(1)
+      const failed = analysis({
+        status: 'FAILED',
+        failureReason: 'UNAVAILABLE',
+        summary: null,
+        suspectLines: [],
+        facts: [],
+        guesses: [],
+        quota: { ...QUOTA, used: 19, remaining: 1 },
+      })
+      let gets = 0
+      server.use(
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            {
+              ...failed,
+              status: 'PENDING',
+              failureReason: null,
+              createdAt: new Date().toISOString(),
+              completedAt: null,
+              quota: { ...QUOTA, used: 20, remaining: 0 },
+            },
+            { status: 202 },
+          ),
+        ),
+        http.get('*/api/submissions/:id/analysis', () =>
+          ++gets === 1
+            ? HttpResponse.json({ status: 404, code: 'ANALYSIS_NOT_FOUND' }, { status: 404 })
+            : HttpResponse.json(failed),
+        ),
+      )
+      renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+
+      expect(
+        await screen.findByRole('button', { name: '다시 시도' }, { timeout: 3000 }),
+      ).toBeEnabled()
+      expect(screen.getByText('오늘 남은 AI 분석 1 / 20회')).toBeInTheDocument()
+    })
+
     it('처리 중에 서버가 내려가 실패한 분석은 한도를 다 썼어도 다시 시도할 수 있다', async () => {
       // 계약: 이미 1회로 셌고 다시 요청해도 같은 결과라 막지 않는다. 이 경우만 completedAt이 null이다
       quotaLeft(0)
