@@ -71,7 +71,8 @@ describe('ReportPage (REP-01·02)', () => {
     expect(
       await screen.findByRole('heading', {
         level: 1,
-        name: '동적 계획법 개념을 조금 더 연습해 볼까요?',
+        // '조금 더' 뒤는 줄바꿈이다(#275). jsdom은 이름에서 줄바꿈을 공백으로 바꾸지 않는다
+        name: /^동적 계획법 개념을 조금 더\s+연습해 볼까요\?$/,
       }),
     ).toBeInTheDocument()
     // 문제 목록은 이름이 아니라 slug로 거른다

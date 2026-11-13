@@ -101,9 +101,10 @@ function Hero({ stats }: { stats: LearningStats }) {
     >
       <div className="flex min-w-0 flex-[999_1_420px] flex-col gap-3 pb-9">
         <p className="text-eyebrow text-inverse-accent">학습 리포트</p>
-        <h1 className="text-[28px] leading-[1.25] font-bold tracking-[-0.025em] break-keep sm:text-[36px]">
+        {/* 시안처럼 '조금 더' 뒤에서 줄을 바꾼다(#275). 줄바꿈은 화면 낭독기에는 띄어쓰기로 읽힌다 */}
+        <h1 className="text-[28px] leading-[1.25] font-bold tracking-[-0.025em] break-keep whitespace-pre-line sm:text-[36px]">
           {weakest
-            ? `${weakest.name} 개념을 조금 더 연습해 볼까요?`
+            ? `${weakest.name} 개념을 조금 더\n연습해 볼까요?`
             : '모든 개념을 고르게 잘 풀고 있어요'}
         </h1>
         <p className="text-inverse-muted text-base leading-[1.65]">
