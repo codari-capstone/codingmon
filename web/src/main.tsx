@@ -1,7 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
+import { applyMotion, readStoredMotion } from './app/motion'
 import './index.css'
+
+// 첫 화면부터 저장한 움직임 설정을 따른다 (UX-08)
+applyMotion(readStoredMotion())
 
 /**
  * 목 모드는 빌드 모드 하나로만 켠다 (`vite --mode mock`, `vite build --mode mock`).
