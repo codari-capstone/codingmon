@@ -96,7 +96,6 @@ function Hero({ stats }: { stats: LearningStats }) {
     <Card
       as="section"
       tone="inverse"
-      padding="lg"
       aria-label="요약"
       className="flex flex-wrap items-center gap-6 overflow-hidden px-6 pt-9 pb-0 sm:px-10"
     >
@@ -144,7 +143,8 @@ export function Component() {
     forgetSessionIfUnauthorized(queryClient, error)
   }, [queryClient, error])
 
-  const ready = data && !error && data.remainingProblemCount === 0
+  // 아래 안내(> 0)와 빈틈없이 갈리게 <= 0으로 본다. === 0이면 계약 밖 음수에서 본문이 통째로 빈다
+  const ready = data && !error && data.remainingProblemCount <= 0
 
   return (
     <section className="flex flex-col gap-7">

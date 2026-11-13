@@ -5,7 +5,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
 
 import { createQueryClient } from '@/app/queryClient'
-import { learningStatsShort } from '@/mocks/fixtures/learning'
+import { learningStatsReady, learningStatsShort } from '@/mocks/fixtures/learning'
 import { server } from '@/mocks/server'
 import { Component as ReportPage } from './ReportPage'
 
@@ -74,9 +74,10 @@ describe('ReportPage (REP-01·02)', () => {
         name: '동적 계획법 개념을 조금 더 연습해 볼까요?',
       }),
     ).toBeInTheDocument()
+    // 문제 목록은 이름이 아니라 slug로 거른다
     expect(screen.getByRole('link', { name: '동적 계획법 문제 풀기' })).toHaveAttribute(
       'href',
-      expect.stringMatching(/^\/problems\?tag=/),
+      '/problems?tag=dp',
     )
   })
 
@@ -99,6 +100,16 @@ describe('ReportPage (REP-01·02)', () => {
     renderReport()
     const math = (await screen.findByText('수학')).closest('tr')!
     expect(within(math).queryByText('취약')).not.toBeInTheDocument()
+  })
+
+  it('남은 수가 계약 밖 음수여도 본문을 비우지 않고 표를 그린다', async () => {
+    server.use(
+      http.get('*/api/users/me/learning-stats', () =>
+        HttpResponse.json({ ...learningStatsReady, remainingProblemCount: -1 }),
+      ),
+    )
+    renderReport()
+    expect(await screen.findByRole('table')).toBeInTheDocument()
   })
 
   it('불러오지 못하면 오류와 다시 시도를 보여 준다', async () => {
