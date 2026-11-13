@@ -416,11 +416,35 @@ export interface paths {
          * 내 배지 (BADGE-01)
          * @description 배지 12개를 모두 `docs/feature-spec.md` 12절의 순서로 준다. 받은 배지는 `unlockedAt`이 있고, 못 받은 배지는 null이다.
          *     서버는 코드만 준다. 이름·조건 문구·그림은 화면이 코드별로 가진다.
-         *     받는 조건은 기능명세 12절이 기준이다. 배지는 제출의 채점이 끝날 때 주고(`GET /api/submissions/{id}`의 `unlockedBadges`), 한 번 받으면 조건이 깨져도 남는다.
+         *     받는 조건은 기능명세 12절이 기준이다. 배지는 제출의 채점이 끝날 때 주고, 한 번 받으면 조건이 깨져도 남는다.
+         *     축하 창(BADGE-03): 화면은 내 제출의 채점이 끝났을 때와 앱을 열 때 이 API를 부른다.
+         *     `unlockedAt`이 있고 `celebrated`가 `false`인 배지를 하나씩 띄우고, 띄운 배지마다 `POST /api/users/me/badges/{code}/celebrated`를 부른다.
          */
         get: operations["getMyBadges"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/me/badges/{code}/celebrated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 배지 축하 창을 띄웠음 (BADGE-03)
+         * @description 화면이 축하 창을 띄운 배지를 알린다. 그 뒤로는 목록의 `celebrated`가 `true`라 어느 기기에서도 다시 띄우지 않는다.
+         *     이미 축하한 배지면 그대로 204다. 탭 두 개에서 동시에 불러도 오류가 나지 않는다.
+         *     받지 않은 배지와 없는 코드는 404 `BADGE_NOT_UNLOCKED`다.
+         */
+        post: operations["markBadgeCelebrated"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1511,6 +1535,8 @@ export interface components {
              * @description 받은 시각. 그 배지를 준 제출의 채점이 끝난 시각(`judgedAt`)과 같다. 못 받았으면 null이다
              */
             unlockedAt: string | null;
+            /** @description 축하 창을 띄웠는지(`POST /api/users/me/badges/{code}/celebrated`). 못 받은 배지는 늘 `false`다 */
+            celebrated: boolean;
         };
         /** @enum {string} */
         Difficulty: "EASY" | "MEDIUM" | "HARD";
@@ -1718,13 +1744,6 @@ export interface components {
             submittedAt: string;
             /** Format: date-time */
             judgedAt: string | null;
-            /**
-             * @description 이 제출의 채점이 끝날 때 새로 받은 배지(BADGE-03). `BadgeCode` 순서로 준다. 없거나 아직 채점 중이면 빈 배열이다.
-             *     판정과 관계없다. 연속 배지는 틀린 제출로도 받는다. 같은 제출을 다시 조회해도 같은 값을 준다.
-             *     화면은 채점이 끝난 응답에서 비어 있지 않으면 축하 창을 띄우고, 축하한 제출 번호를 브라우저에 기억해 한 번만 띄운다.
-             *     관리자 조회(`GET /api/admin/submissions/{id}`)도 같은 값을 준다
-             */
-            unlockedBadges: components["schemas"]["BadgeCode"][];
         };
         /**
          * @description AI 오답 분석(F1)과 연 힌트(F2). 분석 내용(`summary`·`suspectLines`·`facts`·`guesses`)은 `COMPLETED`이고 `blocked`가 아닐 때만 있고,
@@ -2805,6 +2824,29 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    markBadgeCelebrated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 배지 코드(`BadgeCode`) */
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 축하했음으로 기록함 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["Problem"];
         };
     };
     getMyLearningStats: {
