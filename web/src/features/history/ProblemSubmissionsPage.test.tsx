@@ -28,8 +28,13 @@ describe('ProblemSubmissionsPage (HIST-02)', () => {
   it('위에 문제 정보, 아래에 채점이 끝난 제출을 최신순으로 보여 준다', async () => {
     renderList('/submissions/problems/2')
 
-    expect(await screen.findByRole('heading', { name: '구간 합 구하기' })).toBeInTheDocument()
-    expect(screen.getByText(/보통 · 못 맞힘 · 시도 5회 · 힌트 3단계/)).toBeInTheDocument()
+    const heading = await screen.findByRole('heading', { name: '구간 합 구하기' })
+    const summary = within(heading.closest('header')!)
+    expect(summary.getByText('보통')).toBeInTheDocument()
+    expect(summary.getByText('못 맞힘')).toBeInTheDocument()
+    expect(summary.getByText(/· 시도 5회 · 힌트 3단계/)).toBeInTheDocument()
+    expect(summary.getByRole('link', { name: '문제 보기' })).toHaveAttribute('href', '/problems/2')
+    expect(screen.getByRole('link', { name: '제출 기록' })).toHaveAttribute('href', '/submissions')
 
     const rows = within(await screen.findByRole('table'))
       .getAllByRole('row')
