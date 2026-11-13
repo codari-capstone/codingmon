@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 
 import type { Language } from '@/api/types'
 import { useTheme } from '@/app/useTheme'
+import { useEditorSettings } from './editorSettings'
 
 /** 언어별 문법. 줄 번호·자동 들여쓰기·괄호 짝은 basicSetup 기본값이 준다 (SOLVE-05). */
 const SYNTAX = { PYTHON: python, CPP: cpp } satisfies Record<Language, unknown>
@@ -21,6 +22,7 @@ export function CodeEditor({
   onChange,
   label = '코드 편집기',
   readOnly = false,
+  minHeight = '24rem',
 }: {
   language: Language
   value: string
@@ -38,15 +40,33 @@ export function CodeEditor({
    * 바깥 `fieldset`의 `disabled`가 닿지 않는다.
    */
   readOnly?: boolean
+  /** 화면 설정의 미리 보기처럼 짧게 둘 때만 바꾼다 */
+  minHeight?: string
 }) {
   const { theme } = useTheme()
+  // 화면 설정(UX-07). 바꾸면 열려 있는 에디터에도 바로 적용된다
+  const settings = useEditorSettings()
 
   // 배열이 매 렌더 새로 생기면 확장을 그때마다 다시 설정한다 — 글자를 칠 때마다다.
   // aria-label은 편집 영역(contenteditable)에 붙어야 한다. 바깥 div에 붙이면
   // 스크린 리더가 textbox의 이름으로 읽지 않는다.
   const extensions = useMemo(
-    () => [SYNTAX[language](), EditorView.contentAttributes.of({ 'aria-label': label })],
-    [language, label],
+    () => [
+      SYNTAX[language](),
+      EditorView.contentAttributes.of({ 'aria-label': label }),
+      ...(settings.lineWrapping ? [EditorView.lineWrapping] : []),
+    ],
+    [language, label, settings.lineWrapping],
+  )
+  // 위와 같은 이유로 객체를 렌더마다 새로 만들지 않는다
+  const basicSetup = useMemo(
+    () => ({
+      lineNumbers: settings.lineNumbers,
+      closeBrackets: settings.closeBrackets,
+      // tabSize는 들여쓰기 단위(indentUnit)도 함께 정한다
+      tabSize: settings.tabSize,
+    }),
+    [settings.lineNumbers, settings.closeBrackets, settings.tabSize],
   )
 
   return (
@@ -55,9 +75,11 @@ export function CodeEditor({
       onChange={onChange}
       theme={theme}
       extensions={extensions}
+      basicSetup={basicSetup}
       readOnly={readOnly}
-      minHeight="24rem"
-      className="overflow-hidden rounded-lg border text-sm"
+      minHeight={minHeight}
+      style={{ fontSize: settings.fontSize }}
+      className="overflow-hidden rounded-lg border"
     />
   )
 }

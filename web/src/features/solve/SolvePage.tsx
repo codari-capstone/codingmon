@@ -12,6 +12,7 @@ import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { parsePathId } from '@/lib/pathId'
 import { BeginnerGuide } from './BeginnerGuide'
 import { CodeEditor } from './CodeEditor'
+import { getEditorSettings } from './editorSettings'
 import { LanguagePicker } from './LanguagePicker'
 import { formatTimeLimit, LANGUAGE_LABEL } from './labels'
 import { RunButton, SampleRun } from './SampleRun'
@@ -108,9 +109,15 @@ function Workspace({ problem }: { problem: ProblemDetailView }) {
    * undefined가 되어 에디터와 **언어 선택이 함께** 사라진다. 그러면 사용자는
    * 새로고침하지 않고는 지원되는 언어로 돌아갈 길이 없다. 계약은 PYTHON, CPP 순서를
    * 보장하므로 첫 언어가 기본값이다.
+   *
+   * 주소에 언어가 없으면 화면 설정의 기본 언어(UX-07)를 먼저 찾는다. '먼저 여는 언어'라
+   * 화면을 열 때 한 번만 읽는다 — 다른 탭에서 바꿨다고 쓰던 에디터가 갈아끼워지면 안 된다.
    */
+  const [preferred] = useState(() => getEditorSettings().language)
   const current =
-    problem.languages.find((it) => it.language === chosen) ?? problem.languages[0] ?? undefined
+    problem.languages.find((it) => it.language === (chosen ?? preferred)) ??
+    problem.languages[0] ??
+    undefined
   const language = current?.language
 
   /**

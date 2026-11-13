@@ -1,5 +1,18 @@
+import { useState } from 'react'
+
 import { RadioGroup } from '@/components/ui/radio-group'
+import { Select } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { useTheme, type ThemePreference } from '@/app/useTheme'
+import { CodeEditor } from '@/features/solve/CodeEditor'
+import {
+  EDITOR_LANGUAGES,
+  FONT_SIZES,
+  TAB_SIZES,
+  updateEditorSettings,
+  useEditorSettings,
+} from '@/features/solve/editorSettings'
+import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import { cn } from '@/lib/utils'
 import { MY_CARD, MyLayout } from './MyLayout'
 
@@ -13,16 +26,106 @@ const THEMES: { value: ThemePreference; label: string; description: string }[] =
   },
 ]
 
-/**
- * 화면 설정 (UX-06). 고르면 바로 적용되고 이 기기에 저장된다(ThemeProvider).
- * 디자인의 코드 에디터·움직임 설정은 #249에서 더한다.
- */
+const PREVIEW =
+  'def solution(nums):\n    best = nums[0]\n    for n in nums:\n        best = max(best, n)\n    return best\n'
+
+const SELECTS = [
+  {
+    id: 'editor-language',
+    label: '기본 언어',
+    key: 'language',
+    options: EDITOR_LANGUAGES.map((value) => ({ value, label: LANGUAGE_LABEL[value] })),
+  },
+  {
+    id: 'editor-font-size',
+    label: '글꼴 크기',
+    key: 'fontSize',
+    options: FONT_SIZES.map((value) => ({ value, label: `${value}px` })),
+  },
+  {
+    id: 'editor-tab-size',
+    label: '들여쓰기',
+    key: 'tabSize',
+    options: TAB_SIZES.map((value) => ({ value, label: `공백 ${value}칸` })),
+  },
+] as const
+
+const SWITCHES = [
+  { key: 'lineNumbers', label: '줄 번호 보기' },
+  { key: 'closeBrackets', label: '괄호 자동으로 닫기' },
+  {
+    key: 'lineWrapping',
+    label: '긴 줄 자동 줄바꿈',
+    description: '가로 스크롤 없이 화면 폭에 맞춰 줄을 바꿔요.',
+  },
+] as const
+
+/** 코드 에디터 설정 (UX-07). 바꾸면 이 기기에 저장되고 열려 있는 에디터에도 바로 적용된다. */
+function EditorSection() {
+  const settings = useEditorSettings()
+  const [preview, setPreview] = useState(PREVIEW)
+  return (
+    <section aria-labelledby="editor-heading" className={cn(MY_CARD, 'gap-5')}>
+      <div className="flex flex-col gap-1">
+        <h2 id="editor-heading" className="text-foreground text-lg font-semibold">
+          코드 에디터
+        </h2>
+        <p className="text-muted-foreground text-sm">문제 풀이 화면의 에디터에 적용돼요.</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {SELECTS.map((it) => (
+          <div key={it.id} className="flex flex-col gap-1.5">
+            <label htmlFor={it.id} className="text-sm font-semibold">
+              {it.label}
+            </label>
+            <Select
+              id={it.id}
+              value={settings[it.key]}
+              onChange={(event) => {
+                const raw = event.target.value
+                // 언어만 글자고 나머지는 숫자다. 고를 수 있는 값은 위 목록뿐이다
+                updateEditorSettings({ [it.key]: it.key === 'language' ? raw : Number(raw) })
+              }}
+            >
+              {it.options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ))}
+      </div>
+      {/* 실제 에디터라 고른 설정이 그대로 보인다. 써 봐도 저장되지 않는다 */}
+      <CodeEditor
+        language="PYTHON"
+        label="설정 미리 보기"
+        value={preview}
+        onChange={setPreview}
+        minHeight="0"
+      />
+      <div className="flex flex-col">
+        {SWITCHES.map((it) => (
+          <Switch
+            key={it.key}
+            label={it.label}
+            description={'description' in it ? it.description : undefined}
+            checked={settings[it.key]}
+            onChange={(event) => updateEditorSettings({ [it.key]: event.target.checked })}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** 화면 설정 (UX-06·07). 고르면 바로 적용되고 이 기기에 저장된다. 움직임 설정은 #249 다음 PR에서 더한다. */
 export function Component() {
   const { preference, setPreference } = useTheme()
   return (
     <MyLayout
       title="화면 설정"
-      description="테마를 내 눈에 맞게 바꿔요. 바꾸면 바로 적용돼요."
+      description="테마와 코드 에디터를 내 눈에 맞게 바꿔요. 바꾸면 바로 적용돼요."
       narrow
     >
       <section aria-labelledby="theme-heading" className={cn(MY_CARD, 'gap-5')}>
@@ -43,6 +146,7 @@ export function Component() {
           onChange={setPreference}
         />
       </section>
+      <EditorSection />
     </MyLayout>
   )
 }

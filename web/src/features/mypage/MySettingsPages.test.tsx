@@ -10,6 +10,11 @@ import { createQueryClient } from '@/app/queryClient'
 import { THEME_STORAGE_KEY } from '@/app/theme'
 import { ThemeProvider } from '@/app/ThemeProvider'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
+import {
+  EDITOR_DEFAULTS,
+  EDITOR_SETTINGS_KEY,
+  updateEditorSettings,
+} from '@/features/solve/editorSettings'
 import { activityFor } from '@/mocks/fixtures/activity'
 import { server } from '@/mocks/server'
 import { Component as MyAccountPage } from './MyAccountPage'
@@ -90,6 +95,8 @@ describe('계정 설정 /me/account (MY-01~03)', () => {
 describe('화면 설정 /me/display (UX-06)', () => {
   beforeEach(() => {
     localStorage.clear()
+    // 에디터 설정은 메모리에도 한 벌 있다(editorSettings.ts). 앞 테스트에서 바꾼 값을 되돌린다
+    updateEditorSettings(EDITOR_DEFAULTS)
     document.documentElement.classList.remove('dark')
   })
 
@@ -108,6 +115,33 @@ describe('화면 설정 /me/display (UX-06)', () => {
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBeNull()
     // 테스트 환경의 OS 설정은 라이트다(setup.ts)
     expect(document.documentElement.classList.contains('dark')).toBe(false)
+  })
+
+  it('코드 에디터 설정(UX-07)은 기본값에서 시작하고, 바꾸면 이 기기에 저장되고 미리 보기에 바로 적용된다', async () => {
+    const user = userEvent.setup()
+    renderAt('/me/display')
+
+    const fontSize = await screen.findByLabelText('글꼴 크기')
+    expect(screen.getByLabelText('기본 언어')).toHaveValue('PYTHON')
+    expect(fontSize).toHaveValue('14')
+    expect(screen.getByLabelText('들여쓰기')).toHaveValue('4')
+    expect(screen.getByRole('switch', { name: '줄 번호 보기' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: '괄호 자동으로 닫기' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: /긴 줄 자동 줄바꿈/ })).not.toBeChecked()
+
+    await user.selectOptions(fontSize, '18')
+    await user.selectOptions(screen.getByLabelText('기본 언어'), 'CPP')
+    await user.click(screen.getByRole('switch', { name: '줄 번호 보기' }))
+
+    expect(JSON.parse(localStorage.getItem(EDITOR_SETTINGS_KEY)!)).toMatchObject({
+      fontSize: 18,
+      language: 'CPP',
+      lineNumbers: false,
+    })
+    const preview = screen.getByRole('textbox', { name: '설정 미리 보기' })
+    // 글꼴 크기는 에디터를 감싼 요소의 style로 준다(CodeEditor)
+    expect(preview.closest<HTMLElement>('[style*="font-size"]')?.style.fontSize).toBe('18px')
+    expect(document.querySelector('.cm-lineNumbers')).toBeNull()
   })
 })
 
