@@ -14,6 +14,8 @@ export interface EditorSettings {
   lineWrapping: boolean
 }
 
+/** 화면 설정의 고르는 칸과 저장값 검증이 같은 목록을 쓴다. 한쪽만 늘면 고른 값이 곧바로 되돌아간다 */
+export const EDITOR_LANGUAGES = ['PYTHON', 'CPP'] as const satisfies readonly Language[]
 export const FONT_SIZES = [13, 14, 16, 18] as const
 export const TAB_SIZES = [2, 4] as const
 
@@ -43,7 +45,7 @@ export function parseEditorSettings(raw: string | null): EditorSettings {
   const d = EDITOR_DEFAULTS
   const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback)
   return {
-    language: pick<Language>(saved.language, ['PYTHON', 'CPP'], d.language),
+    language: pick<Language>(saved.language, EDITOR_LANGUAGES, d.language),
     fontSize: pick<number>(saved.fontSize, FONT_SIZES, d.fontSize),
     tabSize: pick<number>(saved.tabSize, TAB_SIZES, d.tabSize),
     lineNumbers: bool(saved.lineNumbers, d.lineNumbers),
@@ -60,36 +62,52 @@ function readRaw(): string | null {
   }
 }
 
-// 같은 문자열이면 같은 객체를 돌려준다. useSyncExternalStore는 스냅샷이 바뀌면 다시 그린다
-let cache: { raw: string | null; value: EditorSettings } | undefined
-// 저장이 막힌 브라우저에서도 이번 방문에는 바꾼 값이 적용되게 메모리에 둔다
-let unsaved: EditorSettings | undefined
+/*
+  메모리에 한 벌 두고 바뀔 때만 갈아끼운다. useSyncExternalStore는 렌더마다 스냅샷을 묻는데,
+  그때마다 localStorage를 읽으면 키를 칠 때마다 읽게 되고, 다른 탭에서 바꾼 값이 알림 없이
+  다음 입력에 끼어든다. 다른 탭의 변경은 storage 이벤트로 받는다.
+  저장이 막힌 브라우저에서도 이번 방문에는 바꾼 값이 이 메모리로 적용된다.
+*/
+let current: EditorSettings | undefined
 const listeners = new Set<() => void>()
 
-function snapshot(): EditorSettings {
-  if (unsaved) return unsaved
-  const raw = readRaw()
-  if (cache?.raw !== raw) cache = { raw, value: parseEditorSettings(raw) }
-  return cache.value
+/** 지금 설정. 훅 밖에서 한 번만 읽을 때 쓴다(풀이 화면의 처음 여는 언어). */
+export function getEditorSettings(): EditorSettings {
+  current ??= parseEditorSettings(readRaw())
+  return current
+}
+
+function notify() {
+  listeners.forEach((listener) => listener())
+}
+
+function onStorage(event: StorageEvent) {
+  // key가 null이면 다른 탭이 저장소를 통째로 비운 것이다
+  if (event.key !== null && event.key !== EDITOR_SETTINGS_KEY) return
+  current = parseEditorSettings(readRaw())
+  notify()
 }
 
 function subscribe(listener: () => void) {
+  if (listeners.size === 0) window.addEventListener('storage', onStorage)
   listeners.add(listener)
-  return () => listeners.delete(listener)
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) window.removeEventListener('storage', onStorage)
+  }
 }
 
 export function updateEditorSettings(patch: Partial<EditorSettings>): void {
-  const next = { ...snapshot(), ...patch }
+  current = { ...getEditorSettings(), ...patch }
   try {
-    localStorage.setItem(EDITOR_SETTINGS_KEY, JSON.stringify(next))
-    unsaved = undefined
+    localStorage.setItem(EDITOR_SETTINGS_KEY, JSON.stringify(current))
   } catch {
-    unsaved = next
+    // 저장이 막혔으면 이번 방문에만 적용된다
   }
-  listeners.forEach((listener) => listener())
+  notify()
 }
 
 /** 화면 설정에서 바꾸면 열려 있는 에디터에 바로 적용된다. */
 export function useEditorSettings(): EditorSettings {
-  return useSyncExternalStore(subscribe, snapshot)
+  return useSyncExternalStore(subscribe, getEditorSettings)
 }

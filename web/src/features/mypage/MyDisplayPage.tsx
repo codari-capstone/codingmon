@@ -1,12 +1,12 @@
 import { useState } from 'react'
 
-import type { Language } from '@/api/types'
 import { RadioGroup } from '@/components/ui/radio-group'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useTheme, type ThemePreference } from '@/app/useTheme'
 import { CodeEditor } from '@/features/solve/CodeEditor'
 import {
+  EDITOR_LANGUAGES,
   FONT_SIZES,
   TAB_SIZES,
   updateEditorSettings,
@@ -26,8 +26,6 @@ const THEMES: { value: ThemePreference; label: string; description: string }[] =
   },
 ]
 
-const LANGUAGES: Language[] = ['PYTHON', 'CPP']
-
 const PREVIEW =
   'def solution(nums):\n    best = nums[0]\n    for n in nums:\n        best = max(best, n)\n    return best\n'
 
@@ -36,7 +34,7 @@ const SELECTS = [
     id: 'editor-language',
     label: '기본 언어',
     key: 'language',
-    options: LANGUAGES.map((value) => ({ value, label: LANGUAGE_LABEL[value] })),
+    options: EDITOR_LANGUAGES.map((value) => ({ value, label: LANGUAGE_LABEL[value] })),
   },
   {
     id: 'editor-font-size',

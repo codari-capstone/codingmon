@@ -10,7 +10,7 @@ import { ThemeProvider } from '@/app/ThemeProvider'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { problemDetails } from '@/mocks/fixtures/problemDetails'
 import { server } from '@/mocks/server'
-import { EDITOR_SETTINGS_KEY } from './editorSettings'
+import { EDITOR_DEFAULTS, updateEditorSettings } from './editorSettings'
 import { Component as SolvePage } from './SolvePage'
 
 /**
@@ -83,15 +83,27 @@ describe('SolvePage', () => {
     expect(screen.getByText('Python · 2초 · 256MB')).toBeInTheDocument()
   })
 
-  it('주소에 언어가 없으면 화면 설정의 기본 언어(UX-07)로 연다', async () => {
-    localStorage.setItem(EDITOR_SETTINGS_KEY, JSON.stringify({ language: 'CPP' }))
-    try {
+  describe('기본 언어 (UX-07)', () => {
+    afterEach(() => updateEditorSettings(EDITOR_DEFAULTS))
+
+    it('주소에 언어가 없으면 화면 설정의 기본 언어로 연다', async () => {
+      updateEditorSettings({ language: 'CPP' })
       renderSolve()
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
       expect(screen.getByRole('radio', { name: 'C++' })).toBeChecked()
-    } finally {
-      localStorage.removeItem(EDITOR_SETTINGS_KEY)
-    }
+    })
+
+    it('연 뒤에 기본 언어가 바뀌어도 쓰던 언어를 갈아끼우지 않는다 (다른 탭에서 바꾼 경우)', async () => {
+      const user = userEvent.setup()
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      expect(screen.getByRole('radio', { name: 'Python' })).toBeChecked()
+
+      act(() => updateEditorSettings({ language: 'CPP' }))
+      // 글자를 치면 화면이 다시 그려진다. 그때 설정을 다시 읽으면 C++로 넘어갔다
+      await user.type(screen.getByRole('textbox', { name: '코드 편집기' }), 'x')
+      expect(screen.getByRole('radio', { name: 'Python' })).toBeChecked()
+    })
   })
 
   describe('제출 (SOLVE-09)', () => {

@@ -10,7 +10,11 @@ import { createQueryClient } from '@/app/queryClient'
 import { THEME_STORAGE_KEY } from '@/app/theme'
 import { ThemeProvider } from '@/app/ThemeProvider'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
-import { EDITOR_SETTINGS_KEY } from '@/features/solve/editorSettings'
+import {
+  EDITOR_DEFAULTS,
+  EDITOR_SETTINGS_KEY,
+  updateEditorSettings,
+} from '@/features/solve/editorSettings'
 import { activityFor } from '@/mocks/fixtures/activity'
 import { server } from '@/mocks/server'
 import { Component as MyAccountPage } from './MyAccountPage'
@@ -91,6 +95,8 @@ describe('계정 설정 /me/account (MY-01~03)', () => {
 describe('화면 설정 /me/display (UX-06)', () => {
   beforeEach(() => {
     localStorage.clear()
+    // 에디터 설정은 메모리에도 한 벌 있다(editorSettings.ts). 앞 테스트에서 바꾼 값을 되돌린다
+    updateEditorSettings(EDITOR_DEFAULTS)
     document.documentElement.classList.remove('dark')
   })
 
