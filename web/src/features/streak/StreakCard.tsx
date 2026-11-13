@@ -38,7 +38,8 @@ export function StreakCard() {
       tone="inverse"
       padding="lg"
       aria-label="연속 학습"
-      className="flex items-center gap-6 rounded-[28px]"
+      // 320px 폭에서 달력 7칸이 들어가도록 좁은 화면은 여백·칸을 줄인다 (e2e problems.spec)
+      className="flex items-center gap-6 rounded-[28px] p-5 sm:p-8"
     >
       <img
         src={scene}
@@ -57,12 +58,15 @@ export function StreakCard() {
           </p>
           <p className="text-inverse-muted min-h-[1.5em] text-sm">{guide(streak, guest)}</p>
         </div>
-        <ol aria-label="이번 주" className="m-0 grid max-w-md list-none grid-cols-7 gap-1.5 p-0">
+        <ol
+          aria-label="이번 주"
+          className="m-0 grid max-w-md list-none grid-cols-7 gap-1 p-0 sm:gap-1.5"
+        >
           {days.map((day) => (
             <li key={day.label} className="flex flex-col items-center gap-1.5">
               <span
                 className={cn(
-                  'inline-flex size-8 items-center justify-center rounded-full',
+                  'inline-flex size-7 items-center sm:size-8 justify-center rounded-full',
                   day.active
                     ? 'bg-highlight text-highlight-foreground'
                     : 'bg-inverse-raised text-inverse-muted',
