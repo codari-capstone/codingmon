@@ -52,25 +52,71 @@ function renderMyPage(user: CurrentUser, activity: number | 'error' = user.id) {
   )
 }
 
+/** StatCard의 숫자. 이름(span)은 아이콘과 같은 줄 div 안에 있고, 숫자는 그 div 다음 문단이다. */
+function statValue(scope: HTMLElement, label: string) {
+  return within(scope).getByText(label).closest('div')!.nextElementSibling
+}
+
 describe('MyPage 계정 정보 (MY-01)', () => {
-  it('이메일 가입자는 가린 이메일과 로그인 방식을 보고, GitHub 아이디 줄은 없다', async () => {
+  it('이메일 가입자는 가린 이메일과 로그인 방식을 보고, GitHub 아이디는 없다', async () => {
     renderMyPage(EMAIL_USER)
     const account = await screen.findByRole('region', { name: '계정 정보' })
 
     expect(within(account).getByText('코다리')).toBeInTheDocument()
     expect(within(account).getByText('us***@codari.test')).toBeInTheDocument()
-    // '이메일'은 로그인 방식 값이자 이메일 줄의 이름이라 두 번 나온다
-    expect(within(account).getByText('로그인 방식').nextElementSibling).toHaveTextContent('이메일')
-    expect(within(account).queryByText('GitHub 아이디')).not.toBeInTheDocument()
+    expect(within(account).getByText('이메일 로그인')).toBeInTheDocument()
+    expect(within(account).queryByText(/GitHub/)).not.toBeInTheDocument()
   })
 
-  it('GitHub 가입자는 GitHub 아이디를 보고, 이메일 줄은 없다', async () => {
+  it('GitHub 가입자는 GitHub 아이디를 보고, 이메일은 없다', async () => {
     renderMyPage(GITHUB_USER, 1)
     const account = await screen.findByRole('region', { name: '계정 정보' })
 
     expect(within(account).getByText('octo-kim')).toBeInTheDocument()
-    expect(within(account).getByText('GitHub')).toBeInTheDocument()
-    expect(within(account).queryByText('이메일')).not.toBeInTheDocument()
+    expect(within(account).getByText('GitHub 로그인')).toBeInTheDocument()
+    expect(within(account).queryByText(/@/)).not.toBeInTheDocument()
+  })
+
+  it('프로필 수정은 아래 계정 설정으로 간다 (#243 전까지)', async () => {
+    renderMyPage(EMAIL_USER)
+    const account = await screen.findByRole('region', { name: '계정 정보' })
+    expect(within(account).getByRole('link', { name: '프로필 수정' })).toHaveAttribute(
+      'href',
+      '#account-settings',
+    )
+    expect(document.getElementById('account-settings')).toHaveTextContent('계정 설정')
+  })
+})
+
+describe('MyPage 사이드바 (MyNav)', () => {
+  it('지금 화면을 표시하고, 계정 설정·탈퇴는 이 화면의 구역으로 간다', async () => {
+    renderMyPage(EMAIL_USER)
+    const nav = await screen.findByRole('navigation', { name: '마이페이지 메뉴' })
+
+    expect(within(nav).getByRole('link', { name: /프로필 · 학습 요약/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(nav).getByRole('link', { name: /계정 설정/ })).toHaveAttribute(
+      'href',
+      '#account-settings',
+    )
+    expect(within(nav).getByRole('link', { name: /회원 탈퇴/ })).toHaveAttribute(
+      'href',
+      '#withdraw',
+    )
+    // 화면 설정은 아직 없다. 링크가 아니라 꺼진 항목이다
+    expect(within(nav).queryByRole('link', { name: /화면 설정/ })).not.toBeInTheDocument()
+    expect(within(nav).getByRole('button', { name: /로그아웃/ })).toBeInTheDocument()
+  })
+
+  it('관리자에게는 회원 탈퇴 메뉴가 없다(탈퇴 구역도 없다)', async () => {
+    renderMyPage({ ...EMAIL_USER, role: 'ADMIN' })
+    const nav = await screen.findByRole('navigation', { name: '마이페이지 메뉴' })
+    expect(within(nav).queryByRole('link', { name: /회원 탈퇴/ })).not.toBeInTheDocument()
+    // 메뉴만 보면 WithdrawSection의 관리자 분기가 회귀해도 지나간다(#274 리뷰). 구역도 비어 있어야 한다
+    expect(document.getElementById('withdraw')).toBeEmptyDOMElement()
+    expect(screen.queryByRole('heading', { name: '회원 탈퇴' })).not.toBeInTheDocument()
   })
 })
 
@@ -82,9 +128,9 @@ describe('MyPage 계정 정보 — 서버가 새 필드를 아직 보내지 않�
     const account = await screen.findByRole('region', { name: '계정 정보' })
 
     expect(within(account).getByText('코다리')).toBeInTheDocument()
-    expect(within(account).queryByText('로그인 방식')).not.toBeInTheDocument()
-    expect(within(account).queryByText('이메일')).not.toBeInTheDocument()
-    expect(within(account).queryByText('GitHub 아이디')).not.toBeInTheDocument()
+    expect(within(account).queryByText(/로그인/)).not.toBeInTheDocument()
+    expect(within(account).queryByText(/@/)).not.toBeInTheDocument()
+    expect(within(account).queryByText(/GitHub/)).not.toBeInTheDocument()
   })
 })
 
@@ -108,34 +154,43 @@ describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
 
     expect(await screen.findByText('최근 1년 동안 제출한 날이 없어요.')).toBeInTheDocument()
     expect(screen.queryByText('아직 제출한 문제가 없어요.')).not.toBeInTheDocument()
-    expect(screen.getByText('맞힌 문제').nextElementSibling).toHaveTextContent('7')
+    expect(statValue(document.body, '맞힌 문제')).toHaveTextContent('7')
   })
 
-  it('맞힌·틀린 수, 난이도별 맞힌 수, 총 활동일과 잔디 요약을 보여 준다', async () => {
+  it('맞힌·틀린 수, 활동한 날, 난이도별 맞힌 수와 잔디 요약을 보여 준다', async () => {
     renderMyPage(EMAIL_USER)
     const activity = activityFor(1)
 
-    const summary = await screen.findByRole('region', { name: '풀이 요약' })
-    // 구역은 먼저 그려지고 숫자는 응답 뒤에 온다
-    expect((await within(summary).findByText('맞힌 문제')).nextElementSibling).toHaveTextContent(
-      '7',
+    // 숫자는 응답 뒤에 온다
+    await screen.findByText('맞힌 문제')
+    expect(statValue(document.body, '맞힌 문제')).toHaveTextContent('7')
+    expect(statValue(document.body, '틀린 문제')).toHaveTextContent('3')
+    expect(statValue(document.body, '활동한 날')).toHaveTextContent(
+      String(activity.totalActiveDays),
     )
-    expect(within(summary).getByText('맞힌 문제').nextElementSibling).toHaveTextContent('7')
-    expect(within(summary).getByText('틀린 문제').nextElementSibling).toHaveTextContent('3')
-    expect(within(summary).getByText(/난이도별 맞힌 문제/)).toHaveTextContent(
-      '쉬움 4, 보통 2, 어려움 1',
-    )
-    expect(within(summary).getByText(`총 ${activity.totalActiveDays}일`)).toBeInTheDocument()
+
+    const grass = screen.getByRole('region', { name: '활동 기록' })
     expect(
-      within(summary).getByRole('img', {
+      within(grass).getByText(new RegExp(`최근 12개월 중.*총 ${activity.totalActiveDays}일`)),
+    ).toBeInTheDocument()
+    expect(
+      within(grass).getByRole('img', {
         name: `최근 1년 동안 ${activity.totalActiveDays}일 제출했어요`,
       }),
     ).toBeInTheDocument()
-    expect(within(summary).getByRole('link', { name: '내 학습' })).toHaveAttribute(
+
+    // 난이도 막대의 기준은 맞힌 문제 전체(7)다
+    const byDifficulty = screen.getByRole('region', { name: '난이도별 맞힌 문제' })
+    const bars = within(byDifficulty).getAllByRole('progressbar')
+    expect(bars.map((bar) => bar.getAttribute('aria-label'))).toEqual(['쉬움', '보통', '어려움'])
+    expect(bars.map((bar) => bar.getAttribute('aria-valuenow'))).toEqual(['4', '2', '1'])
+    expect(bars.every((bar) => bar.getAttribute('aria-valuemax') === '7')).toBe(true)
+    // 명세 MY-05: 내 학습·제출 기록으로 가는 길
+    expect(within(byDifficulty).getByRole('link', { name: /학습 리포트 보기/ })).toHaveAttribute(
       'href',
       '/me/report',
     )
-    expect(within(summary).getByRole('link', { name: '제출 기록' })).toHaveAttribute(
+    expect(within(byDifficulty).getByRole('link', { name: /제출 기록 보기/ })).toHaveAttribute(
       'href',
       '/submissions',
     )
@@ -144,7 +199,7 @@ describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
   it('제출이 없으면 숫자는 0이고 안내 문구를 띄운다', async () => {
     renderMyPage(EMAIL_USER, 2)
     expect(await screen.findByText('아직 제출한 문제가 없어요.')).toBeInTheDocument()
-    expect(screen.getByText('맞힌 문제').nextElementSibling).toHaveTextContent('0')
+    expect(statValue(document.body, '맞힌 문제')).toHaveTextContent('0')
     expect(screen.getByRole('img', { name: '최근 1년 동안 0일 제출했어요' })).toBeInTheDocument()
   })
 

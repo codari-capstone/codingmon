@@ -57,6 +57,19 @@ export function grassLevel(count: number): 0 | 1 | 2 | 3 | 4 {
 }
 
 /**
+ * 잔디 범위(`from`~`to`, 1년)에서 제출한 달의 수 (디자인 '최근 12개월 중 N개월 활동').
+ * 같은 줄의 '총 N일'·잔디와 같은 기간을 센다 — 기간이 다르면 '0개월 활동 · 총 5일'처럼 어긋난다(#274 리뷰).
+ * 1년은 달력으로 13달에 걸칠 수 있어 '12개월 중 13개월'이 나오지 않게 12에서 멈춘다.
+ */
+export function activeMonths(activity: Pick<UserActivity, 'days'>): number {
+  // `days`는 그 기간에 제출한 날만 담는다(계약)
+  const months = new Set(
+    activity.days.filter((day) => day.count > 0).map((day) => day.date.slice(0, 7)),
+  )
+  return Math.min(months.size, 12)
+}
+
+/**
  * 달 이름이 다음 이름과 겹치지 않으려면 떨어져야 하는 주 수. 한 주는 14px(칸 11 + 간격 3)이고
  * '12월'은 11px 글자로 24px쯤이라 두 주면 들어간다.
  */
