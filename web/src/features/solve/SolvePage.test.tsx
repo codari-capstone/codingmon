@@ -10,6 +10,7 @@ import { ThemeProvider } from '@/app/ThemeProvider'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { problemDetails } from '@/mocks/fixtures/problemDetails'
 import { server } from '@/mocks/server'
+import { EDITOR_SETTINGS_KEY } from './editorSettings'
 import { Component as SolvePage } from './SolvePage'
 
 /**
@@ -80,6 +81,17 @@ describe('SolvePage', () => {
     expect(screen.getByText('쉬움')).toBeInTheDocument()
     // 고른 것이 없으면 첫 언어(계약이 보장하는 PYTHON)의 제한이다.
     expect(screen.getByText('Python · 2초 · 256MB')).toBeInTheDocument()
+  })
+
+  it('주소에 언어가 없으면 화면 설정의 기본 언어(UX-07)로 연다', async () => {
+    localStorage.setItem(EDITOR_SETTINGS_KEY, JSON.stringify({ language: 'CPP' }))
+    try {
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      expect(screen.getByRole('radio', { name: 'C++' })).toBeChecked()
+    } finally {
+      localStorage.removeItem(EDITOR_SETTINGS_KEY)
+    }
   })
 
   describe('제출 (SOLVE-09)', () => {
