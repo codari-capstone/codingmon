@@ -27,6 +27,15 @@ export function storeTheme(theme: Theme): void {
   }
 }
 
+/** 저장한 선택을 지운다. 다음 방문부터 OS 설정을 따른다(화면 설정의 '시스템', UX-06). */
+export function clearStoredTheme(): void {
+  try {
+    localStorage.removeItem(THEME_STORAGE_KEY)
+  } catch {
+    // 지우지 못하면 다음 방문에 지난 선택이 남는다. 이번 방문은 아래 상태가 맡는다.
+  }
+}
+
 /** 저장된 값이 우선이고, 없으면 OS 설정을 따른다. */
 export function resolveInitialTheme(stored: Theme | null, prefersDark: boolean): Theme {
   if (stored) return stored

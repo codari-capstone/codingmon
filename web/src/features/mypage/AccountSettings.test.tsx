@@ -250,8 +250,9 @@ describe('회원 탈퇴 (MY-04)', () => {
     const user = userEvent.setup()
     renderWith(<WithdrawSection user={ALICE} />)
 
-    await user.click(screen.getByRole('button', { name: '회원 탈퇴' }))
-    const confirm = await screen.findByRole('button', { name: '탈퇴' })
+    // 팝업이 아니라 화면 안의 '탈퇴 확인' 카드다(#243, 디자인 MyWithdraw)
+    const confirm = screen.getByRole('button', { name: '회원 탈퇴' })
+    expect(confirm).toBeDisabled()
     // 띄어쓰기 하나가 달라도 켜지지 않는다
     await user.type(screen.getByLabelText(/그대로 입력해 주세요/), 'alice/탈퇴 하겠습니다')
     expect(confirm).toBeDisabled()
@@ -265,7 +266,7 @@ describe('회원 탈퇴 (MY-04)', () => {
     expect(getGeneration()).toBeGreaterThan(before)
   })
 
-  it('서버가 거절하면 팝업 안에 이유를 보이고 닫지 않는다', async () => {
+  it('서버가 거절하면 이유를 보이고 화면에 남는다', async () => {
     server.use(
       http.delete('*/api/users/me', () =>
         problem(403, 'ADMIN_CANNOT_WITHDRAW', '관리자는 탈퇴할 수 없어요'),
@@ -274,11 +275,15 @@ describe('회원 탈퇴 (MY-04)', () => {
     const user = userEvent.setup()
     renderWith(<WithdrawSection user={ALICE} />)
 
+    await user.type(screen.getByLabelText(/그대로 입력해 주세요/), 'alice/탈퇴하겠습니다')
     await user.click(screen.getByRole('button', { name: '회원 탈퇴' }))
-    await user.type(await screen.findByLabelText(/그대로 입력해 주세요/), 'alice/탈퇴하겠습니다')
-    await user.click(screen.getByRole('button', { name: '탈퇴' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('관리자는 탈퇴할 수 없어요')
-    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeInTheDocument())
+    expect(screen.getByLabelText(/그대로 입력해 주세요/)).toHaveValue('alice/탈퇴하겠습니다')
+  })
+
+  it('[계속 이용할게요]는 마이페이지로 간다', () => {
+    renderWith(<WithdrawSection user={ALICE} />)
+    expect(screen.getByRole('link', { name: '계속 이용할게요' })).toHaveAttribute('href', '/me')
   })
 })
