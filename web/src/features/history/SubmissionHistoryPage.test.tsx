@@ -34,7 +34,7 @@ describe('SubmissionHistoryPage (HIST-01)', () => {
     const row = (await screen.findByRole('link', { name: '역방향 피라미드' })).closest('tr')!
     expect(within(row).getByText('쉬움')).toBeInTheDocument()
     expect(within(row).getByText('맞음')).toBeInTheDocument()
-    expect(within(row).getByText('3')).toBeInTheDocument()
+    expect(within(row).getByText('3회')).toBeInTheDocument()
     expect(within(row).getByText('2단계')).toBeInTheDocument()
 
     // 힌트를 열지 않았으면 0단계가 아니라 줄을 비운다

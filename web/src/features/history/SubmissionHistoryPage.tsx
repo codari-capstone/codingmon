@@ -2,18 +2,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { Link } from 'react-router'
 
+import type { ProblemHistory } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
-import { StatusText } from '@/components/StatusText'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Verdict } from '@/components/Verdict'
+import { Table, type TableColumn } from '@/components/ui/data-table'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { pageCount, PAGE_SIZE } from '@/features/problems/problemListParams'
@@ -22,6 +16,55 @@ import { cn } from '@/lib/utils'
 import { problemSubmissionsPath } from './historyPath'
 import { problemHistoryListQuery } from './historyQuery'
 import { useHealPage, usePage } from './usePage'
+
+type Row = ProblemHistory & { id: number }
+
+const COLUMNS: TableColumn<Row>[] = [
+  {
+    key: 'title',
+    header: '문제',
+    render: (item) => (
+      <Link
+        to={problemSubmissionsPath(item.problemId)}
+        className="text-foreground hover:text-primary-text font-semibold hover:underline"
+      >
+        {item.title}
+      </Link>
+    ),
+  },
+  {
+    key: 'difficulty',
+    header: '난이도',
+    width: '110px',
+    render: (item) => DIFFICULTY_LABEL[item.difficulty],
+  },
+  {
+    key: 'solved',
+    header: '맞힘 여부',
+    width: '130px',
+    // 판정이 아니라 문제 단위 상태지만, 판정과 같은 색·아이콘으로 읽히게 한다 (디자인)
+    render: (item) =>
+      item.solved ? (
+        <Verdict verdict="ACCEPTED">맞음</Verdict>
+      ) : (
+        <Verdict verdict="WRONG_ANSWER">못 맞힘</Verdict>
+      ),
+  },
+  {
+    key: 'attemptCount',
+    header: '시도 횟수',
+    width: '110px',
+    align: 'right',
+    render: (item) => <span className="tabular-nums">{item.attemptCount}회</span>,
+  },
+  {
+    key: 'maxRevealedHintLevel',
+    header: '힌트 단계',
+    width: '130px',
+    align: 'right',
+    render: (item) => (item.maxRevealedHintLevel === 0 ? '—' : `${item.maxRevealedHintLevel}단계`),
+  },
+]
 
 /** 제출 기록 — 제출한 문제를 마지막으로 제출한 순으로 (HIST-01). */
 export function Component() {
@@ -46,8 +89,17 @@ export function Component() {
   const pages = data ? pageCount(data.totalElements) : 1
 
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="page-title">제출 기록</h1>
+    <section className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <p className="text-eyebrow text-primary-text">내 기록</p>
+        <h1 className="page-title">제출 기록</h1>
+        {/* 알림 영역은 늘 두고 내용만 바꾼다 (ProblemListPage와 같은 이유) */}
+        <p className="text-muted-foreground min-h-[1.5em] text-[15px]" aria-live="polite">
+          {data && !error && !waiting && data.content.length > 0
+            ? `제출한 문제 ${data.totalElements}개`
+            : null}
+        </p>
+      </div>
 
       {waiting && !error ? <ListSkeleton rows={PAGE_SIZE} /> : null}
 
@@ -62,65 +114,33 @@ export function Component() {
           />
         ) : (
           <>
-            <p className="text-muted-foreground text-sm" aria-live="polite">
-              제출한 문제 {data.totalElements}개
-            </p>
             <div
               aria-busy={isFetching}
               className={cn('bg-card rounded-lg border px-3 py-2', isFetching && 'opacity-60')}
             >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>문제</TableHead>
-                    <TableHead className="w-24">난이도</TableHead>
-                    <TableHead className="w-24">맞힘 여부</TableHead>
-                    <TableHead className="w-24">시도 횟수</TableHead>
-                    <TableHead className="w-24">힌트 단계</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.content.map((item) => (
-                    <TableRow key={item.problemId}>
-                      <TableCell className="font-medium">
-                        <Link
-                          to={problemSubmissionsPath(item.problemId)}
-                          className="hover:text-primary-text hover:underline"
-                        >
-                          {item.title}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{DIFFICULTY_LABEL[item.difficulty]}</TableCell>
-                      <TableCell>
-                        {item.solved ? (
-                          <StatusText tone="success">맞음</StatusText>
-                        ) : (
-                          <StatusText tone="danger">못 맞힘</StatusText>
-                        )}
-                      </TableCell>
-                      <TableCell className="tabular-nums">{item.attemptCount}</TableCell>
-                      <TableCell className="tabular-nums">
-                        {item.maxRevealedHintLevel === 0 ? '—' : `${item.maxRevealedHintLevel}단계`}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            {/* 맞힌 뒤의 제출은 세지 않아 제출 목록의 개수와 다를 수 있다 (계약). */}
-            <p className="text-muted-foreground text-xs">
-              시도 횟수와 힌트 단계는 처음 맞힐 때까지(못 맞혔으면 지금까지) 기준이에요.
-            </p>
-            {pages > 1 ? (
-              <Pagination
-                page={page}
-                total={pages}
-                onChange={(next) => {
-                  if (next === page) return
-                  setPage(next)
-                }}
+              {/* 좁은 화면은 줄바꿈 대신 가로 스크롤 (data-table) */}
+              <Table
+                columns={COLUMNS}
+                rows={data.content.map((item) => ({ ...item, id: item.problemId }))}
+                className="whitespace-nowrap"
               />
-            ) : null}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              {/* 맞힌 뒤의 제출은 세지 않아 제출 목록의 개수와 다를 수 있다 (계약). */}
+              <p className="text-muted-foreground text-[13px]">
+                시도 횟수와 힌트 단계는 처음 맞힐 때까지(못 맞혔으면 지금까지) 기준이에요.
+              </p>
+              {pages > 1 ? (
+                <Pagination
+                  page={page}
+                  total={pages}
+                  onChange={(next) => {
+                    if (next === page) return
+                    setPage(next)
+                  }}
+                />
+              ) : null}
+            </div>
           </>
         )
       ) : null}
