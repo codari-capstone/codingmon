@@ -46,6 +46,8 @@ export const router = createBrowserRouter([
               {
                 path: 'submissions/:id',
                 lazy: () => import('@/features/result/SubmissionResultPage'),
+                // 시안 ResultWrong·ResultAccepted도 옅은 바탕 위의 카드다(#275)
+                handle: { pageTone: 'subtle' } satisfies PageHandle,
               },
               {
                 path: 'me',
