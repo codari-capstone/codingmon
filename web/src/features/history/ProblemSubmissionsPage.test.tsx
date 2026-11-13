@@ -34,7 +34,8 @@ describe('ProblemSubmissionsPage (HIST-02)', () => {
     expect(summary.getByText('못 맞힘')).toBeInTheDocument()
     expect(summary.getByText(/· 시도 5회 · 힌트 3단계/)).toBeInTheDocument()
     expect(summary.getByRole('link', { name: '문제 보기' })).toHaveAttribute('href', '/problems/2')
-    expect(screen.getByRole('link', { name: '제출 기록' })).toHaveAttribute('href', '/submissions')
+    // 경로(Breadcrumb)는 두지 않는다 — 제목을 두 번 읽지 않게 (#270 리뷰)
+    expect(screen.queryByRole('navigation', { name: '현재 위치' })).not.toBeInTheDocument()
 
     const rows = within(await screen.findByRole('table'))
       .getAllByRole('row')

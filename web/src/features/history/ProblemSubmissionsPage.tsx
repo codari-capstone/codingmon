@@ -8,7 +8,6 @@ import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Verdict } from '@/components/Verdict'
 import { Badge } from '@/components/ui/badge'
-import { Breadcrumb } from '@/components/ui/breadcrumb'
 import { Button } from '@/components/ui/button'
 import { Table, type TableColumn } from '@/components/ui/data-table'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
@@ -18,6 +17,7 @@ import { Pagination } from '@/components/ui/pagination'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import { parsePathId } from '@/lib/pathId'
 import { cn } from '@/lib/utils'
+import { formatSubmittedAt } from './formatSubmittedAt'
 import { problemHistoryQuery, problemSubmissionsQuery } from './historyQuery'
 import { useHealPage, usePage } from './usePage'
 
@@ -27,14 +27,6 @@ function Result({ item }: { item: SubmissionSummary }) {
   if (key === null) return <span className="text-muted-foreground">—</span>
   return <Verdict verdict={key} />
 }
-
-// 디자인은 연도 없이 짧게 적는다. 전체 시각은 title로 남긴다
-const SUBMITTED_AT = new Intl.DateTimeFormat('ko-KR', {
-  month: 'long',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-})
 
 const COLUMNS: TableColumn<SubmissionSummary>[] = [
   {
@@ -77,18 +69,11 @@ const COLUMNS: TableColumn<SubmissionSummary>[] = [
     key: 'submittedAt',
     header: '제출 시각',
     align: 'right',
-    render: (item) => {
-      const at = new Date(item.submittedAt)
-      return (
-        <time
-          dateTime={item.submittedAt}
-          title={at.toLocaleString('ko-KR')}
-          className="text-muted-foreground whitespace-nowrap"
-        >
-          {SUBMITTED_AT.format(at)}
-        </time>
-      )
-    },
+    render: (item) => (
+      <time dateTime={item.submittedAt} className="text-muted-foreground">
+        {formatSubmittedAt(item.submittedAt)}
+      </time>
+    ),
   },
 ]
 
@@ -139,13 +124,11 @@ export function Component() {
 
   return (
     <section className="flex flex-col gap-6">
-      <Breadcrumb
-        items={[
-          { label: '제출 기록', href: '/submissions' },
-          { label: info.data?.title ?? '제출 목록' },
-        ]}
-      />
-
+      {/*
+        디자인의 '제출 기록 > 제목' 경로는 넣지 않는다. 두 단계뿐이고 마지막 항목이 바로 아래
+        h1과 같아 화면 낭독기가 제목을 두 번 읽는다 (SolvePage와 같은 결정, #266·#270 리뷰).
+        목록으로는 상단 바의 '제출 기록'으로 간다.
+      */}
       {info.data ? (
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-3">
@@ -192,9 +175,10 @@ export function Component() {
               {/* 좁은 화면은 줄바꿈 대신 가로 스크롤 (data-table) */}
               <Table columns={COLUMNS} rows={list.data.content} className="whitespace-nowrap" />
             </div>
-            {/* 계약: 시도 횟수(attemptCount)는 채점 불가를 세지 않는다 */}
+            {/* 계약: attemptCount는 맞힌 뒤의 제출과 채점 불가를 세지 않아 표의 줄 수와 다를 수 있다 */}
             <p className="text-muted-foreground text-[13px]">
-              채점 불가는 서버 문제라 시도 횟수에 넣지 않아요.
+              시도 횟수는 처음 맞힐 때까지 센 수예요. 맞힌 뒤의 제출과 채점 불가(서버 문제)는 넣지
+              않아요.
             </p>
             {pages > 1 ? (
               <Pagination
