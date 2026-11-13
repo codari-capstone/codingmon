@@ -197,7 +197,6 @@ export function AnalysisPanel({
         canRequest={canRequest}
         invite={invite}
         label="AI 분석"
-        quotaLabel="AI 분석"
       />
     </section>
   )

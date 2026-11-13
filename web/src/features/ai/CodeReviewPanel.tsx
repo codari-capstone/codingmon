@@ -15,6 +15,7 @@ import { codeReviewQuery, useRequestCodeReview } from './codeReviewQuery'
 import { failureText } from './failureText'
 
 // 모델이 만든 문장이라 글자 그대로 보여 준다(계약). 긴 영단어·코드 조각이 칸을 넘지 않게 끊는다
+const VALUE = 'text-foreground min-w-0 font-mono font-semibold [overflow-wrap:anywhere]'
 const PROSE =
   'text-body-foreground text-[15px] leading-[1.6] whitespace-pre-wrap [overflow-wrap:anywhere]'
 
@@ -50,17 +51,16 @@ function Review({ review }: { review: SubmissionCodeReview }) {
 
       {complexity !== null ? (
         <Section title="복잡도">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[15px]">
+          {/* 값은 모델이 쓴 O 표기라 공백 없이 길 수 있다. min-w-0으로 1fr이 줄어들게 하고 아무 데서나 끊는다(#273 리뷰) */}
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[15px]">
             <dt className="text-muted-foreground">시간</dt>
-            <dd className="text-foreground font-mono font-semibold">{complexity.time}</dd>
+            <dd className={VALUE}>{complexity.time}</dd>
             <dt className="text-muted-foreground">공간</dt>
-            <dd className="text-foreground font-mono font-semibold">{complexity.space}</dd>
+            <dd className={VALUE}>{complexity.space}</dd>
             {/* 문제에 적힌 값이 아니라 AI의 어림이다(계약) */}
             <dt className="text-muted-foreground">의도한 시간(추정)</dt>
-            <dd className="flex flex-wrap items-center gap-2">
-              <span className="text-foreground font-mono font-semibold">
-                {complexity.intendedTime}
-              </span>
+            <dd className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className={VALUE}>{complexity.intendedTime}</span>
               <Badge tone={complexity.meetsIntended ? 'success' : 'warning'}>
                 {complexity.meetsIntended ? '의도한 만큼 빨라요' : '더 줄일 수 있어요'}
               </Badge>
@@ -88,7 +88,11 @@ function Review({ review }: { review: SubmissionCodeReview }) {
           <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
             {review.nextConcepts.map((concept, index) => (
               <li key={index} className="flex flex-col gap-1.5 rounded-[14px] border px-4 py-3.5">
-                <Badge tone="brand" className="self-start">
+                {/* 모델이 정한 이름이라 길 수 있다. 배지의 고정 높이·한 줄을 풀어 카드 안에서 줄을 바꾼다(#273 리뷰) */}
+                <Badge
+                  tone="brand"
+                  className="h-auto min-h-[26px] self-start py-1 whitespace-normal [overflow-wrap:anywhere]"
+                >
                   {concept.name}
                 </Badge>
                 <p className={PROSE}>{concept.reason}</p>
@@ -183,7 +187,6 @@ export function CodeReviewPanel({ submissionId }: { submissionId: number }) {
         canRequest={canRequest}
         invite={invite}
         label="AI 리뷰"
-        quotaLabel="AI 분석·리뷰"
       />
     </section>
   )

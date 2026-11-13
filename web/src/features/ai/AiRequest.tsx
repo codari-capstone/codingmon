@@ -35,7 +35,6 @@ export function AiRequest({
   canRequest,
   invite,
   label,
-  quotaLabel,
 }: {
   /** 저장된 분석·리뷰. 요청한 적이 없으면 null */
   result: AiResult | null
@@ -45,8 +44,6 @@ export function AiRequest({
   invite: boolean
   /** 처음 누르는 버튼 이름. 실패한 뒤에는 '다시 시도'다 */
   label: string
-  /** 남은 횟수 줄의 이름 ('오늘 남은 {quotaLabel} N / 20회') */
-  quotaLabel: string
 }) {
   const quota = useQuery(aiQuotaQuery()).data
 
@@ -86,7 +83,8 @@ export function AiRequest({
       ) : null}
       {canRequest && quota && !limitHit ? (
         <p className={invite ? 'text-inverse-muted text-sm' : 'text-muted-foreground text-sm'}>
-          {outOfQuota ? exhausted : `오늘 남은 ${quotaLabel} ${quota.remaining} / ${quota.limit}회`}
+          {/* 분석과 리뷰가 함께 쓰는 한도라 어느 패널이든 같은 이름으로 부른다(#273 리뷰) */}
+          {outOfQuota ? exhausted : `오늘 남은 AI 분석·리뷰 ${quota.remaining} / ${quota.limit}회`}
         </p>
       ) : null}
     </>

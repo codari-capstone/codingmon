@@ -157,7 +157,7 @@ describe('AnalysisPanel', () => {
       renderResult(WRONG)
 
       await screen.findByRole('button', { name: 'AI 분석' })
-      expect(await screen.findByText('오늘 남은 AI 분석 19 / 20회')).toBeInTheDocument()
+      expect(await screen.findByText('오늘 남은 AI 분석·리뷰 19 / 20회')).toBeInTheDocument()
     })
 
     it('오늘 한도를 다 썼으면 버튼을 끄고 언제 다시 쓸 수 있는지 알린다', async () => {
@@ -238,7 +238,7 @@ describe('AnalysisPanel', () => {
       expect(
         await screen.findByRole('button', { name: '다시 시도' }, { timeout: 3000 }),
       ).toBeEnabled()
-      expect(screen.getByText('오늘 남은 AI 분석 1 / 20회')).toBeInTheDocument()
+      expect(screen.getByText('오늘 남은 AI 분석·리뷰 1 / 20회')).toBeInTheDocument()
     })
 
     it('처리 중에 서버가 내려가 실패한 분석은 한도를 다 썼어도 다시 시도할 수 있다', async () => {
@@ -260,7 +260,7 @@ describe('AnalysisPanel', () => {
       renderResult(WRONG)
 
       expect(await screen.findByRole('button', { name: '다시 시도' })).toBeEnabled()
-      expect(screen.getByText('오늘 남은 AI 분석 0 / 20회')).toBeInTheDocument()
+      expect(screen.getByText('오늘 남은 AI 분석·리뷰 0 / 20회')).toBeInTheDocument()
     })
 
     it('어제 버려진 분석은 오늘 다시 요청하면 새 1회라 한도를 다 썼으면 막는다', async () => {

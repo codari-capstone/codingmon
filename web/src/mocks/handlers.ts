@@ -335,7 +335,8 @@ function reviewView(
     complexity: {
       basis: '1번 줄에서 두 수를 한 번 읽고 2번 줄에서 한 번 더합니다. 반복이 없습니다.',
       time: 'O(1)',
-      space: 'O(1)',
+      // 공백 없는 긴 표기. 분석의 별 120개처럼 e2e가 리뷰 패널의 넘침을 이 값으로 본다(result.spec.ts)
+      space: `O(1)_${'input_buffer_'.repeat(8)}`,
       intendedTime: 'O(1)',
       comparison: '문제가 의도한 복잡도와 같아 더 줄일 곳이 없어요.',
       meetsIntended: true,
@@ -347,6 +348,11 @@ function reviewView(
       {
         name: '입출력 최적화',
         reason: '입력이 많아지면 sys.stdin.readline으로 읽는 속도가 차이를 만들어요.',
+      },
+      // 모델이 길게 지은 개념 이름. 배지가 한 줄로 늘어나 넘치지 않는지 e2e가 본다
+      {
+        name: '분할 정복과 동적 계획법을 결합한 구간 쿼리 처리 패턴 (세그먼트 트리·희소 테이블)',
+        reason: '여러 구간의 합을 빠르게 묻는 문제로 이어져요.',
       },
     ],
     completedAt: createdAt,

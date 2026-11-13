@@ -118,5 +118,32 @@ test.describe('제출 결과 화면', () => {
       expect(sizes!.panelScroll).toBeLessThanOrEqual(sizes!.panelClient + 1)
       expect(sizes!.panelRight).toBeLessThanOrEqual(sizes!.viewportWidth + 1)
     })
+
+    /** 리뷰도 모델이 쓴 글이다. 목의 리뷰에 긴 공간 표기와 긴 개념 이름이 있다(handlers.ts, #273 리뷰). */
+    test(`${width}px에서 AI 리뷰의 긴 값이 패널 밖으로 넘치지 않는다`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await login(page)
+      // 지난 제출 11: 맞았습니다 (fixtures/history.ts)
+      await page.goto('/submissions/11')
+      await page.getByRole('button', { name: 'AI 리뷰' }).click()
+      await expect(page.getByText(/구간 쿼리 처리 패턴/)).toBeVisible({ timeout: 10_000 })
+
+      const sizes = await page.evaluate(() => {
+        const panel = document.querySelector('section[aria-labelledby="review-heading"]')
+        if (!panel) return null
+        return {
+          panelScroll: panel.scrollWidth,
+          panelClient: panel.clientWidth,
+          panelRight: panel.getBoundingClientRect().right,
+          documentWidth: document.documentElement.scrollWidth,
+          viewportWidth: window.innerWidth,
+        }
+      })
+
+      expect(sizes).not.toBeNull()
+      expect(sizes!.documentWidth).toBeLessThanOrEqual(sizes!.viewportWidth + 1)
+      expect(sizes!.panelScroll).toBeLessThanOrEqual(sizes!.panelClient + 1)
+      expect(sizes!.panelRight).toBeLessThanOrEqual(sizes!.viewportWidth + 1)
+    })
   }
 })

@@ -89,7 +89,8 @@ describe('CodeReviewPanel (AI-05)', () => {
     expect(
       await screen.findByText(/필요한 일만 하는 깔끔한 풀이예요/, undefined, { timeout: 3000 }),
     ).toBeInTheDocument()
-    expect(screen.getAllByText('O(1)')).toHaveLength(3)
+    // 시간·의도한 시간. 공간은 목이 넘침 검사용 긴 값을 준다(handlers.ts)
+    expect(screen.getAllByText('O(1)')).toHaveLength(2)
     expect(screen.getByText('의도한 만큼 빨라요')).toBeInTheDocument()
     expect(screen.getByText('입출력 최적화')).toBeInTheDocument()
     // 끝난 리뷰는 다시 만들지 않는다(계약)
