@@ -57,6 +57,26 @@ export function grassLevel(count: number): 0 | 1 | 2 | 3 | 4 {
 }
 
 /**
+ * 최근 12개월(`to`가 든 달과 그 앞 11달) 중 제출한 달의 수 (디자인 '최근 12개월 중 N개월 활동').
+ * 잔디 범위(`from`~`to`)는 1년이라 달력으로는 13달에 걸칠 수 있다. 맨 앞 달을 세면 '12개월 중 13개월'이
+ * 나오므로 12달만 센다.
+ */
+export function activeMonths(activity: Pick<UserActivity, 'to' | 'days'>): number {
+  const [year, month] = activity.to.split('-').map(Number) as [number, number]
+  const first = year * 12 + month - 12 // `to`의 달을 포함해 12달 전의 다음 달부터
+  const months = new Set(
+    activity.days
+      .filter((day) => day.count > 0)
+      .map((day) => {
+        const [y, m] = day.date.split('-').map(Number) as [number, number]
+        return y * 12 + m
+      })
+      .filter((key) => key > first),
+  )
+  return months.size
+}
+
+/**
  * 달 이름이 다음 이름과 겹치지 않으려면 떨어져야 하는 주 수. 한 주는 14px(칸 11 + 간격 3)이고
  * '12월'은 11px 글자로 24px쯤이라 두 주면 들어간다.
  */

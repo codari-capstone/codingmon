@@ -167,7 +167,9 @@ describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
     )
 
     const grass = screen.getByRole('region', { name: '활동 기록' })
-    expect(within(grass).getByText(`총 ${activity.totalActiveDays}일`)).toBeInTheDocument()
+    expect(
+      within(grass).getByText(new RegExp(`최근 12개월 중.*총 ${activity.totalActiveDays}일`)),
+    ).toBeInTheDocument()
     expect(
       within(grass).getByRole('img', {
         name: `최근 1년 동안 ${activity.totalActiveDays}일 제출했어요`,

@@ -1,6 +1,35 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildWeeks, grassLevel, monthLabels } from './grass'
+import { activeMonths, buildWeeks, grassLevel, monthLabels } from './grass'
+
+describe('activeMonths', () => {
+  it('to가 든 달까지 최근 12달 중 제출한 달을 센다. 13달째(맨 앞 달)는 세지 않는다', () => {
+    expect(
+      activeMonths({
+        to: '2026-11-13',
+        days: [
+          { date: '2025-11-20', count: 1 }, // 13달째 — 세지 않는다
+          { date: '2025-12-01', count: 2 },
+          { date: '2025-12-31', count: 1 }, // 같은 달은 한 번
+          { date: '2026-06-10', count: 1 },
+          { date: '2026-11-13', count: 4 },
+        ],
+      }),
+    ).toBe(3)
+  })
+
+  it('해가 바뀌는 1월도 앞 해 2월부터 센다', () => {
+    expect(
+      activeMonths({
+        to: '2027-01-05',
+        days: [
+          { date: '2026-01-31', count: 1 },
+          { date: '2026-02-01', count: 1 },
+        ],
+      }),
+    ).toBe(1)
+  })
+})
 
 describe('buildWeeks', () => {
   // 2026-11-01은 일요일이다.

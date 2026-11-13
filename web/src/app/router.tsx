@@ -1,5 +1,6 @@
 import { createBrowserRouter, redirect } from 'react-router'
 
+import type { PageHandle } from './AppShell'
 import { RequireAdmin } from './RequireAdmin'
 import { RequireAuth } from './RequireAuth'
 import { RootLayout } from './RootLayout'
@@ -46,7 +47,12 @@ export const router = createBrowserRouter([
                 path: 'submissions/:id',
                 lazy: () => import('@/features/result/SubmissionResultPage'),
               },
-              { path: 'me', lazy: () => import('@/features/mypage/MyPage') },
+              {
+                path: 'me',
+                lazy: () => import('@/features/mypage/MyPage'),
+                // 카드가 옅은 바탕 위에 놓인다(디자인 MyPage의 `cmx-subtle`). AppShell이 읽는다
+                handle: { pageTone: 'subtle' } satisfies PageHandle,
+              },
               { path: 'me/report', lazy: () => import('@/features/report/ReportPage') },
               {
                 // RequireAdmin은 역할만 본다. 비로그인이 403을 보지 않도록 RequireAuth 안에 둔다.

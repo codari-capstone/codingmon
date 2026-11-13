@@ -15,7 +15,7 @@ import { useAuth } from '@/features/auth/useAuth'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { cn } from '@/lib/utils'
 import { NicknameForm, PasswordForm, WithdrawSection } from './AccountSettings'
-import { buildWeeks, grassLevel, monthLabels } from './grass'
+import { activeMonths, buildWeeks, grassLevel, monthLabels } from './grass'
 import { MyNav } from './MyNav'
 import { activityQuery } from './myPageQuery'
 
@@ -118,20 +118,26 @@ function Grass({ activity }: { activity: UserActivity }) {
   const weeks = buildWeeks(activity)
   const labels = monthLabels(weeks)
   return (
-    <figure className="m-0 flex flex-col gap-2">
-      <div className="overflow-x-auto pb-1">
+    <figure className="m-0 flex flex-col gap-2.5">
+      {/*
+        디자인처럼 카드 폭을 채운다: 주 열을 1fr로 나누고 칸은 정사각형이다. 좁으면 칸이 너무 작아지지 않게
+        최소 폭에서 멈추고 가로로 스크롤한다. rtl은 스크롤이 오른쪽 끝(최근)에서 시작하게 하려는 것이고,
+        안쪽은 ltr로 되돌려 날짜 순서는 그대로다.
+      */}
+      <div dir="rtl" className="overflow-x-auto pb-1">
         <div
+          dir="ltr"
           role="img"
           aria-label={`최근 1년 동안 ${activity.totalActiveDays}일 제출했어요`}
-          className="inline-grid grid-flow-col gap-[3px]"
-          style={{ gridTemplateRows: 'auto repeat(7, 11px)' }}
+          className="grid w-full min-w-[560px] grid-flow-col gap-[3px]"
+          style={{ gridTemplateRows: 'auto repeat(7, auto)', gridAutoColumns: 'minmax(0, 1fr)' }}
         >
           {weeks.map((week, w) => (
             <div key={w} className="contents">
-              {/* 폭을 칸과 같게 둬서 글자는 옆 칸 위로 넘친다. 글자 폭만큼 그 주가 넓어지지 않게 한다. */}
+              {/* 폭을 0으로 둬서 글자는 옆 칸 위로 넘친다. 글자 폭만큼 그 주가 넓어지지 않게 한다. */}
               <span
                 aria-hidden="true"
-                className="text-muted-foreground h-4 w-[11px] overflow-visible text-[11px] leading-4 whitespace-nowrap"
+                className="text-muted-foreground mb-1 h-4 w-0 overflow-visible text-xs leading-4 whitespace-nowrap"
               >
                 {labels[w]}
               </span>
@@ -143,7 +149,10 @@ function Grass({ activity }: { activity: UserActivity }) {
                     key={d}
                     aria-hidden="true"
                     title={`${cell.date} 제출 ${cell.count}회`}
-                    className={cn('size-[11px] rounded-[2px]', LEVEL_CLASS[grassLevel(cell.count)])}
+                    className={cn(
+                      'aspect-square w-full rounded-[3px]',
+                      LEVEL_CLASS[grassLevel(cell.count)],
+                    )}
                   />
                 )
               })}
@@ -151,12 +160,12 @@ function Grass({ activity }: { activity: UserActivity }) {
           ))}
         </div>
       </div>
-      <figcaption className="text-muted-foreground flex items-center gap-1 text-xs">
-        적음
+      <figcaption className="text-muted-foreground flex items-center justify-end gap-1 text-xs font-medium">
+        <span className="mr-1">적음</span>
         {LEVEL_CLASS.map((cls) => (
-          <span key={cls} aria-hidden="true" className={cn('size-[11px] rounded-[2px]', cls)} />
+          <span key={cls} aria-hidden="true" className={cn('size-3.5 rounded-[4px]', cls)} />
         ))}
-        많음
+        <span className="ml-1">많음</span>
       </figcaption>
     </figure>
   )
@@ -182,7 +191,11 @@ function Activity() {
           <h2 id="activity-heading" className="text-foreground text-lg font-semibold">
             활동 기록
           </h2>
-          <span className="text-muted-foreground text-sm">총 {data.totalActiveDays}일</span>
+          <span className="text-muted-foreground text-sm">
+            최근 12개월 중{' '}
+            <strong className="text-foreground font-bold">{activeMonths(data)}개월</strong> 활동 ·
+            총 {data.totalActiveDays}일
+          </span>
         </div>
         {/*
           제출이 없어도 숫자는 0, 잔디는 빈 칸으로 그린다(명세 MY-05). 잔디는 최근 1년,
@@ -214,7 +227,7 @@ export function Component() {
 
   // RequireAuth 뒤라 user가 있다. 세션이 막 끊긴 순간만 비어 있을 수 있다.
   return (
-    <div className="grid items-start gap-8 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-12">
+    <div className="grid items-start gap-8 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-12 lg:pt-4">
       <aside className="lg:sticky lg:top-6">{user ? <MyNav user={user} /> : null}</aside>
 
       <div className="flex min-w-0 flex-col gap-6">
