@@ -60,6 +60,17 @@ function analysis(over: Partial<SubmissionAnalysis> = {}): SubmissionAnalysis {
   }
 }
 
+const QUOTA = { limit: 20, used: 0, remaining: 20, resetsAt: '2026-11-08T00:00:00Z' }
+
+/** 오늘 남은 횟수를 정해 둔다. 목의 조회는 토큰을 보는데 이 테스트는 토큰 없이 그린다. */
+function quotaLeft(remaining: number) {
+  server.use(
+    http.get('*/api/users/me/ai-quota', () =>
+      HttpResponse.json({ ...QUOTA, used: 20 - remaining, remaining }),
+    ),
+  )
+}
+
 /** 저장된 분석을 정해 둔다. 요청(POST)은 목 그대로다. */
 function stored(value: SubmissionAnalysis) {
   server.use(http.get('*/api/submissions/:id/analysis', () => HttpResponse.json(value)))
@@ -131,12 +142,93 @@ describe('AnalysisPanel', () => {
       renderResult(WRONG)
 
       expect(
-        await screen.findByText('분석을 만들지 못했어요. 다시 시도해 주세요.'),
+        await screen.findByText(
+          'AI 서버가 응답하지 않아 분석을 만들지 못했어요. 잠시 후 다시 시도해 주세요.',
+        ),
       ).toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: '다시 시도' }))
 
       expect(await screen.findByText('요약 문장')).toBeInTheDocument()
       expect(requests).toBe(1)
+    })
+
+    it('누르기 전에 오늘 남은 횟수를 보여 준다', async () => {
+      quotaLeft(19)
+      renderResult(WRONG)
+
+      await screen.findByRole('button', { name: 'AI 분석' })
+      expect(await screen.findByText('오늘 남은 AI 분석 19 / 20회')).toBeInTheDocument()
+    })
+
+    it('오늘 한도를 다 썼으면 버튼을 끄고 언제 다시 쓸 수 있는지 알린다', async () => {
+      quotaLeft(0)
+      renderResult(WRONG)
+
+      expect(await screen.findByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
+      expect(screen.getByText('틀렸습니다')).toBeInTheDocument()
+    })
+
+    it('누른 뒤 한도 초과(429)를 받으면 버튼을 끄고 안내를 한 번만 보인다', async () => {
+      const user = userEvent.setup()
+      quotaLeft(1)
+      server.use(
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            {
+              status: 429,
+              code: 'AI_DAILY_LIMIT_EXCEEDED',
+              detail: '오늘 쓸 수 있는 AI 분석·리뷰 20회를 모두 썼어요.',
+              quota: { ...QUOTA, used: 20, remaining: 0 },
+            },
+            { status: 429 },
+          ),
+        ),
+      )
+      renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+
+      expect(await screen.findByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('처리 중에 서버가 내려가 실패한 분석은 한도를 다 썼어도 다시 시도할 수 있다', async () => {
+      // 계약: 이미 1회로 셌고 다시 요청해도 같은 결과라 막지 않는다. 이 경우만 completedAt이 null이다
+      quotaLeft(0)
+      stored(
+        analysis({
+          status: 'FAILED',
+          failureReason: 'UNAVAILABLE',
+          summary: null,
+          suspectLines: [],
+          facts: [],
+          guesses: [],
+          completedAt: null,
+        }),
+      )
+      renderResult(WRONG)
+
+      expect(await screen.findByRole('button', { name: '다시 시도' })).toBeEnabled()
+    })
+
+    it('대기열이 차서 시작하지 못했으면 그 이유를 알린다', async () => {
+      stored(
+        analysis({
+          status: 'FAILED',
+          failureReason: 'BUSY',
+          summary: null,
+          suspectLines: [],
+          facts: [],
+          guesses: [],
+        }),
+      )
+      renderResult(WRONG)
+
+      expect(
+        await screen.findByText('지금 분석을 기다리는 제출이 많아요. 잠시 후 다시 시도해 주세요.'),
+      ).toBeInTheDocument()
     })
 
     it('요청이 거절되면 서버 문구를 보이고 채점 결과는 그대로 둔다 (AI-06)', async () => {

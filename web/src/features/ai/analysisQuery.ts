@@ -2,7 +2,7 @@ import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query
 
 import { api } from '@/api/client'
 import { fail } from '@/api/fail'
-import type { SubmissionAnalysis } from '@/api/types'
+import type { AiQuota, SubmissionAnalysis } from '@/api/types'
 import { POLL_INTERVAL_MS } from '@/app/queryClient'
 import { problemCode } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
@@ -64,6 +64,23 @@ export function analysisQuery(submissionId: number) {
   })
 }
 
+export const AI_QUOTA_QUERY_KEY = ['ai-quota'] as const
+
+/**
+ * 오늘 남은 AI 횟수 (AI-01). 조회해도 횟수는 줄지 않는다(계약).
+ * 화면은 이 캐시 하나만 읽는다. 분석 요청의 응답·429가 든 `quota`는 아래 mutation이 여기에 넣는다.
+ */
+export function aiQuotaQuery() {
+  return queryOptions({
+    queryKey: AI_QUOTA_QUERY_KEY,
+    queryFn: async () => {
+      const result = await api.GET('/api/users/me/ai-quota')
+      if (result.data === undefined) fail(result)
+      return result.data
+    },
+  })
+}
+
 /**
  * [AI 분석]·[다시 시도] (AI-01·02). `FAILED`에서 다시 누르는 것이 재시도다(계약).
  *
@@ -84,8 +101,17 @@ export function useRequestAnalysis(submissionId: number) {
       // 떠 있던 조회가 늦게 끝나 방금 받은 상태를 덮지 않게 먼저 취소한다(adoptSession과 같은 순서).
       await queryClient.cancelQueries({ queryKey: analysisQueryKey(submissionId) })
       queryClient.setQueryData(analysisQueryKey(submissionId), analysis)
+      queryClient.setQueryData(AI_QUOTA_QUERY_KEY, analysis.quota)
     },
-    onError: (error) => forgetSessionIfUnauthorized(queryClient, error),
+    onError: (error) => {
+      forgetSessionIfUnauthorized(queryClient, error)
+      // 한도 초과(429)는 본문에 거절한 시점의 quota(remaining 0)를 싣는다(계약). fail()이 본문을 펼쳐 던진다
+      if (problemCode(error) === 'AI_DAILY_LIMIT_EXCEEDED') {
+        const quota = (error as { quota?: AiQuota }).quota
+        if (quota) queryClient.setQueryData(AI_QUOTA_QUERY_KEY, quota)
+        else void queryClient.invalidateQueries({ queryKey: AI_QUOTA_QUERY_KEY })
+      }
+    },
   })
 }
 
