@@ -87,9 +87,18 @@ function ByDifficulty({ activity }: { activity: UserActivity }) {
         <h2 id="difficulty-heading" className="text-foreground text-lg font-semibold">
           난이도별 맞힌 문제
         </h2>
-        <Link to="/me/report" className="text-primary-text text-sm font-semibold hover:underline">
-          학습 리포트 보기 →
-        </Link>
+        {/* 명세 MY-05: 내 학습·제출 기록으로 가는 링크. 디자인에는 리포트 링크만 있지만 명세를 따른다(#274 리뷰) */}
+        <div className="flex flex-wrap gap-4">
+          <Link
+            to="/submissions"
+            className="text-primary-text text-sm font-semibold hover:underline"
+          >
+            제출 기록 보기 →
+          </Link>
+          <Link to="/me/report" className="text-primary-text text-sm font-semibold hover:underline">
+            학습 리포트 보기 →
+          </Link>
+        </div>
       </div>
       <div className="grid gap-6 sm:grid-cols-3 sm:gap-8">
         {(['EASY', 'MEDIUM', 'HARD'] as const).map((level) => (

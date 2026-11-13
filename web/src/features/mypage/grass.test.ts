@@ -3,31 +3,28 @@ import { describe, expect, it } from 'vitest'
 import { activeMonths, buildWeeks, grassLevel, monthLabels } from './grass'
 
 describe('activeMonths', () => {
-  it('to가 든 달까지 최근 12달 중 제출한 달을 센다. 13달째(맨 앞 달)는 세지 않는다', () => {
+  it('잔디 범위에서 제출한 달을 센다. 같은 달은 한 번, 맨 앞 달도 센다', () => {
     expect(
       activeMonths({
-        to: '2026-11-13',
         days: [
-          { date: '2025-11-20', count: 1 }, // 13달째 — 세지 않는다
+          // '총 N일'과 같은 기간이다. 맨 앞 달만 제출해도 0개월이 아니다(#274 리뷰)
+          { date: '2025-11-20', count: 1 },
           { date: '2025-12-01', count: 2 },
-          { date: '2025-12-31', count: 1 }, // 같은 달은 한 번
+          { date: '2025-12-31', count: 1 },
           { date: '2026-06-10', count: 1 },
           { date: '2026-11-13', count: 4 },
         ],
       }),
-    ).toBe(3)
+    ).toBe(4)
   })
 
-  it('해가 바뀌는 1월도 앞 해 2월부터 센다', () => {
-    expect(
-      activeMonths({
-        to: '2027-01-05',
-        days: [
-          { date: '2026-01-31', count: 1 },
-          { date: '2026-02-01', count: 1 },
-        ],
-      }),
-    ).toBe(1)
+  it('1년이 달력 13달에 걸쳐도 12를 넘지 않는다', () => {
+    const days = Array.from({ length: 13 }, (_, i) => {
+      const month = ((10 + i) % 12) + 1 // 2025-11 ~ 2026-11
+      const year = i < 2 ? 2025 : 2026
+      return { date: `${year}-${String(month).padStart(2, '0')}-15`, count: 1 }
+    })
+    expect(activeMonths({ days })).toBe(12)
   })
 })
 

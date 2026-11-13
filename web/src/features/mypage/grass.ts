@@ -57,23 +57,16 @@ export function grassLevel(count: number): 0 | 1 | 2 | 3 | 4 {
 }
 
 /**
- * 최근 12개월(`to`가 든 달과 그 앞 11달) 중 제출한 달의 수 (디자인 '최근 12개월 중 N개월 활동').
- * 잔디 범위(`from`~`to`)는 1년이라 달력으로는 13달에 걸칠 수 있다. 맨 앞 달을 세면 '12개월 중 13개월'이
- * 나오므로 12달만 센다.
+ * 잔디 범위(`from`~`to`, 1년)에서 제출한 달의 수 (디자인 '최근 12개월 중 N개월 활동').
+ * 같은 줄의 '총 N일'·잔디와 같은 기간을 센다 — 기간이 다르면 '0개월 활동 · 총 5일'처럼 어긋난다(#274 리뷰).
+ * 1년은 달력으로 13달에 걸칠 수 있어 '12개월 중 13개월'이 나오지 않게 12에서 멈춘다.
  */
-export function activeMonths(activity: Pick<UserActivity, 'to' | 'days'>): number {
-  const [year, month] = activity.to.split('-').map(Number) as [number, number]
-  const first = year * 12 + month - 12 // `to`의 달을 포함해 12달 전의 다음 달부터
+export function activeMonths(activity: Pick<UserActivity, 'days'>): number {
+  // `days`는 그 기간에 제출한 날만 담는다(계약)
   const months = new Set(
-    activity.days
-      .filter((day) => day.count > 0)
-      .map((day) => {
-        const [y, m] = day.date.split('-').map(Number) as [number, number]
-        return y * 12 + m
-      })
-      .filter((key) => key > first),
+    activity.days.filter((day) => day.count > 0).map((day) => day.date.slice(0, 7)),
   )
-  return months.size
+  return Math.min(months.size, 12)
 }
 
 /**
