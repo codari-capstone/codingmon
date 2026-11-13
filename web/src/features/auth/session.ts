@@ -57,6 +57,8 @@ export async function adoptSession(client: QueryClient, user: CurrentUser): Prom
   client.removeQueries({ queryKey: ['learning-stats'] })
   // 풀이 요약·잔디(MY-05)도 본인 제출로 센 값이다.
   client.removeQueries({ queryKey: ['activity'] })
+  // 연속 학습(STREAK-01·02)도 본인 제출로 센 값이다.
+  client.removeQueries({ queryKey: ['streak'] })
   // AI 오답 분석(AI-03)도 본인 제출의 것만 온다.
   client.removeQueries({ queryKey: ['analysis'] })
   // AI 코드 리뷰(AI-05)도 같다.

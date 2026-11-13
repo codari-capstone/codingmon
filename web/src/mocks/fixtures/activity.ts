@@ -1,4 +1,4 @@
-import type { UserActivity } from '@/api/types'
+import type { UserActivity, UserStreak } from '@/api/types'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
@@ -48,5 +48,25 @@ export function activityFor(userId: number, now = Date.now()): UserActivity {
     to,
     days,
     totalActiveDays: days.length,
+  }
+}
+
+/**
+ * 연속 학습 목 데이터 (STREAK-01·02). 1번은 어제까지 3일 이어 왔고 오늘은 아직 제출하지 않은
+ * 모양이다 — 카드의 '오늘 한 문제만 풀면' 안내와 빈 오늘 칸이 보인다. 그 밖은 제출이 없다.
+ */
+export function streakFor(userId: number, now = Date.now()): UserStreak {
+  const today = kstToday(now)
+  // getUTCDay: 일 0 ~ 토 6. 월요일을 0으로 맞춘다
+  const monday = shift(today, -((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7))
+  const active = (date: string) => userId === 1 && date < today && date >= shift(today, -3)
+  return {
+    currentStreak: userId === 1 ? 3 : 0,
+    activeToday: false,
+    today,
+    week: Array.from({ length: 7 }, (_, i) => {
+      const date = shift(monday, i)
+      return { date, active: active(date) }
+    }),
   }
 }

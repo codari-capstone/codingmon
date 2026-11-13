@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/features/auth/useAuth'
 import { useLogout } from '@/features/auth/useLogout'
+import { StreakChip } from '@/features/streak/StreakChip'
 
 const MENU = [
   { to: '/problems', label: '문제' },
@@ -90,6 +91,8 @@ export function AppHeader() {
 
         <div className="flex items-center gap-2.5">
           <ThemeToggle />
+          {/* 관리자 화면 시안의 상단 바에는 칩이 없다 */}
+          {inAdmin ? null : <StreakChip />}
 
           {isLoading ? (
             /*

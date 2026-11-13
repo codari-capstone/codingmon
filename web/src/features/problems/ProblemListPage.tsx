@@ -8,6 +8,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { SearchInput } from '@/components/ui/search-input'
 import { useAuth } from '@/features/auth/useAuth'
+import { StreakCard } from '@/features/streak/StreakCard'
 import { cn } from '@/lib/utils'
 import {
   hasActiveFilter,
@@ -172,6 +173,8 @@ export function Component() {
           onChange={(event) => setDraft(event.target.value)}
         />
       </div>
+
+      <StreakCard />
 
       {/*
         필터와 표는 flex-wrap으로 나란히 둔다. 표에 flex-[999]를 줘서 좁아지면 필터가
