@@ -8,7 +8,9 @@ import { cn } from '@/lib/utils'
 
 const ITEM =
   'flex h-11 items-center gap-3 rounded-[12px] px-3.5 text-[15px] font-semibold transition-colors focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2'
-const IDLE = 'text-body-foreground hover:bg-muted hover:text-foreground'
+// 마이페이지 바탕이 옅은 면(bg-muted, AppShell의 subtle)이라 hover는 카드 면으로 띄운다(#274 리뷰)
+const HOVER = 'hover:bg-card'
+const IDLE = cn('text-body-foreground hover:text-foreground', HOVER)
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -35,7 +37,7 @@ function Anchor({
   danger?: boolean
 }) {
   return (
-    <a href={href} className={cn(ITEM, danger ? 'text-destructive-text hover:bg-muted' : IDLE)}>
+    <a href={href} className={cn(ITEM, danger ? cn('text-destructive-text', HOVER) : IDLE)}>
       <Icon name={icon} />
       {label}
     </a>
@@ -93,7 +95,7 @@ export function MyNav({ user }: { user: CurrentUser }) {
         type="button"
         onClick={logout}
         disabled={isPending}
-        className={cn(ITEM, 'text-muted-foreground hover:bg-muted hover:text-foreground text-left')}
+        className={cn(ITEM, 'text-muted-foreground hover:text-foreground text-left', HOVER)}
       >
         <Icon name="logout" />
         로그아웃

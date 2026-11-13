@@ -114,6 +114,9 @@ describe('MyPage 사이드바 (MyNav)', () => {
     renderMyPage({ ...EMAIL_USER, role: 'ADMIN' })
     const nav = await screen.findByRole('navigation', { name: '마이페이지 메뉴' })
     expect(within(nav).queryByRole('link', { name: /회원 탈퇴/ })).not.toBeInTheDocument()
+    // 메뉴만 보면 WithdrawSection의 관리자 분기가 회귀해도 지나간다(#274 리뷰). 구역도 비어 있어야 한다
+    expect(document.getElementById('withdraw')).toBeEmptyDOMElement()
+    expect(screen.queryByRole('heading', { name: '회원 탈퇴' })).not.toBeInTheDocument()
   })
 })
 
