@@ -51,9 +51,12 @@ export function analysisPollingInterval(
 export function analysisQuery(submissionId: number) {
   return queryOptions({
     queryKey: analysisQueryKey(submissionId),
-    queryFn: async ({ client }): Promise<SubmissionAnalysis | null> => {
+    queryFn: async ({ client, signal }): Promise<SubmissionAnalysis | null> => {
+      // signal을 넘겨야 cancelQueries가 요청을 실제로 끊는다. 안 넘기면 늦게 끝난 응답이
+      // 아래 adoptQuota로 방금 받은 새 횟수를 덮는다(#272 리뷰)
       const result = await api.GET('/api/submissions/{id}/analysis', {
         params: { path: { id: submissionId } },
+        signal,
       })
       if (result.data !== undefined) {
         // 폴링 응답의 quota가 가장 새 값이다. 만들다 실패(FAILED)하면 요청 때 센 1회가 돌아온다(계약)
@@ -86,8 +89,8 @@ export async function adoptQuota(client: QueryClient, quota: AiQuota) {
 export function aiQuotaQuery() {
   return queryOptions({
     queryKey: AI_QUOTA_QUERY_KEY,
-    queryFn: async () => {
-      const result = await api.GET('/api/users/me/ai-quota')
+    queryFn: async ({ signal }) => {
+      const result = await api.GET('/api/users/me/ai-quota', { signal })
       if (result.data === undefined) fail(result)
       return result.data
     },

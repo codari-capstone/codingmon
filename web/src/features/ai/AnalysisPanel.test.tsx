@@ -189,9 +189,12 @@ describe('AnalysisPanel', () => {
 
       await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
 
-      expect(await screen.findByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toBeInTheDocument()
+      // 화면 낭독기가 읽도록 alert로 알리고, 같은 문장을 두 번 그리지 않는다(#272 리뷰)
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /오늘 AI 분석·리뷰 20회를 다 썼어요/,
+      )
+      expect(screen.getAllByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toHaveLength(1)
       expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
 
     it('마지막 1회로 요청한 분석이 만들다 실패하면 돌아온 횟수로 다시 시도할 수 있다', async () => {
@@ -250,11 +253,36 @@ describe('AnalysisPanel', () => {
           facts: [],
           guesses: [],
           completedAt: null,
+          // 오늘(11-07) 만든 분석. 응답의 quota도 0회로 맞춰야 예외를 확인한다
+          quota: { ...QUOTA, used: 20, remaining: 0 },
         }),
       )
       renderResult(WRONG)
 
       expect(await screen.findByRole('button', { name: '다시 시도' })).toBeEnabled()
+      expect(screen.getByText('오늘 남은 AI 분석 0 / 20회')).toBeInTheDocument()
+    })
+
+    it('어제 버려진 분석은 오늘 다시 요청하면 새 1회라 한도를 다 썼으면 막는다', async () => {
+      // 서버는 오늘(UTC) 만든 분석만 센다. QUOTA.resetsAt이 11-08 00시라 오늘은 11-07이다
+      quotaLeft(0)
+      stored(
+        analysis({
+          status: 'FAILED',
+          failureReason: 'UNAVAILABLE',
+          summary: null,
+          suspectLines: [],
+          facts: [],
+          guesses: [],
+          createdAt: '2026-11-06T12:00:00Z',
+          completedAt: null,
+          // 분석 응답의 quota도 캐시에 들어간다(adoptQuota). 같은 0회로 맞춘다
+          quota: { ...QUOTA, used: 20, remaining: 0 },
+        }),
+      )
+      renderResult(WRONG)
+
+      expect(await screen.findByRole('button', { name: '다시 시도' })).toBeDisabled()
     })
 
     it('대기열이 차서 시작하지 못했으면 그 이유를 알린다', async () => {

@@ -81,6 +81,8 @@ const FAILURE_TEXT: Record<NonNullable<SubmissionAnalysis['failureReason']>, str
   INTERNAL: '분석을 만들지 못했어요. 다시 시도해 주세요.',
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
 const RESETS_AT = new Intl.DateTimeFormat('ko-KR', {
   month: 'long',
   day: 'numeric',
@@ -143,28 +145,34 @@ export function AnalysisPanel({
   const invite = loaded && data === null && !working
   // 한도를 다 썼으면 새로 만들 수 없다(429). 예외: 서버가 처리 중에 내려가 시간이 지나 FAILED가 된 분석은
   // 이미 1회로 셌고 다시 요청할 수 있다 — 이 경우만 completedAt이 null이다(계약 `AiQuota`·`completedAt`).
-  const outOfQuota =
-    quota?.remaining === 0 && !(data?.status === 'FAILED' && data.completedAt === null)
+  // 단 오늘(UTC) 만든 것만이다. 서버는 오늘 만든 분석만 세고, 어제 것을 다시 요청하면 새 1회로 센다(#272 리뷰).
+  const abandonedToday =
+    data?.status === 'FAILED' &&
+    data.completedAt === null &&
+    quota !== undefined &&
+    Date.parse(data.createdAt) >= Date.parse(quota.resetsAt) - DAY_MS
+  const outOfQuota = quota?.remaining === 0 && !abandonedToday
+  const exhausted = quota
+    ? `오늘 AI 분석·리뷰 ${quota.limit}회를 다 썼어요. ${RESETS_AT.format(new Date(quota.resetsAt))}에 다시 쓸 수 있어요.`
+    : ''
+  // 누른 뒤 한도 초과를 받았으면 그 안내를 alert로 읽힌다. 아래 줄은 live region이 아니라 소리 없이 바뀐다
+  const limitHit = request.isError && outOfQuota
 
   const quotaLine =
-    canRequest && quota ? (
+    canRequest && quota && !limitHit ? (
       <p className={invite ? 'text-inverse-muted text-sm' : 'text-muted-foreground text-sm'}>
-        {outOfQuota
-          ? `오늘 AI 분석·리뷰 ${quota.limit}회를 다 썼어요. ${RESETS_AT.format(new Date(quota.resetsAt))}에 다시 쓸 수 있어요.`
-          : `오늘 남은 AI 분석 ${quota.remaining} / ${quota.limit}회`}
+        {outOfQuota ? exhausted : `오늘 남은 AI 분석 ${quota.remaining} / ${quota.limit}회`}
       </p>
     ) : null
 
-  // 한도 초과 429는 위 줄이 같은 말을 한다. 두 번 띄우지 않는다
-  const requestError =
-    request.isError && !outOfQuota ? (
-      <p
-        role="alert"
-        className={invite ? 'text-inverse-foreground text-sm' : 'text-destructive-text text-sm'}
-      >
-        {problemMessage(request.error)}
-      </p>
-    ) : null
+  const requestError = request.isError ? (
+    <p
+      role="alert"
+      className={invite ? 'text-inverse-foreground text-sm' : 'text-destructive-text text-sm'}
+    >
+      {limitHit ? exhausted : problemMessage(request.error)}
+    </p>
+  ) : null
   const requestButton = canRequest ? (
     <Button
       type="button"
