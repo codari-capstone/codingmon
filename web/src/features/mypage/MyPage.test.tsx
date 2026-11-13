@@ -77,19 +77,20 @@ describe('MyPage 계정 정보 (MY-01)', () => {
     expect(within(account).queryByText(/@/)).not.toBeInTheDocument()
   })
 
-  it('프로필 수정은 아래 계정 설정으로 간다 (#243 전까지)', async () => {
+  it('프로필 수정은 계정 설정 화면으로 간다', async () => {
     renderMyPage(EMAIL_USER)
     const account = await screen.findByRole('region', { name: '계정 정보' })
     expect(within(account).getByRole('link', { name: '프로필 수정' })).toHaveAttribute(
       'href',
-      '#account-settings',
+      '/me/account',
     )
-    expect(document.getElementById('account-settings')).toHaveTextContent('계정 설정')
+    // 계정 설정은 이 화면에 없다(#243)
+    expect(screen.queryByLabelText('닉네임')).not.toBeInTheDocument()
   })
 })
 
 describe('MyPage 사이드바 (MyNav)', () => {
-  it('지금 화면을 표시하고, 계정 설정·탈퇴는 이 화면의 구역으로 간다', async () => {
+  it('지금 화면을 표시하고, 메뉴마다 그 화면으로 간다', async () => {
     renderMyPage(EMAIL_USER)
     const nav = await screen.findByRole('navigation', { name: '마이페이지 메뉴' })
 
@@ -97,26 +98,18 @@ describe('MyPage 사이드바 (MyNav)', () => {
       'aria-current',
       'page',
     )
-    expect(within(nav).getByRole('link', { name: /계정 설정/ })).toHaveAttribute(
-      'href',
-      '#account-settings',
-    )
-    expect(within(nav).getByRole('link', { name: /회원 탈퇴/ })).toHaveAttribute(
-      'href',
-      '#withdraw',
-    )
-    // 화면 설정은 아직 없다. 링크가 아니라 꺼진 항목이다
-    expect(within(nav).queryByRole('link', { name: /화면 설정/ })).not.toBeInTheDocument()
+    const href = (name: RegExp) => within(nav).getByRole('link', { name }).getAttribute('href')
+    expect(href(/계정 설정/)).toBe('/me/account')
+    expect(href(/화면 설정/)).toBe('/me/display')
+    expect(href(/회원 탈퇴/)).toBe('/me/withdraw')
     expect(within(nav).getByRole('button', { name: /로그아웃/ })).toBeInTheDocument()
   })
 
-  it('관리자에게는 회원 탈퇴 메뉴가 없다(탈퇴 구역도 없다)', async () => {
+  it('관리자에게는 회원 탈퇴 메뉴가 없다', async () => {
     renderMyPage({ ...EMAIL_USER, role: 'ADMIN' })
     const nav = await screen.findByRole('navigation', { name: '마이페이지 메뉴' })
     expect(within(nav).queryByRole('link', { name: /회원 탈퇴/ })).not.toBeInTheDocument()
-    // 메뉴만 보면 WithdrawSection의 관리자 분기가 회귀해도 지나간다(#274 리뷰). 구역도 비어 있어야 한다
-    expect(document.getElementById('withdraw')).toBeEmptyDOMElement()
-    expect(screen.queryByRole('heading', { name: '회원 탈퇴' })).not.toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: /계정 설정/ })).toBeInTheDocument()
   })
 })
 

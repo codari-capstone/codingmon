@@ -14,17 +14,14 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { cn } from '@/lib/utils'
-import { NicknameForm, PasswordForm, WithdrawSection } from './AccountSettings'
 import { activeMonths, buildWeeks, grassLevel, monthLabels } from './grass'
-import { MyNav } from './MyNav'
+import { MY_CARD as CARD, MyLayout } from './MyLayout'
 import { activityQuery } from './myPageQuery'
 
 const LOGIN_METHOD_LABEL: Record<CurrentUser['loginMethod'], string> = {
   EMAIL: '이메일',
   GITHUB: 'GitHub',
 }
-
-const CARD = 'bg-card flex flex-col rounded-lg border p-6 sm:px-8 sm:py-7'
 
 /** 계정 정보 (MY-01). `/api/users/me`는 헤더가 이미 받아 둔 값이라 따로 부르지 않는다. */
 function AccountInfo({ user }: { user: CurrentUser }) {
@@ -54,9 +51,8 @@ function AccountInfo({ user }: { user: CurrentUser }) {
           </p>
         ) : null}
       </div>
-      {/* shortcut: 계정 설정이 아직 이 화면 아래에 있다(#240). #243에서 /me/account로 바꾼다 */}
       <Button asChild variant="secondary" size="sm">
-        <a href="#account-settings">프로필 수정</a>
+        <Link to="/me/account">프로필 수정</Link>
       </Button>
     </section>
   )
@@ -225,43 +221,13 @@ function Activity() {
   )
 }
 
-/**
- * 마이페이지 · 프로필 · 학습 요약 (MY-01·05). 왼쪽은 마이페이지 메뉴(MyNav)다.
- *
- * shortcut: 계정 설정(MY-02·03)과 탈퇴(MY-04)는 아직 이 화면 아래에 둔다(#240). 메뉴가 앵커로 이곳을
- * 가리킨다. #243에서 /me/account·/me/withdraw로 옮긴다.
- */
+/** 마이페이지 · 프로필 · 학습 요약 (MY-01·05). 계정 설정·탈퇴는 메뉴의 각 화면이다(#243). */
 export function Component() {
   const { user } = useAuth()
-
-  // RequireAuth 뒤라 user가 있다. 세션이 막 끊긴 순간만 비어 있을 수 있다.
   return (
-    <div className="grid items-start gap-8 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-12 lg:pt-4">
-      <aside className="lg:sticky lg:top-6">{user ? <MyNav user={user} /> : null}</aside>
-
-      <div className="flex min-w-0 flex-col gap-6">
-        <h1 className="page-title">프로필 · 학습 요약</h1>
-        {user ? <AccountInfo user={user} /> : null}
-        <Activity />
-        {user ? (
-          <>
-            <section
-              id="account-settings"
-              aria-labelledby="settings-heading"
-              className={cn(CARD, 'mt-6 scroll-mt-6 gap-6')}
-            >
-              <h2 id="settings-heading" className="text-foreground text-lg font-semibold">
-                계정 설정
-              </h2>
-              <NicknameForm user={user} />
-              <PasswordForm user={user} />
-            </section>
-            <div id="withdraw" className="scroll-mt-6">
-              <WithdrawSection user={user} />
-            </div>
-          </>
-        ) : null}
-      </div>
-    </div>
+    <MyLayout title="프로필 · 학습 요약">
+      {user ? <AccountInfo user={user} /> : null}
+      <Activity />
+    </MyLayout>
   )
 }

@@ -169,6 +169,35 @@ describe('ThemeProvider', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 
+  // 화면 설정의 '시스템 설정 따르기'(UX-06, #243)
+  it("'시스템'을 고르면 저장한 선택을 지우고 다시 OS 설정을 따라간다", async () => {
+    media = stubMatchMedia(true)
+    localStorage.setItem(THEME_STORAGE_KEY, 'light')
+    function PreferenceProbe() {
+      const { theme, preference, setPreference } = useTheme()
+      return (
+        <button type="button" onClick={() => setPreference('system')}>
+          {`${preference}:${theme}`}
+        </button>
+      )
+    }
+    const user = userEvent.setup()
+    render(
+      <ThemeProvider>
+        <PreferenceProbe />
+      </ThemeProvider>,
+    )
+    expect(screen.getByRole('button')).toHaveTextContent('light:light')
+
+    await user.click(screen.getByRole('button'))
+
+    expect(screen.getByRole('button')).toHaveTextContent('system:dark')
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBeNull()
+    // 이제 고른 것이 없으니 OS 변화를 따라간다
+    media.changeTo(false)
+    expect(screen.getByRole('button')).toHaveTextContent('system:light')
+  })
+
   it('언마운트하면 OS 설정 리스너를 떼어낸다', () => {
     media = stubMatchMedia(false)
     const { unmount } = render(

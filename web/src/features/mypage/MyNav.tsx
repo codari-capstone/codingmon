@@ -21,26 +21,36 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   )
 }
 
-/**
- * 같은 화면 안의 구역으로 간다. shortcut: 계정 설정·탈퇴는 아직 /me 아래에 있어(#240) 앵커로 잇는다.
- * #243에서 /me/account·/me/withdraw가 생기면 NavLink로 바꾼다.
- */
-function Anchor({
-  href,
+/** 메뉴 하나. 지금 화면이면 옅은 파랑 면(aria-current). 탈퇴는 빨간 글자다(디자인 MyNav) */
+function Item({
+  to,
   icon,
   label,
   danger,
 }: {
-  href: string
+  to: string
   icon: IconName
   label: string
   danger?: boolean
 }) {
   return (
-    <a href={href} className={cn(ITEM, danger ? cn('text-destructive-text', HOVER) : IDLE)}>
+    <NavLink
+      to={to}
+      end
+      className={({ isActive }) =>
+        cn(
+          ITEM,
+          isActive
+            ? 'bg-accent text-primary-text'
+            : danger
+              ? cn('text-destructive-text', HOVER)
+              : IDLE,
+        )
+      }
+    >
       <Icon name={icon} />
       {label}
-    </a>
+    </NavLink>
   )
 }
 
@@ -63,30 +73,18 @@ export function MyNav({ user }: { user: CurrentUser }) {
       </div>
 
       <Group title="내 정보">
-        <NavLink
-          to="/me"
-          end
-          className={({ isActive }) => cn(ITEM, isActive ? 'bg-accent text-primary-text' : IDLE)}
-        >
-          <Icon name="user" />
-          프로필 · 학습 요약
-        </NavLink>
+        <Item to="/me" icon="user" label="프로필 · 학습 요약" />
       </Group>
 
       <Group title="설정">
-        <Anchor href="#account-settings" icon="lock" label="계정 설정" />
-        {/* 화면 설정(UX-06)은 #243·#249에서 생긴다. 그때까지 꺼 둔다 */}
-        <span aria-disabled="true" className={cn(ITEM, 'text-muted-foreground opacity-50')}>
-          <Icon name="settings" />
-          화면 설정
-          <span className="sr-only">(준비 중)</span>
-        </span>
+        <Item to="/me/account" icon="lock" label="계정 설정" />
+        <Item to="/me/display" icon="settings" label="화면 설정" />
       </Group>
 
-      {/* 관리자는 탈퇴할 수 없다(WithdrawSection이 그리지 않는다). 갈 곳 없는 메뉴를 두지 않는다 */}
+      {/* 관리자는 탈퇴할 수 없다(명세 MY-04, 서버도 403). 갈 곳 없는 메뉴를 두지 않는다 */}
       {user.role !== 'ADMIN' ? (
         <Group title="계정 관리">
-          <Anchor href="#withdraw" icon="x" label="회원 탈퇴" danger />
+          <Item to="/me/withdraw" icon="x" label="회원 탈퇴" danger />
         </Group>
       ) : null}
 

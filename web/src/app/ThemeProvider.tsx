@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-import { applyTheme, readStoredTheme, resolveInitialTheme, storeTheme, type Theme } from './theme'
-import { ThemeContext } from './useTheme'
+import {
+  applyTheme,
+  clearStoredTheme,
+  readStoredTheme,
+  resolveInitialTheme,
+  storeTheme,
+  type Theme,
+} from './theme'
+import { ThemeContext, type ThemePreference } from './useTheme'
 
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 
@@ -24,6 +31,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
    * 저장 성공 여부와 무관해진다.
    */
   const chosenByUser = useRef(readStoredTheme() !== null)
+  // 화면 설정(UX-06)이 고른 칸을 보여 주려고 상태로도 둔다. ref는 렌더를 다시 하지 않는다
+  const [chosen, setChosen] = useState(() => readStoredTheme() !== null)
 
   // commit 뒤 paint 전에 동기로 클래스를 붙인다. 다만 이것은 React가 렌더를
   // 시작한 뒤의 깜빡임만 막는다. 번들 로드 전 구간은 index.html의 인라인
@@ -47,15 +56,32 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = useCallback((next: Theme) => {
     chosenByUser.current = true
+    setChosen(true)
     storeTheme(next)
     setThemeState(next)
   }, [])
+
+  // '시스템': 고른 것을 잊고 OS 설정으로 돌아간다. 위 effect가 이후 OS 변화를 따라간다
+  const setPreference = useCallback(
+    (next: ThemePreference) => {
+      if (next !== 'system') return setTheme(next)
+      chosenByUser.current = false
+      setChosen(false)
+      clearStoredTheme()
+      setThemeState(prefersDark() ? 'dark' : 'light')
+    },
+    [setTheme],
+  )
 
   const toggle = useCallback(() => {
     setTheme(theme === 'dark' ? 'light' : 'dark')
   }, [theme, setTheme])
 
+  const preference: ThemePreference = chosen ? theme : 'system'
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggle }}>{children}</ThemeContext.Provider>
+    <ThemeContext.Provider value={{ theme, preference, setTheme, setPreference, toggle }}>
+      {children}
+    </ThemeContext.Provider>
   )
 }
