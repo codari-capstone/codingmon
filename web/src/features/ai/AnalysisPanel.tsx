@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { problemMessage } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { isDeadEnd } from '@/features/result/resultQuery'
-import { analysisQuery, useRequestAnalysis } from './analysisQuery'
+import { aiQuotaQuery, analysisQuery, useRequestAnalysis } from './analysisQuery'
 import { suspectLines } from './countLines'
 import { HintSteps } from './HintSteps'
 
@@ -72,6 +72,24 @@ function Explanation({
   )
 }
 
+/** 만들지 못한 이유별 안내 (AI-06, 계약 `failureReason`). 어느 이유든 다시 누르면 새로 만든다. */
+const FAILURE_TEXT: Record<NonNullable<SubmissionAnalysis['failureReason']>, string> = {
+  UNAVAILABLE: 'AI 서버가 응답하지 않아 분석을 만들지 못했어요. 잠시 후 다시 시도해 주세요.',
+  RATE_LIMITED: 'AI 서버에 요청이 몰려 분석을 만들지 못했어요. 잠시 후 다시 시도해 주세요.',
+  BUSY: '지금 분석을 기다리는 제출이 많아요. 잠시 후 다시 시도해 주세요.',
+  INVALID_RESPONSE: '분석을 만들지 못했어요. 다시 시도해 주세요.',
+  INTERNAL: '분석을 만들지 못했어요. 다시 시도해 주세요.',
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+const RESETS_AT = new Intl.DateTimeFormat('ko-KR', {
+  month: 'long',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
 /**
  * 진행 문구. 결과 화면의 `Headline`처럼 live region 하나를 두고 내용만 바꾼다 —
  * 분기마다 노드가 바뀌면 '분석을 마쳤어요' 같은 마지막 변화가 안내되지 않는다.
@@ -79,7 +97,7 @@ function Explanation({
 function statusText(working: boolean, analysis: SubmissionAnalysis | null): string {
   if (working) return 'AI가 분석하고 있어요…'
   if (analysis === null) return ''
-  if (analysis.status === 'FAILED') return '분석을 만들지 못했어요. 다시 시도해 주세요.'
+  if (analysis.status === 'FAILED') return FAILURE_TEXT[analysis.failureReason ?? 'INTERNAL']
   // AI-06. 정답 코드가 섞여 결과를 숨긴 분석이다(계약). 다시 요청해도 새로 만들지 않는다.
   if (analysis.blocked)
     return '이 제출은 AI 분석을 보여 줄 수 없어요. 채점 결과와 쉬운 설명은 그대로 볼 수 있어요.'
@@ -93,8 +111,7 @@ function statusText(working: boolean, analysis: SubmissionAnalysis | null): stri
  * 설명이 그대로 보인다. 요청한 적이 없으면 [AI 분석] 버튼이다.
  *
  * 이 패널의 오류는 패널 안에서 끝난다. 채점 결과는 그대로 보여야 한다(AI-06).
- *
- * shortcut: 오늘 남은 횟수(AI-01)와 한도 초과 구분(AI-06)은 계약에 없다(#80·#81). 계약에 들어오면 붙인다.
+ * 누를 수 있을 때는 버튼 아래 오늘 남은 횟수를 보인다(AI-01).
  */
 export function AnalysisPanel({
   submissionId,
@@ -109,6 +126,7 @@ export function AnalysisPanel({
   const queryClient = useQueryClient()
   const { data, isPending, error, refetch } = useQuery(analysisQuery(submissionId))
   const request = useRequestAnalysis(submissionId)
+  const quota = useQuery(aiQuotaQuery()).data
 
   // 결과 화면과 같은 이유로 읽기에도 건다 (session.ts).
   useEffect(() => {
@@ -125,13 +143,34 @@ export function AnalysisPanel({
   const canRequest = loaded && !working && (data === null || data.status === 'FAILED')
   // 한 번도 요청하지 않은 오답은 남색 안내 카드로 권한다(디자인 ResultRuntime)
   const invite = loaded && data === null && !working
+  // 한도를 다 썼으면 새로 만들 수 없다(429). 예외: 서버가 처리 중에 내려가 시간이 지나 FAILED가 된 분석은
+  // 이미 1회로 셌고 다시 요청할 수 있다 — 이 경우만 completedAt이 null이다(계약 `AiQuota`·`completedAt`).
+  // 단 오늘(UTC) 만든 것만이다. 서버는 오늘 만든 분석만 세고, 어제 것을 다시 요청하면 새 1회로 센다(#272 리뷰).
+  const abandonedToday =
+    data?.status === 'FAILED' &&
+    data.completedAt === null &&
+    quota !== undefined &&
+    Date.parse(data.createdAt) >= Date.parse(quota.resetsAt) - DAY_MS
+  const outOfQuota = quota?.remaining === 0 && !abandonedToday
+  const exhausted = quota
+    ? `오늘 AI 분석·리뷰 ${quota.limit}회를 다 썼어요. ${RESETS_AT.format(new Date(quota.resetsAt))}에 다시 쓸 수 있어요.`
+    : ''
+  // 누른 뒤 한도 초과를 받았으면 그 안내를 alert로 읽힌다. 아래 줄은 live region이 아니라 소리 없이 바뀐다
+  const limitHit = request.isError && outOfQuota
+
+  const quotaLine =
+    canRequest && quota && !limitHit ? (
+      <p className={invite ? 'text-inverse-muted text-sm' : 'text-muted-foreground text-sm'}>
+        {outOfQuota ? exhausted : `오늘 남은 AI 분석 ${quota.remaining} / ${quota.limit}회`}
+      </p>
+    ) : null
 
   const requestError = request.isError ? (
     <p
       role="alert"
       className={invite ? 'text-inverse-foreground text-sm' : 'text-destructive-text text-sm'}
     >
-      {problemMessage(request.error)}
+      {limitHit ? exhausted : problemMessage(request.error)}
     </p>
   ) : null
   const requestButton = canRequest ? (
@@ -140,6 +179,7 @@ export function AnalysisPanel({
       size={invite ? 'lg' : 'md'}
       fullWidth={invite}
       className="min-h-11 self-start"
+      disabled={outOfQuota}
       onClick={() => request.mutate()}
     >
       {data === null ? 'AI 분석' : '다시 시도'}
@@ -214,6 +254,7 @@ export function AnalysisPanel({
       ) : null}
       {requestError}
       {requestButton}
+      {quotaLine}
     </section>
   )
 }
