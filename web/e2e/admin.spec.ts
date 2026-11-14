@@ -98,3 +98,29 @@ test('공백 없는 긴 제목도 좁은 화면에서 가로로 넘치지 않는
   )
   expect(overflow).toBeLessThanOrEqual(1)
 })
+
+/**
+ * 나란한 칸(출처·라이선스, 입력·출력 형식·제약 조건)은 도움말이나 오류가 한 칸에만 있어도 입력칸이
+ * 같은 줄에 서야 한다. 바닥 맞춤은 오류 문구까지 바닥에 넣어 26px 어긋났다(#289 리뷰). 폭은 jsdom이 재지 않는다.
+ */
+test('나란한 칸은 한 칸에만 오류·도움말이 있어도 입력칸이 같은 줄에 선다', async ({ page }) => {
+  await login(page, ADMIN)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/admin/problems/1')
+  const top = async (id: string) => (await page.locator(`#${id}`).boundingBox())!.y
+
+  // 나란히 놓이지 않은 칸의 라벨은 왼쪽에 그대로 있다(맞춤을 격자일 때만 건다)
+  const labelX = (await page.locator('label[for="title"]').boundingBox())!.x
+  expect(Math.abs(labelX - (await page.locator('#title').boundingBox())!.x)).toBeLessThan(1)
+
+  await page.getByLabel('라이선스').fill('가'.repeat(121))
+  await page.getByRole('button', { name: '저장' }).click()
+  await expect(page.getByText(/120자/)).toBeVisible()
+  expect(Math.abs((await top('sourceName')) - (await top('license')))).toBeLessThan(1)
+
+  await page.getByRole('tab', { name: '지문' }).click()
+  await page.locator('#constraintsMarkdown').waitFor()
+  expect(
+    Math.abs((await top('inputDescription')) - (await top('constraintsMarkdown'))),
+  ).toBeLessThan(1)
+})

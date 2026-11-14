@@ -4,10 +4,11 @@ import { DIFFICULTIES } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
+import { RadioGroup } from '@/components/ui/radio-group'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { conceptTagsQuery } from '@/features/problems/problemsQuery'
 import { Field } from './Field'
+import { ALIGNED_ROW } from './fieldLayout'
 import type { ProblemFormApi } from './problemInputSchema'
 
 /** 문제 하나에 붙일 수 있는 개념 태그 수 (ADM-02, `docs/AI_FEATURES.md` 7절). */
@@ -30,6 +31,7 @@ export function BasicInfoTab({ form }: { form: ProblemFormApi }) {
 
   const tags = useQuery(conceptTagsQuery())
   const chosen = watch('tags')
+  const difficulty = watch('difficulty')
 
   function toggle(slug: string) {
     const next = chosen.includes(slug) ? chosen.filter((item) => item !== slug) : [...chosen, slug]
@@ -38,20 +40,27 @@ export function BasicInfoTab({ form }: { form: ProblemFormApi }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Field id="title" label="제목" error={errors.title?.message}>
         <Input id="title" {...register('title')} />
       </Field>
 
-      <Field id="difficulty" label="난이도" error={errors.difficulty?.message}>
-        <Select id="difficulty" {...register('difficulty')}>
-          {DIFFICULTIES.map((value) => (
-            <option key={value} value={value}>
-              {DIFFICULTY_LABEL[value]}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      {/* 디자인: 세 난이도를 카드로 늘어놓는다. 하나만 고르므로 라디오다 */}
+      <div className="flex flex-col gap-1.5">
+        <RadioGroup
+          label="난이도"
+          name="difficulty"
+          variant="card"
+          options={DIFFICULTIES.map((value) => ({ value, label: DIFFICULTY_LABEL[value] }))}
+          value={difficulty}
+          onChange={(next) =>
+            setValue('difficulty', next, { shouldValidate: true, shouldDirty: true })
+          }
+        />
+        {errors.difficulty ? (
+          <p className="text-destructive-text text-sm">{errors.difficulty.message}</p>
+        ) : null}
+      </div>
 
       <fieldset className="flex flex-col gap-1.5">
         <legend className="text-sm font-medium">개념 태그</legend>
@@ -66,7 +75,7 @@ export function BasicInfoTab({ form }: { form: ProblemFormApi }) {
         ) : tags.data === undefined ? (
           <p className="text-muted-foreground text-sm">태그를 불러오는 중…</p>
         ) : (
-          <div className="flex flex-wrap gap-x-4">
+          <div className="flex flex-wrap gap-x-5">
             {tags.data.map((tag) => {
               const checked = chosen.includes(tag.slug)
               return (
@@ -89,14 +98,21 @@ export function BasicInfoTab({ form }: { form: ProblemFormApi }) {
         ) : null}
       </fieldset>
 
-      <Field
-        id="sourceName"
-        label="출처"
-        hint="공개하려면 출처 이름이 있어야 해요. 직접 만든 문제면 '직접 제작'처럼 적어요."
-        error={errors.sourceName?.message}
-      >
-        <Input id="sourceName" {...register('sourceName')} />
-      </Field>
+      {/* 디자인: 출처와 라이선스를 한 줄에. 도움말·오류가 한 칸에만 있어도 입력칸이 같은 줄에 선다(alignAt) */}
+      <div className={ALIGNED_ROW.sm}>
+        <Field
+          id="sourceName"
+          label="출처"
+          hint="공개하려면 출처 이름이 있어야 해요. 직접 만든 문제면 '직접 제작'처럼 적어요."
+          error={errors.sourceName?.message}
+          alignAt="sm"
+        >
+          <Input id="sourceName" {...register('sourceName')} />
+        </Field>
+        <Field id="license" label="라이선스" error={errors.license?.message} alignAt="sm">
+          <Input id="license" placeholder="CC BY-SA 4.0" {...register('license')} />
+        </Field>
+      </div>
 
       <Field
         id="sourceUrl"
@@ -105,10 +121,6 @@ export function BasicInfoTab({ form }: { form: ProblemFormApi }) {
         error={errors.sourceUrl?.message}
       >
         <Input id="sourceUrl" type="url" placeholder="https://" {...register('sourceUrl')} />
-      </Field>
-
-      <Field id="license" label="라이선스" error={errors.license?.message}>
-        <Input id="license" placeholder="CC BY-SA 4.0" {...register('license')} />
       </Field>
     </div>
   )

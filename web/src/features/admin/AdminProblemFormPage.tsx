@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { problemCode, problemMessage } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { parsePathId } from '@/lib/pathId'
+import { cn } from '@/lib/utils'
 import { adminProblemQuery, adminProblemVersionQuery, saveProblem } from './adminProblemQuery'
 import { BasicInfoTab } from './BasicInfoTab'
 import {
@@ -229,6 +230,15 @@ function AdminProblemForm() {
     if (next === 'solutions') setOpenedSolutions(true)
   }
 
+  // 두 탭이 같은 문제 폼을 저장한다. 탭마다 카드 안에 둔다(디자인) — 보이는 탭은 하나라 버튼도 하나다
+  const saveButton = (
+    <div className="flex justify-end">
+      <Button type="submit" className="min-h-11" disabled={save.isPending}>
+        {save.isPending ? '저장 중…' : '저장'}
+      </Button>
+    </div>
+  )
+
   return (
     <section className="mx-auto flex w-full max-w-[1080px] flex-col gap-5">
       {/*
@@ -360,25 +370,20 @@ function AdminProblemForm() {
                 : 'contents'
             }
           >
-            <TabsContent className={PANEL} value="basic">
+            {/* 디자인: [저장]은 카드 안 오른쪽 아래. 잠긴 화면에는 두지 않는다(눌러도 409다) */}
+            <TabsContent className={cn(PANEL, 'flex flex-col gap-6')} value="basic">
               <BasicInfoTab form={form} />
+              {locked ? null : saveButton}
             </TabsContent>
-            <TabsContent className={PANEL} value="statement">
+            <TabsContent className={cn(PANEL, 'flex flex-col gap-6')} value="statement">
               <StatementTab
                 form={form}
                 manualPython={manualPython}
                 onManualPythonChange={setManualOverride}
               />
+              {locked ? null : saveButton}
             </TabsContent>
           </fieldset>
-
-          {locked || (tab !== 'basic' && tab !== 'statement') ? null : (
-            <div>
-              <Button type="submit" className="min-h-11" disabled={save.isPending}>
-                {save.isPending ? '저장 중…' : '저장'}
-              </Button>
-            </div>
-          )}
         </form>
 
         {id === null || readOnly || !openedCases ? null : (
