@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { CurrentUser } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
-import { MOTION_STORAGE_KEY } from '@/app/motion'
+import { MOTION_STORAGE_KEY, startMotionSync } from '@/app/motion'
 import { THEME_STORAGE_KEY } from '@/app/theme'
 import { ThemeProvider } from '@/app/ThemeProvider'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
@@ -99,7 +99,8 @@ describe('화면 설정 /me/display (UX-06)', () => {
     // 에디터 설정은 메모리에도 한 벌 있다(editorSettings.ts). 앞 테스트에서 바꾼 값을 되돌린다
     updateEditorSettings(EDITOR_DEFAULTS)
     document.documentElement.classList.remove('dark')
-    delete document.documentElement.dataset.motion
+    // 움직임 설정도 메모리에 한 벌 있다(motion.ts). 비운 저장소를 다시 읽혀 되돌린다
+    startMotionSync()
   })
 
   it('애니메이션 줄이기(UX-08)는 기기 설정에서 시작하고, 고르면 저장하고 html에 적는다', async () => {
@@ -120,6 +121,37 @@ describe('화면 설정 /me/display (UX-06)', () => {
     await user.click(reduce)
     expect(document.documentElement.dataset.motion).toBe('full')
     expect(localStorage.getItem(MOTION_STORAGE_KEY)).toBe('full')
+  })
+
+  it('고른 값이 있을 때만 [기기 설정 따르기]가 있고, 누르면 저장한 선택을 지운다', async () => {
+    const user = userEvent.setup()
+    renderAt('/me/display')
+    const reduce = await screen.findByRole('switch', { name: /애니메이션 줄이기/ })
+    expect(screen.queryByRole('button', { name: '기기 설정 따르기' })).not.toBeInTheDocument()
+
+    await user.click(reduce)
+    await user.click(screen.getByRole('button', { name: '기기 설정 따르기' }))
+
+    expect(localStorage.getItem(MOTION_STORAGE_KEY)).toBeNull()
+    expect(document.documentElement.dataset.motion).toBeUndefined()
+    // 테스트 환경의 기기는 동작 줄이기가 꺼져 있어 스위치도 꺼진다
+    expect(reduce).not.toBeChecked()
+    expect(screen.queryByRole('button', { name: '기기 설정 따르기' })).not.toBeInTheDocument()
+  })
+
+  it('다른 탭에서 바꾸면 이 탭의 스위치와 html도 따라간다', async () => {
+    renderAt('/me/display')
+    const reduce = await screen.findByRole('switch', { name: /애니메이션 줄이기/ })
+
+    act(() => {
+      localStorage.setItem(MOTION_STORAGE_KEY, 'reduce')
+      // 다른 탭의 setItem은 이 탭에 storage 이벤트로만 온다
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: MOTION_STORAGE_KEY, newValue: 'reduce' }),
+      )
+    })
+    expect(reduce).toBeChecked()
+    expect(document.documentElement.dataset.motion).toBe('reduce')
   })
 
   it('기기가 동작 줄이기면 고른 적이 없어도 스위치가 켜져 보인다', async () => {
