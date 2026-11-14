@@ -418,11 +418,45 @@ export interface paths {
          *     맞힌 서로 다른 문제가 `requiredProblemCount`(5)개 미만이면 `concepts`는 빈 배열이고 `remainingProblemCount`로 남은 개수를 알려 준다.
          *     조건을 채우면 맞히지 못한 문제를 포함해 제출한 모든 문제로 계산한다. 예제 실행·채점 불가·채점 중인 제출은 세지 않는다.
          *     문제의 태그는 공개 중인 버전을 따르고, 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다.
-         *     요청할 때마다 다시 계산한다. 하루 1회 저장하는 리포트(#85)와 다르다.
+         *     요청할 때마다 다시 계산한다. 하루 1회 저장하는 리포트(`LearningReport`)와 다르다.
          */
         get: operations["getMyLearningStats"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/me/learning-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 마지막 학습 리포트 (REP-03~05)
+         * @description 가장 최근 날짜의 리포트다. 오늘 리포트가 없으면 지난 날짜의 리포트를 준다. 화면을 열 때와 만드는 동안의 폴링에 쓴다. AI를 부르지 않는다.
+         *     `reportDate`가 오늘(UTC)이 아니면 화면은 [리포트 보기]로 오늘 리포트를 새로 만들 수 있다고 안내한다.
+         *     한 번도 만들지 않았으면 404 `LEARNING_REPORT_NOT_FOUND`다.
+         */
+        get: operations["getLearningReport"];
+        put?: never;
+        /**
+         * 학습 리포트 만들기 (REP-03~05, 기술명세서 `LEARNING-001`·`LEARNING-003`)
+         * @description [리포트 보기] 버튼. 오늘 리포트를 만들거나, 이미 있는 오늘 리포트를 돌려준다(`docs/AI_FEATURES.md` 7절).
+         *     오늘은 UTC 날짜다(한국 시각 오전 9시에 바뀐다). 리포트는 사용자당 하루 1회 새로 만든다.
+         *     통계와 추천 문제는 만들 때 서버가 계산해 저장하고, AI는 그 옆에 붙는 문장만 쓴다.
+         *     - 오늘 리포트가 끝났거나(`COMPLETED`) 만드는 중(`PENDING`)이면 새로 만들지 않고 그것을 돌려준다(200).
+         *     - 없거나 `FAILED`면 통계와 추천을 지금 기준으로 다시 계산해 만들기 시작한다(202 `PENDING`). `FAILED`에서 다시 누르는 것이 재시도다.
+         *     - 맞힌 서로 다른 문제가 5개 미만이면 409 `LEARNING_REPORT_NOT_AVAILABLE`이고 아무것도 만들지 않는다. 오늘 리포트가 이미 있으면 이 검사보다 먼저 그것을 돌려준다.
+         *     - AI 분석·리뷰의 하루 한도(`AiQuota`)에는 세지 않는다. 리포트는 하루 1회가 따로 있다.
+         *     - AI 대기열이 차 시작하지 못하면 200 `FAILED`, `failureReason` `BUSY`다.
+         *     화면은 `status`가 `PENDING`이면 바뀔 때까지 `GET`을 주기적으로 부른다.
+         */
+        post: operations["requestLearningReport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1517,6 +1551,77 @@ export interface components {
             weaknessScore: number;
             /** @description 취약 개념인지. 취약 점수 상위 2개 태그이면서 반올림한 취약 점수가 0보다 크면 참이다 */
             weak: boolean;
+        };
+        /**
+         * @description 하루 1회 만드는 학습 리포트(F4). 수치, 취약 개념, 추천 문제는 리포트를 만들 때 서버가 계산해 저장한 값이다(REP-02·04).
+         *     AI 응답에서 가져오지 않으므로 `PENDING`·`FAILED`여도 있다.
+         *     AI가 쓴 문장(`summary`, `weakConcepts[].explanation`·`practice`, `recommendations[].reason`)은 `COMPLETED`일 때만 있고, 그 밖에는 null이다.
+         *     `COMPLETED`여도 null일 수 있다. 서버가 문장 속 수치를 통계와 대조해 맞지 않는 문장을 지우고, 다 지워진 글은 null로 둔다(`docs/AI_FEATURES.md` 7절).
+         *     화면은 null인 글을 빼고 보여 준다. 모델이 만든 문장이라 글자 그대로 보여 준다(HTML로 렌더링하지 않는다).
+         */
+        LearningReport: {
+            /**
+             * Format: date
+             * @description 리포트의 기준 날짜(UTC). 하루 1회는 이 날짜로 센다
+             */
+            reportDate: string;
+            /**
+             * @description `PENDING` 만드는 중, `COMPLETED` 끝남, `FAILED` 만들지 못함(같은 날 다시 요청할 수 있다). 만들지 못한 이유는 `failureReason`이다.
+             *     서버가 처리 중에 내려가 끝나지 못한 리포트는 시작하고 15분(서버 설정 `LLM_PENDING_TIMEOUT`)이 지나면 `FAILED`로 준다.
+             * @enum {string}
+             */
+            status: "PENDING" | "COMPLETED" | "FAILED";
+            /**
+             * @description `status`가 `FAILED`일 때만 있다. 값의 뜻은 `SubmissionAnalysis.failureReason`과 같다
+             * @enum {string|null}
+             */
+            failureReason: "UNAVAILABLE" | "RATE_LIMITED" | "BUSY" | "INVALID_RESPONSE" | "INTERNAL" | null;
+            /**
+             * Format: date-time
+             * @description 리포트를 만들기 시작한 시각(REP-05). 다시 시도하면 그 시각으로 바뀐다
+             */
+            generatedAt: string;
+            /** @description 만들 때의 맞힌 서로 다른 문제 수 */
+            solvedProblemCount: number;
+            /** @description 만들 때의 개념별 통계. 값과 순서, `weak`의 규칙은 `LearningStats.concepts`와 같다 */
+            concepts: components["schemas"]["ConceptStat"][];
+            /** @description 리포트 전체의 요약 분석 */
+            summary: string | null;
+            /** @description `concepts` 중 `weak`인 개념을 같은 순서로 준다. 취약 개념이 없으면 빈 배열이다 */
+            weakConcepts: {
+                slug: string;
+                name: string;
+                /** @description 이 개념이 무엇이고, 통계로 보아 어떤 점이 어려웠는지 (REP-03) */
+                explanation: string | null;
+                /** @description 이 개념을 익히는 연습 방법 (REP-03) */
+                practice: string | null;
+            }[];
+            /** @description 다음에 풀 문제. 순위 순이다. 공개 문제를 거의 다 맞혔을 때만 3개보다 적다 */
+            recommendations: components["schemas"]["LearningReportRecommendation"][];
+        };
+        /** @description 리포트를 만들 때 서버가 고른 추천 문제(REP-04, 규칙은 `docs/AI_FEATURES.md` 7절) */
+        LearningReportRecommendation: {
+            rank: number;
+            /**
+             * Format: int64
+             * @description 누르면 이 문제로 간다
+             */
+            problemId: number;
+            /** @description 문제의 지금 공개 버전의 제목. 공개가 내려갔으면 마지막으로 공개됐던 버전의 제목이다 */
+            title: string;
+            /** @description `title`과 같은 버전의 난이도 */
+            difficulty: components["schemas"]["Difficulty"];
+            /** @description 추천의 근거가 된 취약 개념과 그 점수(만들 때의 값). null이면 취약 개념에서 고를 문제가 모자라 난이도로 고른 도전 문제다. 화면은 개념·점수 없이 표시한다 */
+            concept: {
+                slug: string;
+                name: string;
+                /** @description `concepts`의 같은 개념의 `weaknessScore` */
+                weaknessScore: number;
+            } | null;
+            /** @description 응답하는 지금의 풀이 상태. 추천한 뒤 맞혔으면 `SOLVED`다 */
+            solveStatus: components["schemas"]["SolveStatus"];
+            /** @description AI가 쓴 추천 이유(`LEARNING-003`) */
+            reason: string | null;
         };
         ProblemSummary: {
             /**
@@ -2758,6 +2863,78 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getLearningReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 가장 최근 리포트 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningReport"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description 오류 `code`: `LEARNING_REPORT_NOT_FOUND`(만든 리포트가 없음) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    requestLearningReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 이미 있는 오늘 리포트(만드는 중 포함), 또는 대기열이 차 시작하지 못함(`FAILED`, `BUSY`) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningReport"];
+                };
+            };
+            /** @description 리포트를 만들기 시작함(`PENDING`) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningReport"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description 오류 `code`: `LEARNING_REPORT_NOT_AVAILABLE`(맞힌 서로 다른 문제가 5개 미만). `remainingProblemCount`로 더 맞혀야 할 개수를 준다 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"] & {
+                        /** @description 더 맞혀야 할 문제 수(`LearningStats.remainingProblemCount`와 같다) */
+                        remainingProblemCount: number;
+                    };
+                };
+            };
         };
     };
     getAiQuota: {
