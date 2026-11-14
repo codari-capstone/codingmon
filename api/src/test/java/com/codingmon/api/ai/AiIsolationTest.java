@@ -10,6 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,6 +49,7 @@ import com.zaxxer.hikari.HikariDataSource;
 // 모델은 풀어 줄 때까지 돌아오지 않는 가짜다. 처리기 1개·대기열 1칸이라 요청 둘이면 꽉 차고 셋째는 BUSY다.
 // DB 연결을 2개로 줄여, AI 처리기가 모델을 기다리며 연결을 쥐고 있으면 조회가 연결을 기다리다 시간을 넘기게 한다.
 // 채점 처리기는 JUDGE0_URL이 비어 꺼져 있으므로, 새 제출·예제 실행은 받는 것(QUEUED)까지만 본다.
+// 학습 리포트(#85)도 같은 처리기를 쓰므로 만드는 동안 연결을 쥐지 않는지 따로 본다.
 @SpringBootTest(properties = { "app.llm.workers=1", "app.llm.queue-capacity=1",
         "spring.datasource.hikari.maximum-pool-size=2" })
 class AiIsolationTest {
@@ -81,7 +85,23 @@ class AiIsolationTest {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+            if (request.responseType() == LearningReportResult.class) {
+                return (LlmResponse<T>) report(request);
+            }
             return (LlmResponse<T>) AnalysisControllerTest.FakeLlm.ok();
+        }
+
+        // 학습 리포트 응답. 취약 개념은 없고(태그 없는 문제만 맞혔다), 추천 순위는 입력마다 만드는 스키마의 enum에서 읽는다.
+        @SuppressWarnings("unchecked")
+        private static LlmResponse<?> report(LlmRequest<?> request) {
+            Map<String, Object> recommendations = (Map<String, Object>) ((Map<String, Object>) request.schema()
+                    .get("properties")).get("recommendations");
+            List<Integer> ranks = recommendations.get("maxItems").equals(0) ? List.of()
+                    : (List<Integer>) ((Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) recommendations
+                            .get("items")).get("properties")).get("rank")).get("enum");
+            return new LlmResponse<>(new LearningReportResult(List.of(),
+                    ranks.stream().map(r -> new LearningReportResult.RecommendationReason(r, "도전해 봐요.")).toList(),
+                    "고르게 잘하고 있어요."), "{}", LlmUsage.NONE);
         }
     }
 
@@ -110,6 +130,8 @@ class AiIsolationTest {
     long userId;
     long problemId;
     long versionId;
+    // 학습 리포트 조건(맞힌 문제 5개)을 채우려고 만든 문제
+    final List<Long> solvedProblemIds = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -142,6 +164,42 @@ class AiIsolationTest {
         jdbc.sql("delete from users where id = :id").param("id", userId).update();
         jdbc.sql("delete from problem_versions where id = :id").param("id", versionId).update();
         jdbc.sql("delete from problems where id = :id").param("id", problemId).update();
+        if (!solvedProblemIds.isEmpty()) {
+            jdbc.sql("delete from problems where id in (:ids)").param("ids", solvedProblemIds).update();
+            solvedProblemIds.clear();
+        }
+    }
+
+    @Test
+    void 학습_리포트를_만드는_동안에도_통계와_리포트_조회는_바로_응답하고_DB_연결을_쥐지_않는다() throws Exception {
+        // 태그 없는 문제 5개를 맞혔다. 개념별 통계는 비고, 추천은 아직 맞히지 않은 공개 문제(A+B)를 도전 문제로 고른다.
+        for (int i = 0; i < 5; i++) {
+            long id = jdbc.sql("insert into problems (slug) values (:slug) returning id")
+                    .param("slug", "iso-solved-" + UUID.randomUUID().toString().substring(0, 12)).query(Long.class).single();
+            solvedProblemIds.add(id);
+            jdbc.sql("insert into user_problem_stats (user_id, problem_id, attempt_count, solved, first_solved_at)"
+                    + " values (:userId, :problemId, 1, true, now())").param("userId", userId).param("problemId", id)
+                    .update();
+        }
+
+        mvc.perform(post("/api/users/me/learning-report").with(as(userId))).andExpect(status().isAccepted());
+        assertThat(llm.started.await(5, TimeUnit.SECONDS)).isTrue();
+
+        expectOk(within("학습 통계", get("/api/users/me/learning-stats").with(as(userId))));
+        expectOk(within("학습 리포트 조회", get("/api/users/me/learning-report").with(as(userId))));
+        HikariDataSource pool = dataSource.unwrap(HikariDataSource.class);
+        assertThat(eventually(() -> pool.getHikariPoolMXBean().getActiveConnections() == 0)).isTrue();
+        assertThat(llm.threads).isNotEmpty().allMatch(name -> name.startsWith("ai-"));
+
+        llm.release.countDown();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        String status = null;
+        while (System.nanoTime() < deadline && !"COMPLETED".equals(status)) {
+            Thread.sleep(50);
+            status = jdbc.sql("select status from learning_reports where user_id = :userId").param("userId", userId)
+                    .query(String.class).single();
+        }
+        assertThat(status).isEqualTo("COMPLETED");
     }
 
     @Test
