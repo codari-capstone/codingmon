@@ -56,6 +56,8 @@ class LearningReportService {
     private final LlmClient llm;
     private final JsonMapper json;
     private final TransactionTemplate transactions;
+    // 리포트 행(통계)과 추천을 한 시점에서 읽는다. 재시도가 둘을 한 트랜잭션에서 함께 바꾸므로 따로 읽으면 옛 통계와 새 추천이 섞인다.
+    private final TransactionTemplate snapshot;
     private final Duration pendingTimeout;
     // 이 서버의 처리기에 넣고 아직 끝나지 않은 learning_reports.id. 대기열에서 오래 기다려도 버려진 것으로 보지 않게 한다.
     // ai_reviews.id와 번호가 겹치므로 AiReviewRunner의 목록과 따로 둔다.
@@ -78,6 +80,10 @@ class LearningReportService {
         this.transactions = new TransactionTemplate(transactionManager);
         this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.transactions.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        this.snapshot = new TransactionTemplate(transactionManager);
+        this.snapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        this.snapshot.setReadOnly(true);
         this.pendingTimeout = pendingTimeout;
     }
 
@@ -85,9 +91,11 @@ class LearningReportService {
     // 시도를 잡는다. 통계는 그 저장소가 REPEATABLE READ로 한 시점을 읽으므로 시도를 잡는 트랜잭션 밖에서 먼저 읽는다.
     // 그사이 다른 요청이 먼저 잡았으면 계산한 것을 버리고 그 리포트를 돌려준다. 처리기에는 잡은 트랜잭션이 커밋된 뒤에 넣는다.
     Requested request(long userId) {
-        Optional<LearningReportRepository.Stored> today = reports.findToday(userId, abandoned());
-        if (today.isPresent() && today.get().status() != Status.FAILED) {
-            return new Requested(view(userId, today.get()), false);
+        Optional<LearningReportView> today = snapshot.execute(status -> reports.findToday(userId, abandoned())
+                .filter(stored -> stored.status() != Status.FAILED)
+                .map(stored -> view(userId, stored)));
+        if (today.isPresent()) {
+            return new Requested(today.get(), false);
         }
         LearningStats current = stats.find(userId);
         if (current.remainingProblemCount() > 0) {
@@ -103,17 +111,19 @@ class LearningReportService {
                 }));
         claim.ifPresent(claimed -> start(claimed, input));
         // 잡은 뒤 날짜가 바뀌어도 방금 잡은 행이 가장 최근 행이다.
-        LearningReportRepository.Stored stored = reports.findLatest(userId, abandoned())
+        LearningReportView latest = latest(userId)
                 .orElseThrow(() -> new IllegalStateException("만든 학습 리포트 행이 없다: 사용자 " + userId));
-        return new Requested(view(userId, stored), claim.isPresent());
+        return new Requested(latest, claim.isPresent());
     }
 
     // 화면을 열 때와 폴링. 가장 최근 날짜의 리포트다.
     LearningReportView find(long userId) {
-        return reports.findLatest(userId, abandoned())
-                .map(stored -> view(userId, stored))
-                .orElseThrow(() -> ApiErrors.error(HttpStatus.NOT_FOUND, "LEARNING_REPORT_NOT_FOUND",
-                        "학습 리포트를 찾을 수 없어요"));
+        return latest(userId).orElseThrow(() -> ApiErrors.error(HttpStatus.NOT_FOUND, "LEARNING_REPORT_NOT_FOUND",
+                "학습 리포트를 찾을 수 없어요"));
+    }
+
+    private Optional<LearningReportView> latest(long userId) {
+        return snapshot.execute(status -> reports.findLatest(userId, abandoned()).map(stored -> view(userId, stored)));
     }
 
     // 맞힌 문제가 모자라면 아무것도 만들지 않는다(REP-01). 더 맞혀야 할 개수를 본문에 함께 준다.
@@ -196,6 +206,7 @@ class LearningReportService {
         }
     }
 
+    // snapshot 안에서 부른다.
     private LearningReportView view(long userId, LearningReportRepository.Stored stored) {
         LearningStats statistics = json.readValue(stored.statistics(), LearningStats.class);
         LearningReportContent content = stored.status() == Status.COMPLETED
