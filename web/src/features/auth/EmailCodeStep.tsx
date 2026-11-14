@@ -58,6 +58,13 @@ export function EmailCodeStep({
     onSuccess: () => {
       setCodeOpen(true)
       start()
+      // 새 번호를 보냈으니 옛 번호에 딸린 것은 모두 지난 일이다(MAIL_FAILED 분기와 같다).
+      // - 확인 실패: 남기면 '다시 받아 주세요'가 계속 보이고 메일함 안내가 다시 나오지 않는다(#284 리뷰)
+      // - 칸의 옛 번호: 서버가 이미 무효로 만들었다. 오류 표시 없이 남으면 그대로 눌러 시도 횟수만 준다(#286 리뷰)
+      // - 자릿수 오류: 새 발송 안내와 옛 검증 문구가 함께 보인다
+      verify.reset()
+      setCode('')
+      setCodeError(null)
     },
     onError: (error) => {
       const failed = problemCode(error)
@@ -233,7 +240,9 @@ export function EmailCodeStep({
                 autoComplete="one-time-code"
                 placeholder={`${CODE_LENGTH}자리 숫자`}
                 maxLength={CODE_LENGTH}
-                readOnly={verified || busy || verify.isPending}
+                // 다시 받는 중에도 잠근다. 응답보다 메일이 먼저 와 새 번호를 넣으면, 늦게 온 발송
+                // 성공이 칸을 비워(위 send.onSuccess) 방금 넣은 번호가 사라진다(#286 리뷰). 이메일 칸과 같다
+                readOnly={verified || busy || verify.isPending || send.isPending}
                 value={code}
                 onChange={(event) => {
                   setCode(event.target.value)

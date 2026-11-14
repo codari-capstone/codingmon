@@ -405,6 +405,78 @@ describe('EmailCodeStep', () => {
     // 테스트가 중간에 실패해도 실제 타이머로 되돌려야 뒤의 테스트가 가짜 타이머를 물려받지 않는다.
     afterEach(() => vi.useRealTimers())
 
+    it('번호가 만료된 뒤 다시 받으면 만료 문구를 지우고 메일함 안내를 다시 보인다', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      setup({
+        verifyCode: vi.fn().mockRejectedValue({
+          status: 400,
+          code: 'CODE_EXPIRED',
+          detail: '인증번호가 만료됐어요. 다시 받아 주세요',
+        }),
+      })
+      const notice = '인증번호를 보냈어요. 메일함을 확인해 주세요.'
+
+      await user.type(screen.getByLabelText('이메일'), 'new@codari.test')
+      await user.click(screen.getByRole('button', { name: '인증번호 받기' }))
+      await user.type(await screen.findByLabelText('인증번호'), '123456')
+      await user.click(screen.getByRole('button', { name: '확인' }))
+      expect(await screen.findByText(/다시 받아 주세요/)).toBeInTheDocument()
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000)
+      })
+      await user.click(screen.getByRole('button', { name: '다시 받기' }))
+
+      expect(await screen.findByText(notice)).toBeInTheDocument()
+      expect(screen.queryByText(/다시 받아 주세요/)).not.toBeInTheDocument()
+    })
+
+    it('틀린 번호를 넣은 뒤 다시 받으면 칸의 옛 번호를 비운다 (그대로 눌러 시도 횟수를 잃지 않게)', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      setup({
+        // CODE_MISMATCH는 칸을 비우지 않는다. 다시 받을 때 비워야 한다
+        verifyCode: vi.fn().mockRejectedValue({
+          status: 400,
+          code: 'CODE_MISMATCH',
+          detail: '인증번호가 맞지 않아요',
+        }),
+      })
+
+      await user.type(screen.getByLabelText('이메일'), 'new@codari.test')
+      await user.click(screen.getByRole('button', { name: '인증번호 받기' }))
+      await user.type(await screen.findByLabelText('인증번호'), '123456')
+      await user.click(screen.getByRole('button', { name: '확인' }))
+      await screen.findByText('인증번호가 맞지 않아요')
+      expect(screen.getByLabelText('인증번호')).toHaveValue('123456')
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000)
+      })
+      await user.click(screen.getByRole('button', { name: '다시 받기' }))
+
+      await screen.findByText('인증번호를 보냈어요. 메일함을 확인해 주세요.')
+      expect(screen.getByLabelText('인증번호')).toHaveValue('')
+    })
+
+    it('자릿수 오류가 뜬 뒤 다시 받으면 그 문구를 지운다', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      setup()
+
+      await user.type(screen.getByLabelText('이메일'), 'new@codari.test')
+      await user.click(screen.getByRole('button', { name: '인증번호 받기' }))
+      await user.type(await screen.findByLabelText('인증번호'), '12345')
+      await user.click(screen.getByRole('button', { name: '확인' }))
+      expect(screen.getByText('인증번호 6자리를 입력해 주세요')).toBeInTheDocument()
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000)
+      })
+      await user.click(screen.getByRole('button', { name: '다시 받기' }))
+
+      await screen.findByText('인증번호를 보냈어요. 메일함을 확인해 주세요.')
+      expect(screen.queryByText('인증번호 6자리를 입력해 주세요')).not.toBeInTheDocument()
+    })
+
     it('다시 받기가 도는 동안에는 확인이 꺼진다', async () => {
       // 칸이 열린 채 발송이 도는 상황은 쿨다운을 넘긴 뒤 [다시 받기]뿐이다. 그때 [확인]이
       // 열려 있으면, 서버가 이전 번호를 무효로 만든 뒤 확인이 도착해 CODE_MISMATCH가 되고
@@ -430,10 +502,13 @@ describe('EmailCodeStep', () => {
       await user.click(screen.getByRole('button', { name: '다시 받기' }))
 
       expect(screen.getByRole('button', { name: '확인' })).toBeDisabled()
+      // 칸도 잠긴다. 열려 있으면 그 사이 넣은 새 번호를 늦게 온 발송 성공이 지운다
+      expect(screen.getByLabelText('인증번호')).toHaveAttribute('readonly')
 
       resolveSend()
       await act(async () => {})
       expect(screen.getByRole('button', { name: '확인' })).toBeEnabled()
+      expect(screen.getByLabelText('인증번호')).not.toHaveAttribute('readonly')
     })
 
     it('쿨다운이 끝나도 확인 요청 중이면 다시 받기가 꺼진다', async () => {
