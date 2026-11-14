@@ -170,10 +170,10 @@ export function PublishTab({
                 className="bg-muted flex flex-wrap items-center gap-3 rounded-md px-4 py-3 text-sm"
               >
                 {/*
-                  기준 폭을 글자 길이(auto)로 둔다. flex-1은 기준 폭이 0이라, 좁은 화면에서 버튼이 다음 줄로
+                  기준 폭을 글자 길이(flex-auto = 1 1 auto, AppHeader와 같은 처방)로 둔다. flex-1은 기준 폭이 0이라, 좁은 화면에서 버튼이 다음 줄로
                   내려가지 않고 설명이 몇 글자 폭으로 짜부라졌다(#290 리뷰). 넓으면 늘어나 버튼을 오른쪽 끝에 민다
                 */}
-                <span className="text-destructive-text flex flex-[1_1_auto] items-center gap-2 font-semibold">
+                <span className="text-destructive-text flex flex-auto items-center gap-2 font-semibold">
                   <Icon name="x" size={16} />
                   {info?.text ?? `아직 못 채운 조건이 있어요 (${condition})`}
                 </span>
