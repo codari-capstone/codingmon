@@ -202,20 +202,26 @@ class LearningReportControllerTest {
 
     @Test
     void 통계와_맞지_않는_수치를_쓴_문장은_지우고_화면_수치는_서버_값이다() throws Exception {
-        // 해결률은 83%이고 평균 시도는 1.33번이다. 50%와 2.5번은 입력에 없다.
-        llm.answer = request -> answer(request, tagName, "해결률이 50%예요. 평균 2.5번 시도했어요.");
+        // 해결률은 83%이고 평균 시도는 1.33번이다. 50%, 2.5번, 4번은 입력에 없다.
+        llm.answer = request -> answer(request, tagName, "해결률이 50%예요. 평균 2.5번 시도했어요.", "평균 4번 시도한 문제예요.");
 
         mvc.perform(post(PATH).with(as(userId))).andExpect(status().isAccepted());
         awaitStatus("COMPLETED");
 
         mvc.perform(get(PATH).with(as(userId)))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.weakConcepts[0].explanation").isEmpty())
                 .andExpect(jsonPath("$.weakConcepts[0].practice").value("작은 입력으로 한 줄씩 따라가 보세요."))
+                // 이유가 모두 지워진 추천도 문제는 그대로 보인다.
+                .andExpect(jsonPath("$.recommendations[0].problemId").value(wrongProblemId))
+                .andExpect(jsonPath("$.recommendations[0].reason").isEmpty())
+                .andExpect(jsonPath("$.recommendations[1].reason").value("이어서 연습해요."))
                 .andExpect(jsonPath("$.concepts[0].solveRate").value(0.83))
                 .andExpect(jsonPath("$.concepts[0].averageAttempts").value(1.33));
         assertThat(jdbc.sql("select content -> 'numberCheck' ->> 'fixes' from learning_reports where user_id = :userId")
                 .param("userId", userId).query(String.class).single())
-                .isEqualTo("[\"PERCENT@weakConcepts[0].explanation\", \"NUMBER@weakConcepts[0].explanation\"]");
+                .isEqualTo("[\"PERCENT@weakConcepts[0].explanation\", \"NUMBER@weakConcepts[0].explanation\","
+                        + " \"NUMBER@recommendations[0].reason\"]");
     }
 
     @Test
@@ -381,14 +387,18 @@ class LearningReportControllerTest {
 
     // 입력의 취약 개념(이 테스트에서는 하나)과 추천 순위에 맞춘 응답. 순위는 입력마다 만드는 스키마의 enum에서 읽는다
     // (다시 만들 때 추천이 줄 수 있다).
-    @SuppressWarnings("unchecked")
     private static LlmResponse<?> answer(LlmRequest<?> request, String concept, String explanation) {
+        return answer(request, concept, explanation, "1위 문제로 다시 도전해 봐요.");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static LlmResponse<?> answer(LlmRequest<?> request, String concept, String explanation, String firstReason) {
         Map<String, Object> recommendations = (Map<String, Object>) ((Map<String, Object>) request.schema()
                 .get("properties")).get("recommendations");
         Map<String, Object> rank = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) recommendations
                 .get("items")).get("properties")).get("rank");
         List<LearningReportResult.RecommendationReason> reasons = ((List<Integer>) rank.get("enum")).stream()
-                .map(r -> new LearningReportResult.RecommendationReason(r, r == 1 ? "1위 문제로 다시 도전해 봐요." : "이어서 연습해요."))
+                .map(r -> new LearningReportResult.RecommendationReason(r, r == 1 ? firstReason : "이어서 연습해요."))
                 .toList();
         LearningReportResult result = new LearningReportResult(
                 List.of(new LearningReportResult.WeakConcept(concept, explanation, "작은 입력으로 한 줄씩 따라가 보세요.")),
