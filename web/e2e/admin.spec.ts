@@ -38,7 +38,8 @@ test('목록에서 문제를 열어 지문을 고치면 공개 중인 버전에 
 
   await page.getByRole('link', { name: '두 수의 합' }).click()
 
-  await expect(page.getByRole('heading', { level: 1, name: '문제 수정' })).toBeVisible()
+  // 문제 제목이 화면 제목이다(#242)
+  await expect(page.getByRole('heading', { level: 1, name: '두 수의 합' })).toBeVisible()
   await expect(page.getByLabel('제목')).toHaveValue('두 수의 합')
 
   await page.getByRole('tab', { name: '지문' }).click()

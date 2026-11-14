@@ -284,7 +284,8 @@ describe('AdminProblemFormPage', () => {
     await user.click(screen.getByRole('tab', { name: '버전' }))
     await user.click(await screen.findByRole('link', { name: 'v1' }))
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'v1 보기' })).toBeInTheDocument()
+    // 버전 보기는 제목 옆 배지가 'v1 · 상태'다(지난 버전을 읽는 화면이라는 표시)
+    expect(await screen.findByText(/^v1 · /)).toBeInTheDocument()
     expect(screen.queryByText(/저장했어요/)).not.toBeInTheDocument()
   })
 

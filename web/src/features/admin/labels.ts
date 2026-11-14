@@ -1,4 +1,5 @@
 import type { ProblemVersionStatus, PublishCondition, SolutionStatus } from '@/api/types'
+import type { BadgeTone } from '@/components/ui/badge'
 
 /** 버전 하나의 상태. 기능명세 ADM-01의 '작성 중·검증 중·공개' 문구를 쓴다. */
 export const VERSION_STATUS_LABEL: Record<ProblemVersionStatus, string> = {
@@ -32,6 +33,25 @@ export function problemStateLabel(
   const work = latestStatus === 'DRAFT' ? '수정 중' : VERSION_STATUS_LABEL[latestStatus]
   return `공개 v${publishedVersionNo} · ${work}`
 }
+
+/**
+ * 문제 상태 배지의 색 (디자인 AdminProblems). 공개 초록, 작성 중 회색, 검증 중 파랑, 비공개 테두리.
+ * 공개된 버전 위에서 작업 중이면 둘이 겹친 상태라 브랜드색으로 따로 보인다(problemStateLabel과 같은 갈래).
+ */
+export function problemStateTone(
+  latestStatus: ProblemVersionStatus,
+  publishedVersionNo: number | null,
+): BadgeTone {
+  if (latestStatus === 'PUBLISHED') return 'success'
+  if (publishedVersionNo !== null) return 'brand'
+  return WORK_TONE[latestStatus]
+}
+
+const WORK_TONE = {
+  DRAFT: 'neutral',
+  VALIDATING: 'info',
+  RETIRED: 'outline',
+} as const satisfies Record<Exclude<ProblemVersionStatus, 'PUBLISHED'>, BadgeTone>
 
 /**
  * 저장이 어느 버전에 들어갔는지 알리는 문구 (ADM-07).

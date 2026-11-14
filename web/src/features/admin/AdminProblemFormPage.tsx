@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react'
 import { useForm, type FieldErrors } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router'
 
-import type { ProblemInput } from '@/api/types'
+import type { ProblemInput, ProblemVersionStatus } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { problemCode, problemMessage } from '@/features/auth/problemCode'
@@ -15,7 +16,12 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { parsePathId } from '@/lib/pathId'
 import { adminProblemQuery, adminProblemVersionQuery, saveProblem } from './adminProblemQuery'
 import { BasicInfoTab } from './BasicInfoTab'
-import { savedVersionNotice, VERSION_STATUS_LABEL } from './labels'
+import {
+  problemStateLabel,
+  problemStateTone,
+  savedVersionNotice,
+  VERSION_STATUS_LABEL,
+} from './labels'
 import {
   EMPTY_FORM,
   followsPythonFormula,
@@ -29,6 +35,21 @@ import { SolutionsTab } from './SolutionsTab'
 import { StatementTab } from './StatementTab'
 import { TestCasesTab } from './TestCasesTab'
 import { VersionsTab } from './VersionsTab'
+
+/** 탭 하나의 카드 (디자인 AdminProblemEdit: 흰 면, 20px 둥글기, 32px 안쪽 여백) */
+const PANEL = 'bg-card rounded-lg border p-6 sm:p-8'
+
+/**
+ * 제목 옆 상태 배지. 시안은 '공개 · v1'처럼 버전을 붙인다. 공개된 버전 위에서 작업 중이면
+ * problemStateLabel이 이미 '공개 v1 · 수정 중'으로 두 버전을 말하므로 지금 버전만 덧붙인다.
+ */
+function stateBadge(
+  status: ProblemVersionStatus,
+  publishedVersionNo: number | null,
+  versionNo: number,
+): string {
+  return `${problemStateLabel(status, publishedVersionNo)} · v${versionNo}`
+}
 
 /** 기본 정보 탭이 들고 있는 칸. 숨은 탭의 오류를 어디서 보여 줄지 가르는 데 쓴다. */
 const BASIC_FIELDS = [
@@ -209,14 +230,29 @@ function AdminProblemForm() {
   }
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title">
-          {isNew ? '새 문제' : readOnly ? `v${versionNo} 보기` : '문제 수정'}
-        </h1>
-        <Link to="/admin" className="text-primary-text text-sm hover:underline">
-          문제 관리로
-        </Link>
+    <section className="mx-auto flex w-full max-w-[1080px] flex-col gap-5">
+      {/*
+        시안은 '문제 관리 > 1. 두 수의 합' 경로(Breadcrumb)지만, 두 단계뿐이면 쓰지 않는 부품 규칙과
+        다른 화면(#270)을 따라 돌아가는 링크 하나로 둔다. 제목을 두 번 읽지 않는다.
+      */}
+      <Link
+        to="/admin"
+        className="text-muted-foreground self-start text-sm font-medium hover:underline"
+      >
+        문제 관리로
+      </Link>
+      <div className="flex flex-wrap items-center gap-3">
+        {/* 시안처럼 문제 제목이 화면 제목이다. 제목을 비운 초안은 이름이 없어 '문제 수정'으로 둔다 */}
+        <h1 className="page-title">{isNew ? '새 문제' : loaded?.title || '문제 수정'}</h1>
+        {readOnly && loaded ? (
+          <Badge tone="outline">{`v${versionNo} · ${VERSION_STATUS_LABEL[loaded.status]}`}</Badge>
+        ) : null}
+        {/* 공개 중인 버전 번호는 상세에만 있다(버전 보기 응답에는 없다) */}
+        {!readOnly && detail.data ? (
+          <Badge tone={problemStateTone(detail.data.status, detail.data.publishedVersionNo)}>
+            {stateBadge(detail.data.status, detail.data.publishedVersionNo, detail.data.versionNo)}
+          </Badge>
+        ) : null}
       </div>
 
       {readOnly ? (
@@ -315,10 +351,10 @@ function AdminProblemForm() {
                 : 'contents'
             }
           >
-            <TabsContent className="bg-card rounded-lg border p-6" value="basic">
+            <TabsContent className={PANEL} value="basic">
               <BasicInfoTab form={form} />
             </TabsContent>
-            <TabsContent className="bg-card rounded-lg border p-6" value="statement">
+            <TabsContent className={PANEL} value="statement">
               <StatementTab
                 form={form}
                 manualPython={manualPython}
@@ -338,22 +374,12 @@ function AdminProblemForm() {
 
         {id === null || readOnly || !openedCases ? null : (
           // forceMount면 Radix가 hidden을 끄지만, 뒤에 오는 prop이 이겨 우리가 다시 건다.
-          <TabsContent
-            className="bg-card rounded-lg border p-6"
-            value="cases"
-            forceMount
-            hidden={tab !== 'cases'}
-          >
+          <TabsContent className={PANEL} value="cases" forceMount hidden={tab !== 'cases'}>
             <TestCasesTab problemId={id} locked={locked} before={before} />
           </TabsContent>
         )}
         {id === null || readOnly || !openedSolutions ? null : (
-          <TabsContent
-            className="bg-card rounded-lg border p-6"
-            value="solutions"
-            forceMount
-            hidden={tab !== 'solutions'}
-          >
+          <TabsContent className={PANEL} value="solutions" forceMount hidden={tab !== 'solutions'}>
             <SolutionsTab problemId={id} locked={locked} before={before} />
           </TabsContent>
         )}
@@ -362,12 +388,12 @@ function AdminProblemForm() {
           떠났다 돌아와도 잃을 것이 없고, 공개 조건은 상세에서 다시 읽는다.
         */}
         {id === null || readOnly ? null : (
-          <TabsContent className="bg-card rounded-lg border p-6" value="publish">
+          <TabsContent className={PANEL} value="publish">
             <PublishTab problemId={id} locked={locked} onGoToTab={goToTab} />
           </TabsContent>
         )}
         {id === null ? null : (
-          <TabsContent className="bg-card rounded-lg border p-6" value="versions">
+          <TabsContent className={PANEL} value="versions">
             <VersionsTab problemId={id} />
           </TabsContent>
         )}

@@ -101,14 +101,17 @@ export const router = createBrowserRouter([
                       {
                         path: 'problems/new',
                         lazy: () => import('@/features/admin/AdminProblemFormPage'),
+                        handle: { pageTone: 'subtle' } satisfies PageHandle,
                       },
                       {
                         path: 'problems/:id',
                         lazy: () => import('@/features/admin/AdminProblemFormPage'),
+                        handle: { pageTone: 'subtle' } satisfies PageHandle,
                       },
                       {
                         path: 'problems/:id/versions/:versionNo',
                         lazy: () => import('@/features/admin/AdminProblemFormPage'),
+                        handle: { pageTone: 'subtle' } satisfies PageHandle,
                       },
                     ],
                   },
