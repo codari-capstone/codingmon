@@ -82,18 +82,14 @@ describe('ReportPage (REP-01·02)', () => {
     )
   })
 
-  it('내 학습 탭: 학습 리포트가 지금 화면이고 배지는 아직 꺼져 있다', async () => {
+  it('내 학습 탭: 학습 리포트가 지금 화면이고 배지 화면으로 갈 수 있다 (BADGE-02)', async () => {
     renderReport()
     const nav = await screen.findByRole('navigation', { name: '내 학습 메뉴' })
     expect(within(nav).getByRole('link', { name: '학습 리포트' })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    expect(within(nav).queryByRole('link', { name: /배지/ })).not.toBeInTheDocument()
-    expect(within(nav).getByText('배지').closest('[aria-disabled]')).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    )
+    expect(within(nav).getByRole('link', { name: '배지' })).toHaveAttribute('href', '/me/badges')
   })
 
   // 취약 여부는 서버의 `weak`만 따른다. 상위 2개·0점 규칙은 서버가 판단한다(계약).

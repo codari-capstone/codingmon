@@ -1,4 +1,4 @@
-import { Link, NavLink, useLocation, useMatch } from 'react-router'
+import { Link, matchPath, useLocation, useMatch } from 'react-router'
 
 import wordmark from '@/assets/brand/codingmon_wordmark.png'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -16,10 +16,11 @@ import { useAuth } from '@/features/auth/useAuth'
 import { useLogout } from '@/features/auth/useLogout'
 import { StreakChip } from '@/features/streak/StreakChip'
 
-const MENU = [
+const MENU: { to: string; label: string; also?: string }[] = [
   { to: '/problems', label: '문제' },
   { to: '/submissions', label: '제출 기록' },
-  { to: '/me/report', label: '내 학습' },
+  // 배지 화면도 내 학습 탭(LearnNav)의 한 칸이라 함께 켠다 (BADGE-02)
+  { to: '/me/report', label: '내 학습', also: '/me/badges' },
 ]
 
 /** 학습자 화면에서 ADMIN에게만 더 보이는 입구 (COM-05). */
@@ -40,7 +41,7 @@ export function AppHeader() {
   const isAdmin = user?.role === 'ADMIN'
   // /admin 아래에 남는 사람은 ADMIN뿐이다(아니면 /forbidden으로 간다). 세션을 모르는 동안에도
   // 관리자 메뉴를 두어야 새로고침 때 학습자 메뉴 3개 -> 1개로 흔들리지 않는다.
-  const menu =
+  const menu: typeof MENU =
     inAdmin && (isAdmin || isLoading) ? ADMIN_MENU : isAdmin ? [...MENU, ADMIN_ENTRY] : MENU
   // 로그인 화면에서 넘어왔다면 그 화면이 들고 있던 돌아갈 주소를 이어 준다. 아니면 지금 주소.
   // 값은 로그인 화면의 safeRedirect가 검사하므로 여기서는 거르지 않는다.
@@ -74,19 +75,25 @@ export function AppHeader() {
           nav 안에서 링크 단위로 한 번 더 줄을 바꾼다. 링크 글자는 끊지 않는다.
         */}
         <nav aria-label="주요 메뉴" className="flex flex-auto flex-wrap gap-1">
-          {menu.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `text-label whitespace-nowrap hover:bg-muted hover:text-foreground focus-visible:outline-ring inline-flex h-10 items-center rounded-full px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 ${
-                  isActive ? 'bg-muted text-foreground' : 'text-muted-foreground'
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {menu.map((item) => {
+            // NavLink는 aria-current를 자기 주소에만 붙인다. `also`까지 같은 규칙(구간 단위 앞부분 일치)으로
+            // 직접 가려 색과 화면 낭독기의 '현재 페이지'가 함께 가게 한다(#248 리뷰)
+            const active = [item.to, item.also].some(
+              (path) => path && matchPath({ path, end: false }, location.pathname),
+            )
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-current={active ? 'page' : undefined}
+                className={`text-label whitespace-nowrap hover:bg-muted hover:text-foreground focus-visible:outline-ring inline-flex h-10 items-center rounded-full px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                  active ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {item.label}
+              </Link>
+            )
+          })}
         </nav>
 
         <div className="flex items-center gap-2.5">
