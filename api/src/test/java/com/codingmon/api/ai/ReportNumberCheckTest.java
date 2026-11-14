@@ -82,8 +82,9 @@ class ReportNumberCheckTest {
     }
 
     @Test
-    void 순서_힌트_단계_이름과_단위가_없는_수는_보지_않는다() {
-        String practice = "힌트는 0~3단계 중 2단계까지만 열어 보세요. 2번째 추천 문제부터 다시 풀어 보세요. 입력이 7이면 어떻게 될지 적어 보세요.";
+    void 순서_번호_힌트_단계_이름과_단위가_없는_수는_보지_않는다() {
+        String practice = "힌트는 0~3단계 중 2단계까지만 열어 보세요. 2번째 추천 문제부터 다시 풀어 보세요. 1번 문제도 다시 읽어 보세요."
+                + " 입력이 7이면 어떻게 될지 적어 보세요.";
         LearningReportResult result = new LearningReportResult(List.of(
                 weak("반복문 범위", "개념이에요.", practice), weak("인덱스 변환", "개념이에요.", "연습해요.")),
                 List.of(reason(1, "좋아요."), reason(2, "좋아요."), reason(3, "좋아요.")), "잘하고 있어요.");
@@ -110,6 +111,38 @@ class ReportNumberCheckTest {
         assertThat(outcome.content().recommendations().get(0).reason()).isEqualTo("숫자 7개 고르기로 연습해요.");
         assertThat(outcome.content().weakConcepts().get(0).explanation())
                 .isEqualTo("2차원 배열은 행과 열로 값을 담아요. 해결률 80%예요.");
+    }
+
+    @Test
+    void 이름_속_문장_끝_표시에서_문장을_나누지_않는다() {
+        LearningReportInput input = LearningReportInput.of(
+                new LearningStats(5, 5, 0, List.of(stat("grid", "2차원 배열", 5, 4, "0.80", "1.20", "0.40", "0.13", true))),
+                List.of(LearningReportInput.Recommendation.of(1, "몇 개일까? 7개 고르기", "EASY", "2차원 배열", false)), List.of());
+        LearningReportResult result = new LearningReportResult(List.of(weak("2차원 배열", "행과 열로 값을 담아요.", "연습해요.")),
+                List.of(reason(1, "몇 개일까? 7개 고르기로 연습해요. 3번 더 풀어 봐요.")), "잘하고 있어요.");
+
+        ReportNumberCheck.Outcome outcome = ReportNumberCheck.verify(result, input);
+
+        // 제목은 통째로 가려지고, 제목 밖의 "3번"만 입력에 없는 수다.
+        assertThat(outcome.content().recommendations().get(0).reason()).isEqualTo("몇 개일까? 7개 고르기로 연습해요.");
+        assertThat(ReportNumberCheck.describe(outcome.fixes())).isEqualTo("NUMBER@recommendations[0].reason");
+    }
+
+    @Test
+    void 쉼표에_붙은_수와_천_단위_수도_대조한다() {
+        LearningReportResult result = new LearningReportResult(List.of(
+                weak("반복문 범위", "해결률은 50%예요. 다른 개념과 견주면 50%,80%예요.", "연습해요."),
+                weak("인덱스 변환", "개념이에요.", "연습해요.")),
+                List.of(reason(1, "좋아요."), reason(2, "좋아요."), reason(3, "좋아요.")),
+                "반복문 범위는 6문제,인덱스 변환은 4문제를 풀었어요. 모두 1,000문제를 풀었어요.");
+
+        ReportNumberCheck.Outcome outcome = ReportNumberCheck.verify(result, typical);
+
+        // 80%는 조건문의 해결률이고 1,000은 입력에 없는 수다. 쉼표 뒤의 4문제는 인덱스 변환의 문제 수다.
+        assertThat(outcome.content().weakConcepts().get(0).explanation()).isEqualTo("해결률은 50%예요.");
+        assertThat(outcome.content().summary()).isEqualTo("반복문 범위는 6문제,인덱스 변환은 4문제를 풀었어요.");
+        assertThat(ReportNumberCheck.describe(outcome.fixes()))
+                .isEqualTo("PERCENT@weakConcepts[0].explanation,NUMBER@summary");
     }
 
     @Test
