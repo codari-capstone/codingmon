@@ -167,7 +167,10 @@ class JudgeRepository {
                 .param("id", id)
                 .update();
         if (updated == 1) {
-            badges.recordJudged(id, stats.recordJudged(id));
+            // 제출 → 회원 → 풀이 통계 순서로 잠근다(BadgeRepository.lockOwner).
+            Optional<Long> owner = badges.lockOwner(id);
+            Optional<UserProblemStatsRepository.Judged> judged = stats.recordJudged(id);
+            owner.ifPresent(userId -> badges.recordJudged(userId, judged));
             validations.recordJudged(id);
         }
     }
