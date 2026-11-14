@@ -216,9 +216,12 @@
 - `report_date`: 하루 제한을 적용할 기준 날짜(UTC).
 - `status`: `PENDING`, `COMPLETED`, `FAILED` 중 하나. 기본값은 `PENDING`이다.
 - `statistics`: 서버가 계산한 통계 JSON.
-- `content` (비어도 됨): AI가 작성한 리포트 내용 JSON. 완료 전에는 비어 있을 수 있다.
+- `content` (비어도 됨): AI가 작성한 리포트 내용 JSON. 완료 전에는 비어 있을 수 있다. 취약 개념별 설명·연습 방법, 순위별 추천 이유, 요약과 수치 대조 내역(`numberCheck`)이다(`LearningReportContent`). 수치와 목록은 담지 않는다.
 - `model` (비어도 됨): 리포트를 만든 AI 모델.
-- `generated_at`: 리포트 생성 요청 행을 만들거나 마지막으로 재시도한 시각.
+- `failure_reason` (비어도 됨): 만들지 못한 이유. 값과 규칙은 `ai_reviews.failure_reason`과 같다. `FAILED`일 때만 있다(CHECK).
+- `prompt_version` (비어도 됨): 리포트를 만든 프롬프트 버전(`LLM_PROMPT_VERSION_LEARNING_REPORT`).
+- `input_tokens`, `output_tokens` (비어도 됨): 쓴 토큰 수. 다시 시도하면 지우지 않고 더한다.
+- `generated_at`: 리포트 생성 요청 행을 만들거나 마지막으로 재시도한 시각. 늦게 끝난 이전 시도가 새 시도를 덮어쓰지 못하게 결과는 이 값이 그대로일 때만 저장한다.
 - `(user_id, report_date)` 중복 불가: 사용자별 하루 한 건만 허용한다.
 
 ## `learning_report_recommendations` — 리포트 추천 문제
@@ -228,7 +231,6 @@
 - `(learning_report_id, rank)` 복합 PK: 한 리포트 안에서 같은 순위를 중복할 수 없다.
 - `problem_id` (FK): 추천 대상 문제. 누르면 그 문제의 지금 공개 버전으로 간다.
 - `concept_tag_id` (비어도 됨, FK): 추천 이유가 연결된 취약 개념 태그. 비어 있으면 취약 개념 후보가 모자라 난이도로 고른 도전 문제다.
-- `reason`: 이 문제를 추천한 이유.
 - `(learning_report_id, problem_id)` 중복 불가: 같은 문제를 한 리포트에 두 번 추천하지 못하게 한다.
 - 문제 버전은 가리키지 않는다. 버전을 가리키면 관리자가 공개 버전의 태그를 고칠 때 추천 행이 막는다. 추천할 때 그 태그가 문제의 공개 버전에 붙어 있는지는 추천을 만드는 서비스가 확인한다.
 
