@@ -61,11 +61,13 @@ class OpenAiCompatibleLlmClient implements LlmClient {
             @Value("${app.llm.model}") String model,
             @Value("${app.llm.prompt-version.analysis}") String analysisPromptVersion,
             @Value("${app.llm.prompt-version.code-review}") String codeReviewPromptVersion,
+            @Value("${app.llm.prompt-version.learning-report}") String learningReportPromptVersion,
             @Value("${app.llm.connect-timeout}") Duration connectTimeout,
             @Value("${app.llm.read-timeout}") Duration readTimeout,
             @Value("${app.llm.max-output-tokens}") int maxOutputTokens, JsonMapper json, Validator validator) {
         this(build(url, apiKey, connectTimeout, readTimeout), !url.isBlank() && !model.isBlank(), model,
-                Map.of(ReviewType.ANALYSIS, analysisPromptVersion, ReviewType.CODE_REVIEW, codeReviewPromptVersion),
+                Map.of(ReviewType.ANALYSIS, analysisPromptVersion, ReviewType.CODE_REVIEW, codeReviewPromptVersion,
+                        ReviewType.LEARNING_REPORT, learningReportPromptVersion),
                 maxOutputTokens, json, validator);
     }
 
