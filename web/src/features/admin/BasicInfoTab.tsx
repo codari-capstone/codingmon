@@ -8,6 +8,7 @@ import { RadioGroup } from '@/components/ui/radio-group'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { conceptTagsQuery } from '@/features/problems/problemsQuery'
 import { Field } from './Field'
+import { ALIGNED_ROW } from './fieldLayout'
 import type { ProblemFormApi } from './problemInputSchema'
 
 /** 문제 하나에 붙일 수 있는 개념 태그 수 (ADM-02, `docs/AI_FEATURES.md` 7절). */
@@ -97,17 +98,18 @@ export function BasicInfoTab({ form }: { form: ProblemFormApi }) {
         ) : null}
       </fieldset>
 
-      {/* 디자인: 출처와 라이선스를 한 줄에. 칸 위 도움말 길이가 달라도 칸 바닥이 맞게 끝에 붙인다 */}
-      <div className="grid items-end gap-4 sm:grid-cols-2">
+      {/* 디자인: 출처와 라이선스를 한 줄에. 도움말·오류가 한 칸에만 있어도 입력칸이 같은 줄에 선다(alignAt) */}
+      <div className={ALIGNED_ROW.sm}>
         <Field
           id="sourceName"
           label="출처"
           hint="공개하려면 출처 이름이 있어야 해요. 직접 만든 문제면 '직접 제작'처럼 적어요."
           error={errors.sourceName?.message}
+          alignAt="sm"
         >
           <Input id="sourceName" {...register('sourceName')} />
         </Field>
-        <Field id="license" label="라이선스" error={errors.license?.message}>
+        <Field id="license" label="라이선스" error={errors.license?.message} alignAt="sm">
           <Input id="license" placeholder="CC BY-SA 4.0" {...register('license')} />
         </Field>
       </div>

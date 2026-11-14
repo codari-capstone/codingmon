@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import { Field } from './Field'
+import { ALIGNED_ROW } from './fieldLayout'
 import { FORM_LANGUAGES, pythonLimits, type ProblemFormApi } from './problemInputSchema'
 
 const PYTHON = FORM_LANGUAGES.indexOf('PYTHON')
@@ -88,13 +89,23 @@ export function StatementTab({
         </div>
       </Field>
 
-      {/* 디자인: 세 칸을 한 줄에. 제약 조건만 도움말이 있어 칸 바닥을 끝에 맞춘다 */}
-      <div className="grid items-end gap-4 md:grid-cols-3">
-        <Field id="inputDescription" label="입력 형식" error={errors.inputDescription?.message}>
+      {/* 디자인: 세 칸을 한 줄에. 제약 조건만 도움말이 있어도, 한 칸에만 오류가 떠도 입력칸이 같은 줄에 선다(alignAt) */}
+      <div className={ALIGNED_ROW.md}>
+        <Field
+          id="inputDescription"
+          label="입력 형식"
+          error={errors.inputDescription?.message}
+          alignAt="md"
+        >
           <Textarea id="inputDescription" rows={4} {...register('inputDescription')} />
         </Field>
 
-        <Field id="outputDescription" label="출력 형식" error={errors.outputDescription?.message}>
+        <Field
+          id="outputDescription"
+          label="출력 형식"
+          error={errors.outputDescription?.message}
+          alignAt="md"
+        >
           <Textarea id="outputDescription" rows={4} {...register('outputDescription')} />
         </Field>
 
@@ -103,6 +114,7 @@ export function StatementTab({
           label="제약 조건"
           hint="없으면 비워 둬요."
           error={errors.constraintsMarkdown?.message}
+          alignAt="md"
         >
           <Textarea id="constraintsMarkdown" rows={4} {...register('constraintsMarkdown')} />
         </Field>
