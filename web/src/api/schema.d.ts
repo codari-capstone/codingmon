@@ -405,6 +405,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/me/badges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내 배지 (BADGE-01)
+         * @description 배지 12개를 모두 `docs/feature-spec.md` 12절의 순서로 준다. 받은 배지는 `unlockedAt`이 있고, 못 받은 배지는 null이다.
+         *     서버는 코드만 준다. 이름·조건 문구·그림은 화면이 코드별로 가진다.
+         *     받는 조건과 주는 때는 기능명세 12절이 기준이다. 한 번 받으면 조건이 깨져도 남는다. 서버는 이미 받은 배지의 조건을 다시 확인하지 않는다.
+         *     축하 창(BADGE-03): 화면은 내 제출의 채점이 끝났을 때 이 API를 부른다. 채점 중에 다른 화면으로 옮겨도 채점이 끝나면 부른다.
+         *     채점 상태(`GET /api/submissions/{id}`의 `status`)가 `COMPLETED`로 보일 때는 그 제출로 준 배지도 이미 저장돼 있다.
+         *     `unlockedAt`이 있고 `celebrated`가 `false`인 배지를 하나씩 띄우고, 띄운 배지마다 `POST /api/users/me/badges/{code}/celebrated`를 부른다.
+         */
+        get: operations["getMyBadges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/me/badges/{code}/celebrated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 배지 축하 창을 띄웠음 (BADGE-03)
+         * @description 화면이 축하 창을 띄운 배지를 알린다. 그 뒤로는 목록의 `celebrated`가 `true`라 어느 기기에서도 다시 띄우지 않는다.
+         *     이미 축하한 배지면 그대로 204다. 탭 두 개에서 동시에 불러도 오류가 나지 않는다.
+         *     받지 않은 배지는 404 `BADGE_NOT_UNLOCKED`다. 경로의 `code`가 `BadgeCode`의 12개 값이 아니면 `code` 없는 400이다(다른 경로 값과 같음).
+         */
+        post: operations["markBadgeCelebrated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/me/learning-stats": {
         parameters: {
             query?: never;
@@ -1471,6 +1518,26 @@ export interface components {
                 /** @description 그날 제출했는지 */
                 active: boolean;
             }[];
+        };
+        /**
+         * @description 배지 코드. 받는 조건은 `docs/feature-spec.md` 12절이다. 사용자에게 보이는 이름과 문구는 화면이 정한다.
+         *     DB에 저장하는 값이라 조건을 바꿔도 코드는 바꾸지 않는다.
+         * @enum {string}
+         */
+        BadgeCode: "FIRST_SOLVE" | "STREAK_3" | "STREAK_7" | "STREAK_14" | "MEDIUM_SOLVER" | "HARD_SOLVER" | "FIRST_TRY" | "NO_HINT" | "RETRY" | "PERSISTENCE" | "INTERMEDIATE" | "MASTER";
+        UserBadges: {
+            /** @description 배지 12개. `BadgeCode` 순서와 같다 */
+            badges: components["schemas"]["UserBadge"][];
+        };
+        UserBadge: {
+            code: components["schemas"]["BadgeCode"];
+            /**
+             * Format: date-time
+             * @description 배지를 준 시각. 못 받았으면 null이다
+             */
+            unlockedAt: string | null;
+            /** @description 축하 창을 띄웠는지(`POST /api/users/me/badges/{code}/celebrated`). 못 받은 배지는 늘 `false`다 */
+            celebrated: boolean;
         };
         /** @enum {string} */
         Difficulty: "EASY" | "MEDIUM" | "HARD";
@@ -2737,6 +2804,51 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getMyBadges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 배지 12개 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserBadges"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    markBadgeCelebrated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 배지 코드 */
+                code: components["schemas"]["BadgeCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 축하했음으로 기록함 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["Problem"];
         };
     };
     getMyLearningStats: {
