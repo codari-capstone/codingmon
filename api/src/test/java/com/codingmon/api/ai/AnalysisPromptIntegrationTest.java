@@ -31,7 +31,7 @@ class AnalysisPromptIntegrationTest {
     private static final Path OUT = Path.of("build", "analysis-eval");
     private static final AnalysisPrompt PROMPT = new AnalysisPrompt("v1");
     private static final OpenAiCompatibleLlmClient CLIENT = new OpenAiCompatibleLlmClient(System.getenv("LLM_URL"),
-            System.getenv().getOrDefault("LLM_API_KEY", ""), System.getenv("LLM_MODEL"), "v1", "v1",
+            System.getenv().getOrDefault("LLM_API_KEY", ""), System.getenv("LLM_MODEL"), "v1", "v1", "v1",
             Duration.ofSeconds(3), Duration.ofSeconds(180), 8192, JsonMapper.builder().build(),
             Validation.buildDefaultValidatorFactory().getValidator());
     private static final List<String> SUMMARY = new ArrayList<>();
