@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { UserStreak } from '@/api/types'
+import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import * as useAuthModule from '@/features/auth/useAuth'
 import { streakFor } from '@/mocks/fixtures/activity'
 import { server } from '@/mocks/server'
@@ -128,6 +129,23 @@ describe('StreakCard 받기 실패', () => {
     fail = false
     await user.click(screen.getByRole('button', { name: '다시 받기' }))
     expect(await screen.findByText('오늘 한 문제만 풀면 4일이 돼요.')).toBeInTheDocument()
+  })
+})
+
+describe('연속 학습 401', () => {
+  it('세션이 끊겨 401이면 세션을 버린다 ([다시 받기]가 같은 401만 되풀이하지 않게)', async () => {
+    signedIn(true)
+    server.use(
+      http.get('*/api/users/me/streak', () =>
+        HttpResponse.json({ status: 401, code: 'UNAUTHORIZED' }, { status: 401 }),
+      ),
+    )
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(ME_QUERY_KEY, { id: 1 })
+    renderIt(<StreakCard />, client)
+
+    // 실제 앱에서는 ['me']가 비면 상단 바가 비로그인으로 바뀌고 카드도 비로그인으로 그려진다
+    await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull())
   })
 })
 
