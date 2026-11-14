@@ -219,6 +219,24 @@ describe('AdminProblemFormPage', () => {
     expect(router.state.location.pathname).toMatch(/^\/admin\/problems\/\d+$/)
   })
 
+  it('새 문제를 저장한 직후 상세가 오기 전에도 화면 제목은 보낸 제목이다 (깜빡이지 않게)', async () => {
+    const user = userEvent.setup()
+    const { router } = renderPage('/admin/problems/new')
+    // 새 주소의 상세 조회를 붙잡아 '아직 안 온' 구간을 만든다
+    server.use(http.get('*/api/admin/problems/:id', () => new Promise<never>(() => {})))
+
+    await user.type(field('제목'), '새로 만든 문제')
+    expect(await save(user)).toHaveTextContent('만들었어요')
+    // 안내가 먼저 뜨고 캐시를 비운 뒤 새 주소로 바꾼다. 바뀐 뒤를 본다
+    await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/admin\/problems\/\d+$/))
+
+    // 주소는 바로 바뀌지만 다시 그리는 건 그다음이다. 상세는 끝내 오지 않으므로 이 제목은 보낸 값뿐이다
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('새로 만든 문제'),
+    )
+    expect(screen.queryByRole('heading', { name: '문제 수정' })).not.toBeInTheDocument()
+  })
+
   /**
    * `fieldset disabled`는 안에 있는 **버튼까지** 잠근다. 탭 버튼이 그 안에 있으면 읽기
    * 전용 화면이 '기본 정보'에 갇혀, 지난 버전의 지문도 버전 목록도 볼 수 없다.
@@ -284,7 +302,8 @@ describe('AdminProblemFormPage', () => {
     await user.click(screen.getByRole('tab', { name: '버전' }))
     await user.click(await screen.findByRole('link', { name: 'v1' }))
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'v1 보기' })).toBeInTheDocument()
+    // 버전 보기는 제목 옆 배지가 'v1 · 상태'다(지난 버전을 읽는 화면이라는 표시)
+    expect(await screen.findByText(/^v1 · /)).toBeInTheDocument()
     expect(screen.queryByText(/저장했어요/)).not.toBeInTheDocument()
   })
 

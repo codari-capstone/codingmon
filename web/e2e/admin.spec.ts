@@ -38,7 +38,8 @@ test('목록에서 문제를 열어 지문을 고치면 공개 중인 버전에 
 
   await page.getByRole('link', { name: '두 수의 합' }).click()
 
-  await expect(page.getByRole('heading', { level: 1, name: '문제 수정' })).toBeVisible()
+  // 문제 제목이 화면 제목이다(#242)
+  await expect(page.getByRole('heading', { level: 1, name: '두 수의 합' })).toBeVisible()
   await expect(page.getByLabel('제목')).toHaveValue('두 수의 합')
 
   await page.getByRole('tab', { name: '지문' }).click()
@@ -76,4 +77,24 @@ test('새 문제를 등록하면 초안으로 목록에 들어간다', async ({ 
   await page.getByRole('link', { name: '문제 관리로' }).click()
   await page.getByLabel('제목으로 검색').fill('e2e로')
   await expect(page.getByRole('row', { name: /e2e로 만든 문제/ })).toContainText('작성 중')
+})
+
+/**
+ * 화면 제목이 문제 제목이라(#242) 관리자가 쓴 값이 그대로 h1이 된다. 공백 없는 긴 영문을
+ * 줄이지 못하면 320px에서 문서 전체가 가로로 넘친다(#288 리뷰). jsdom은 폭을 재지 않아 여기서 본다.
+ */
+test('공백 없는 긴 제목도 좁은 화면에서 가로로 넘치지 않는다', async ({ page }) => {
+  await login(page, ADMIN)
+  await page.goto('/admin/problems/10')
+  await page.getByLabel('제목').fill('LongestSubstringWithoutRepeatingCharacters')
+  await page.getByRole('button', { name: '저장' }).click()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+    'LongestSubstringWithoutRepeatingCharacters',
+  )
+
+  await page.setViewportSize({ width: 320, height: 800 })
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow).toBeLessThanOrEqual(1)
 })

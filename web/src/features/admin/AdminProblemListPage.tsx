@@ -1,13 +1,13 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/ui/search-input'
 import {
   Table,
   TableBody,
@@ -20,7 +20,8 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { Pagination } from '@/components/ui/pagination'
 import { ADMIN_PAGE_SIZE, adminProblemListQuery } from './adminProblemQuery'
-import { problemStateLabel } from './labels'
+import { cn } from '@/lib/utils'
+import { problemStateLabel, problemStateTone } from './labels'
 
 /** 검색어를 조회에 반영하기까지 기다리는 시간. 사용자 목록과 같은 값이다. */
 const SEARCH_DEBOUNCE_MS = 300
@@ -73,28 +74,29 @@ export function Component() {
   }
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="page-title">문제 관리</h1>
+    <section className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <p className="text-eyebrow text-primary-text">관리자</p>
+          <h1 className="page-title">문제 관리</h1>
+        </div>
         <Button asChild className="min-h-11">
           <Link to="/admin/problems/new">새 문제</Link>
         </Button>
       </div>
 
-      <div className="relative">
-        <Search
-          aria-hidden="true"
-          className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
-        />
-        <Input
-          type="search"
-          aria-label="제목으로 검색"
-          placeholder="제목으로 검색"
-          className="pl-9"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-      </div>
+      {/*
+        시안에는 상태 필터(전체·공개·작성 중·검증 중·비공개)가 있지만 두지 않는다. 목록 API가
+        상태로 거르지 못해(keyword·page·size뿐), 화면에서 거르면 한 페이지 안에서만 걸러 개수와
+        페이지가 틀린다. API가 생기면 이 줄에 Tabs pill을 둔다.
+      */}
+      <SearchInput
+        aria-label="제목으로 검색"
+        placeholder="제목으로 검색"
+        className="w-[300px] max-w-full self-end"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+      />
 
       {isPending && !error ? <ListSkeleton rows={ADMIN_PAGE_SIZE} /> : null}
 
@@ -123,8 +125,12 @@ export function Component() {
             <p className="text-muted-foreground text-sm" aria-live="polite">
               {keyword ? '조건에 맞는 문제' : '문제'} {data.totalElements}개
             </p>
-            <div aria-busy={isFetching} className={isFetching ? 'opacity-60' : undefined}>
-              <Table>
+            <div
+              aria-busy={isFetching}
+              className={cn('bg-card rounded-lg border px-3 py-2', isFetching && 'opacity-60')}
+            >
+              {/* 좁은 화면에서는 열을 짜내지 않고 표 안에서 가로로 민다(Table이 overflow-x-auto). 시안도 같다 */}
+              <Table className="min-w-[640px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-20">번호</TableHead>
@@ -151,9 +157,13 @@ export function Component() {
                       </TableCell>
                       <TableCell>{DIFFICULTY_LABEL[problem.difficulty]}</TableCell>
                       <TableCell>
-                        {problemStateLabel(problem.latestStatus, problem.publishedVersionNo)}
+                        <Badge
+                          tone={problemStateTone(problem.latestStatus, problem.publishedVersionNo)}
+                        >
+                          {problemStateLabel(problem.latestStatus, problem.publishedVersionNo)}
+                        </Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums">
+                      <TableCell className="font-mono text-sm">
                         v{problem.latestVersionNo}
                       </TableCell>
                     </TableRow>
