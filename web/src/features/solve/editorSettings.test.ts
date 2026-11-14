@@ -28,6 +28,29 @@ describe('useEditorSettings (UX-07)', () => {
     expect(result.current.fontSize).toBe(18)
   })
 
+  it('듣는 화면이 없던 사이 다른 탭이 바꾼 값도 다시 열 때 읽는다 (낡은 값 위에 덮어쓰지 않게)', () => {
+    // 한 번 열었다 닫아 메모리에 값이 남은 상태
+    const first = renderHook(() => useEditorSettings())
+    expect(first.result.current.fontSize).toBe(14)
+    first.unmount()
+
+    // 듣는 쪽이 없어 storage 이벤트를 놓친다
+    localStorage.setItem(
+      EDITOR_SETTINGS_KEY,
+      JSON.stringify({ ...EDITOR_DEFAULTS, fontSize: 18, language: 'CPP' }),
+    )
+
+    const again = renderHook(() => useEditorSettings())
+    expect(again.result.current.fontSize).toBe(18)
+    // 그 위에 한 칸만 고쳐도 다른 탭의 값이 남는다
+    act(() => updateEditorSettings({ lineNumbers: false }))
+    expect(JSON.parse(localStorage.getItem(EDITOR_SETTINGS_KEY)!)).toMatchObject({
+      fontSize: 18,
+      language: 'CPP',
+      lineNumbers: false,
+    })
+  })
+
   it('다른 키의 storage 이벤트에는 다시 읽지 않는다', () => {
     const { result } = renderHook(() => useEditorSettings())
     const before = result.current

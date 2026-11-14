@@ -58,13 +58,8 @@ export function EmailCodeStep({
     onSuccess: () => {
       setCodeOpen(true)
       start()
-      // 새 번호를 보냈으니 옛 번호에 딸린 것은 모두 지난 일이다(MAIL_FAILED 분기와 같다).
-      // - 확인 실패: 남기면 '다시 받아 주세요'가 계속 보이고 메일함 안내가 다시 나오지 않는다(#284 리뷰)
-      // - 칸의 옛 번호: 서버가 이미 무효로 만들었다. 오류 표시 없이 남으면 그대로 눌러 시도 횟수만 준다(#286 리뷰)
-      // - 자릿수 오류: 새 발송 안내와 옛 검증 문구가 함께 보인다
-      verify.reset()
-      setCode('')
-      setCodeError(null)
+      // 새 번호를 보냈으니 옛 번호에 딸린 것은 모두 지난 일이다(clearCode 주석)
+      clearCode()
     },
     onError: (error) => {
       const failed = problemCode(error)
@@ -78,9 +73,7 @@ export function EmailCodeStep({
       // 하루 횟수에 센다는 뜻이고, 사용자가 할 일은 다시 받기다.
       if (failed === 'MAIL_FAILED') {
         setCodeOpen(false)
-        setCode('')
-        setCodeError(null)
-        verify.reset()
+        clearCode()
       }
       // 서버가 번호를 만들었거나 횟수에 센 경우만 쿨다운을 돈다 (계정 규칙).
       // - MAIL_FAILED: 번호를 만들었으므로 1분 안에 또 보내면 429다.
@@ -111,6 +104,19 @@ export function EmailCodeStep({
   // 확인이 '번호가 죽었다'로 끝났다. 칸도 비워진다(위 verify.onError)
   const verifyFailure = verify.isError ? problemCode(verify.error) : undefined
   const codeDead = verifyFailure === 'CODE_EXPIRED' || verifyFailure === 'CODE_ATTEMPTS_EXCEEDED'
+
+  /**
+   * 옛 번호에 딸린 것을 버린다. 새 번호를 보냈을 때·발송이 실패했을 때·주소가 바뀌었을 때 셋이
+   * 같은 일을 해야 해서 한 곳에 둔다(#286 리뷰) — 할 일이 늘면 여기만 고친다.
+   * - 확인 실패: 남기면 '다시 받아 주세요'가 계속 보이고 메일함 안내가 다시 나오지 않는다(#284 리뷰)
+   * - 칸의 옛 번호: 서버가 이미 무효로 만들었다. 오류 표시 없이 남으면 그대로 눌러 시도 횟수만 준다
+   * - 자릿수 오류: 새 발송 안내와 옛 검증 문구가 함께 보인다
+   */
+  function clearCode() {
+    verify.reset()
+    setCode('')
+    setCodeError(null)
+  }
 
   function handleSend() {
     if (!EMAIL_PATTERN.test(trimmedEmail)) {
@@ -146,10 +152,8 @@ export function EmailCodeStep({
     // 주소가 그대로라 형식 판정도 그대로다.
     setEmailError(null)
     setCodeOpen(false)
-    setCode('')
-    setCodeError(null)
+    clearCode()
     send.reset()
-    verify.reset()
     // 제한은 이메일마다 따로 센다. 다른 주소가 이전 주소의 쿨다운을 물려받으면 안 된다.
     // 원래 주소로 되돌아가 또 보내면 서버가 429로 막고 그 문구와 함께 쿨다운이 다시 돈다.
     reset()

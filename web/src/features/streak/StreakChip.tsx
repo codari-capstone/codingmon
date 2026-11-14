@@ -4,11 +4,22 @@ import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
 import { useStreak } from './streakQuery'
 
-/** 상단 바 연속 학습 칩 (STREAK-02). 비로그인은 0일(명세). 숫자를 모르는 동안은 두지 않는다. */
+/** 상단 바 연속 학습 칩 (STREAK-02). 비로그인은 0일(명세). 숫자를 모르는 동안은 자리만 잡는다. */
 export function StreakChip() {
-  const { streak, guest } = useStreak()
+  const { streak, guest, loading, sessionLoading } = useStreak()
   const count = guest ? 0 : streak?.currentStreak
-  if (count === undefined) return null
+  if (count === undefined) {
+    // 받는 동안 비워 두면 응답이 오는 순간 칩 폭만큼 테마 버튼이 밀린다. 사용자 메뉴 자리표시와 같은
+    // 이유로 한 자리 칩의 폭을 잡아 둔다(#279 리뷰). 세션을 모르는 동안은 비로그인일 수도 있어
+    // 0일 칩처럼 sm부터만 잡는다. 받지 못했으면(오류) 자리도 두지 않는다 — 카드가 이유를 말한다.
+    if (!loading) return null
+    return (
+      <span
+        aria-hidden="true"
+        className={cn('h-[34px] w-[62px] shrink-0', sessionLoading ? 'hidden sm:block' : 'block')}
+      />
+    )
+  }
   return (
     <Link
       to="/problems"

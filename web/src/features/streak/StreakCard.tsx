@@ -1,5 +1,6 @@
 import type { UserStreak } from '@/api/types'
 import scene from '@/assets/scenes/streak.png'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
@@ -20,7 +21,7 @@ function guide(streak: UserStreak | undefined, guest: boolean): string | null {
 
 /** 문제 목록 위 연속 학습 카드 (STREAK-01). 오늘 아직 제출하지 않았으면 오늘 칸이 빈다. */
 export function StreakCard() {
-  const { streak, guest } = useStreak()
+  const { streak, guest, failed, retry } = useStreak()
   const count = guest ? 0 : streak?.currentStreak
   const days = DAY_LABELS.map((label, i) => {
     const day = streak?.week[i]
@@ -56,7 +57,17 @@ export function StreakCard() {
             <span className="text-highlight tabular-nums">{count ?? '–'}일</span>째
             {count ? ' 이어 가는 중' : null}
           </p>
-          <p className="text-inverse-muted min-h-[1.5em] text-sm">{guide(streak, guest)}</p>
+          {/* 받지 못했으면 '–일째'만 남기지 않고 이유와 다시 받기를 둔다(#279 리뷰) */}
+          {failed ? (
+            <p className="text-inverse-muted m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              연속 학습을 불러오지 못했어요.
+              <Button type="button" variant="glass" size="sm" onClick={retry}>
+                다시 받기
+              </Button>
+            </p>
+          ) : (
+            <p className="text-inverse-muted min-h-[1.5em] text-sm">{guide(streak, guest)}</p>
+          )}
         </div>
         <ol
           aria-label="이번 주"

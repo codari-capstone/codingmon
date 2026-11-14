@@ -29,7 +29,19 @@ export function streakQuery() {
  */
 export function useStreak() {
   const { isAuthenticated, isLoading } = useAuth()
-  const { data } = useQuery({ ...streakQuery(), enabled: isAuthenticated })
-  // enabled가 꺼져도 캐시는 남는다. 세션이 401로 끊기면 ['me']만 비워지므로 앞사람 달력을 버린다
-  return { streak: isAuthenticated ? data : undefined, guest: !isLoading && !isAuthenticated }
+  const { data, error, isPending, refetch } = useQuery({
+    ...streakQuery(),
+    enabled: isAuthenticated,
+  })
+  return {
+    // enabled가 꺼져도 캐시는 남는다. 세션이 401로 끊기면 ['me']만 비워지므로 앞사람 달력을 버린다
+    streak: isAuthenticated ? data : undefined,
+    guest: !isLoading && !isAuthenticated,
+    /** 세션을 모르거나, 로그인했는데 아직 받는 중. 칩이 자리만 잡아 둔다 */
+    loading: isLoading || (isAuthenticated && isPending && !error),
+    /** 로그인했는데 받지 못했다. 카드가 이유와 다시 받기를 보여 준다 */
+    failed: isAuthenticated && data === undefined && error !== null,
+    sessionLoading: isLoading,
+    retry: () => void refetch(),
+  }
 }
