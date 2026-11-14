@@ -453,7 +453,7 @@ export interface paths {
          *     - 없거나 `FAILED`면 통계와 추천을 지금 기준으로 다시 계산해 만들기 시작한다(202 `PENDING`). `FAILED`에서 다시 누르는 것이 재시도다.
          *     - 맞힌 서로 다른 문제가 5개 미만이면 409 `LEARNING_REPORT_NOT_AVAILABLE`이고 아무것도 만들지 않는다. 오늘 리포트가 이미 있으면 이 검사보다 먼저 그것을 돌려준다.
          *     - AI 분석·리뷰의 하루 한도(`AiQuota`)에는 세지 않는다. 리포트는 하루 1회가 따로 있다.
-         *     - AI 대기열이 차 시작하지 못하면 200 `FAILED`, `failureReason` `BUSY`다.
+         *     - 만들기를 시작했어도 응답 전에 끝났으면 그 상태로 200이다. AI 대기열이 차 시작하지 못하면 `FAILED`, `failureReason` `BUSY`이고, 모델 서버가 바로 거절하면 `FAILED`, `UNAVAILABLE`일 수 있다.
          *     화면은 `status`가 `PENDING`이면 바뀔 때까지 `GET`을 주기적으로 부른다.
          */
         post: operations["requestLearningReport"];
@@ -2904,7 +2904,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 이미 있는 오늘 리포트(만드는 중 포함), 또는 대기열이 차 시작하지 못함(`FAILED`, `BUSY`) */
+            /** @description 이미 있는 오늘 리포트(만드는 중 포함), 또는 만들기를 시작했지만 응답 전에 끝남(`COMPLETED`, `FAILED`) */
             200: {
                 headers: {
                     [name: string]: unknown;
