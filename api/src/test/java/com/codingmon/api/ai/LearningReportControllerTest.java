@@ -31,6 +31,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -49,6 +50,8 @@ class LearningReportControllerTest {
 
         final AtomicInteger calls = new AtomicInteger();
         volatile Function<LlmRequest<?>, LlmResponse<?>> answer;
+        // 닫혀 있으면 답하기 전에 기다린다(start).
+        volatile CountDownLatch gate = new CountDownLatch(0);
 
         @Override
         public String model() {
@@ -64,6 +67,7 @@ class LearningReportControllerTest {
         @SuppressWarnings("unchecked")
         public <T> LlmResponse<T> complete(LlmRequest<T> request) {
             calls.incrementAndGet();
+            await(gate);
             return (LlmResponse<T>) answer.apply(request);
         }
     }
@@ -100,6 +104,7 @@ class LearningReportControllerTest {
     void setUp() {
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(SecurityMockMvcConfigurers.springSecurity()).build();
         llm.calls.set(0);
+        llm.gate = new CountDownLatch(0);
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         // 개념 이름에 숫자가 섞여도 수치 대조는 이름을 가리고 본다.
         tagName = "반복 범위 " + suffix;
@@ -205,7 +210,7 @@ class LearningReportControllerTest {
         // 해결률은 83%이고 평균 시도는 1.33번이다. 50%, 2.5번, 4번은 입력에 없다.
         llm.answer = request -> answer(request, tagName, "해결률이 50%예요. 평균 2.5번 시도했어요.", "평균 4번 시도한 문제예요.");
 
-        mvc.perform(post(PATH).with(as(userId))).andExpect(status().isAccepted());
+        start();
         awaitStatus("COMPLETED");
 
         mvc.perform(get(PATH).with(as(userId)))
@@ -244,7 +249,7 @@ class LearningReportControllerTest {
         llm.answer = request -> {
             throw new LlmException(LlmException.Kind.UNAVAILABLE, "모델 서버가 꺼져 있다", null, new LlmUsage(10, 0));
         };
-        mvc.perform(post(PATH).with(as(userId))).andExpect(status().isAccepted());
+        start();
         awaitStatus("FAILED");
         mvc.perform(get(PATH).with(as(userId)))
                 .andExpect(jsonPath("$.status").value("FAILED"))
@@ -258,9 +263,7 @@ class LearningReportControllerTest {
         jdbc.sql("update user_problem_stats set solved = true, first_solved_at = now() where user_id = :userId"
                 + " and problem_id = :problemId").param("userId", userId).param("problemId", wrongProblemId).update();
         llm.answer = request -> answer(request, tagName, "반복 범위는 반복이 끝나는 값을 정하는 개념이에요.");
-        mvc.perform(post(PATH).with(as(userId)))
-                .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.status").value("PENDING"))
+        start()
                 .andExpect(jsonPath("$.failureReason").isEmpty())
                 .andExpect(jsonPath("$.solvedProblemCount").value(6))
                 .andExpect(jsonPath("$.recommendations[0].problemId").value(freshProblemId))
@@ -283,7 +286,7 @@ class LearningReportControllerTest {
                         new LearningReportResult.RecommendationReason(1, "이유"),
                         new LearningReportResult.RecommendationReason(1, "이유")), "요약이에요."), "{}", LlmUsage.NONE);
 
-        mvc.perform(post(PATH).with(as(userId))).andExpect(status().isAccepted());
+        start();
         awaitStatus("FAILED");
 
         mvc.perform(get(PATH).with(as(userId)))
@@ -305,9 +308,7 @@ class LearningReportControllerTest {
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.failureReason").value("UNAVAILABLE"))
                 .andExpect(jsonPath("$.recommendations", hasSize(0)));
-        mvc.perform(post(PATH).with(as(userId)))
-                .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.recommendations", hasSize(3)));
+        start().andExpect(jsonPath("$.recommendations", hasSize(3)));
         awaitStatus("COMPLETED");
 
         assertThat(jdbc.sql("select id from learning_reports where user_id = :userId").param("userId", userId)
@@ -317,7 +318,7 @@ class LearningReportControllerTest {
     @Test
     void 오늘_리포트가_없으면_지난_리포트를_보여_주고_새로_누르면_오늘_것을_만든다() throws Exception {
         mvc.perform(get(PATH).with(as(userId))).andExpect(status().isNotFound());
-        mvc.perform(post(PATH).with(as(userId))).andExpect(status().isAccepted());
+        start();
         awaitStatus("COMPLETED");
         jdbc.sql("update learning_reports set report_date = report_date - 1 where user_id = :userId")
                 .param("userId", userId).update();
@@ -327,7 +328,7 @@ class LearningReportControllerTest {
         mvc.perform(get(PATH).with(as(userId)))
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
                 .andExpect(jsonPath("$.reportDate").value(yesterday));
-        mvc.perform(post(PATH).with(as(userId))).andExpect(status().isAccepted());
+        start();
         awaitStatus("COMPLETED");
 
         assertThat(reportCount(userId)).isEqualTo(2);
@@ -338,7 +339,7 @@ class LearningReportControllerTest {
 
     @Test
     void 추천_문제의_풀이_상태는_보여_줄_때의_것이다() throws Exception {
-        mvc.perform(post(PATH).with(as(userId))).andExpect(status().isAccepted());
+        start();
         awaitStatus("COMPLETED");
         jdbc.sql("insert into user_problem_stats (user_id, problem_id, attempt_count, solved, first_solved_at)"
                 + " values (:userId, :problemId, 1, true, now())").param("userId", userId)
@@ -404,6 +405,20 @@ class LearningReportControllerTest {
                 List.of(new LearningReportResult.WeakConcept(concept, explanation, "작은 입력으로 한 줄씩 따라가 보세요.")),
                 reasons, "5문제를 맞혔어요. 다음 문제로 이어 가 봐요.");
         return new LlmResponse<>(result, "{}", new LlmUsage(100, 50));
+    }
+
+    // 만들기를 시작하는 POST. 가짜 모델이 바로 답하면 처리기가 응답보다 먼저 끝내 200이 될 수 있으므로, 응답을 받을 때까지
+    // 모델을 붙잡아 둔다.
+    private ResultActions start() throws Exception {
+        CountDownLatch hold = new CountDownLatch(1);
+        llm.gate = hold;
+        try {
+            return mvc.perform(post(PATH).with(as(userId)))
+                    .andExpect(status().isAccepted())
+                    .andExpect(jsonPath("$.status").value("PENDING"));
+        } finally {
+            hold.countDown();
+        }
     }
 
     private int reportCount(long owner) {
