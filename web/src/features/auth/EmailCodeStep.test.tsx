@@ -502,10 +502,13 @@ describe('EmailCodeStep', () => {
       await user.click(screen.getByRole('button', { name: '다시 받기' }))
 
       expect(screen.getByRole('button', { name: '확인' })).toBeDisabled()
+      // 칸도 잠긴다. 열려 있으면 그 사이 넣은 새 번호를 늦게 온 발송 성공이 지운다
+      expect(screen.getByLabelText('인증번호')).toHaveAttribute('readonly')
 
       resolveSend()
       await act(async () => {})
       expect(screen.getByRole('button', { name: '확인' })).toBeEnabled()
+      expect(screen.getByLabelText('인증번호')).not.toHaveAttribute('readonly')
     })
 
     it('쿨다운이 끝나도 확인 요청 중이면 다시 받기가 꺼진다', async () => {
