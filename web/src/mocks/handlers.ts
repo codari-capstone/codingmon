@@ -39,7 +39,7 @@ import {
   type MockProblemVersion,
 } from './fixtures/adminProblems'
 import { pastSubmission, problemHistories, submissionsOf } from './fixtures/history'
-import { learningStatsReady } from './fixtures/learning'
+import { learningReportOf, learningStatsReady } from './fixtures/learning'
 import { activityFor, streakFor } from './fixtures/activity'
 import { problemDetails } from './fixtures/problemDetails'
 import { conceptTags, problems } from './fixtures/problems'
@@ -252,6 +252,17 @@ export function resetSubmissions(): void {
   mockAnalyses.clear()
   mockReviews.clear()
   nextSubmissionId = 1
+}
+
+/**
+ * 학습 리포트 (REP-03~05). 값은 만들기 시작한 시각이다. 분석처럼 요청 응답만 `PENDING`이고 다음 조회부터 끝난다.
+ * 목은 통계 목처럼 세션을 보지 않고 사용자를 나누지 않는다. 하루 1회는 UTC 날짜로 센다(계약).
+ */
+let mockReportGeneratedAt: string | null = null
+
+/** 테스트 사이에 만든 리포트가 새지 않게 비운다. */
+export function resetLearningReport(): void {
+  mockReportGeneratedAt = null
 }
 
 /** 하루 AI 분석·리뷰 한도 (AI-01). 계약의 `AiQuota.limit` 설명과 같은 값이다. */
@@ -1260,6 +1271,27 @@ export const handlers: RequestHandler[] = [
 
   /** 학습 통계 (REP-01·02). 읽기뿐이라 상태가 없다. 조건 미달 모양은 테스트가 `server.use`로 바꾼다. */
   http.get('*/api/users/me/learning-stats', () => HttpResponse.json(learningStatsReady)),
+
+  /**
+   * 학습 리포트 만들기 (REP-03~05). 오늘(UTC) 만든 것이 있으면 그것을 200으로, 없으면 새로 만들어 202 `PENDING`으로 준다.
+   * 통계 목이 늘 조건을 채운 모양이라 409 `LEARNING_REPORT_NOT_AVAILABLE`은 테스트가 `server.use`로 바꿔 본다.
+   */
+  http.post('*/api/users/me/learning-report', () => {
+    const today = new Date().toISOString().slice(0, 10)
+    if (mockReportGeneratedAt?.slice(0, 10) === today) {
+      return HttpResponse.json(learningReportOf('COMPLETED', mockReportGeneratedAt))
+    }
+    mockReportGeneratedAt = new Date().toISOString()
+    return HttpResponse.json(learningReportOf('PENDING', mockReportGeneratedAt), { status: 202 })
+  }),
+
+  /** 마지막 학습 리포트 (REP-03~05). 만든 적이 없으면 계약대로 404 `LEARNING_REPORT_NOT_FOUND`다. */
+  http.get('*/api/users/me/learning-report', () => {
+    if (!mockReportGeneratedAt) {
+      return problem(404, 'LEARNING_REPORT_NOT_FOUND', '학습 리포트를 찾을 수 없어요')
+    }
+    return HttpResponse.json(learningReportOf('COMPLETED', mockReportGeneratedAt))
+  }),
 
   /** 오늘 남은 AI 분석·리뷰 횟수 (AI-01). 세는 방법은 mockQuota에 있다. */
   http.get('*/api/users/me/ai-quota', ({ request }) =>

@@ -98,6 +98,13 @@ export type AiQuota = components['schemas']['AiQuota']
 export type LearningStats = components['schemas']['LearningStats']
 export type ConceptStat = components['schemas']['ConceptStat']
 
+/**
+ * 하루 1회 만드는 학습 리포트 (REP-03~05). 수치·추천은 만들 때 서버가 저장한 값이고, AI 문장은
+ * `COMPLETED`일 때만 있다. 통계와 맞지 않는 수치를 쓴 문장은 서버가 지워 null일 수 있다(계약).
+ */
+export type LearningReport = components['schemas']['LearningReport']
+export type LearningReportRecommendation = components['schemas']['LearningReportRecommendation']
+
 /** 풀이 요약·최근 1년 잔디 (MY-05). 잔디의 `days`는 제출이 있는 날만 온다. */
 export type UserActivity = components['schemas']['UserActivity']
 
