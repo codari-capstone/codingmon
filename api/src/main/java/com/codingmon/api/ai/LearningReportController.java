@@ -19,7 +19,8 @@ class LearningReportController {
         this.reports = reports;
     }
 
-    // 새로 만들기 시작했으면 202, 이미 있는 오늘 리포트를 돌려주면 200이다.
+    // 새로 만들기 시작했으면 202, 이미 있는 오늘 리포트를 돌려주면 200이다. 시작했어도 응답 전에 끝났으면(대기열이 차 BUSY,
+    // 모델 서버가 바로 거절) 그 상태로 200이다.
     @PostMapping("/api/users/me/learning-report")
     ResponseEntity<LearningReportView> request(@AuthenticationPrincipal Jwt jwt) {
         LearningReportService.Requested requested = reports.request(userId(jwt));
