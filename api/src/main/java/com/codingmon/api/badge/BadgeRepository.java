@@ -70,6 +70,9 @@ public class BadgeRepository {
             return;
         }
         long userId = owner.get();
+        // 같은 사용자의 채점이 두 슬롯에서 동시에 끝나면 서로의 커밋 전 정답을 못 봐 마스터 등을 둘 다 주지 않을 수 있다.
+        // 사용자 행을 잠가 차례로 확인한다. 잠근 뒤의 문장은 먼저 끝난 쪽의 커밋을 본다.
+        activity.lockForSubmission(userId);
         Set<BadgeCode> have = unlocked(userId);
         List<BadgeCode> add = new ArrayList<>();
         if (!have.contains(BadgeCode.PERSISTENCE) && judgedSubmissions(userId) >= PERSISTENCE_SUBMISSIONS) {
@@ -134,9 +137,11 @@ public class BadgeRepository {
     }
 
     // 공개 중인 문제를 모두 맞혔는지. 공개가 내려간 문제는 세지 않는다.
+    // 채점 중에 마지막 공개 문제가 내려가 공개 문제가 0개가 되면 거짓으로 본다.
     private boolean solvedAllPublished(long userId) {
         return jdbc.sql("""
-                select not exists (
+                select exists (select 1 from problem_versions where status = 'PUBLISHED')
+                   and not exists (
                   select 1 from problem_versions v
                   where v.status = 'PUBLISHED'
                     and not exists (

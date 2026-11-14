@@ -109,6 +109,7 @@ public class UserActivityRepository {
     // 먼저 연속 일수를 갱신하게 한다. 제출 시각(submitted_at)은 잠근 뒤의 clock_timestamp()라 날짜 순서와 갱신 순서가 같다.
     // now()(트랜잭션 시작 시각)로 정하면 자정 전에 시작한 제출이 자정 뒤 제출보다 늦게 갱신돼 연속 일수가 1로 줄 수 있다.
     // 제출 행이 거는 FOR KEY SHARE와 충돌하지 않게 FOR NO KEY UPDATE로 잠근다. 예제 실행은 기다리지 않는다.
+    // 배지(#248)도 채점 완료 때 같은 사용자의 배지 확인을 차례로 하려고 부른다.
     @Transactional(propagation = Propagation.MANDATORY)
     public void lockForSubmission(long userId) {
         jdbc.sql("select id from users where id = :userId for no key update")
