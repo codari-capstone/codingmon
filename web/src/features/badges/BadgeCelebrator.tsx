@@ -6,6 +6,7 @@ import type { BadgeCode } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/dialog'
+import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { isDeadEnd, isFinished, submissionResultQuery } from '@/features/result/resultQuery'
 import { SUBMIT_MUTATION_KEY } from '@/features/solve/submitQuery'
@@ -65,32 +66,57 @@ function Celebrator() {
   const queued = useRef(new Set<BadgeCode>())
   const [queue, setQueue] = useState<BadgeCode[]>([])
 
+  // 로그아웃하면 이 인스턴스는 사라진다. 그 뒤 도착한 앞사람의 응답이 다음 사람의 세션을 건드리지 않게 한다
+  const alive = useRef(true)
+  useEffect(
+    () => () => {
+      alive.current = false
+    },
+    [],
+  )
+
+  // 축하 창이 낸 조회의 순번. 둘이 거꾸로 도착하면 늦게 낸 쪽만 캐시에 넣는다
+  const latest = useRef(0)
+
   const finishedKey = finished.join(',')
   useEffect(() => {
     const done = finished.filter((id) => !checking.current.has(id))
     if (done.length === 0) return
     done.forEach((id) => checking.current.add(id))
+    const order = ++latest.current
     // fetchQuery는 진행 중인 같은 키의 요청(앞 제출의 확인, 열려 있는 배지 화면)을 그대로 돌려줘서
-    // 방금 끝난 제출로 받은 배지가 빠진 응답을 볼 수 있다. 늘 새로 묻고 캐시에는 넣어 둔다(#294 리뷰)
+    // 방금 끝난 제출로 받은 배지가 빠진 응답을 볼 수 있다. 그래서 따로 묻는다(#294 리뷰).
+    // 받은 목록은 배지 화면의 진행 중인 요청을 취소한 뒤 넣는다. 그대로 두면 늦게 도착한 옛 응답이
+    // 덮어써 방금 축하한 배지가 잠긴 채로 남는다. 무효화로는 안 된다 — 데이터가 아직 없는 첫 조회는
+    // 취소되지 않고 그 요청을 그대로 기다린다(2차 리뷰, useRequestAnalysis와 같은 순서)
     fetchMyBadges()
       .then(
-        (badges) => {
-          queryClient.setQueryData(badgesQuery().queryKey, badges)
+        async (badges) => {
+          if (!alive.current) return
+          if (order === latest.current) {
+            const { queryKey } = badgesQuery()
+            await queryClient.cancelQueries({ queryKey })
+            queryClient.setQueryData(queryKey, badges)
+          }
           const waiting = badges
             .filter(
               (b) =>
                 b.unlockedAt !== null &&
                 !b.celebrated &&
                 !queued.current.has(b.code) &&
-                // 웹이 아직 모르는 코드(서버가 먼저 배포됨)는 그릴 이름·그림이 없다
-                b.code in BADGE_INFO,
+                // 웹이 아직 모르는 코드(서버가 먼저 배포됨)는 그릴 이름·그림이 없다.
+                // `in`은 constructor 같은 프로토타입 키도 통과시킨다(constants/errors.ts와 같은 검사)
+                Object.hasOwn(BADGE_INFO, b.code),
             )
             .map((b) => b.code)
           waiting.forEach((code) => queued.current.add(code))
           if (waiting.length > 0) setQueue((q) => [...q, ...waiting])
         },
-        // 못 받았으면 띄우지 않는다. 배지는 서버에 남아 다음 채점이 끝날 때 다시 본다
-        () => {},
+        // 못 받았으면 띄우지 않는다. 배지는 서버에 남아 다음 채점이 끝날 때 다시 본다.
+        // 세션이 끊겼으면(채점 조회의 401도 여기로 이어진다) 다른 화면처럼 로그인 화면으로 보낸다
+        (error: unknown) => {
+          if (alive.current) forgetSessionIfUnauthorized(queryClient, error)
+        },
       )
       .finally(() => {
         done.forEach((id) => checking.current.delete(id))

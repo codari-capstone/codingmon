@@ -1,5 +1,5 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, Link, Outlet, RouterProvider } from 'react-router'
@@ -222,9 +222,11 @@ describe('BadgeCelebrator (BADGE-03)', () => {
     ).toBeInTheDocument()
   })
 
-  // 배지 화면이 열려 있어 같은 키를 조회 중일 때다. 그 응답에는 방금 끝난 채점으로 받은 배지가 없다
-  it('진행 중인 배지 조회를 함께 쓰지 않고 새로 묻는다', async () => {
+  // 배지 화면이 열려 있어 같은 키를 조회 중일 때다. 그 응답에는 방금 끝난 채점으로 받은 배지가 없다.
+  // 늦게 도착한 그 옛 응답이 화면을 덮어 방금 축하한 배지를 잠긴 채로 되돌려서도 안 된다(2차 리뷰)
+  it('진행 중인 배지 조회를 함께 쓰지 않고, 늦게 온 옛 응답이 화면을 덮지 않는다', async () => {
     let calls = 0
+    let heldDone = false
     let release = () => {}
     const held = new Promise<void>((resolve) => (release = resolve))
     server.use(
@@ -232,11 +234,14 @@ describe('BadgeCelebrator (BADGE-03)', () => {
         calls++
         if (calls === 1) {
           await held
+          heldDone = true
           return HttpResponse.json({ badges: badgesFor(1) })
         }
         return HttpResponse.json({
           badges: badgesFor(1).map((b) =>
-            b.code === 'STREAK_3' ? { ...b, celebrated: false } : b,
+            b.code === 'FIRST_TRY'
+              ? { ...b, unlockedAt: '2026-11-15T01:00:00Z', celebrated: false }
+              : b,
           ),
         })
       }),
@@ -249,10 +254,61 @@ describe('BadgeCelebrator (BADGE-03)', () => {
     await waitFor(() => expect(calls).toBe(1))
     await submitLikeSolvePage(client)
 
-    expect(
-      await screen.findByRole('dialog', { name: "'3일 연속' 배지를 받았어요" }),
-    ).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog', { name: "'한 번에 맞힘' 배지를 받았어요" })
+    await userEvent.click(within(dialog).getByRole('button', { name: '확인' }))
+
     release()
+    await waitFor(() => expect(heldDone).toBe(true))
+    // 옛 응답이 캐시에 들어갈 틈을 준 뒤 본다
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    const card = within(screen.getByRole('region', { name: '실력' }))
+      .getAllByRole('listitem')
+      .find((li) => li.textContent?.startsWith('한 번에 맞힘'))
+    expect(card).toHaveTextContent('2026.11.15 획득')
+  })
+
+  it('로그아웃 뒤 도착한 배지 응답은 캐시에 넣지 않는다', async () => {
+    let asked = false
+    let answered = false
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.get('*/api/users/me/badges', async () => {
+        asked = true
+        await held
+        answered = true
+        return HttpResponse.json({ badges: badgesFor(1) })
+      }),
+    )
+    const { client } = renderAt('/submissions/1')
+    await submitLikeSolvePage(client)
+    await waitFor(() => expect(asked).toBe(true))
+
+    // 로그아웃하면 축하 창이 사라진다. 다음 사람이 로그인하기 전에 앞사람의 응답이 온다
+    // TanStack은 캐시 변화를 다음 틱에 화면에 알린다(notifyManager). 축하 창이 사라진 뒤에 응답을 푼다
+    await act(async () => {
+      client.setQueryData(ME_QUERY_KEY, null)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    })
+    release()
+    await waitFor(() => expect(answered).toBe(true))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(client.getQueryData(['badges'])).toBeUndefined()
+  })
+
+  it('세션이 끊겨 배지 조회가 401이면 세션을 버린다', async () => {
+    server.use(
+      http.get('*/api/submissions/:id', () =>
+        HttpResponse.json({ status: 401, title: 'Unauthorized' }, { status: 401 }),
+      ),
+      http.get('*/api/users/me/badges', () =>
+        HttpResponse.json({ status: 401, title: 'Unauthorized' }, { status: 401 }),
+      ),
+    )
+    const { client } = renderAt('/submissions/1')
+    await submitLikeSolvePage(client)
+
+    await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull())
   })
 
   // 첫 조회가 503이면 폴링이 멈춘다(isDeadEnd). 남겨 두면 다시 묻지도, 배지를 보지도 않는다
@@ -289,6 +345,8 @@ describe('BadgeCelebrator (BADGE-03)', () => {
           badges: [
             ...badgesFor(1),
             { code: 'NEW_FROM_SERVER', unlockedAt: '2026-11-15T01:00:00Z', celebrated: false },
+            // 프로토타입 키도 모르는 코드다(`in`이면 통과한다)
+            { code: 'constructor', unlockedAt: '2026-11-15T01:00:00Z', celebrated: false },
           ],
         })
       }),
