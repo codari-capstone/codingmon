@@ -43,3 +43,5 @@ List<NextConcept> concepts = nextConcepts.findRecent(userId, 20);
 //             name="이진 탐색", reason="…", tag=Tag(id=5, slug="binary-search", name="이분 탐색"))
 // 맞는 태그가 없으면 tag는 null이고 name·reason은 원문 그대로다.
 ```
+
+학습 리포트(F4) 프롬프트는 `src/main/resources/prompts/learning-report-<버전>/system.md`이고 `LearningReportPrompt`가 읽는다. 버전은 `LLM_PROMPT_VERSION_LEARNING_REPORT`(기본 `v1`)이다. 리포트에는 코드를 쓸 자리가 없어 정답 코드 검사와 `retry.md`가 없다. 입력(`LearningReportInput.of`)은 `LearningStatsRepository.find`의 통계, 추천 문제(`RecommendationRepository`의 순위·근거 태그에 문제 제목·난이도·풀이 여부를 붙인 것), `findRecent(userId, LearningReportInput.NEXT_CONCEPT_REVIEWS)`의 다음 개념이다. 응답 스키마는 입력마다 만들어(`LearningReportResult.schema`) 취약 개념·추천의 개수와 이름·순위를 묶는다. `LearningReportPromptIntegrationTest`는 더미 통계 3세트(`LearningReportSamples`)를 실제 모델에 `LLM_EVAL_RUNS`번(기본 1)씩 보내고 응답 원문과 `summary.tsv`(걸린 시간, 토큰, 순서, 입력에 없는 수치, 글 하나의 최대 수치 개수)를 `build/learning-report-eval/`에 남긴다.
