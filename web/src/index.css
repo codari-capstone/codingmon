@@ -4,6 +4,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* 애니메이션 줄이기 (UX-08, app/motion.ts). 기본 motion-reduce는 기기 설정만 본다.
+ * 화면 설정에서 고른 값(<html data-motion>)이 있으면 그것이 이기고, 없으면 기기 설정을 따른다. */
+@custom-variant motion-reduce {
+  &:where([data-motion='reduce'] *) {
+    @slot;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &:where(:root:not([data-motion='full']) *) {
+      @slot;
+    }
+  }
+}
+
 /* 색은 아래 :root·.dark 변수를 가리킨다(테마마다 값이 바뀌므로 inline).
  * 이름은 shadcn 것을 그대로 쓰고, 디자인 시스템(펭귄 Codingmon)의 토큰 값을 넣었다.
  * 디자인 원본(tokens.json)은 저장소 밖 자료라, 이 파일이 기준이다.

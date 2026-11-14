@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { RadioGroup } from '@/components/ui/radio-group'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { useReduceMotion } from '@/app/motion'
 import { useTheme, type ThemePreference } from '@/app/useTheme'
 import { CodeEditor } from '@/features/solve/CodeEditor'
 import {
@@ -119,7 +120,25 @@ function EditorSection() {
   )
 }
 
-/** 화면 설정 (UX-06·07). 고르면 바로 적용되고 이 기기에 저장된다. 움직임 설정은 #249 다음 PR에서 더한다. */
+/** 움직임 (UX-08). '맞혔을 때 축하 효과'는 끄고 켤 효과가 생기는 #248에서 더한다. */
+function MotionSection() {
+  const [reduce, setReduce] = useReduceMotion()
+  return (
+    <section aria-labelledby="motion-heading" className={cn(MY_CARD, 'gap-2')}>
+      <h2 id="motion-heading" className="text-foreground text-lg font-semibold">
+        움직임
+      </h2>
+      <Switch
+        label="애니메이션 줄이기"
+        description="화면의 움직이는 효과를 줄여요. 처음에는 기기의 '동작 줄이기' 설정을 따라요."
+        checked={reduce}
+        onChange={(event) => setReduce(event.target.checked)}
+      />
+    </section>
+  )
+}
+
+/** 화면 설정 (UX-06·07·08). 고르면 바로 적용되고 이 기기에 저장된다. */
 export function Component() {
   const { preference, setPreference } = useTheme()
   return (
@@ -147,6 +166,7 @@ export function Component() {
         />
       </section>
       <EditorSection />
+      <MotionSection />
     </MyLayout>
   )
 }

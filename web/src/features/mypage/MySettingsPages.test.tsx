@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { CurrentUser } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
+import { MOTION_STORAGE_KEY } from '@/app/motion'
 import { THEME_STORAGE_KEY } from '@/app/theme'
 import { ThemeProvider } from '@/app/ThemeProvider'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
@@ -98,6 +99,39 @@ describe('화면 설정 /me/display (UX-06)', () => {
     // 에디터 설정은 메모리에도 한 벌 있다(editorSettings.ts). 앞 테스트에서 바꾼 값을 되돌린다
     updateEditorSettings(EDITOR_DEFAULTS)
     document.documentElement.classList.remove('dark')
+    delete document.documentElement.dataset.motion
+  })
+
+  it('애니메이션 줄이기(UX-08)는 기기 설정에서 시작하고, 고르면 저장하고 html에 적는다', async () => {
+    const user = userEvent.setup()
+    renderAt('/me/display')
+
+    // 테스트 환경의 기기는 '동작 줄이기'가 꺼져 있다(setup.ts의 matchMedia)
+    const reduce = await screen.findByRole('switch', { name: /애니메이션 줄이기/ })
+    expect(reduce).not.toBeChecked()
+    expect(document.documentElement.dataset.motion).toBeUndefined()
+
+    await user.click(reduce)
+    expect(reduce).toBeChecked()
+    expect(document.documentElement.dataset.motion).toBe('reduce')
+    expect(localStorage.getItem(MOTION_STORAGE_KEY)).toBe('reduce')
+
+    // 끄면 기기 설정으로 돌아가는 게 아니라 '움직임 그대로'를 고른 것이다 — 기기가 줄이기여도 이긴다
+    await user.click(reduce)
+    expect(document.documentElement.dataset.motion).toBe('full')
+    expect(localStorage.getItem(MOTION_STORAGE_KEY)).toBe('full')
+  })
+
+  it('기기가 동작 줄이기면 고른 적이 없어도 스위치가 켜져 보인다', async () => {
+    const original = window.matchMedia
+    window.matchMedia = (query: string) =>
+      ({ ...original(query), matches: query.includes('reduced-motion') }) as MediaQueryList
+    try {
+      renderAt('/me/display')
+      expect(await screen.findByRole('switch', { name: /애니메이션 줄이기/ })).toBeChecked()
+    } finally {
+      window.matchMedia = original
+    }
   })
 
   it('테마를 고르면 바로 적용되고, 시스템을 고르면 저장한 선택을 지운다', async () => {
