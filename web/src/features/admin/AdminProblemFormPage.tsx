@@ -248,7 +248,8 @@ function AdminProblemForm() {
           '새 문제' → '문제 수정' → 실제 제목으로 두 번 깜빡인다(#288 리뷰). 입력 중인 값(watch)은 쓰지 않는다:
           화면 제목이 글자를 칠 때마다 바뀐다.
         */}
-        <h1 className="page-title">
+        {/* 제목은 관리자가 쓴 값이라 공백 없는 긴 영문이 올 수 있다. 줄이지 못하면 320px에서 문서가 가로로 넘친다(#288 리뷰) */}
+        <h1 className="page-title min-w-0 [overflow-wrap:anywhere]">
           {isNew ? '새 문제' : loaded?.title || save.variables?.title || '문제 수정'}
         </h1>
         {readOnly && loaded ? (
@@ -263,8 +264,9 @@ function AdminProblemForm() {
       </div>
 
       {readOnly ? (
+        // 상태는 제목 옆 배지('v1 · 공개')가 말한다. 여기서 또 말하면 두 번 읽히고 고칠 곳도 둘이 된다(#288 리뷰)
         <p role="status" className="text-muted-foreground text-sm">
-          {`지난 버전이라 고칠 수 없어요. 상태는 '${loaded ? VERSION_STATUS_LABEL[loaded.status] : ''}'예요.`}
+          지난 버전이라 고칠 수 없어요.
         </p>
       ) : null}
 
