@@ -6,7 +6,7 @@ import type { ProblemListQuery, ProblemPage } from '@/api/types'
 import { MOCK_CODE, resetEmailCodes } from './fixtures/emailCodes'
 import { conceptTags, problems } from './fixtures/problems'
 import { mockAccounts } from './fixtures/users'
-import { resetSessions, resetSubmissions } from './handlers'
+import { resetLearningReport, resetSessions, resetSubmissions } from './handlers'
 import { server } from './server'
 
 async function fetchProblems(query: ProblemListQuery): Promise<ProblemPage> {
@@ -691,6 +691,47 @@ describe('제출 목의 검사 순서', () => {
     })
 
     expect(code(res)).toBe('SOURCE_EMPTY')
+  })
+})
+
+describe('학습 리포트 목', () => {
+  afterEach(() => resetLearningReport())
+
+  it('만든 적이 없으면 조회는 404 LEARNING_REPORT_NOT_FOUND다', async () => {
+    const res = await api.GET('/api/users/me/learning-report')
+
+    expect(res.response.status).toBe(404)
+    expect(code(res)).toBe('LEARNING_REPORT_NOT_FOUND')
+  })
+
+  it('처음 요청은 202 PENDING이고 문장 없이 통계·추천만 있다', async () => {
+    const requested = await api.POST('/api/users/me/learning-report')
+
+    expect(requested.response.status).toBe(202)
+    expect(requested.data?.status).toBe('PENDING')
+    expect(requested.data?.summary).toBeNull()
+    expect(requested.data?.concepts).toHaveLength(4)
+    expect(requested.data?.recommendations.map((r) => r.reason)).toEqual([null, null, null])
+  })
+
+  it('다음 조회에 끝나고, 같은 날 다시 요청하면 새로 만들지 않고 200으로 준다', async () => {
+    const requested = await api.POST('/api/users/me/learning-report')
+    const polled = await api.GET('/api/users/me/learning-report')
+    const again = await api.POST('/api/users/me/learning-report')
+
+    expect(polled.data?.status).toBe('COMPLETED')
+    expect(polled.data?.summary).not.toBeNull()
+    expect(again.response.status).toBe(200)
+    expect(again.data?.generatedAt).toBe(requested.data?.generatedAt)
+  })
+
+  it('취약 개념은 통계의 weak와 같은 순서이고, 도전 문제는 개념이 없다', async () => {
+    await api.POST('/api/users/me/learning-report')
+    const { data } = await api.GET('/api/users/me/learning-report')
+
+    const weak = data!.concepts.filter((c) => c.weak).map((c) => c.slug)
+    expect(data!.weakConcepts.map((c) => c.slug)).toEqual(weak)
+    expect(data!.recommendations.map((r) => r.concept?.slug ?? null)).toEqual(['dp', 'dp', null])
   })
 })
 
