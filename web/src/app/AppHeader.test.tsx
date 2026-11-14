@@ -64,6 +64,13 @@ describe('AppHeader', () => {
     expect(screen.getByRole('link', { name: '내 학습' })).toHaveAttribute('href', '/me/report')
   })
 
+  it('배지 화면에서도 내 학습 메뉴가 켜져 있다 (BADGE-02)', () => {
+    renderHeaderAt('/me/badges')
+    const nav = screen.getByRole('navigation', { name: '주요 메뉴' })
+    expect(within(nav).getByRole('link', { name: '내 학습' })).toHaveClass('bg-muted')
+    expect(within(nav).getByRole('link', { name: '문제' })).not.toHaveClass('bg-muted')
+  })
+
   it('테마 전환 버튼이 있다', () => {
     renderHeader()
     expect(screen.getByRole('button', { name: '다크 모드로 전환' })).toBeInTheDocument()

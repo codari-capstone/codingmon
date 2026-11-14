@@ -41,6 +41,7 @@ import {
 import { pastSubmission, problemHistories, submissionsOf } from './fixtures/history'
 import { learningStatsReady } from './fixtures/learning'
 import { activityFor, streakFor } from './fixtures/activity'
+import { BADGE_CODES, badgesFor, celebrate } from './fixtures/badges'
 import { problemDetails } from './fixtures/problemDetails'
 import { conceptTags, problems } from './fixtures/problems'
 import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from './fixtures/users'
@@ -1256,6 +1257,23 @@ export const handlers: RequestHandler[] = [
   http.get('*/api/users/me/streak', ({ request }) => {
     const id = userIdFromToken(bearer(request))
     return id === null ? unauthorized() : HttpResponse.json(streakFor(id))
+  }),
+
+  /** 배지 (BADGE-01). 1번은 첫 정답·3일 연속(둘 다 축하함), 그 밖은 없음 (fixtures/badges.ts). */
+  http.get('*/api/users/me/badges', ({ request }) => {
+    const id = userIdFromToken(bearer(request))
+    return id === null ? unauthorized() : HttpResponse.json({ badges: badgesFor(id) })
+  }),
+
+  /** 축하 창을 띄웠음 (BADGE-03). 이미 했어도 204, 못 받은 배지는 404. */
+  http.post('*/api/users/me/badges/:code/celebrated', ({ request, params }) => {
+    const id = userIdFromToken(bearer(request))
+    if (id === null) return unauthorized()
+    const code = BADGE_CODES.find((it) => it === params.code)
+    // 12개 밖의 코드는 code 없는 400이다(계약)
+    if (!code) return badRequest('배지 코드가 아니다')
+    if (!celebrate(id, code)) return problem(404, 'BADGE_NOT_UNLOCKED', '받지 않은 배지예요')
+    return new HttpResponse(null, { status: 204 })
   }),
 
   /** 학습 통계 (REP-01·02). 읽기뿐이라 상태가 없다. 조건 미달 모양은 테스트가 `server.use`로 바꾼다. */

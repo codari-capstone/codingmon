@@ -28,6 +28,8 @@ export async function submitCode(input: SubmitInput): Promise<number> {
   return result.data.id
 }
 
+export const SUBMIT_MUTATION_KEY = ['submit'] as const
+
 /**
  * 제출 mutation.
  *
@@ -50,6 +52,8 @@ export function useSubmit() {
   const queryClient = useQueryClient()
 
   return useMutation({
+    // 축하 창(BadgeCelebrator)이 이 키로 이번 세션에 낸 제출 번호를 읽어 채점을 지켜본다
+    mutationKey: SUBMIT_MUTATION_KEY,
     mutationFn: submitCode,
     // 제출은 되돌릴 수 없다(시도 횟수가 오른다). 실패하면 사람이 다시 누르게 한다.
     retry: false,
