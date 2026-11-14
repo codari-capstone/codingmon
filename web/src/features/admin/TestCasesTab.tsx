@@ -6,6 +6,7 @@ import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import type { CaseType } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -232,14 +233,14 @@ export function TestCasesTab({
     <form
       aria-label="테스트케이스"
       noValidate
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-5"
       onSubmit={form.handleSubmit(handleSave)}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
         {/* 공개에 몇 개가 필요한지는 적지 않는다. ADM-06 공개 조건 체크리스트가 그 일을
             하고(#37 PR C), 같은 수를 두 곳에 쓰면 한쪽만 고쳐지는 자리가 생긴다. */}
-        <p className="text-sm">{`공개 예제 ${sampleCount}개 · 비공개 ${hiddenCount}개`}</p>
-        <p className="text-muted-foreground text-xs">{`케이스는 ${MAX_CASES}개까지, 입력 2MB·기대 출력 1MB·합 10MB까지예요`}</p>
+        <h2 className="text-foreground m-0 text-lg font-semibold">{`공개 예제 ${sampleCount}개 · 비공개 ${hiddenCount}개`}</h2>
+        <p className="text-muted-foreground m-0 text-[13px]">{`케이스는 ${MAX_CASES}개까지, 입력 2MB·기대 출력 1MB·합 10MB까지예요`}</p>
       </div>
 
       {notice ? (
@@ -294,9 +295,13 @@ export function TestCasesTab({
               return (
                 <li key={field.id} className="bg-muted rounded-md">
                   <details open={form.formState.errors.cases?.[index] !== undefined || undefined}>
-                    <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
-                      <span className="font-medium">{`${index + 1}. ${CASE_TYPE_LABEL[row.caseType]}`}</span>
-                      <span className="text-muted-foreground text-xs">
+                    {/* 디자인: 번호 · 종류 배지 · 크기 · 검증 한 줄. 줄을 누르면 펼쳐 고친다 */}
+                    <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-[18px] py-3.5 text-sm">
+                      <b className="text-foreground w-6 tabular-nums">{index + 1}</b>
+                      <Badge tone={row.caseType === 'SAMPLE' ? 'brand' : 'neutral'}>
+                        {CASE_TYPE_LABEL[row.caseType]}
+                      </Badge>
+                      <span className="text-muted-foreground flex-1 tabular-nums">
                         {/* 바이트는 서버가 세어 준 값을 쓴다(계약이 담아 주는 이유다).
                             고친 행은 저장할 때 세므로 그 말을 적는다 — 2MB 값에
                             매 타이핑마다 TextEncoder를 돌리지 않는다. */}
@@ -304,7 +309,7 @@ export function TestCasesTab({
                           ? '저장하면 크기를 계산해요'
                           : `입력 ${formatBytes(row.meta.inputBytes)} · 출력 ${formatBytes(row.meta.outputBytes)}`}
                       </span>
-                      <span className="text-muted-foreground ml-auto text-xs">
+                      <span className="text-muted-foreground text-[13px] font-semibold">
                         {row.meta === null ? '저장 전' : validationLabel(row.meta.validation)}
                       </span>
                     </summary>
@@ -379,8 +384,9 @@ export function TestCasesTab({
           </ul>
         )}
 
+        {/* 디자인: 왼쪽에 [케이스 더하기]·[ZIP 올리기], 오른쪽 끝에 [케이스 저장] */}
         {locked ? null : (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2.5">
             <Button
               type="button"
               variant="secondary"
@@ -408,7 +414,7 @@ export function TestCasesTab({
               className="hidden"
               onChange={handleZipChange}
             />
-            <Button type="submit" className="min-h-11">
+            <Button type="submit" className="ml-auto min-h-11">
               {save.isPending ? '저장 중…' : '케이스 저장'}
             </Button>
           </div>
