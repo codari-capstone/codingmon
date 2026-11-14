@@ -242,8 +242,15 @@ function AdminProblemForm() {
         문제 관리로
       </Link>
       <div className="flex flex-wrap items-center gap-3">
-        {/* 시안처럼 문제 제목이 화면 제목이다. 제목을 비운 초안은 이름이 없어 '문제 수정'으로 둔다 */}
-        <h1 className="page-title">{isNew ? '새 문제' : loaded?.title || '문제 수정'}</h1>
+        {/*
+          시안처럼 문제 제목이 화면 제목이다. 제목을 비운 초안은 이름이 없어 '문제 수정'으로 둔다.
+          등록 직후에는 새 주소의 상세가 오기 전이라 loaded가 없다. 방금 보낸 제목을 쓴다 — 없으면
+          '새 문제' → '문제 수정' → 실제 제목으로 두 번 깜빡인다(#288 리뷰). 입력 중인 값(watch)은 쓰지 않는다:
+          화면 제목이 글자를 칠 때마다 바뀐다.
+        */}
+        <h1 className="page-title">
+          {isNew ? '새 문제' : loaded?.title || save.variables?.title || '문제 수정'}
+        </h1>
         {readOnly && loaded ? (
           <Badge tone="outline">{`v${versionNo} · ${VERSION_STATUS_LABEL[loaded.status]}`}</Badge>
         ) : null}
