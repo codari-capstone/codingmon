@@ -21,6 +21,7 @@ import { CodeReviewPanel } from '@/features/ai/CodeReviewPanel'
 import { suspectLines } from '@/features/ai/countLines'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { parsePathId } from '@/lib/pathId'
+import { BLANK_PIXEL } from '@/lib/utils'
 import { nextActions } from './nextActions'
 import { problemSubmissionsPath } from '@/features/history/historyPath'
 import { isDeadEnd, isFinished, submissionResultQuery } from './resultQuery'
@@ -201,9 +202,6 @@ function canReview(result: SubmissionResult | undefined): boolean {
 }
 
 const FILE_NAME = { PYTHON: 'solution.py', CPP: 'main.cpp' } satisfies Record<Language, string>
-
-/** 투명한 1×1 GIF. 좁은 화면의 장면 자리에 들어가 요청을 만들지 않는다 */
-const BLANK_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
 
 /** 판정 옆 펭귄 장면. 장식이라 alt를 비운다. 채점 중에는 두지 않는다 */
 function Scene({ result }: { result: SubmissionResult }) {

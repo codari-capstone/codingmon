@@ -19,7 +19,7 @@ export function RouteErrorBoundary() {
   const error = useRouteError()
 
   return (
-    <AppShell>
+    <AppShell contained>
       <ErrorState problem={error} headingLevel={1} onRetry={() => window.location.reload()} />
     </AppShell>
   )

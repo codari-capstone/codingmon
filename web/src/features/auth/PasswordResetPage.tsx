@@ -1,12 +1,13 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { isValidPassword, PASSWORD_CHANGED_NOTICE } from './accountRules'
+import { AUTH_CARD, AUTH_FOOT, AUTH_LINK } from './authCard'
 import { EmailCodeStep } from './EmailCodeStep'
+import { NewPasswordFields } from './NewPasswordFields'
 import { problemCode, problemMessage } from './problemCode'
 import { resetPassword, sendResetCode, verifyResetCode } from './passwordResetQuery'
 import { useAuth } from './useAuth'
@@ -65,8 +66,13 @@ export function Component() {
   const ready = resetToken !== null && isValidPassword(password) && password === passwordConfirm
 
   return (
-    <section className="bg-card mx-auto my-10 flex w-full max-w-md flex-col gap-6 rounded-lg border p-6 sm:p-8">
-      <h1 className="page-title">비밀번호 찾기</h1>
+    <section className={AUTH_CARD}>
+      <div className="flex flex-col gap-1.5">
+        <h1 className="page-title">비밀번호 찾기</h1>
+        <p className="text-muted-foreground m-0 text-[15px] leading-[1.6]">
+          가입한 이메일로 인증번호를 보내 드려요. 인증하면 새 비밀번호를 정할 수 있어요.
+        </p>
+      </div>
 
       <EmailCodeStep
         key={emailStepKey}
@@ -83,39 +89,13 @@ export function Component() {
         }}
       />
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="password" className="text-sm font-medium">
-          새 비밀번호
-        </label>
-        <Input
-          id="password"
-          type="password"
-          autoComplete="new-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-        <p className="text-muted-foreground text-sm">
-          10~20자, 영문 대문자·소문자·숫자·특수문자를 각각 하나 이상
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="passwordConfirm" className="text-sm font-medium">
-          새 비밀번호 확인
-        </label>
-        <Input
-          id="passwordConfirm"
-          type="password"
-          autoComplete="new-password"
-          value={passwordConfirm}
-          onChange={(event) => setPasswordConfirm(event.target.value)}
-        />
-        {passwordConfirm.length > 0 && password !== passwordConfirm ? (
-          <p className="text-destructive-text text-sm">
-            비밀번호 확인이 일치하지 않아요. 같은 비밀번호를 입력해 주세요
-          </p>
-        ) : null}
-      </div>
+      <NewPasswordFields
+        label="새 비밀번호"
+        password={password}
+        passwordConfirm={passwordConfirm}
+        onPassword={setPassword}
+        onPasswordConfirm={setPasswordConfirm}
+      />
 
       {submit.isError ? (
         <p role="alert" className="text-destructive-text text-sm">
@@ -133,6 +113,13 @@ export function Component() {
       >
         {submit.isPending ? '바꾸는 중…' : '재설정'}
       </Button>
+
+      <p className={AUTH_FOOT}>
+        {/* 들어오려던 화면을 그대로 싣는다. 로그인하면 거기로 간다 */}
+        <Link to="/login" state={{ from }} className={AUTH_LINK}>
+          로그인으로 돌아가기
+        </Link>
+      </p>
     </section>
   )
 }

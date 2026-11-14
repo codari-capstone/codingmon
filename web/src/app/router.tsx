@@ -22,11 +22,24 @@ export const router = createBrowserRouter([
           { index: true, loader: () => redirect('/problems') },
           // 필터는 화면 안에 둔다. 제목·검색칸이 필터와 표 위 전체 폭에 걸친다 (#235)
           { path: 'problems', lazy: () => import('@/features/problems/ProblemListPage') },
-          { path: 'login', lazy: () => import('@/features/auth/LoginPage') },
+          // 왼쪽 남색 패널이 좌우 끝까지 간다 (#241)
+          {
+            path: 'login',
+            lazy: () => import('@/features/auth/LoginPage'),
+            handle: { bleed: true } satisfies PageHandle,
+          },
           // GitHub 로그인이 돌아오는 자리 (COM-02). 주소는 계약이 정했다.
           { path: 'login/github', lazy: () => import('@/features/auth/GitHubCallbackPage') },
-          { path: 'signup', lazy: () => import('@/features/auth/SignupPage') },
-          { path: 'password-reset', lazy: () => import('@/features/auth/PasswordResetPage') },
+          {
+            path: 'signup',
+            lazy: () => import('@/features/auth/SignupPage'),
+            handle: { pageTone: 'subtle' } satisfies PageHandle,
+          },
+          {
+            path: 'password-reset',
+            lazy: () => import('@/features/auth/PasswordResetPage'),
+            handle: { pageTone: 'subtle' } satisfies PageHandle,
+          },
           { path: 'forbidden', lazy: () => import('@/app/ForbiddenPage') },
           {
             // 로그인이 필요한 화면들 (COM-05). 가드는 막거나 통과시킬 뿐 AppShell을 만들지 않으므로,

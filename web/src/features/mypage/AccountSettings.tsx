@@ -9,7 +9,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
-import { Input } from '@/components/ui/input'
+import { Field, Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { MY_CARD } from './MyLayout'
 import {
@@ -101,13 +101,9 @@ export function NicknameForm({ user }: { user: CurrentUser }) {
       ) : null}
       {/* 가린 이메일이다(계약). GitHub 가입자는 이메일이 없어 칸을 두지 않는다 */}
       {user.email != null ? (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="text-sm font-semibold">
-            이메일
-          </label>
+        <Field label="이메일" htmlFor="email" hint="이메일은 바꿀 수 없어요.">
           <Input id="email" value={user.email} readOnly />
-          <p className="text-muted-foreground text-sm">이메일은 바꿀 수 없어요.</p>
-        </div>
+        </Field>
       ) : null}
       {save.isError ? (
         <p role="alert" className="text-destructive-text text-sm">

@@ -120,6 +120,27 @@ describe('EmailCodeStep', () => {
     expect(screen.getByRole('link', { name: '로그인하러 가기' })).toBeInTheDocument()
   })
 
+  it('보낸 뒤 메일함 안내를 두고, 번호가 죽으면(만료) 안내를 지운다', async () => {
+    const user = userEvent.setup()
+    setup({
+      verifyCode: vi.fn().mockRejectedValue({
+        status: 400,
+        code: 'CODE_EXPIRED',
+        detail: '인증번호가 만료됐어요. 다시 받아 주세요',
+      }),
+    })
+    const notice = '인증번호를 보냈어요. 메일함을 확인해 주세요.'
+
+    await user.type(screen.getByLabelText('이메일'), 'new@codari.test')
+    await user.click(screen.getByRole('button', { name: '인증번호 받기' }))
+    expect(await screen.findByText(notice)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('인증번호'), '123456')
+    await user.click(screen.getByRole('button', { name: '확인' }))
+    expect(await screen.findByText(/다시 받아 주세요/)).toBeInTheDocument()
+    expect(screen.queryByText(notice)).not.toBeInTheDocument()
+  })
+
   it('MAIL_FAILED면 인증번호 칸을 닫고 다시 받게 한다', async () => {
     // 서버는 이전 번호를 무효로 만든 뒤 새 번호를 저장하고 메일을 보낸다(EmailCodeService).
     // 발송이 실패하면 새 번호는 사용자에게 가지 않았고 이전 번호는 이미 죽었다. 칸을 열어
