@@ -21,8 +21,10 @@ export function BadgeCelebrator() {
 /**
  * 내 제출의 채점이 끝나면 배지 목록을 받아, 받았는데 축하 전인 배지를 하나씩 띄운다(계약 `getMyBadges`).
  *
- * 지켜볼 제출은 이번 세션에 낸 것이다 — 제출 mutation의 기록을 읽어 새 저장소를 두지 않는다.
- * 그 번호들을 여기서도 구독하니 결과 화면을 떠나도 폴링이 이어진다(같은 키라 요청이 겹치지 않는다).
+ * 지켜볼 제출은 이번 세션에 낸 것이다 — 제출 mutation의 기록에서 번호를 옮겨 와 직접 든다.
+ * mutation은 결과 화면으로 넘어가면 관찰자가 없어 5분(gcTime) 뒤 지워지므로, 채점이 그보다
+ * 오래 걸려도 놓치지 않게 옮겨 둔다(#248 리뷰). 끝나서 확인한 제출은 내려놓아 구독을 끊는다.
+ * 구독하는 동안은 결과 화면을 떠나도 폴링이 이어진다(같은 키라 요청이 겹치지 않는다).
  * 기록에서 연 끝난 제출은 mutation이 없어 띄우지 않는다.
  *
  * shortcut: 채점 중에 새로고침하면 그 제출을 놓친다. 배지는 남아 다음 제출의 채점이 끝날 때 함께 뜬다(명세가 허용).
@@ -35,37 +37,59 @@ function Celebrator() {
     filters: { mutationKey: SUBMIT_MUTATION_KEY, status: 'success' },
     select: (mutation) => mutation.state.data as number,
   })
+  // 한 번 옮겨 온 번호는 다시 옮기지 않는다. 렌더 중 상태 갱신으로 새 번호를 잡는다(아래 shown과 같은 방식)
+  const [seen, setSeen] = useState<ReadonlySet<number>>(() => new Set())
+  const [watching, setWatching] = useState<number[]>([])
+  const fresh = ids.filter((id) => !seen.has(id))
+  if (fresh.length > 0) {
+    setSeen(new Set([...seen, ...fresh]))
+    setWatching([...watching, ...fresh])
+  }
+
   const finished = useQueries({
-    queries: ids.map((id) => submissionResultQuery(id)),
+    queries: watching.map((id) => submissionResultQuery(id)),
     combine: (results) =>
-      ids.filter((_, i) => {
+      watching.filter((_, i) => {
         const status = results[i]?.data?.status
         return status !== undefined && isFinished(status)
       }),
   })
 
-  // 한 번 확인한 제출, 한 번 띄운 배지. 축하 기록(POST)이 끝나기 전에 다음 채점이 끝나면
+  // 확인 중인 제출, 한 번 띄운 배지. 축하 기록(POST)이 끝나기 전에 다음 채점이 끝나면
   // 서버는 아직 celebrated=false를 줘서 방금 닫은 배지가 다시 뜬다
-  const checked = useRef(new Set<number>())
+  const checking = useRef(new Set<number>())
   const queued = useRef(new Set<BadgeCode>())
   const [queue, setQueue] = useState<BadgeCode[]>([])
 
   const finishedKey = finished.join(',')
   useEffect(() => {
-    const fresh = finished.filter((id) => !checked.current.has(id))
-    if (fresh.length === 0) return
-    fresh.forEach((id) => checked.current.add(id))
-    queryClient.fetchQuery(badgesQuery()).then(
-      (badges) => {
-        const waiting = badges
-          .filter((b) => b.unlockedAt !== null && !b.celebrated && !queued.current.has(b.code))
-          .map((b) => b.code)
-        waiting.forEach((code) => queued.current.add(code))
-        if (waiting.length > 0) setQueue((q) => [...q, ...waiting])
-      },
-      // 못 받았으면 띄우지 않는다. 배지는 서버에 남아 다음 채점이 끝날 때 다시 본다
-      () => {},
-    )
+    const done = finished.filter((id) => !checking.current.has(id))
+    if (done.length === 0) return
+    done.forEach((id) => checking.current.add(id))
+    queryClient
+      .fetchQuery(badgesQuery())
+      .then(
+        (badges) => {
+          const waiting = badges
+            .filter(
+              (b) =>
+                b.unlockedAt !== null &&
+                !b.celebrated &&
+                !queued.current.has(b.code) &&
+                // 웹이 아직 모르는 코드(서버가 먼저 배포됨)는 그릴 이름·그림이 없다
+                b.code in BADGE_INFO,
+            )
+            .map((b) => b.code)
+          waiting.forEach((code) => queued.current.add(code))
+          if (waiting.length > 0) setQueue((q) => [...q, ...waiting])
+        },
+        // 못 받았으면 띄우지 않는다. 배지는 서버에 남아 다음 채점이 끝날 때 다시 본다
+        () => {},
+      )
+      .finally(() => {
+        done.forEach((id) => checking.current.delete(id))
+        setWatching((w) => w.filter((id) => !done.includes(id)))
+      })
     // finished는 렌더마다 새 배열이라 번호 목록으로 본다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finishedKey, queryClient])

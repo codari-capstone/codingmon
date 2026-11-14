@@ -1,4 +1,4 @@
-import { Link, NavLink, useLocation, useMatch } from 'react-router'
+import { Link, matchPath, useLocation, useMatch } from 'react-router'
 
 import wordmark from '@/assets/brand/codingmon_wordmark.png'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -75,21 +75,25 @@ export function AppHeader() {
           nav 안에서 링크 단위로 한 번 더 줄을 바꾼다. 링크 글자는 끊지 않는다.
         */}
         <nav aria-label="주요 메뉴" className="flex flex-auto flex-wrap gap-1">
-          {menu.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `text-label whitespace-nowrap hover:bg-muted hover:text-foreground focus-visible:outline-ring inline-flex h-10 items-center rounded-full px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 ${
-                  isActive || (item.also && location.pathname.startsWith(item.also))
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground'
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {menu.map((item) => {
+            // NavLink는 aria-current를 자기 주소에만 붙인다. `also`까지 같은 규칙(구간 단위 앞부분 일치)으로
+            // 직접 가려 색과 화면 낭독기의 '현재 페이지'가 함께 가게 한다(#248 리뷰)
+            const active = [item.to, item.also].some(
+              (path) => path && matchPath({ path, end: false }, location.pathname),
+            )
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-current={active ? 'page' : undefined}
+                className={`text-label whitespace-nowrap hover:bg-muted hover:text-foreground focus-visible:outline-ring inline-flex h-10 items-center rounded-full px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                  active ? 'bg-muted text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {item.label}
+              </Link>
+            )
+          })}
         </nav>
 
         <div className="flex items-center gap-2.5">

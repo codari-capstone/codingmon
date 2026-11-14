@@ -67,8 +67,11 @@ describe('AppHeader', () => {
   it('배지 화면에서도 내 학습 메뉴가 켜져 있다 (BADGE-02)', () => {
     renderHeaderAt('/me/badges')
     const nav = screen.getByRole('navigation', { name: '주요 메뉴' })
-    expect(within(nav).getByRole('link', { name: '내 학습' })).toHaveClass('bg-muted')
-    expect(within(nav).getByRole('link', { name: '문제' })).not.toHaveClass('bg-muted')
+    expect(within(nav).getByRole('link', { name: '내 학습' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(nav).getByRole('link', { name: '문제' })).not.toHaveAttribute('aria-current')
   })
 
   it('테마 전환 버튼이 있다', () => {

@@ -179,6 +179,52 @@ describe('BadgeCelebrator (BADGE-03)', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
+  // 결과 화면으로 넘어가면 제출 mutation은 관찰자가 없어 5분 뒤 지워진다. 채점이 그보다 오래 걸린 경우다
+  it('채점 중에 제출 기록이 캐시에서 지워져도 끝까지 지켜본다', async () => {
+    serveBadges(['STREAK_3'])
+    // 목은 몇 번 만에 채점을 끝낸다. 지우기 전에 끝나면 이 경우가 아니므로 풀어 줄 때까지 채점 중으로 둔다.
+    // 풀면 아무것도 돌려주지 않아 기본 핸들러(채점이 나아감)로 넘긴다
+    let judging = true
+    let polled = 0
+    server.use(
+      http.get('*/api/submissions/:id', () => {
+        polled++
+        return judging ? HttpResponse.json({ id: 1, status: 'RUNNING', progress: 50 }) : undefined
+      }),
+    )
+    const { client } = renderAt('/submissions/1')
+    await submitLikeSolvePage(client)
+    await waitFor(() => expect(polled).toBeGreaterThan(0))
+    // 5분 뒤의 정리(gc)와 같은 remove로 지운다. clear()는 알린 뒤에 비워서 useMutationState가 바뀌지 않는다
+    const mutations = client.getMutationCache()
+    mutations.getAll().forEach((m) => mutations.remove(m))
+    judging = false
+
+    expect(
+      await screen.findByRole('dialog', { name: "'3일 연속' 배지를 받았어요" }),
+    ).toBeInTheDocument()
+  })
+
+  it('웹이 모르는 배지 코드는 띄우지 않는다', async () => {
+    let asked = 0
+    server.use(
+      http.get('*/api/users/me/badges', () => {
+        asked++
+        return HttpResponse.json({
+          badges: [
+            ...badgesFor(1),
+            { code: 'NEW_FROM_SERVER', unlockedAt: '2026-11-15T01:00:00Z', celebrated: false },
+          ],
+        })
+      }),
+    )
+    const { client } = renderAt('/submissions/1')
+    await submitLikeSolvePage(client)
+
+    await waitFor(() => expect(asked).toBe(1))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
   it('결과 화면을 떠나도 채점이 끝나면 지금 화면 위에 띄운다', async () => {
     serveBadges(['STREAK_3'])
     const { client, router } = renderAt('/submissions/1')
