@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { Button } from '@/components/ui/button'
 import { RadioGroup } from '@/components/ui/radio-group'
 import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
@@ -122,7 +123,7 @@ function EditorSection() {
 
 /** 움직임 (UX-08). '맞혔을 때 축하 효과'는 끄고 켤 효과가 생기는 #248에서 더한다. */
 function MotionSection() {
-  const [reduce, setReduce] = useReduceMotion()
+  const { reduce, followsDevice, setReduce, followDevice } = useReduceMotion()
   return (
     <section aria-labelledby="motion-heading" className={cn(MY_CARD, 'gap-2')}>
       <h2 id="motion-heading" className="text-foreground text-lg font-semibold">
@@ -130,10 +131,20 @@ function MotionSection() {
       </h2>
       <Switch
         label="애니메이션 줄이기"
-        description="화면의 움직이는 효과를 줄여요. 처음에는 기기의 '동작 줄이기' 설정을 따라요."
+        description={
+          followsDevice
+            ? "화면의 움직이는 효과를 줄여요. 지금은 기기의 '동작 줄이기' 설정을 따라요."
+            : '화면의 움직이는 효과를 줄여요. 직접 고른 값을 쓰고 있어요.'
+        }
         checked={reduce}
         onChange={(event) => setReduce(event.target.checked)}
       />
+      {/* 한 번 고르면 기기 설정을 다시 따를 길이 없었다(#281 리뷰). 고른 값이 있을 때만 둔다 */}
+      {followsDevice ? null : (
+        <Button variant="link" className="self-start text-sm" onClick={followDevice}>
+          기기 설정 따르기
+        </Button>
+      )}
     </section>
   )
 }
