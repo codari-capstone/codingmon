@@ -331,9 +331,11 @@ export function SolutionsTab({
               </div>
 
               {/* 계약: "정답 코드가 그대로 들어간 문자열이라 글자 그대로 보여 준다(HTML로
-                렌더링하지 않는다)." 그래서 Markdown 컴포넌트를 쓰지 않는다. */}
+                렌더링하지 않는다)." 그래서 Markdown 컴포넌트를 쓰지 않는다.
+                옅은 면(bg-muted)으로 둔다. 탭 카드가 흰 면이라 같은 bg-card면 어디까지가
+                컴파일러 출력인지 경계가 보이지 않는다(#290 리뷰) */}
               {solution?.compilerMessage ? (
-                <pre className="bg-card max-h-48 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
+                <pre className="bg-muted text-foreground m-0 max-h-48 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
                   {solution.compilerMessage}
                 </pre>
               ) : null}
