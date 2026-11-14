@@ -83,6 +83,11 @@ export function Component() {
   }, [queryClient, error])
 
   const byCode = new Map(data?.map((badge) => [badge.code, badge]))
+  // 머리 개수도 아래 묶음과 같은 12개 코드로 센다. 서버가 먼저 배포한 모르는 배지는 묶음에 없어
+  // 따로 세면 '3개를 모았어요'인데 묶음 합은 2가 된다(#294 리뷰)
+  const shownBadges = BADGE_GROUPS.flatMap((group) =>
+    group.codes.flatMap((code) => byCode.get(code) ?? []),
+  )
 
   return (
     <section className="flex flex-col gap-7">
@@ -91,7 +96,7 @@ export function Component() {
       </div>
 
       {data && !error ? (
-        <Hero count={data.filter((badge) => badge.unlockedAt !== null).length} />
+        <Hero count={shownBadges.filter((badge) => badge.unlockedAt !== null).length} />
       ) : (
         <h1 className="page-title">배지</h1>
       )}

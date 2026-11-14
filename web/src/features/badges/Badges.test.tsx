@@ -125,6 +125,23 @@ describe('MyBadgesPage (BADGE-01·02)', () => {
     expect(cards[2]).toHaveTextContent(/^7일 연속7일 연속으로 제출하기아직 못 받았어요$/)
   })
 
+  it('머리 개수는 묶음과 같은 12개 코드로 센다 (서버가 먼저 낸 배지는 세지 않음)', async () => {
+    server.use(
+      http.get('*/api/users/me/badges', () =>
+        HttpResponse.json({
+          badges: [
+            ...badgesFor(1),
+            { code: 'NEW_FROM_SERVER', unlockedAt: '2026-11-15T01:00:00Z', celebrated: true },
+          ],
+        }),
+      ),
+    )
+    renderAt('/me/badges')
+    expect(
+      await screen.findByRole('heading', { level: 1, name: '배지 2개를 모았어요' }),
+    ).toBeInTheDocument()
+  })
+
   it('불러오지 못하면 이유와 다시 시도를 보여 준다', async () => {
     server.use(
       http.get('*/api/users/me/badges', () =>
@@ -203,6 +220,64 @@ describe('BadgeCelebrator (BADGE-03)', () => {
     expect(
       await screen.findByRole('dialog', { name: "'3일 연속' 배지를 받았어요" }),
     ).toBeInTheDocument()
+  })
+
+  // 배지 화면이 열려 있어 같은 키를 조회 중일 때다. 그 응답에는 방금 끝난 채점으로 받은 배지가 없다
+  it('진행 중인 배지 조회를 함께 쓰지 않고 새로 묻는다', async () => {
+    let calls = 0
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.get('*/api/users/me/badges', async () => {
+        calls++
+        if (calls === 1) {
+          await held
+          return HttpResponse.json({ badges: badgesFor(1) })
+        }
+        return HttpResponse.json({
+          badges: badgesFor(1).map((b) =>
+            b.code === 'STREAK_3' ? { ...b, celebrated: false } : b,
+          ),
+        })
+      }),
+      http.post(
+        '*/api/users/me/badges/:code/celebrated',
+        () => new HttpResponse(null, { status: 204 }),
+      ),
+    )
+    const { client } = renderAt('/me/badges')
+    await waitFor(() => expect(calls).toBe(1))
+    await submitLikeSolvePage(client)
+
+    expect(
+      await screen.findByRole('dialog', { name: "'3일 연속' 배지를 받았어요" }),
+    ).toBeInTheDocument()
+    release()
+  })
+
+  // 첫 조회가 503이면 폴링이 멈춘다(isDeadEnd). 남겨 두면 다시 묻지도, 배지를 보지도 않는다
+  it('채점 조회가 포기되면 그 제출을 내려놓고 배지를 한 번 본다', async () => {
+    serveBadges(['STREAK_3'])
+    server.use(
+      http.get('*/api/submissions/:id', () =>
+        HttpResponse.json({ status: 503, title: 'Service Unavailable' }, { status: 503 }),
+      ),
+    )
+    const { client } = renderAt('/submissions/1')
+    await submitLikeSolvePage(client)
+
+    expect(
+      await screen.findByRole('dialog', { name: "'3일 연속' 배지를 받았어요" }),
+    ).toBeInTheDocument()
+    // 내려놓았으니 그 제출을 지켜보는 쿼리 관찰자가 없다
+    await waitFor(() =>
+      expect(
+        client
+          .getQueryCache()
+          .find({ queryKey: ['submission', 1] })
+          ?.getObserversCount(),
+      ).toBe(0),
+    )
   })
 
   it('웹이 모르는 배지 코드는 띄우지 않는다', async () => {

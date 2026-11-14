@@ -13,13 +13,16 @@ import type { BadgeCode, UserBadge } from '@/api/types'
 export function badgesQuery() {
   return queryOptions({
     queryKey: ['badges'] as const,
-    queryFn: async (): Promise<UserBadge[]> => {
-      const result = await api.GET('/api/users/me/badges')
-      if (result.data === undefined) fail(result)
-      return result.data.badges
-    },
+    queryFn: fetchMyBadges,
     staleTime: 0,
   })
+}
+
+/** 캐시를 거치지 않는 조회. 축하 창은 진행 중인 요청을 함께 쓰면 안 돼서 이걸 직접 부른다(BadgeCelebrator). */
+export async function fetchMyBadges(): Promise<UserBadge[]> {
+  const result = await api.GET('/api/users/me/badges')
+  if (result.data === undefined) fail(result)
+  return result.data.badges
 }
 
 /** 축하 창을 띄운 배지를 알린다 (BADGE-03). 이미 축하한 배지도 204라 두 탭에서 불러도 괜찮다(계약). */

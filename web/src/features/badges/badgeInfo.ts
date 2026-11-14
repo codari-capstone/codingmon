@@ -77,7 +77,8 @@ export const BADGE_INFO: Record<BadgeCode, BadgeInfo> = {
   RETRY: {
     name: '다시 도전',
     condition: '한 문제를 5번 이상 틀린 뒤 맞히기',
-    achieved: '5번 넘게 틀려도 포기하지 않고 맞혔어요.',
+    // 명세 12절·서버(RETRY_MIN_ATTEMPTS = 6)는 정확히 5번 틀린 뒤 맞혀도 준다. '넘게'가 아니다(#294 리뷰)
+    achieved: '5번 이상 틀려도 포기하지 않고 맞혔어요.',
     image: comeback,
   },
   PERSISTENCE: {

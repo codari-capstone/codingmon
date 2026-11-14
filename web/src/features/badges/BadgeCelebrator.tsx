@@ -7,10 +7,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/dialog'
 import { useAuth } from '@/features/auth/useAuth'
-import { isFinished, submissionResultQuery } from '@/features/result/resultQuery'
+import { isDeadEnd, isFinished, submissionResultQuery } from '@/features/result/resultQuery'
 import { SUBMIT_MUTATION_KEY } from '@/features/solve/submitQuery'
 import { BADGE_INFO } from './badgeInfo'
-import { badgesQuery, markCelebrated } from './badgeQuery'
+import { badgesQuery, fetchMyBadges, markCelebrated } from './badgeQuery'
 
 /** 축하 창 (BADGE-03). 모든 화면 위에 하나 둔다(RootLayout). 비로그인은 낸 제출이 없다. */
 export function BadgeCelebrator() {
@@ -46,12 +46,16 @@ function Celebrator() {
     setWatching([...watching, ...fresh])
   }
 
+  // 끝났거나, 폴링이 포기한 제출(isDeadEnd: 첫 조회 실패·401·403·404). 포기한 제출은 다시 묻지 않으니
+  // 남겨 두면 구독만 세션 내내 남는다. 함께 내려놓고 배지를 한 번 본다 — 못 본 배지는 다음 채점에 뜬다(#294 리뷰)
   const finished = useQueries({
     queries: watching.map((id) => submissionResultQuery(id)),
     combine: (results) =>
       watching.filter((_, i) => {
-        const status = results[i]?.data?.status
-        return status !== undefined && isFinished(status)
+        const result = results[i]
+        const status = result?.data?.status
+        if (status !== undefined && isFinished(status)) return true
+        return result !== undefined && isDeadEnd(result.error, result.data !== undefined)
       }),
   })
 
@@ -66,10 +70,12 @@ function Celebrator() {
     const done = finished.filter((id) => !checking.current.has(id))
     if (done.length === 0) return
     done.forEach((id) => checking.current.add(id))
-    queryClient
-      .fetchQuery(badgesQuery())
+    // fetchQuery는 진행 중인 같은 키의 요청(앞 제출의 확인, 열려 있는 배지 화면)을 그대로 돌려줘서
+    // 방금 끝난 제출로 받은 배지가 빠진 응답을 볼 수 있다. 늘 새로 묻고 캐시에는 넣어 둔다(#294 리뷰)
+    fetchMyBadges()
       .then(
         (badges) => {
+          queryClient.setQueryData(badgesQuery().queryKey, badges)
           const waiting = badges
             .filter(
               (b) =>
