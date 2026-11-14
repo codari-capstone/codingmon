@@ -64,11 +64,12 @@ record LearningReportView(LocalDate reportDate, Status status, FailureReason fai
         return new Concept(r.conceptSlug(), r.conceptName(), score);
     }
 
+    // 수치 대조로 모두 지워진 이유는 null이다. Stream.findFirst는 null을 고르면 던지므로 순위로 먼저 찾고 꺼낸다.
     private static String reason(LearningReportContent content, int rank) {
         if (content == null) {
             return null;
         }
-        return content.recommendations().stream().filter(r -> r.rank() == rank).map(LearningReportContent.Reason::reason)
-                .findFirst().orElse(null);
+        return content.recommendations().stream().filter(r -> r.rank() == rank).findFirst()
+                .map(LearningReportContent.Reason::reason).orElse(null);
     }
 }
