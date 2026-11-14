@@ -19,7 +19,8 @@ import java.util.stream.Stream;
 // - 백분율: "50%", "50 퍼센트", "50프로". 입력의 해결률이어야 한다.
 // - 소수: "1.5". 입력의 평균 시도·평균 힌트 단계, 또는 개수여야 한다.
 // - 횟수·개수 단위가 붙은 정수: "4문제", "3번", "2회", "2개", "3차례". 입력의 개수나 평균 값이어야 한다.
-//   "2번째"(순서), "2단계"(힌트 단계 이름 0~3), 단위가 없는 정수는 보지 않는다. 한글로 쓴 수("두 번")도 보지 않는다.
+//   "2번째"(순서), "1번 문제"(번호), "2단계"(힌트 단계 이름 0~3), 단위가 없는 정수는 보지 않는다. 한글로 쓴 수("두 번")도 보지 않는다.
+// 천 단위 쉼표가 든 수("1,000")는 한 수로 읽는다. 그 밖의 쉼표 뒤 수("50%,80%"의 80%)는 따로 본다.
 // 문제 제목과 개념 이름 속 숫자("2차원 배열", "369 게임")는 수치가 아니라 이름이므로 가리고 본다.
 //
 // 글마다 쓸 수 있는 값이 다르다. 다른 개념의 수치를 끌어다 쓴 문장을 잡으려는 것이다.
@@ -54,15 +55,15 @@ final class ReportNumberCheck {
         }
     }
 
-    // 수 하나. 앞은 숫자가 아닌 곳에서 시작한다(1,000의 000이나 v1.2의 2를 따로 보지 않는다). 뒤의 백분율 표기를 함께 읽는다.
-    // "프로그램"의 "프로"는 백분율이 아니다.
+    // 수 하나. 앞은 숫자·영문·점이 아닌 곳에서 시작한다(v1.2의 2를 따로 보지 않는다). 천 단위 쉼표("1,000")는 한 수로 읽고
+    // 값은 쉼표를 빼고 본다. 뒤의 백분율 표기를 함께 읽는다. "프로그램"의 "프로"는 백분율이 아니다.
     private static final Pattern NUMBER = Pattern.compile(
-            "(?<![0-9A-Za-z.,])(\\d+(?:\\.\\d+)?)(?![0-9]|\\.\\d|,\\d)(\\s*(?:%|퍼센트|프로(?!그)))?");
-    // 정수 뒤에 붙으면 횟수·개수로 보는 단위. "2번째"는 순서, "2개념"·"2회차"는 다른 말이다.
-    private static final Pattern COUNT_UNIT = Pattern.compile("^\\s*(?:문제|번(?!째)|회(?!차)|개(?!념)|차례)");
+            "(?<![0-9A-Za-z.])((?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?)(?![0-9]|\\.\\d)(\\s*(?:%|퍼센트|프로(?!그)))?");
+    // 정수 뒤에 붙으면 횟수·개수로 보는 단위. "2번째"는 순서, "1번 문제"는 번호, "2개념"·"2회차"는 다른 말이다.
+    private static final Pattern COUNT_UNIT = Pattern.compile("^\\s*(?:문제|번(?!째|\\s*문제)|회(?!차)|개(?!념)|차례)");
     // 문장 끝(마침표·물음표·느낌표 뒤 공백)이나 줄바꿈에서 나눈다. "1.5"처럼 공백 없이 이어진 점은 나누지 않는다.
     private static final Pattern SENTENCE_BREAK = Pattern.compile("(?<=[.!?。])\\s+|\\s*\\n\\s*");
-    // 가린 이름 대신 넣는 글자. 숫자가 아니면 된다.
+    // 가린 이름의 글자마다 넣는 글자. 숫자나 문장 끝 표시가 아니면 된다.
     private static final String MASK = "□";
 
     private ReportNumberCheck() {
@@ -118,18 +119,31 @@ final class ReportNumberCheck {
     }
 
     // 맞지 않는 수가 있는 문장을 지운 글. 지울 것이 없으면 받은 글 그대로이고, 모두 지웠으면 null이다.
+    // 이름을 먼저 가리고 문장을 나눈다("몇 개일까? 7개 고르기"가 두 문장으로 갈라져 가려지지 않는 일을 막는다).
+    // 가린 글은 원문과 길이가 같으므로 가린 글에서 찾은 문장 경계로 원문을 자른다.
     private static String check(String text, Values allowed, List<String> names, String field, List<Fix> fixes,
             int[] counts) {
         if (text == null) {
             return null;
         }
+        String original = text.strip();
+        String masked = mask(original, names);
+        List<int[]> spans = new ArrayList<>();
+        Matcher sentenceBreak = SENTENCE_BREAK.matcher(masked);
+        int start = 0;
+        while (sentenceBreak.find()) {
+            spans.add(new int[] {start, sentenceBreak.start()});
+            start = sentenceBreak.end();
+        }
+        spans.add(new int[] {start, masked.length()});
         List<String> kept = new ArrayList<>();
         boolean removed = false;
-        for (String sentence : SENTENCE_BREAK.split(text.strip())) {
+        for (int[] span : spans) {
+            String sentence = original.substring(span[0], span[1]);
             if (sentence.isBlank()) {
                 continue;
             }
-            List<Kind> violations = violations(mask(sentence, names), allowed);
+            List<Kind> violations = violations(masked.substring(span[0], span[1]), allowed);
             if (violations.isEmpty()) {
                 kept.add(sentence);
             } else {
@@ -152,7 +166,7 @@ final class ReportNumberCheck {
         List<Kind> found = new ArrayList<>();
         Matcher m = NUMBER.matcher(sentence);
         while (m.find()) {
-            BigDecimal value = new BigDecimal(m.group(1));
+            BigDecimal value = new BigDecimal(m.group(1).replace(",", ""));
             if (m.group(2) != null) {
                 if (!allowed.hasPercent(value)) {
                     found.add(Kind.PERCENT);
@@ -168,16 +182,16 @@ final class ReportNumberCheck {
         return found;
     }
 
-    // 긴 이름부터 가린다. 짧은 이름이 긴 이름의 일부면 긴 이름이 먼저 통째로 가려진다.
-    private static String mask(String sentence, List<String> names) {
-        String masked = sentence;
+    // 긴 이름부터 가린다. 짧은 이름이 긴 이름의 일부면 긴 이름이 먼저 통째로 가려진다. 글자 수를 그대로 둔다.
+    private static String mask(String text, List<String> names) {
+        String masked = text;
         for (String name : names) {
-            masked = masked.replace(name, MASK);
+            masked = masked.replace(name, MASK.repeat(name.length()));
         }
         return masked;
     }
 
-    // 입력에 있는 이름(개념, 추천 문제 제목, 다음 개념과 그 문제 제목) 중 숫자가 든 것
+    // 입력에 있는 이름(개념, 추천 문제 제목, 다음 개념과 그 문제 제목) 중 숫자나 문장 끝 표시(. ! ?)가 든 것
     private static List<String> maskedNames(LearningReportInput input) {
         return Stream.of(
                         input.concepts().stream().map(LearningReportInput.Concept::name),
@@ -185,7 +199,8 @@ final class ReportNumberCheck {
                         input.nextConcepts().stream().map(LearningReportInput.NextConcept::name),
                         input.nextConcepts().stream().flatMap(c -> c.problems().stream()))
                 .flatMap(s -> s)
-                .filter(name -> name != null && name.chars().anyMatch(Character::isDigit))
+                .filter(name -> name != null
+                        && name.chars().anyMatch(ch -> Character.isDigit(ch) || ".!?。".indexOf(ch) >= 0))
                 .map(String::strip)
                 .distinct()
                 .sorted(Comparator.comparingInt(String::length).reversed())
