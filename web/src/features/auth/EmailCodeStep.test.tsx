@@ -405,6 +405,32 @@ describe('EmailCodeStep', () => {
     // 테스트가 중간에 실패해도 실제 타이머로 되돌려야 뒤의 테스트가 가짜 타이머를 물려받지 않는다.
     afterEach(() => vi.useRealTimers())
 
+    it('번호가 만료된 뒤 다시 받으면 만료 문구를 지우고 메일함 안내를 다시 보인다', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      setup({
+        verifyCode: vi.fn().mockRejectedValue({
+          status: 400,
+          code: 'CODE_EXPIRED',
+          detail: '인증번호가 만료됐어요. 다시 받아 주세요',
+        }),
+      })
+      const notice = '인증번호를 보냈어요. 메일함을 확인해 주세요.'
+
+      await user.type(screen.getByLabelText('이메일'), 'new@codari.test')
+      await user.click(screen.getByRole('button', { name: '인증번호 받기' }))
+      await user.type(await screen.findByLabelText('인증번호'), '123456')
+      await user.click(screen.getByRole('button', { name: '확인' }))
+      expect(await screen.findByText(/다시 받아 주세요/)).toBeInTheDocument()
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000)
+      })
+      await user.click(screen.getByRole('button', { name: '다시 받기' }))
+
+      expect(await screen.findByText(notice)).toBeInTheDocument()
+      expect(screen.queryByText(/다시 받아 주세요/)).not.toBeInTheDocument()
+    })
+
     it('다시 받기가 도는 동안에는 확인이 꺼진다', async () => {
       // 칸이 열린 채 발송이 도는 상황은 쿨다운을 넘긴 뒤 [다시 받기]뿐이다. 그때 [확인]이
       // 열려 있으면, 서버가 이전 번호를 무효로 만든 뒤 확인이 도착해 CODE_MISMATCH가 되고
