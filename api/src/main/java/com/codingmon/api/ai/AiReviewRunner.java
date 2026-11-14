@@ -158,24 +158,13 @@ class AiReviewRunner {
         } else {
             Throwable cause = failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
             if (cause instanceof LlmException e) {
-                reason = reason(e.kind());
+                reason = AiReviewRepository.FailureReason.of(e.kind());
                 log.warn("{} {} 실패({}): {}", label(type), claim.id(), e.kind(), e.getMessage());
             } else {
                 log.error("{} {} 실패", label(type), claim.id(), cause);
             }
         }
         fail(type, claim, reason);
-    }
-
-    // 빠짐없는 switch라 Kind에 값이 늘면 컴파일이 깨진다. 이름으로 바꾸면(valueOf) 빠진 값이 콜백 안에서 예외가 되어
-    // fail()에 닿지 못하고, 그 행은 재시작할 때까지 PENDING으로 남는다.
-    private static AiReviewRepository.FailureReason reason(LlmException.Kind kind) {
-        return switch (kind) {
-            case UNAVAILABLE -> AiReviewRepository.FailureReason.UNAVAILABLE;
-            case RATE_LIMITED -> AiReviewRepository.FailureReason.RATE_LIMITED;
-            case BUSY -> AiReviewRepository.FailureReason.BUSY;
-            case INVALID_RESPONSE -> AiReviewRepository.FailureReason.INVALID_RESPONSE;
-        };
     }
 
     // 결과와 store가 쓰는 것을 한 트랜잭션에 저장한다. 그 시도가 이미 끝났으면(다시 시작한 요청의 이전 시도가 늦게 끝났다)
