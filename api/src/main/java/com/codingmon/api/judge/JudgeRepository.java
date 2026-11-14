@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.codingmon.api.Language;
+import com.codingmon.api.badge.BadgeRepository;
 import com.codingmon.api.problem.SolutionValidationRepository;
 import com.codingmon.api.submission.UserProblemStatsRepository;
 
@@ -32,11 +33,14 @@ class JudgeRepository {
     private final JdbcClient jdbc;
     private final UserProblemStatsRepository stats;
     private final SolutionValidationRepository validations;
+    private final BadgeRepository badges;
 
-    JudgeRepository(JdbcClient jdbc, UserProblemStatsRepository stats, SolutionValidationRepository validations) {
+    JudgeRepository(JdbcClient jdbc, UserProblemStatsRepository stats, SolutionValidationRepository validations,
+            BadgeRepository badges) {
         this.jdbc = jdbc;
         this.stats = stats;
         this.validations = validations;
+        this.badges = badges;
     }
 
     // 가장 오래 기다린 제출을 COMPILING으로 바꿔 선점한다. 다른 트랜잭션이 잡고 있는 행은 건너뛴다.
@@ -147,6 +151,7 @@ class JudgeRepository {
     }
 
     // 판정을 기록하고, 이 갱신으로 COMPLETED가 됐을 때만 풀이 통계를 올리고 정답 코드 검증을 반영한다(#35).
+    // 배지(#248)도 같은 트랜잭션에서 주므로, COMPLETED가 보이면 그 제출로 준 배지도 이미 보인다.
     // 두 번 부르면 시도 횟수가 두 번 오른다.
     @Transactional
     void complete(long id, Verdict verdict, RuntimeErrorType errorType, String compilerMessage, Integer timeMs,
@@ -162,7 +167,10 @@ class JudgeRepository {
                 .param("id", id)
                 .update();
         if (updated == 1) {
-            stats.recordJudged(id);
+            // 제출 → 회원 → 풀이 통계 순서로 잠근다(BadgeRepository.lockOwner).
+            Optional<Long> owner = badges.lockOwner(id);
+            Optional<UserProblemStatsRepository.Judged> judged = stats.recordJudged(id);
+            owner.ifPresent(userId -> badges.recordJudged(userId, judged));
             validations.recordJudged(id);
         }
     }

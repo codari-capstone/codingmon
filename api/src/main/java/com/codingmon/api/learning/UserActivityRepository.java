@@ -22,6 +22,17 @@ public class UserActivityRepository {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final int DAYS_BEFORE_TODAY = 364;
+    // 난이도별 맞힌 수는 공개 중인 버전의 난이도로 센다. 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다.
+    // 배지(#248)도 같은 기준으로 센다.
+    private static final String SOLVED_FROM = """
+            from user_problem_stats s
+            left join lateral (
+              select difficulty from problem_versions
+              where problem_id = s.problem_id and published_at is not null
+              order by published_at desc limit 1
+            ) v on true
+            where s.user_id = :userId
+            """;
 
     private final JdbcClient jdbc;
 
@@ -34,7 +45,7 @@ public class UserActivityRepository {
     }
 
     // 필드 이름이 그대로 응답의 키가 된다(openapi.yaml의 Difficulty).
-    record SolvedByDifficulty(int EASY, int MEDIUM, int HARD) {
+    public record SolvedByDifficulty(int EASY, int MEDIUM, int HARD) {
     }
 
     record ActivityDay(LocalDate date, int count) {
@@ -54,21 +65,13 @@ public class UserActivityRepository {
     UserActivity find(long userId) {
         LocalDate to = LocalDate.now(KST);
         LocalDate from = to.minusDays(DAYS_BEFORE_TODAY);
-        // 공개가 내려간 문제는 마지막으로 공개됐던 버전의 난이도로 센다.
         Summary summary = jdbc.sql("""
                 select count(*) filter (where s.solved) as solved,
                        count(*) filter (where not s.solved) as wrong,
                        count(*) filter (where s.solved and v.difficulty = 'EASY') as easy,
                        count(*) filter (where s.solved and v.difficulty = 'MEDIUM') as medium,
                        count(*) filter (where s.solved and v.difficulty = 'HARD') as hard
-                from user_problem_stats s
-                left join lateral (
-                  select difficulty from problem_versions
-                  where problem_id = s.problem_id and published_at is not null
-                  order by published_at desc limit 1
-                ) v on true
-                where s.user_id = :userId
-                """)
+                """ + SOLVED_FROM)
                 .param("userId", userId)
                 .query((rs, n) -> new Summary(rs.getInt("solved"), rs.getInt("wrong"),
                         new SolvedByDifficulty(rs.getInt("easy"), rs.getInt("medium"), rs.getInt("hard"))))
@@ -87,6 +90,19 @@ public class UserActivityRepository {
                 .query((rs, n) -> new ActivityDay(rs.getObject("day", LocalDate.class), rs.getInt("count")))
                 .list();
         return new UserActivity(summary.solved(), summary.wrong(), summary.byDifficulty(), from, to, days, days.size());
+    }
+
+    // MY-05와 같은 기준의 난이도별 맞힌 수. 배지(#248)가 쓴다.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public SolvedByDifficulty solvedByDifficulty(long userId) {
+        return jdbc.sql("""
+                select count(*) filter (where s.solved and v.difficulty = 'EASY') as easy,
+                       count(*) filter (where s.solved and v.difficulty = 'MEDIUM') as medium,
+                       count(*) filter (where s.solved and v.difficulty = 'HARD') as hard
+                """ + SOLVED_FROM)
+                .param("userId", userId)
+                .query((rs, n) -> new SolvedByDifficulty(rs.getInt("easy"), rs.getInt("medium"), rs.getInt("hard")))
+                .single();
     }
 
     // 사용자 제출을 저장하기 전에 부른다. 같은 사용자의 제출을 한 줄로 세워, 먼저 잠근 제출이 먼저 제출 시각을 받고
