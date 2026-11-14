@@ -47,6 +47,7 @@ function Field({
   htmlFor,
   hint,
   error,
+  announceError = true,
   className,
   children,
 }: {
@@ -55,6 +56,11 @@ function Field({
   htmlFor: string
   hint?: React.ReactNode
   error?: React.ReactNode
+  /**
+   * 오류를 role="alert"로 바로 읽힐지. 입력하는 동안 바뀌는 검사(비밀번호 확인 불일치)나
+   * 한 번에 여러 칸이 뜨는 검사는 끈다 — 칸에 포커스하면 aria-describedby로 읽힌다.
+   */
+  announceError?: boolean
   className?: string
   children: React.ReactNode
 }) {
@@ -68,7 +74,11 @@ function Field({
         error ? `${htmlFor}-error` : hint ? `${htmlFor}-hint` : undefined,
         !!error,
       )}
-      {error ? <FieldError id={`${htmlFor}-error`}>{error}</FieldError> : null}
+      {error ? (
+        <FieldError id={`${htmlFor}-error`} role={announceError ? 'alert' : undefined}>
+          {error}
+        </FieldError>
+      ) : null}
       {hint && !error ? <FieldHint id={`${htmlFor}-hint`}>{hint}</FieldHint> : null}
     </div>
   )

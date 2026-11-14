@@ -25,3 +25,7 @@ export const cn = createCn({
     },
   },
 })
+
+/** 투명한 1×1 GIF. <picture>에서 좁은 화면이 고르는 빈 그림이라 요청을 만들지 않는다 */
+export const BLANK_PIXEL =
+  'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='

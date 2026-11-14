@@ -1,6 +1,6 @@
 /** 회원가입·비밀번호 찾기의 가운데 카드 (디자인 Signup·PasswordReset). 바탕은 라우트의 pageTone subtle */
 export const AUTH_CARD =
-  'bg-card shadow-card mx-auto my-6 flex w-full max-w-[480px] flex-col gap-[22px] rounded-[28px] p-6 sm:my-6 sm:p-10 dark:border'
+  'bg-card shadow-card mx-auto my-6 flex w-full max-w-[480px] flex-col gap-[22px] rounded-xl p-6 sm:p-10 dark:border'
 
 /** 카드 맨 아래 다른 화면으로 가는 한 줄 */
 export const AUTH_FOOT = 'text-muted-foreground m-0 text-center text-sm'

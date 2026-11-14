@@ -8,7 +8,7 @@ import { ListSkeleton } from '@/components/ListSkeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
+import { BLANK_PIXEL, cn } from '@/lib/utils'
 import { AUTH_FOOT, AUTH_LINK } from './authCard'
 import { loginRequest } from './authQuery'
 import { startGitHubLogin } from './githubQuery'
@@ -67,7 +67,8 @@ export function Component() {
   if (isAuthenticated) return <Navigate to={target} replace />
 
   return (
-    <div className="lg:min-h-[calc(100dvh-var(--spacing-topbar))] grid lg:grid-cols-2">
+    // 상단 바는 높이 64px에 아래 테두리 1px이 더해진다. 빼지 않으면 늘 1px 넘쳐 스크롤이 생긴다
+    <div className="lg:min-h-[calc(100dvh-var(--spacing-topbar)-1px)] grid lg:grid-cols-2">
       {/* 소개 패널. 좁은 화면에서는 폼이 먼저라 뺀다 */}
       <section
         aria-label="소개"
@@ -89,7 +90,11 @@ export function Component() {
             열어요.
           </p>
         </div>
-        <img src={hero} alt="" width={320} height={384} className="block self-center" />
+        {/* 패널이 숨는 좁은 화면에서는 큰 그림을 받지 않는다. CSS로 숨겨도 img는 받으므로 picture로 고른다 */}
+        <picture className="block self-center">
+          <source media="(min-width: 64rem)" srcSet={hero} />
+          <img src={BLANK_PIXEL} alt="" width={320} height={384} className="block" />
+        </picture>
       </section>
 
       <section className="flex items-center justify-center px-6 py-12 sm:px-16">
@@ -133,7 +138,12 @@ export function Component() {
           컴포넌트를 새로 들이지 않아도 된다.
           autoComplete은 브라우저와 비밀번호 관리자에게 각 칸이 무엇인지 알려 준다.
         */}
-            <Field label="이메일" htmlFor="email" error={errors.email?.message}>
+            <Field
+              label="이메일"
+              htmlFor="email"
+              error={errors.email?.message}
+              announceError={false}
+            >
               <Input
                 id="email"
                 type="email"
@@ -143,7 +153,12 @@ export function Component() {
               />
             </Field>
 
-            <Field label="비밀번호" htmlFor="password" error={errors.password?.message}>
+            <Field
+              label="비밀번호"
+              htmlFor="password"
+              error={errors.password?.message}
+              announceError={false}
+            >
               <Input
                 id="password"
                 type="password"

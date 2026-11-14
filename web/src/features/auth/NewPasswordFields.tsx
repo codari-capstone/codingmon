@@ -34,6 +34,8 @@ export function NewPasswordFields({
       <Field
         label={`${label} 확인`}
         htmlFor="passwordConfirm"
+        // 첫 글자부터 '불일치'라 입력 중에 끼어든다. 예전처럼 읽히지 않게 둔다(#284 리뷰)
+        announceError={false}
         error={
           mismatch ? '비밀번호 확인이 일치하지 않아요. 같은 비밀번호를 입력해 주세요' : undefined
         }
