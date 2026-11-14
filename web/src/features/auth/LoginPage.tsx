@@ -185,6 +185,8 @@ export function Component() {
 
           <div
             role="separator"
+            // separator의 자식 글자는 접근성 트리에서 빠진다. 두 버튼이 대안이라는 말을 이름으로 준다
+            aria-label="또는"
             className="text-muted-foreground flex items-center gap-3 text-[13px] before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
           >
             또는

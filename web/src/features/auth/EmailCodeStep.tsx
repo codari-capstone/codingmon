@@ -101,6 +101,10 @@ export function EmailCodeStep({
     },
   })
 
+  // 확인이 '번호가 죽었다'로 끝났다. 칸도 비워진다(위 verify.onError)
+  const verifyFailure = verify.isError ? problemCode(verify.error) : undefined
+  const codeDead = verifyFailure === 'CODE_EXPIRED' || verifyFailure === 'CODE_ATTEMPTS_EXCEEDED'
+
   function handleSend() {
     if (!EMAIL_PATTERN.test(trimmedEmail)) {
       // 서버의 INVALID_EMAIL과 같은 문구다. 명세 '계정 규칙'이 "화면이 보내기 전에 미리
@@ -210,8 +214,11 @@ export function EmailCodeStep({
             {problemMessage(send.error)} {sendErrorAction?.(problemCode(send.error))}
           </FieldError>
         ) : null}
-        {/* 디자인: 보낸 뒤 칸 아래 한 줄. 인증을 마치면 할 일이 없어 지운다 */}
-        {codeOpen && !verified && !send.isError ? (
+        {/*
+          디자인: 보낸 뒤 칸 아래 한 줄. 인증을 마치면 할 일이 없어 지운다. 번호가 죽은 경우(만료·횟수 초과)도
+          지운다 — 그때는 '다시 받아 주세요'가 뜨는데 '메일함을 확인해 주세요'가 남으면 할 일이 엇갈린다
+        */}
+        {codeOpen && !verified && !send.isError && !codeDead ? (
           <FieldHint role="status">인증번호를 보냈어요. 메일함을 확인해 주세요.</FieldHint>
         ) : null}
       </div>
