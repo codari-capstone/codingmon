@@ -331,8 +331,8 @@ describe('회원가입 화면', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/이메일을 다시 인증해 주세요/)
     expect(screen.queryByText('인증됐어요')).not.toBeInTheDocument()
-    // 다시 마운트돼 send.error가 비었으니 이 상태에는 링크가 하나도 없어야 한다.
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    // 다시 마운트돼 send.error가 비었으니 [로그인하러 가기]가 없어야 한다(맨 아래 '로그인' 링크는 늘 있다).
+    expect(screen.queryByRole('link', { name: '로그인하러 가기' })).not.toBeInTheDocument()
     // 이메일 단계가 새로 마운트돼 입력이 비고 다시 편집할 수 있다.
     expect(screen.getByLabelText('이메일')).toHaveValue('')
     expect(screen.getByLabelText('이메일')).not.toHaveAttribute('readonly')

@@ -4,9 +4,11 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Stepper } from '@/components/ui/stepper'
 import { isValidPassword } from './accountRules'
+import { AUTH_CARD, AUTH_FOOT, AUTH_LINK } from './authCard'
 import { EmailCodeStep } from './EmailCodeStep'
+import { NewPasswordFields } from './NewPasswordFields'
 import { NicknameField } from './NicknameField'
 import { problemCode, problemMessage } from './problemCode'
 import { sendSignupCode, signUp, verifySignupCode } from './signupQuery'
@@ -15,6 +17,8 @@ import { useNicknameCheck } from './useNicknameCheck'
 
 /** 가입 뒤 로그인 화면에 띄우는 안내. 명세 COM-06이 이 문구로 정했다 (#113). */
 const SIGNUP_NOTICE = '가입이 완료됐어요. 로그인해 주세요'
+
+const STEPS = [{ label: '이메일 인증' }, { label: '닉네임' }, { label: '비밀번호' }]
 
 /**
  * 이메일 회원가입 (COM-06).
@@ -92,10 +96,16 @@ export function Component() {
 
   const passwordOk = isValidPassword(password) && password === passwordConfirm
   const ready = verificationToken !== null && nickname.ok && passwordOk
+  // 한 화면이지만 순서가 있다. 앞 단계를 마쳐야 다음 칸이 의미가 있다
+  const step = verificationToken === null ? 0 : nickname.ok ? 2 : 1
 
   return (
-    <section className="bg-card mx-auto my-10 flex w-full max-w-md flex-col gap-6 rounded-lg border p-6 sm:p-8">
-      <h1 className="page-title">회원가입</h1>
+    <section className={AUTH_CARD}>
+      <div className="flex flex-col gap-1.5">
+        <p className="text-eyebrow text-primary-text">코딩몬 시작하기</p>
+        <h1 className="page-title">회원가입</h1>
+      </div>
+      <Stepper steps={STEPS} current={step} />
 
       <EmailCodeStep
         key={emailStepKey}
@@ -126,39 +136,13 @@ export function Component() {
 
       <NicknameField check={nickname} inputRef={nicknameInput} busy={submit.isPending} />
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="password" className="text-sm font-medium">
-          비밀번호
-        </label>
-        <Input
-          id="password"
-          type="password"
-          autoComplete="new-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-        <p className="text-muted-foreground text-sm">
-          10~20자, 영문 대문자·소문자·숫자·특수문자를 각각 하나 이상
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="passwordConfirm" className="text-sm font-medium">
-          비밀번호 확인
-        </label>
-        <Input
-          id="passwordConfirm"
-          type="password"
-          autoComplete="new-password"
-          value={passwordConfirm}
-          onChange={(event) => setPasswordConfirm(event.target.value)}
-        />
-        {passwordConfirm.length > 0 && password !== passwordConfirm ? (
-          <p className="text-destructive-text text-sm">
-            비밀번호 확인이 일치하지 않아요. 같은 비밀번호를 입력해 주세요
-          </p>
-        ) : null}
-      </div>
+      <NewPasswordFields
+        label="비밀번호"
+        password={password}
+        passwordConfirm={passwordConfirm}
+        onPassword={setPassword}
+        onPasswordConfirm={setPasswordConfirm}
+      />
 
       {submit.isError ? (
         <p role="alert" className="text-destructive-text text-sm">
@@ -184,6 +168,13 @@ export function Component() {
       >
         {submit.isPending ? '가입 중…' : '가입 완료'}
       </Button>
+
+      <p className={AUTH_FOOT}>
+        이미 계정이 있나요?{' '}
+        <Link to="/login" state={{ from }} className={AUTH_LINK}>
+          로그인
+        </Link>
+      </p>
     </section>
   )
 }

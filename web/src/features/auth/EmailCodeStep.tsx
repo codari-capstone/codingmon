@@ -2,8 +2,9 @@ import { useMutation } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Field, FieldError, FieldHint, FieldRow, Input } from '@/components/ui/input'
 import { CODE_LENGTH, EMAIL_PATTERN, INVALID_EMAIL_MESSAGE, isValidCode } from './accountRules'
+import { WRAP_ROW } from './authCard'
 import { problemCode, problemMessage } from './problemCode'
 import { useResendCooldown } from './useResendCooldown'
 
@@ -155,26 +156,27 @@ export function EmailCodeStep({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="email" className="text-sm font-medium">
-          이메일
-        </label>
-        <div className="flex flex-col gap-2 sm:flex-row">
+    <div className="flex flex-col gap-[22px]">
+      <div className="flex flex-col gap-2">
+        {/* 입력 + 버튼 한 줄, 버튼은 입력칸 바닥에 맞춘다(디자인 cm-field-row). 좁으면 버튼이 아래로 내려간다 */}
+        <FieldRow className={WRAP_ROW}>
           {/*
             요청이 오가는 동안에도 잠근다. 보낸 주소와 화면의 주소가 갈라지면, 응답이
             지금 입력값에 대한 것인지 알 수 없다. 확인 요청 중에 주소를 B로 고치면 A용
             증명서를 쥔 채 B가 인증된 것처럼 잠겨, 화면에 없는 A 계정이 처리된다.
             잠그는 동안 두 버튼도 꺼져 있어 사용자가 할 수 있는 일은 달라지지 않는다.
           */}
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            readOnly={verified || busy || send.isPending || verify.isPending}
-            value={email}
-            onChange={(event) => handleEmailInput(event.target.value)}
-          />
+          <Field label="이메일" htmlFor="email">
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              readOnly={verified || busy || send.isPending || verify.isPending}
+              value={email}
+              onChange={(event) => handleEmailInput(event.target.value)}
+            />
+          </Field>
           {verified ? (
             <Button type="button" variant="secondary" disabled={busy} onClick={clearForEmail}>
               이메일 바꾸기
@@ -182,6 +184,7 @@ export function EmailCodeStep({
           ) : (
             <Button
               type="button"
+              variant="secondary"
               // 꺼진 글자색(disabled-foreground)은 읽지 않는 글자용이다. 카운트다운은 읽어야 하는 글자라 대비가 나은 색을 쓴다
               className="shrink-0 disabled:text-muted-foreground"
               // 확인 요청과 겹치지 않게 막는다. 겹치면 서버가 이전 번호를 무효로 만든 뒤
@@ -195,39 +198,51 @@ export function EmailCodeStep({
               {remaining > 0 ? ` (${remaining}초)` : ''}
             </Button>
           )}
-        </div>
-        {emailError ? <p className="text-destructive-text text-sm">{emailError}</p> : null}
+        </FieldRow>
+        {/* 이 칸의 형식 오류는 보내기 전 검사라 지금처럼 읽어 주지 않는다(role 없음) */}
+        {emailError ? (
+          <FieldError role={undefined} className="font-medium">
+            {emailError}
+          </FieldError>
+        ) : null}
         {send.isError ? (
-          <p role="alert" className="text-destructive-text text-sm">
+          <FieldError>
             {problemMessage(send.error)} {sendErrorAction?.(problemCode(send.error))}
-          </p>
+          </FieldError>
+        ) : null}
+        {/* 디자인: 보낸 뒤 칸 아래 한 줄. 인증을 마치면 할 일이 없어 지운다 */}
+        {codeOpen && !verified && !send.isError ? (
+          <FieldHint role="status">인증번호를 보냈어요. 메일함을 확인해 주세요.</FieldHint>
         ) : null}
       </div>
 
       {codeOpen ? (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="code" className="text-sm font-medium">
-            인증번호
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              id="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={CODE_LENGTH}
-              readOnly={verified || busy || verify.isPending}
-              value={code}
-              onChange={(event) => {
-                setCode(event.target.value)
-                setCodeError(null)
-                verify.reset()
-              }}
-            />
+        <div className="flex flex-col gap-2">
+          <FieldRow className={WRAP_ROW}>
+            <Field label="인증번호" htmlFor="code">
+              <Input
+                id="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder={`${CODE_LENGTH}자리 숫자`}
+                maxLength={CODE_LENGTH}
+                readOnly={verified || busy || verify.isPending}
+                value={code}
+                onChange={(event) => {
+                  setCode(event.target.value)
+                  setCodeError(null)
+                  verify.reset()
+                }}
+              />
+            </Field>
             {verified ? (
-              <p className="self-center text-sm">인증됐어요</p>
+              <p className="text-success-text flex h-control-md items-center text-sm font-semibold">
+                인증됐어요
+              </p>
             ) : (
               <Button
                 type="button"
+                variant="secondary"
                 className="shrink-0"
                 disabled={busy || verify.isPending || send.isPending}
                 onClick={handleVerify}
@@ -235,13 +250,13 @@ export function EmailCodeStep({
                 확인
               </Button>
             )}
-          </div>
-          {codeError ? <p className="text-destructive-text text-sm">{codeError}</p> : null}
-          {verify.isError ? (
-            <p role="alert" className="text-destructive-text text-sm">
-              {problemMessage(verify.error)}
-            </p>
+          </FieldRow>
+          {codeError ? (
+            <FieldError role={undefined} className="font-medium">
+              {codeError}
+            </FieldError>
           ) : null}
+          {verify.isError ? <FieldError>{problemMessage(verify.error)}</FieldError> : null}
         </div>
       ) : null}
     </div>
