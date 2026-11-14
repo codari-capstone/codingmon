@@ -55,6 +55,7 @@ PostgreSQL용 초안이다. DDL은 `api/src/main/resources/db/migration/`의 `V1
 | `ai_review_next_concepts` | 코드 리뷰, 순서, 개념 이름·이유 원문, 맞춘 개념 태그 | 리뷰가 권한 다음 개념을 학습 리포트가 사용자별로 모아 읽게 함 |
 | `review_feedback` | AI 리뷰, 도움 여부, 이유 | 사용자가 남긴 피드백 |
 | `user_problem_stats` | 사용자·문제, 해결 여부·최초 정답 시각, 첫 정답까지 시도 수, 첫 정답까지 연 최고 힌트 단계 | 리포트용 집계값. 제출과 AI 기록에서 다시 계산 가능 |
+| `user_badges` | 사용자, 배지 코드, 받은 시각, 축하 창을 띄운 시각 | 받은 배지(BADGE). 받은 배지만 행으로 두고 한 번 받으면 지우지 않음 |
 | `learning_reports` | 사용자, 기준 날짜, 통계 JSON, AI 결과 JSON, 모델·상태 | 사용자별 일일 리포트 |
 | `learning_report_recommendations` | 리포트, 순위, 문제, 태그, 추천 이유 | 추천 목록과 순서를 정규화해 보존 |
 

@@ -21,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.codingmon.api.ApiErrors;
 import com.codingmon.api.Language;
 import com.codingmon.api.Page;
+import com.codingmon.api.badge.BadgeRepository;
 import com.codingmon.api.learning.UserActivityRepository;
 
 // 코드 제출(SOLVE-09)과 예제 실행(SOLVE-08). QUEUED로 저장하는 데까지만 하고, 이후 상태·판정은 채점 처리기(#71)가 갱신한다.
@@ -37,11 +38,14 @@ class SubmissionController {
     private final SubmissionRepository submissions;
     private final ApplicationEventPublisher events;
     private final UserActivityRepository activity;
+    private final BadgeRepository badges;
 
-    SubmissionController(SubmissionRepository submissions, ApplicationEventPublisher events, UserActivityRepository activity) {
+    SubmissionController(SubmissionRepository submissions, ApplicationEventPublisher events, UserActivityRepository activity,
+            BadgeRepository badges) {
         this.submissions = submissions;
         this.events = events;
         this.activity = activity;
+        this.badges = badges;
     }
 
     @PostMapping("/api/submissions")
@@ -52,6 +56,7 @@ class SubmissionController {
         activity.lockForSubmission(userId);
         long id = queue(body, jwt, SubmissionRepository.Kind.SUBMIT);
         activity.recordSubmission(userId, id);
+        badges.recordStreak(userId);
         return ResponseEntity.accepted().location(URI.create("/api/submissions/" + id)).body(Map.of("id", id));
     }
 
