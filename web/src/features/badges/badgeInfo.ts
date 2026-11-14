@@ -84,7 +84,8 @@ export const BADGE_INFO: Record<BadgeCode, BadgeInfo> = {
   PERSISTENCE: {
     name: '끈기',
     condition: '판정이 난 제출 50번 하기',
-    achieved: '판정이 난 제출이 50번을 넘었어요.',
+    // 명세 12절: 50번에 닿거나 넘으면 준다. 정확히 50번째에도 받으므로 '넘었어요'가 아니다(#294 리뷰)
+    achieved: '판정이 난 제출이 50번에 닿았어요.',
     image: grit,
   },
   INTERMEDIATE: {
