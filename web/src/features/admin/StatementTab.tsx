@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 
 import { Markdown } from '@/components/Markdown'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
@@ -60,7 +60,7 @@ export function StatementTab({
   }, [manualPython, timeLimitMs, memoryLimitMb, setValue])
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Field
         id="statementMarkdown"
         label="지문"
@@ -75,9 +75,9 @@ export function StatementTab({
             className="min-w-0 font-mono"
             {...register('statementMarkdown')}
           />
-          <div className="min-w-0">
-            <p className="text-muted-foreground mb-1 text-xs">미리보기</p>
-            <div className="bg-muted min-h-32 overflow-x-auto rounded-md p-3">
+          <div className="flex min-w-0 flex-col gap-2">
+            <p className="text-foreground m-0 text-sm font-semibold">미리보기</p>
+            <div className="bg-muted min-h-32 flex-1 overflow-x-auto rounded-md px-5 py-4">
               {statement.trim() === '' ? (
                 <p className="text-muted-foreground text-sm">아직 쓴 내용이 없어요.</p>
               ) : (
@@ -88,25 +88,31 @@ export function StatementTab({
         </div>
       </Field>
 
-      <Field id="inputDescription" label="입력 형식" error={errors.inputDescription?.message}>
-        <Textarea id="inputDescription" rows={4} {...register('inputDescription')} />
-      </Field>
+      {/* 디자인: 세 칸을 한 줄에. 제약 조건만 도움말이 있어 칸 바닥을 끝에 맞춘다 */}
+      <div className="grid items-end gap-4 md:grid-cols-3">
+        <Field id="inputDescription" label="입력 형식" error={errors.inputDescription?.message}>
+          <Textarea id="inputDescription" rows={4} {...register('inputDescription')} />
+        </Field>
 
-      <Field id="outputDescription" label="출력 형식" error={errors.outputDescription?.message}>
-        <Textarea id="outputDescription" rows={4} {...register('outputDescription')} />
-      </Field>
+        <Field id="outputDescription" label="출력 형식" error={errors.outputDescription?.message}>
+          <Textarea id="outputDescription" rows={4} {...register('outputDescription')} />
+        </Field>
 
-      <Field
-        id="constraintsMarkdown"
-        label="제약 조건"
-        hint="없으면 비워 둬요."
-        error={errors.constraintsMarkdown?.message}
-      >
-        <Textarea id="constraintsMarkdown" rows={4} {...register('constraintsMarkdown')} />
-      </Field>
+        <Field
+          id="constraintsMarkdown"
+          label="제약 조건"
+          hint="없으면 비워 둬요."
+          error={errors.constraintsMarkdown?.message}
+        >
+          <Textarea id="constraintsMarkdown" rows={4} {...register('constraintsMarkdown')} />
+        </Field>
+      </div>
 
-      <fieldset className="flex flex-col gap-3">
-        <legend className="text-sm font-medium">언어별 제한과 시작 코드</legend>
+      {/* 디자인: 위와 선으로 나눈 구역. float를 주면 legend가 테두리 자리가 아니라 면 안 첫 줄에 그려진다 */}
+      <fieldset className="border-border flex flex-col gap-4 border-t pt-6">
+        <legend className="text-foreground float-left w-full text-lg font-semibold">
+          언어별 제한과 시작 코드
+        </legend>
 
         {/*
           Python 제한을 C++에서 계산해 넣는다 (#65 실측 배수).
@@ -117,74 +123,80 @@ export function StatementTab({
           시간 초과**가 된다. 버튼으로 두면 안 눌러도 저장되고, 말없이 덮으면 관리자가
           일부러 넣은 값이 사라진다. 그래서 기본은 읽기 전용이고 열려면 체크한다.
         */}
-        <Checkbox
+        {/* 누르는 즉시 적용되는 설정이라 스위치다(디자인). 저장은 아래 [저장]이 한다 */}
+        <Switch
           label="Python 제한을 직접 입력"
           checked={manualPython}
           onChange={(event) => onManualPythonChange(event.target.checked)}
-          className="self-start"
         />
 
-        {FORM_LANGUAGES.map((language, index) => {
-          const locked = index === PYTHON && !manualPython
+        {/* 디자인: 두 언어 카드를 나란히. 좁으면 위아래로 */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          {FORM_LANGUAGES.map((language, index) => {
+            const locked = index === PYTHON && !manualPython
 
-          return (
-            // fieldset+legend로 둔다. 두 언어의 칸 이름이 같아('시간 제한 (ms)')
-            // 묶음에 이름이 없으면 사람도 스크린 리더도 어느 언어의 칸인지 알 수 없다.
-            <fieldset key={language} className="bg-muted flex flex-col gap-3 rounded-md p-3">
-              {/* float를 주면 legend가 테두리 자리(면의 위 가장자리)가 아니라 면 안 첫 줄에 그려진다 */}
-              <legend className="float-left w-full text-sm font-medium">
-                {LANGUAGE_LABEL[language]}
-              </legend>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field
-                  id={`time-${language}`}
-                  label="시간 제한 (ms)"
-                  hint={locked ? `C++ 기준 ×3 + 2000ms = ${derived.timeLimitMs}ms` : undefined}
-                  error={errors.languages?.[index]?.timeLimitMs?.message}
-                >
-                  <Input
-                    id={`time-${language}`}
-                    type="number"
-                    inputMode="numeric"
-                    readOnly={locked}
-                    className={locked ? 'bg-muted' : undefined}
-                    {...register(`languages.${index}.timeLimitMs`)}
-                  />
-                </Field>
-
-                <Field
-                  id={`memory-${language}`}
-                  label="메모리 제한 (MB)"
-                  hint={locked ? `C++ 기준 ×2 = ${derived.memoryLimitMb}MB` : undefined}
-                  error={errors.languages?.[index]?.memoryLimitMb?.message}
-                >
-                  <Input
-                    id={`memory-${language}`}
-                    type="number"
-                    inputMode="numeric"
-                    readOnly={locked}
-                    className={locked ? 'bg-muted' : undefined}
-                    {...register(`languages.${index}.memoryLimitMb`)}
-                  />
-                </Field>
-              </div>
-
-              <Field
-                id={`starter-${language}`}
-                label="시작 코드"
-                error={errors.languages?.[index]?.starterCode?.message}
+            return (
+              // fieldset+legend로 둔다. 두 언어의 칸 이름이 같아('시간 제한 (ms)')
+              // 묶음에 이름이 없으면 사람도 스크린 리더도 어느 언어의 칸인지 알 수 없다.
+              <fieldset
+                key={language}
+                className="bg-muted flex min-w-0 flex-col gap-3 rounded-lg p-5"
               >
-                <Textarea
+                {/* float를 주면 legend가 테두리 자리(면의 위 가장자리)가 아니라 면 안 첫 줄에 그려진다 */}
+                <legend className="text-foreground float-left w-full text-[15px] font-bold">
+                  {LANGUAGE_LABEL[language]}
+                </legend>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field
+                    id={`time-${language}`}
+                    label="시간 제한 (ms)"
+                    hint={locked ? `C++ 기준 ×3 + 2000ms = ${derived.timeLimitMs}ms` : undefined}
+                    error={errors.languages?.[index]?.timeLimitMs?.message}
+                  >
+                    <Input
+                      id={`time-${language}`}
+                      type="number"
+                      inputMode="numeric"
+                      readOnly={locked}
+                      className={locked ? 'bg-muted' : undefined}
+                      {...register(`languages.${index}.timeLimitMs`)}
+                    />
+                  </Field>
+
+                  <Field
+                    id={`memory-${language}`}
+                    label="메모리 제한 (MB)"
+                    hint={locked ? `C++ 기준 ×2 = ${derived.memoryLimitMb}MB` : undefined}
+                    error={errors.languages?.[index]?.memoryLimitMb?.message}
+                  >
+                    <Input
+                      id={`memory-${language}`}
+                      type="number"
+                      inputMode="numeric"
+                      readOnly={locked}
+                      className={locked ? 'bg-muted' : undefined}
+                      {...register(`languages.${index}.memoryLimitMb`)}
+                    />
+                  </Field>
+                </div>
+
+                <Field
                   id={`starter-${language}`}
-                  rows={6}
-                  className="font-mono"
-                  {...register(`languages.${index}.starterCode`)}
-                />
-              </Field>
-            </fieldset>
-          )
-        })}
+                  label="시작 코드"
+                  error={errors.languages?.[index]?.starterCode?.message}
+                >
+                  <Textarea
+                    id={`starter-${language}`}
+                    rows={6}
+                    className="font-mono"
+                    {...register(`languages.${index}.starterCode`)}
+                  />
+                </Field>
+              </fieldset>
+            )
+          })}
+        </div>
       </fieldset>
     </div>
   )
