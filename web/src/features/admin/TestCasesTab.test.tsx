@@ -47,7 +47,15 @@ function renderTab(
  * 글자가 든 span이 아니라 summary를 누른다 — details를 여는 것은 summary의 동작이다.
  */
 async function expand(user: ReturnType<typeof userEvent.setup>, label: string) {
-  await user.click(screen.getByText(label).closest('summary')!)
+  // 줄은 번호(굵게)와 종류 배지가 따로다(디자인). '1. 공개 예제'를 둘로 나눠 그 줄을 찾는다
+  const [number, kind] = label.split('. ')
+  const summary = screen
+    .getAllByText(kind!)
+    .map((element) => element.closest('summary'))
+    .find((element) => element?.querySelector('b')?.textContent === number)
+  // 못 찾으면 분명히 말한다. undefined를 그대로 누르면 user-event 내부 오류로 원인이 가려진다(#290 리뷰)
+  if (!summary) throw new Error(`케이스 줄 '${label}'을 찾지 못했어요`)
+  await user.click(summary)
 }
 
 /** 숨은 파일 칸. userEvent.upload는 display:none을 클릭할 수 없어 change를 직접 쏜다. */
@@ -508,7 +516,8 @@ describe('TestCasesTab', () => {
     fireEvent.change(screen.getByLabelText('2번 기대 출력'), {
       target: { value: 'a'.repeat(1024 * 1024 + 1) },
     })
-    await user.click(screen.getByText('2. 공개 예제').closest('summary')!)
+    // 같은 줄을 한 번 더 눌러 접는다
+    await expand(user, '2. 공개 예제')
     await user.click(screen.getByRole('button', { name: '케이스 저장' }))
 
     expect(await screen.findByText('2번 케이스를 고쳐 주세요')).toBeInTheDocument()

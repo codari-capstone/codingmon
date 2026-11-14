@@ -260,8 +260,8 @@ export function SolutionsTab({
   if (solutions.isPending) return <ListSkeleton rows={4} />
 
   return (
-    <section aria-label="정답 코드" className="flex flex-col gap-4">
-      <p className="text-muted-foreground text-xs">
+    <section aria-label="정답 코드" className="flex flex-col gap-5">
+      <p className="text-muted-foreground m-0 text-sm">
         {`언어마다 ${MAX_SOURCE_BYTES / 1024}KB까지예요. 칸을 비우고 저장하면 그 언어의 정답 코드를 지워요`}
       </p>
 
@@ -306,78 +306,89 @@ export function SolutionsTab({
         </p>
       ) : null}
 
-      {SOLUTION_LANGUAGES.map((language) => {
-        const solution = saved.find((item) => item.language === language)
-        const dirty = changed.includes(language)
-        const results = (cases.data ?? [])
-          .map((item, index) => ({
-            no: index + 1,
-            caseType: item.caseType,
-            result: item.validation[language],
-          }))
-          .filter((row): row is typeof row & { result: CaseValidation } => row.result !== null)
+      {/* 디자인: 두 언어를 나란히. 한 칸이 420px보다 좁아지면 위아래로 쌓는다 */}
+      <div className="flex flex-wrap gap-5">
+        {SOLUTION_LANGUAGES.map((language) => {
+          const solution = saved.find((item) => item.language === language)
+          const dirty = changed.includes(language)
+          const results = (cases.data ?? [])
+            .map((item, index) => ({
+              no: index + 1,
+              caseType: item.caseType,
+              result: item.validation[language],
+            }))
+            .filter((row): row is typeof row & { result: CaseValidation } => row.result !== null)
 
-        return (
-          <div key={language} className="bg-muted flex flex-col gap-3 rounded-md p-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <h3 className="font-medium">{LANGUAGE_LABEL[language]}</h3>
-              <p className="text-muted-foreground text-xs">{statusLine(solution, dirty)}</p>
-            </div>
+          return (
+            <div key={language} className="flex min-w-0 flex-[1_1_420px] flex-col gap-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <h3 className="text-foreground m-0 text-[15px] font-bold">
+                  {LANGUAGE_LABEL[language]}
+                </h3>
+                <p className="text-muted-foreground m-0 text-[13px] font-semibold">
+                  {statusLine(solution, dirty)}
+                </p>
+              </div>
 
-            {/* 계약: "정답 코드가 그대로 들어간 문자열이라 글자 그대로 보여 준다(HTML로
-                렌더링하지 않는다)." 그래서 Markdown 컴포넌트를 쓰지 않는다. */}
-            {solution?.compilerMessage ? (
-              <pre className="bg-card max-h-48 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
-                {solution.compilerMessage}
-              </pre>
-            ) : null}
+              {/* 계약: "정답 코드가 그대로 들어간 문자열이라 글자 그대로 보여 준다(HTML로
+                렌더링하지 않는다)." 그래서 Markdown 컴포넌트를 쓰지 않는다.
+                옅은 면(bg-muted)으로 둔다. 탭 카드가 흰 면이라 같은 bg-card면 어디까지가
+                컴파일러 출력인지 경계가 보이지 않는다(#290 리뷰) */}
+              {solution?.compilerMessage ? (
+                <pre className="bg-muted text-foreground m-0 max-h-48 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
+                  {solution.compilerMessage}
+                </pre>
+              ) : null}
 
-            <CodeEditor
-              language={language}
-              label={`${LANGUAGE_LABEL[language]} 코드 편집기`}
-              value={codes[language]}
-              onChange={(next) => setEdited((prev) => ({ ...prev, [language]: next }))}
-              readOnly={locked || save.isPending}
-            />
+              <CodeEditor
+                language={language}
+                label={`${LANGUAGE_LABEL[language]} 코드 편집기`}
+                value={codes[language]}
+                onChange={(next) => setEdited((prev) => ({ ...prev, [language]: next }))}
+                readOnly={locked || save.isPending}
+              />
 
-            {results.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>번호</TableHead>
-                    <TableHead>종류</TableHead>
-                    <TableHead>판정</TableHead>
-                    <TableHead>시간</TableHead>
-                    <TableHead>메모리</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {results.map((row) => (
-                    <TableRow key={row.no}>
-                      <TableCell>{row.no}</TableCell>
-                      <TableCell>{row.caseType === 'SAMPLE' ? '공개 예제' : '비공개'}</TableCell>
-                      <TableCell>{verdictLabel(row.result, solution?.status)}</TableCell>
-                      <TableCell>
-                        {row.result.executionTimeMs === null
-                          ? '-'
-                          : `${row.result.executionTimeMs}ms`}
-                      </TableCell>
-                      <TableCell>
-                        {row.result.memoryUsedKb === null
-                          ? '-'
-                          : `${row.result.memoryUsedKb.toLocaleString('ko-KR')}KB`}
-                      </TableCell>
+              {results.length > 0 ? (
+                // 칸이 좁아 열을 짜내지 않고 표 안에서 가로로 민다
+                <Table className="min-w-[400px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>번호</TableHead>
+                      <TableHead>종류</TableHead>
+                      <TableHead>판정</TableHead>
+                      <TableHead>시간</TableHead>
+                      <TableHead>메모리</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : null}
-          </div>
-        )
-      })}
+                  </TableHeader>
+                  <TableBody>
+                    {results.map((row) => (
+                      <TableRow key={row.no}>
+                        <TableCell>{row.no}</TableCell>
+                        <TableCell>{row.caseType === 'SAMPLE' ? '공개 예제' : '비공개'}</TableCell>
+                        <TableCell>{verdictLabel(row.result, solution?.status)}</TableCell>
+                        <TableCell>
+                          {row.result.executionTimeMs === null
+                            ? '-'
+                            : `${row.result.executionTimeMs}ms`}
+                        </TableCell>
+                        <TableCell>
+                          {row.result.memoryUsedKb === null
+                            ? '-'
+                            : `${row.result.memoryUsedKb.toLocaleString('ko-KR')}KB`}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
 
+      {/* 디자인: 두 버튼을 오른쪽 끝에. 주 동작 [저장하고 검증]이 맨 오른쪽 */}
       {locked || validating ? null : (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap justify-end gap-2.5">
           <Button
             type="button"
             variant="secondary"

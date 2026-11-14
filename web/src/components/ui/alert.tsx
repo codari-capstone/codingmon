@@ -28,6 +28,11 @@ interface AlertProps {
   /** 작은 버튼 하나 */
   action?: React.ReactNode
   onClose?: () => void
+  /**
+   * 기본 true. 화면을 열 때부터 있는 안내(지금 상태 요약, 늘 같은 설명)는 false로 둔다 —
+   * 바뀐 것이 없는데 읽어 주고, 같은 화면의 진짜 알림(저장·공개 결과)과 status가 둘이 된다.
+   */
+  live?: boolean
   className?: string
 }
 
@@ -36,10 +41,18 @@ interface AlertProps {
  * 잠깐 뜨고 사라지는 알림에는 Toast, 채점 결과에는 Verdict를 쓰며 한 화면에 셋 넘게 쌓지 않는다.
  * 제목·본문은 상자 색의 글자색이 아니라 본문색이다 — 색 글자는 제목과 아이콘만이다.
  */
-export function Alert({ tone = 'info', title, children, action, onClose, className }: AlertProps) {
+export function Alert({
+  tone = 'info',
+  title,
+  children,
+  action,
+  onClose,
+  live = true,
+  className,
+}: AlertProps) {
   return (
     <div
-      role={tone === 'danger' ? 'alert' : 'status'}
+      role={live ? (tone === 'danger' ? 'alert' : 'status') : undefined}
       className={cn('flex items-start gap-3 rounded-lg px-4 py-3.5', TONE[tone], className)}
     >
       <span className="mt-px inline-flex">

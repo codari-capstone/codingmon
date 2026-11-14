@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { PublishCondition } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { Alert } from '@/components/ui/alert'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +17,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Icon } from '@/components/ui/icon'
 import { problemMessage } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import {
@@ -129,27 +131,30 @@ export function PublishTab({
   const error = publish.error ?? unpublish.error
 
   return (
-    <div className="flex flex-col gap-4 py-4">
-      <div>
-        <h2 className="text-lg font-semibold">공개 조건</h2>
-        <p className="text-muted-foreground text-sm">
-          {/*
-            '아직 공개한 적이 없어요'라고 적지 않는다. 내린 뒤에도 `publishedVersionNo`는
-            null이라 그 문구가 거짓이 된다 — 상세만으로는 공개한 적이 있는지 알 수 없다
-            (지난 버전 목록을 받아야 안다). 지금 사실만 적는다.
-          */}
-          {isPublished
-            ? `v${String(detail.data.versionNo)}이 공개 중이에요. 사용자에게 보여요`
-            : detail.data.publishedVersionNo === null
-              ? '공개 중인 버전이 없어요. 사용자에게 보이지 않아요'
-              : `사용자는 v${String(detail.data.publishedVersionNo)}를 풀고 있어요`}
-        </p>
-      </div>
+    <div className="flex flex-col gap-5">
+      {/*
+        디자인: 맨 위에 지금 상태를 알림으로. 공개 중이면 초록, 아니면 파랑.
+        '아직 공개한 적이 없어요'라고 적지 않는다. 내린 뒤에도 `publishedVersionNo`는
+        null이라 그 문구가 거짓이 된다 — 상세만으로는 공개한 적이 있는지 알 수 없다
+        (지난 버전 목록을 받아야 안다). 지금 사실만 적는다.
+      */}
+      <Alert tone={isPublished ? 'success' : 'info'} live={false}>
+        {isPublished
+          ? `v${String(detail.data.versionNo)}이 공개 중이에요. 사용자에게 보여요`
+          : detail.data.publishedVersionNo === null
+            ? '공개 중인 버전이 없어요. 사용자에게 보이지 않아요'
+            : `사용자는 v${String(detail.data.publishedVersionNo)}를 풀고 있어요`}
+      </Alert>
+
+      <h2 className="text-foreground m-0 text-base font-semibold">공개 조건</h2>
 
       {unmet.length === 0 ? (
-        <p className="text-sm">공개 조건을 모두 채웠어요.</p>
+        <p className="text-success-text m-0 flex items-center gap-2 text-sm font-semibold">
+          <Icon name="check" size={16} />
+          공개 조건을 모두 채웠어요.
+        </p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {unmet.map((condition) => {
             /*
               모르는 값이 올 수 있다. 서버가 새 조건을 먼저 배포하면 화면에 없는 코드가
@@ -160,8 +165,12 @@ export function PublishTab({
             const info: (typeof PUBLISH_CONDITION_LABEL)[PublishCondition] | undefined =
               PUBLISH_CONDITION_LABEL[condition]
             return (
-              <li key={condition} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-destructive-text">
+              <li
+                key={condition}
+                className="bg-muted flex flex-wrap items-center gap-3 rounded-md px-4 py-3 text-sm"
+              >
+                <span className="text-destructive-text flex flex-1 items-center gap-2 font-semibold">
+                  <Icon name="x" size={16} />
                   {info?.text ?? `아직 못 채운 조건이 있어요 (${condition})`}
                 </span>
                 {/* 조건만 보여 주고 고칠 곳을 알려 주지 않으면 네 탭을 뒤져야 한다. */}
@@ -169,7 +178,7 @@ export function PublishTab({
                   <Button
                     type="button"
                     variant="secondary"
-                    className="min-h-11"
+                    size="sm"
                     onClick={() => onGoToTab(info.tab)}
                   >
                     {`${info.tabLabel} 탭으로`}
@@ -224,7 +233,8 @@ export function PublishTab({
                 검증 중이라고 막으면, 검증이 끝날 때까지 틀린 문제가 사용자에게 계속
                 보인다. 내려도 초안은 그대로 남아 검증은 하던 대로 끝난다(계약).
               */}
-              <Button type="button" variant="secondary" className="min-h-11" disabled={busy}>
+              {/* 디자인: 사용자 화면에서 문제가 사라지는 동작이라 위험 버튼이다 */}
+              <Button type="button" variant="danger" className="min-h-11" disabled={busy}>
                 비공개로 내리기
               </Button>
             </AlertDialogTrigger>

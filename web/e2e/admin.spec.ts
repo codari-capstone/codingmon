@@ -113,6 +113,15 @@ test('나란한 칸은 한 칸에만 오류·도움말이 있어도 입력칸이
   const labelX = (await page.locator('label[for="title"]').boundingBox())!.x
   expect(Math.abs(labelX - (await page.locator('#title').boundingBox())!.x)).toBeLessThan(1)
 
+  // 오류가 없으면 나란한 줄 아래 간격도 다른 칸 사이와 같다(빈 오류 줄이 6px을 남기지 않는다)
+  const box = async (selector: string) => (await page.locator(selector).boundingBox())!
+  const below = async (input: string, next: string) => {
+    const a = await box(input)
+    return (await box(next)).y - (a.y + a.height)
+  }
+  const usual = await below('#title', 'fieldset[data-slot="radio-group"]')
+  expect(Math.abs((await below('#sourceName', 'label[for="sourceUrl"]')) - usual)).toBeLessThan(1)
+
   await page.getByLabel('라이선스').fill('가'.repeat(121))
   await page.getByRole('button', { name: '저장' }).click()
   await expect(page.getByText(/120자/)).toBeVisible()

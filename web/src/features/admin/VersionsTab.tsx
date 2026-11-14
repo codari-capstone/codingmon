@@ -3,6 +3,8 @@ import { Link } from 'react-router'
 
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { Alert } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import {
   Table,
   TableBody,
@@ -12,7 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { adminProblemVersionsQuery } from './adminProblemQuery'
-import { VERSION_STATUS_LABEL } from './labels'
+import { problemStateTone, VERSION_STATUS_LABEL } from './labels'
 
 /** 날짜만 보여 준다. 분 단위까지 필요한 화면이 아니다. */
 function day(iso: string | null): string {
@@ -35,13 +37,14 @@ export function VersionsTab({ problemId }: { problemId: number }) {
   if (isPending) return <ListSkeleton rows={3} />
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-muted-foreground text-sm">
+    <div className="flex flex-col gap-4">
+      <Alert tone="info" live={false}>
         채점 기준(시간·메모리 제한, 테스트케이스, 언어)이 바뀔 때만 새 버전이 생겨요. 지문과 태그를
         고치면 최신 버전에 바로 반영돼요.
-      </p>
+      </Alert>
 
-      <Table>
+      {/* 좁은 화면에서는 열을 짜내지 않고 표 안에서 가로로 민다(목록과 같다) */}
+      <Table className="min-w-[480px]">
         <TableHeader>
           <TableRow>
             <TableHead className="w-20">버전</TableHead>
@@ -53,19 +56,24 @@ export function VersionsTab({ problemId }: { problemId: number }) {
         <TableBody>
           {data.map((version) => (
             <TableRow key={version.versionNo}>
-              <TableCell className="font-medium">
+              <TableCell className="font-mono text-sm">
                 {/*
                   링크는 fieldset의 disabled에 걸리지 않는다. 버전을 읽기 전용으로 보는
                   화면도 이 탭을 쓰므로, 거기서도 다른 버전으로 옮겨 갈 수 있다.
                 */}
                 <Link
                   to={`/admin/problems/${problemId}/versions/${version.versionNo}`}
-                  className="hover:text-primary-text hover:underline"
+                  className="text-primary-text font-semibold hover:underline"
                 >
                   {`v${version.versionNo}`}
                 </Link>
               </TableCell>
-              <TableCell>{VERSION_STATUS_LABEL[version.status]}</TableCell>
+              <TableCell>
+                {/* 목록 배지와 같은 색(공개 초록·작성 중 회색·검증 중 파랑·비공개 테두리) */}
+                <Badge tone={problemStateTone(version.status, null)}>
+                  {VERSION_STATUS_LABEL[version.status]}
+                </Badge>
+              </TableCell>
               <TableCell className="text-muted-foreground tabular-nums">
                 {day(version.createdAt)}
               </TableCell>

@@ -44,14 +44,26 @@ export function Field({
         {hint === undefined ? null : <p className="text-muted-foreground text-xs">{hint}</p>}
       </div>
       {children}
-      {error === undefined ? null : <p className="text-destructive-text text-sm">{error}</p>}
+      {error === undefined ? null : (
+        <p className={cn('text-destructive-text text-sm', alignAt && ERROR_GAP[alignAt])}>
+          {error}
+        </p>
+      )}
     </div>
   )
 }
 
+/*
+  격자일 때는 줄 간격(gap-y)을 두지 않고, 같은 6px을 라벨 덩이 아래·오류 위 여백으로 준다.
+  줄 간격으로 두면 오류가 없어 셋째 줄 높이가 0이어도 그 앞 간격 6px이 남아, 나란한 줄 아래만
+  다른 칸보다 6px 넓어졌다(#289 리뷰). 여백은 오류가 있을 때만 생긴다.
+*/
 const SUBGRID = {
-  sm: 'sm:grid sm:row-span-3 sm:grid-rows-subgrid',
-  md: 'md:grid md:row-span-3 md:grid-rows-subgrid',
+  // 칸 자체의 gap-1.5도 0으로 — 남기면 subgrid가 그 차이의 절반(3px)을 여백으로 더한다
+  sm: 'sm:grid sm:row-span-3 sm:grid-rows-subgrid sm:gap-0',
+  md: 'md:grid md:row-span-3 md:grid-rows-subgrid md:gap-0',
 } as const
 
-const HEADER_END = { sm: 'sm:self-end', md: 'md:self-end' } as const
+const HEADER_END = { sm: 'sm:self-end sm:pb-1.5', md: 'md:self-end md:pb-1.5' } as const
+
+const ERROR_GAP = { sm: 'sm:pt-1.5', md: 'md:pt-1.5' } as const
