@@ -370,7 +370,8 @@ export interface paths {
          * @description 요약과 잔디를 한 번에 준다. 세는 기준이 다르다.
          *     - 맞힌·틀린 문제 수는 판정이 나온 제출만 센다(`LIST-01`과 같다).
          *     - 잔디는 사용자 제출(`SUBMIT`)이면 판정과 관계없이 센다(틀림, 채점 중, 채점 불가 포함). 예제 실행과 관리자의 정답 코드 검증은 세지 않는다.
-         *     잔디의 날짜는 한국 시각 자정으로 나눈다. 범위는 오늘을 포함한 최근 365일(`from`~`to`)이다.
+         *     잔디의 날짜는 한국 시각 자정으로 나눈다. 범위는 `year`의 1월 1일 ~ 12월 31일(`from`~`to`)이다.
+         *     총 활동일(`totalActiveDays`)도 이 안에서 센다.
          */
         get: operations["getMyActivity"];
         put?: never;
@@ -391,7 +392,7 @@ export interface paths {
         /**
          * 연속 학습 (STREAK-01, STREAK-02)
          * @description 문제 목록 위 연속 학습 카드와 상단 바 칩에 쓴다. 비로그인이면 화면이 부르지 않고 0일째·빈 달력으로 그린다.
-         *     무엇을 세는지와 하루를 나누는 시각은 잔디(`/api/users/me/activity`)와 같다. 다만 잔디처럼 최근 365일만 보지 않고 기간 제한 없이 센다.
+         *     무엇을 세는지와 하루를 나누는 시각은 잔디(`/api/users/me/activity`)와 같다. 다만 잔디처럼 한 해 안만 보지 않고 기간 제한 없이 센다.
          *     - 사용자 제출(`SUBMIT`)이 하나라도 있으면 그날을 센다. 판정과 관계없다(틀림, 채점 중, 채점 불가 포함). 예제 실행과 관리자의 정답 코드 검증은 세지 않는다.
          *     - 날짜는 한국 시각 자정으로 나눈다.
          *     제출이 없으면 `currentStreak`는 0이고 `week`는 모두 `false`다.
@@ -1479,12 +1480,12 @@ export interface components {
             };
             /**
              * Format: date
-             * @description 잔디의 첫날(한국 시각). `to`의 364일 전
+             * @description 잔디의 첫날. `year`의 1월 1일
              */
             from: string;
             /**
              * Format: date
-             * @description 잔디의 마지막 날. 한국 시각으로 오늘
+             * @description 잔디의 마지막 날. `year`의 12월 31일. 올해면 오늘 뒤 날짜도 들어가고, 그날들은 제출이 없어 `days`에 오지 않는다
              */
             to: string;
             /** @description 제출이 있는 날만 날짜순으로 준다. 없는 날은 빈 칸으로 그린다 */
@@ -2766,7 +2767,10 @@ export interface operations {
     };
     getMyActivity: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 볼 연도. 빼면 한국 시각으로 올해다. 2026년(서비스 시작)부터 올해까지 고를 수 있다 */
+                year?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2780,6 +2784,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserActivity"];
+                };
+            };
+            /** @description `year`가 2026보다 앞이거나 올해보다 뒤이거나 정수가 아님 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
             401: components["responses"]["Unauthorized"];
