@@ -6,6 +6,7 @@ import { Select } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useReduceMotion } from '@/app/motion'
 import { useTheme, type ThemePreference } from '@/app/useTheme'
+import { useAuth } from '@/features/auth/useAuth'
 import { CodeEditor } from '@/features/solve/CodeEditor'
 import {
   EDITOR_LANGUAGES,
@@ -66,13 +67,19 @@ const SWITCHES = [
 function EditorSection() {
   const settings = useEditorSettings()
   const [preview, setPreview] = useState(PREVIEW)
+  // 같은 CodeEditor라 관리자의 정답 코드 편집기에도 적용된다. 그 편집기는 관리자만 보므로 관리자에게만 말한다(#280 리뷰)
+  const isAdmin = useAuth().user?.role === 'ADMIN'
   return (
     <section aria-labelledby="editor-heading" className={cn(MY_CARD, 'gap-5')}>
       <div className="flex flex-col gap-1">
         <h2 id="editor-heading" className="text-foreground text-lg font-semibold">
           코드 에디터
         </h2>
-        <p className="text-muted-foreground text-sm">문제 풀이 화면의 에디터에 적용돼요.</p>
+        <p className="text-muted-foreground text-sm">
+          {isAdmin
+            ? '문제 풀이 화면과 정답 코드 편집기(관리자)에 적용돼요.'
+            : '문제 풀이 화면의 에디터에 적용돼요.'}
+        </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
         {SELECTS.map((it) => (

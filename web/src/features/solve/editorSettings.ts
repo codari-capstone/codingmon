@@ -67,14 +67,28 @@ function readRaw(): string | null {
   그때마다 localStorage를 읽으면 키를 칠 때마다 읽게 되고, 다른 탭에서 바꾼 값이 알림 없이
   다음 입력에 끼어든다. 다른 탭의 변경은 storage 이벤트로 받는다.
   저장이 막힌 브라우저에서도 이번 방문에는 바꾼 값이 이 메모리로 적용된다.
+
+  듣는 쪽이 하나도 없는 동안에는 storage 이벤트도 듣지 않는다. 그 사이 다른 탭이 바꾼 값을
+  놓치므로, 그때는 읽을 때마다 저장소와 견준다(#280 리뷰) — 안 그러면 다시 열 때 낡은 값으로 열리고,
+  그 위에 고친 칸 하나를 얹어 저장해 다른 탭의 변경을 되돌린다. 같은 문자열이면 같은 객체를 돌려준다
+  (useSyncExternalStore는 스냅샷이 매번 새 객체면 무한히 다시 그린다).
 */
 let current: EditorSettings | undefined
+/** current를 만든 저장소 문자열. 저장이 막혀 메모리에만 바꾼 값은 이 문자열과 같아 덮이지 않는다 */
+let currentRaw: string | null = null
 const listeners = new Set<() => void>()
+
+function refresh() {
+  const raw = readRaw()
+  if (current !== undefined && raw === currentRaw) return
+  currentRaw = raw
+  current = parseEditorSettings(raw)
+}
 
 /** 지금 설정. 훅 밖에서 한 번만 읽을 때 쓴다(풀이 화면의 처음 여는 언어). */
 export function getEditorSettings(): EditorSettings {
-  current ??= parseEditorSettings(readRaw())
-  return current
+  if (listeners.size === 0) refresh()
+  return current!
 }
 
 function notify() {
@@ -84,7 +98,7 @@ function notify() {
 function onStorage(event: StorageEvent) {
   // key가 null이면 다른 탭이 저장소를 통째로 비운 것이다
   if (event.key !== null && event.key !== EDITOR_SETTINGS_KEY) return
-  current = parseEditorSettings(readRaw())
+  refresh()
   notify()
 }
 
@@ -100,7 +114,9 @@ function subscribe(listener: () => void) {
 export function updateEditorSettings(patch: Partial<EditorSettings>): void {
   current = { ...getEditorSettings(), ...patch }
   try {
-    localStorage.setItem(EDITOR_SETTINGS_KEY, JSON.stringify(current))
+    const raw = JSON.stringify(current)
+    localStorage.setItem(EDITOR_SETTINGS_KEY, raw)
+    currentRaw = raw
   } catch {
     // 저장이 막혔으면 이번 방문에만 적용된다
   }

@@ -107,7 +107,17 @@ test('나란한 칸은 한 칸에만 오류·도움말이 있어도 입력칸이
   await login(page, ADMIN)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/admin/problems/1')
-  const top = async (id: string) => (await page.locator(`#${id}`).boundingBox())!.y
+  // 두 칸의 위치를 한 번에 잰다. 따로 재면 그 사이 미리보기(수식)가 그려지며 화면이 밀려 1px씩 어긋나게 읽혔다.
+  // 그려지는 중일 수 있어 자리 잡을 때까지 기다린다 — 정말 어긋나 있으면 끝내 실패한다
+  const offset = (a: string, b: string) =>
+    page.evaluate(
+      ([x, y]) =>
+        Math.abs(
+          document.getElementById(x!)!.getBoundingClientRect().top -
+            document.getElementById(y!)!.getBoundingClientRect().top,
+        ),
+      [a, b],
+    )
 
   // 나란히 놓이지 않은 칸의 라벨은 왼쪽에 그대로 있다(맞춤을 격자일 때만 건다)
   const labelX = (await page.locator('label[for="title"]').boundingBox())!.x
@@ -125,11 +135,9 @@ test('나란한 칸은 한 칸에만 오류·도움말이 있어도 입력칸이
   await page.getByLabel('라이선스').fill('가'.repeat(121))
   await page.getByRole('button', { name: '저장' }).click()
   await expect(page.getByText(/120자/)).toBeVisible()
-  expect(Math.abs((await top('sourceName')) - (await top('license')))).toBeLessThan(1)
+  await expect.poll(() => offset('sourceName', 'license')).toBeLessThan(1)
 
   await page.getByRole('tab', { name: '지문' }).click()
   await page.locator('#constraintsMarkdown').waitFor()
-  expect(
-    Math.abs((await top('inputDescription')) - (await top('constraintsMarkdown'))),
-  ).toBeLessThan(1)
+  await expect.poll(() => offset('inputDescription', 'constraintsMarkdown')).toBeLessThan(1)
 })

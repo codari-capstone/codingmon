@@ -1,8 +1,10 @@
-import { queryOptions, useQuery } from '@tanstack/react-query'
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 
 import { api } from '@/api/client'
 import { fail } from '@/api/fail'
 import type { UserStreak } from '@/api/types'
+import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 
 /**
@@ -29,7 +31,26 @@ export function streakQuery() {
  */
 export function useStreak() {
   const { isAuthenticated, isLoading } = useAuth()
-  const { data } = useQuery({ ...streakQuery(), enabled: isAuthenticated })
-  // enabled가 꺼져도 캐시는 남는다. 세션이 401로 끊기면 ['me']만 비워지므로 앞사람 달력을 버린다
-  return { streak: isAuthenticated ? data : undefined, guest: !isLoading && !isAuthenticated }
+  const { data, error, isPending, refetch } = useQuery({
+    ...streakQuery(),
+    enabled: isAuthenticated,
+  })
+  // 세션이 끊겼으면(갱신도 실패한 401) 버린다. 안 그러면 상단 바는 로그인 상태로 남고 카드의
+  // [다시 받기]가 같은 401만 되풀이한다. 탈퇴 화면·마이페이지와 같은 처리(#293 리뷰). 카드와 칩이
+  // 함께 불러 두 번 돌 수 있지만 null을 한 번 더 넣을 뿐이다
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, error)
+  }, [queryClient, error])
+  return {
+    // enabled가 꺼져도 캐시는 남는다. 세션이 401로 끊기면 ['me']만 비워지므로 앞사람 달력을 버린다
+    streak: isAuthenticated ? data : undefined,
+    guest: !isLoading && !isAuthenticated,
+    /** 세션을 모르거나, 로그인했는데 아직 받는 중. 칩이 자리만 잡아 둔다 */
+    loading: isLoading || (isAuthenticated && isPending && !error),
+    /** 로그인했는데 받지 못했다. 카드가 이유와 다시 받기를 보여 준다 */
+    failed: isAuthenticated && data === undefined && error !== null,
+    sessionLoading: isLoading,
+    retry: () => void refetch(),
+  }
 }

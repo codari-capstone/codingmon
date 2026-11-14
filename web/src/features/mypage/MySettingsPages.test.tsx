@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -40,8 +40,12 @@ const GITHUB_USER: CurrentUser = {
   githubUsername: 'octo-kim',
 }
 
-function renderAt(path: string, user: CurrentUser = EMAIL_USER) {
-  server.use(http.get('*/api/users/me/activity', () => HttpResponse.json(activityFor(1))))
+function renderAt(
+  path: string,
+  user: CurrentUser = EMAIL_USER,
+  activity: () => Response = () => HttpResponse.json(activityFor(1)),
+) {
+  server.use(http.get('*/api/users/me/activity', activity))
   const client = createQueryClient()
   client.setQueryData(ME_QUERY_KEY, user)
   const router = createMemoryRouter(
@@ -212,6 +216,16 @@ describe('화면 설정 /me/display (UX-06)', () => {
 })
 
 describe('회원 탈퇴 /me/withdraw (MY-04)', () => {
+  it('활동 조회가 401이면 세션을 버린다 (확인 문구를 다 쓰고서야 알게 하지 않는다)', async () => {
+    renderAt('/me/withdraw', EMAIL_USER, () =>
+      HttpResponse.json({ status: 401, code: 'UNAUTHORIZED' }, { status: 401 }),
+    )
+    // 세션이 비면 이 화면은 탈퇴 확인 카드를 그리지 않는다(user가 없다). 실제 앱에서는 RequireAuth가 로그인 화면으로 보낸다
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '회원 탈퇴' })).not.toBeInTheDocument(),
+    )
+  })
+
   it('남은 기록과 지워지는 것을 알리고 확인 카드를 둔다', async () => {
     renderAt('/me/withdraw')
     const activity = activityFor(1)

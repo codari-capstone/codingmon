@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { UserStreak } from '@/api/types'
+import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import * as useAuthModule from '@/features/auth/useAuth'
 import { streakFor } from '@/mocks/fixtures/activity'
 import { server } from '@/mocks/server'
@@ -111,7 +113,57 @@ describe('StreakCard (STREAK-01)', () => {
   })
 })
 
+describe('StreakCard 받기 실패', () => {
+  it("로그인했는데 받지 못하면 '–일째'로 굳지 않고 이유와 다시 받기를 보여 준다", async () => {
+    signedIn(true)
+    let fail = true
+    server.use(
+      http.get('*/api/users/me/streak', () =>
+        fail ? new HttpResponse(null, { status: 500 }) : HttpResponse.json(streakFor(1, NOW)),
+      ),
+    )
+    const user = userEvent.setup()
+    renderIt(<StreakCard />)
+
+    expect(await screen.findByText('연속 학습을 불러오지 못했어요.')).toBeInTheDocument()
+    fail = false
+    await user.click(screen.getByRole('button', { name: '다시 받기' }))
+    expect(await screen.findByText('오늘 한 문제만 풀면 4일이 돼요.')).toBeInTheDocument()
+  })
+})
+
+describe('연속 학습 401', () => {
+  it('세션이 끊겨 401이면 세션을 버린다 ([다시 받기]가 같은 401만 되풀이하지 않게)', async () => {
+    signedIn(true)
+    server.use(
+      http.get('*/api/users/me/streak', () =>
+        HttpResponse.json({ status: 401, code: 'UNAUTHORIZED' }, { status: 401 }),
+      ),
+    )
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(ME_QUERY_KEY, { id: 1 })
+    renderIt(<StreakCard />, client)
+
+    // 실제 앱에서는 ['me']가 비면 상단 바가 비로그인으로 바뀌고 카드도 비로그인으로 그려진다
+    await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull())
+  })
+})
+
 describe('StreakChip (STREAK-02)', () => {
+  it('받는 동안은 칩 자리를 잡아 두어 상단 바가 흔들리지 않는다', () => {
+    signedIn(true)
+    server.use(http.get('*/api/users/me/streak', () => new Promise<never>(() => {})))
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <StreakChip />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(container.querySelector('span[aria-hidden="true"]')).toBeInTheDocument()
+  })
+
   it('연속 일수를 보여 주고 문제 목록으로 간다', async () => {
     signedIn(true)
     respond(streakFor(1, NOW))

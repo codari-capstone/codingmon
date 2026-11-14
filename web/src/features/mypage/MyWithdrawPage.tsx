@@ -1,9 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { Navigate } from 'react-router'
 
 import scene from '@/assets/scenes/withdraw.png'
 import { Alert } from '@/components/ui/alert'
 import { Icon } from '@/components/ui/icon'
+import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { cn } from '@/lib/utils'
 import { WithdrawSection } from './AccountSettings'
@@ -20,7 +22,13 @@ const LOSES = [
 
 /** 남은 기록을 숫자로 짚는다. 불러오지 못했으면 숫자 없이 말한다 — 탈퇴를 막을 일은 아니다 */
 function Farewell() {
-  const { data } = useQuery(activityQuery())
+  const { data, error } = useQuery(activityQuery())
+  // 세션이 끊겼으면 여기서 로그인 화면으로 보낸다. 숫자만 빼고 넘기면 확인 문구까지 다 쓰고
+  // [회원 탈퇴]를 눌러야 401로 알게 된다. /me의 Activity와 같은 처리(#277 리뷰)
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, error)
+  }, [queryClient, error])
   return (
     <section className={cn(MY_CARD, 'flex-row flex-wrap items-center gap-6')}>
       <img src={scene} alt="" width={160} height={126} className="block h-auto shrink-0" />
