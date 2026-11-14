@@ -314,7 +314,8 @@ export function TestCasesTab({
                       </span>
                     </summary>
 
-                    <div className="flex flex-col gap-3 border-t px-3 py-3">
+                    {/* 위 요약 줄과 같은 좌우 여백(18px)이어야 펼쳤을 때 왼쪽 정렬선이 맞는다(#290 리뷰) */}
+                    <div className="flex flex-col gap-3 border-t px-[18px] py-3">
                       <div className="flex flex-col gap-1.5">
                         <label htmlFor={`cases.${index}.caseType`} className="text-sm font-medium">
                           {`${index + 1}번 종류`}

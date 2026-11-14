@@ -53,7 +53,9 @@ async function expand(user: ReturnType<typeof userEvent.setup>, label: string) {
     .getAllByText(kind!)
     .map((element) => element.closest('summary'))
     .find((element) => element?.querySelector('b')?.textContent === number)
-  await user.click(summary!)
+  // 못 찾으면 분명히 말한다. undefined를 그대로 누르면 user-event 내부 오류로 원인이 가려진다(#290 리뷰)
+  if (!summary) throw new Error(`케이스 줄 '${label}'을 찾지 못했어요`)
+  await user.click(summary)
 }
 
 /** 숨은 파일 칸. userEvent.upload는 display:none을 클릭할 수 없어 change를 직접 쏜다. */
