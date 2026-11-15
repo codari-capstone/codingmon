@@ -9,6 +9,11 @@ API, 채점 처리기, AI 처리기, 리포트 계산을 패키지로 나눈 하
 
 채점 통합 테스트(`JudgeWorkerIntegrationTest`)는 `JUDGE0_URL`이 있을 때만 돈다. 테스트 DB에 문제·제출을 만들었다가 지운다.
 
+학습자의 제출과 예제 실행은 미완료 작업 수를 함께 센다(`QUEUED`·`COMPILING`·`RUNNING`). 기본 상한은 사용자당 3개,
+전체 학습자 작업 100개이며 `JUDGE_USER_PENDING_LIMIT`·`JUDGE_PENDING_LIMIT`으로 조정한다. 상한에 닿으면 새 행을
+만들지 않고 429 `JUDGE_QUEUE_FULL`을 준다. 끝난 작업은 바로 몫을 돌려준다. 관리자 정답 검증은 이 접수 상한의 대상이 아니다.
+접수 트랜잭션은 PostgreSQL advisory lock으로 직렬화하므로 여러 연결에서 동시에 요청해도 같은 상한을 지킨다.
+
 ```bash
 DB_URL=... DB_USERNAME=... DB_PASSWORD=... JUDGE0_URL=http://127.0.0.1:2358 JUDGE0_AUTHN_TOKEN=... ./gradlew test
 ```

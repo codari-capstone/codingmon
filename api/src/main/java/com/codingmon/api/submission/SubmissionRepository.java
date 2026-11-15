@@ -9,13 +9,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.codingmon.api.Language;
+import com.codingmon.api.ApiErrors;
 import com.codingmon.api.Page;
 import com.codingmon.api.judge.StoredText;
 
@@ -77,9 +81,17 @@ class SubmissionRepository {
             + " and s.job_status in ('COMPLETED', 'JUDGE_ERROR')";
 
     private final JdbcClient jdbc;
+    private final int userPendingLimit;
+    private final int pendingLimit;
 
-    SubmissionRepository(JdbcClient jdbc) {
+    SubmissionRepository(JdbcClient jdbc, @Value("${app.judge.user-pending-limit:3}") int userPendingLimit,
+            @Value("${app.judge.pending-limit:100}") int pendingLimit) {
         this.jdbc = jdbc;
+        if (userPendingLimit < 1 || pendingLimit < userPendingLimit) {
+            throw new IllegalArgumentException("채점 접수 상한은 1 <= 사용자 상한 <= 전체 상한이어야 한다");
+        }
+        this.userPendingLimit = userPendingLimit;
+        this.pendingLimit = pendingLimit;
     }
 
     // 문제의 공개 버전과, 그 버전이 이 언어를 지원하는지. 공개 버전이 없으면 비어 있다.
@@ -225,7 +237,22 @@ class SubmissionRepository {
     // QUEUED로 저장한다. 이후 상태는 채점 처리기(#71)가 갱신한다.
     // 제출 시각은 트랜잭션 시작(now())이 아니라 이 문장이 도는 시각이다. 연속 학습 잠금 뒤의 시각이어야 해서다
     // (UserActivityRepository.lockForSubmission).
+    @Transactional(propagation = Propagation.MANDATORY)
     long insertQueued(long userId, long versionId, Kind kind, Language language, String source) {
+        // 접수 트랜잭션끼리만 직렬화한다. 실행 중인 제출 행은 잠그지 않아 채점 완료·탈퇴의 잠금 순서와 충돌하지 않는다.
+        // 잠금 대기 뒤 새 READ COMMITTED 스냅샷으로 세어야 하므로 잠금과 COUNT를 한 SQL로 합치지 않는다.
+        jdbc.sql("select pg_advisory_xact_lock(1129140046, 1)").query((rs, n) -> 1).single();
+        int pending = jdbc.sql("select count(*) from submissions"
+                + " where submission_kind in ('SUBMIT', 'SAMPLE_RUN')"
+                + " and job_status in ('QUEUED', 'COMPILING', 'RUNNING')").query(Integer.class).single();
+        int userPending = jdbc.sql("select count(*) from submissions where user_id = :userId"
+                + " and submission_kind in ('SUBMIT', 'SAMPLE_RUN')"
+                + " and job_status in ('QUEUED', 'COMPILING', 'RUNNING')")
+                .param("userId", userId).query(Integer.class).single();
+        if (pending >= pendingLimit || userPending >= userPendingLimit) {
+            throw ApiErrors.error(HttpStatus.TOO_MANY_REQUESTS, "JUDGE_QUEUE_FULL",
+                    "채점을 기다리는 요청이 많아요. 진행 중인 채점이 끝난 뒤 다시 시도해 주세요");
+        }
         return jdbc.sql("insert into submissions (user_id, problem_version_id, submission_kind, language, source_code, submitted_at)"
                 + " values (:userId, :versionId, :kind, :language, :source, clock_timestamp()) returning id")
                 .param("userId", userId)
