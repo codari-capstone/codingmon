@@ -118,6 +118,11 @@ record LearningReportInput(int solvedProblemCount, List<Concept> concepts, List<
         return title.substring(0, title.offsetByCodePoints(0, TITLE_MAX_CHARS)) + "…";
     }
 
+    // clipTitle이 붙인 "…"를 뗀 앞부분. 수치 대조(ReportNumberCheck)는 이것을 가려 모델이 "…" 없이 옮긴 제목도 가린다.
+    static String unclipTitle(String title) {
+        return title != null && title.endsWith("…") ? title.substring(0, title.length() - 1) : title;
+    }
+
     // 0.49 → "49%". 해결률은 소수 둘째 자리까지라 100을 곱하면 정수다. 화면(ReportPage)과 같이 반올림해 정수로 쓴다.
     static String percent(BigDecimal rate) {
         return rate.movePointRight(2).setScale(0, RoundingMode.HALF_UP).toPlainString() + "%";

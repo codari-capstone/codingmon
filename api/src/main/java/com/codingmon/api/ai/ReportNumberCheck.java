@@ -191,13 +191,15 @@ final class ReportNumberCheck {
         return masked;
     }
 
-    // 입력에 있는 이름(개념, 추천 문제 제목, 다음 개념과 그 문제 제목) 중 숫자나 문장 끝 표시(. ! ?)가 든 것
+    // 입력에 있는 이름(개념, 추천 문제 제목, 다음 개념과 그 문제 제목) 중 숫자나 문장 끝 표시(. ! ?)가 든 것.
+    // 긴 제목은 입력에서 앞부분에 "…"를 붙여 잘렸으므로(clipTitle) "…" 앞부분을 가린다. 모델이 "…"를 빼고 옮겨도 가려진다.
     private static List<String> maskedNames(LearningReportInput input) {
         return Stream.of(
                         input.concepts().stream().map(LearningReportInput.Concept::name),
-                        input.recommendations().stream().map(LearningReportInput.Recommendation::title),
+                        input.recommendations().stream().map(r -> LearningReportInput.unclipTitle(r.title())),
                         input.nextConcepts().stream().map(LearningReportInput.NextConcept::name),
-                        input.nextConcepts().stream().flatMap(c -> c.problems().stream()))
+                        input.nextConcepts().stream().flatMap(c -> c.problems().stream())
+                                .map(LearningReportInput::unclipTitle))
                 .flatMap(s -> s)
                 .filter(name -> name != null
                         && name.chars().anyMatch(ch -> Character.isDigit(ch) || ".!?。".indexOf(ch) >= 0))

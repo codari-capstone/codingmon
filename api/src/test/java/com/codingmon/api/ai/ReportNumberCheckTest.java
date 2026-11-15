@@ -129,6 +129,24 @@ class ReportNumberCheckTest {
     }
 
     @Test
+    void 잘린_긴_제목은_모델이_본_앞부분을_가린다() {
+        // 제목은 100자에서 잘려 입력에는 "…"가 붙는다. 모델이 "…"를 빼고 앞 100자만 옮겨도 가린다.
+        String title = "숫자 7개 고르기 " + "아주 긴 제목 ".repeat(20);
+        String shown = title.substring(0, LearningReportInput.TITLE_MAX_CHARS);
+        LearningReportInput input = LearningReportInput.of(
+                new LearningStats(5, 5, 0, List.of(stat("grid", "2차원 배열", 5, 4, "0.80", "1.20", "0.40", "0.13", true))),
+                List.of(LearningReportInput.Recommendation.of(1, title, "EASY", "2차원 배열", false)), List.of());
+        LearningReportResult result = new LearningReportResult(List.of(weak("2차원 배열", "행과 열로 값을 담아요.", "연습해요.")),
+                List.of(reason(1, shown + "로 연습해요.")), "잘하고 있어요.");
+
+        ReportNumberCheck.Outcome outcome = ReportNumberCheck.verify(result, input);
+
+        assertThat(input.recommendations().get(0).title()).isEqualTo(shown + "…");
+        assertThat(outcome.fixes()).isEmpty();
+        assertThat(outcome.content().recommendations().get(0).reason()).isEqualTo(shown + "로 연습해요.");
+    }
+
+    @Test
     void 쉼표에_붙은_수와_천_단위_수도_대조한다() {
         LearningReportResult result = new LearningReportResult(List.of(
                 weak("반복문 범위", "해결률은 50%예요. 다른 개념과 견주면 50%,80%예요.", "연습해요."),

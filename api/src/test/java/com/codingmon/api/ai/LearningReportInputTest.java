@@ -146,6 +146,9 @@ class LearningReportInputTest {
         assertThat(LearningReportInput.clipTitle("짧은 제목")).isEqualTo("짧은 제목");
         // 한글 외 코드 포인트도 반으로 자르지 않는다.
         assertThat(LearningReportInput.clipTitle("😀".repeat(150))).isEqualTo("😀".repeat(LearningReportInput.TITLE_MAX_CHARS) + "…");
+        // 수치 대조가 가리는 이름은 "…"를 뗀 앞부분이다.
+        assertThat(LearningReportInput.unclipTitle(long_.title())).isEqualTo("가".repeat(LearningReportInput.TITLE_MAX_CHARS));
+        assertThat(LearningReportInput.unclipTitle("짧은 제목")).isEqualTo("짧은 제목");
         assertThat(gathered.get(0).reason()).startsWith("다".repeat(LearningReportInput.NEXT_CONCEPT_REASON_MAX_CHARS))
                 .endsWith("100자 생략]");
     }
