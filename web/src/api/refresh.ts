@@ -3,6 +3,26 @@ import { getAccessToken, getGeneration, setAccessToken } from './session'
 /** 갱신 요청이 쓰는 잠금 이름. 탭끼리 공유된다. */
 const LOCK_NAME = 'codingmon-auth-refresh'
 
+// 실제 access token은 JWT다. 서명 검증은 서버가 맡고, 여기서는 갱신 전후 계정이 같은지만 본다.
+// 개발용 MSW의 불투명 토큰에는 JWT subject가 없다.
+function subject(token: string): string | null {
+  try {
+    const payload = token.split('.')[1]
+    if (!payload) return null
+    const claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as {
+      sub?: unknown
+    }
+    return typeof claims.sub === 'string' ? claims.sub : null
+  } catch {
+    return null
+  }
+}
+
+function sameAccount(previous: string | null, next: string): boolean {
+  const expected = previous === null ? null : subject(previous)
+  return expected === null || subject(next) === expected
+}
+
 /**
  * access token을 새로 받는다. 성공하면 새 토큰, 실패하면 null.
  *
@@ -46,25 +66,37 @@ async function requestNewToken(): Promise<string | null> {
  * T1이라 "바뀐 것이 없다"로 읽혀 한 번 더 갱신했다. 보낸 토큰과 비교하면 그 요청이 **낡은
  * 토큰으로 실패했다**는 사실이 그대로 드러난다.
  */
-export async function refreshAccessToken(used: string | null): Promise<string | null> {
+export async function refreshAccessToken(
+  used: string | null,
+  generation = getGeneration(),
+): Promise<string | null> {
   const run = async (): Promise<string | null> => {
+    // 원래 요청을 보낸 뒤, 또는 Web Lock을 기다리는 동안 세션이 바뀌었으면 이어가지 않는다.
+    if (getGeneration() !== generation) return null
     // 그사이 다른 요청이 이미 새 토큰을 받아 왔다. 그것을 쓴다.
     // 세션이 끝나 null이 된 경우도 여기서 걸러져, 나머지 401들이 각자 갱신을 또
     // 요청하지 않는다(그러면 실패 요청이 401 개수만큼 나간다).
     const current = getAccessToken()
-    if (current !== used) return current
+    if (current !== used) {
+      if (current !== null && !sameAccount(used, current)) {
+        throw new DOMException('이전 계정의 요청입니다', 'AbortError')
+      }
+      return current
+    }
 
-    const startedAt = getGeneration()
     const token = await requestNewToken()
 
     // 기다리는 동안 로그아웃했다. 방금 버린 세션의 토큰을 되살리지 않는다 (session.ts).
-    if (getGeneration() !== startedAt) return null
+    if (getGeneration() !== generation) return null
 
     if (token === null) {
       // 실패했어도 그사이 다른 경로(로그인 등)가 유효한 토큰을 심었으면 지우지 않는다.
       if (getAccessToken() === used) setAccessToken(null)
       return null
     }
+    // 늦게 도착한 다른 로그인/갱신 응답이 공유 refresh 쿠키를 바꿀 수도 있다.
+    // 그 쿠키가 다른 계정의 토큰을 주더라도 기존 요청의 권한으로 사용하지 않는다.
+    if (!sameAccount(used, token)) return null
     setAccessToken(token)
     return token
   }

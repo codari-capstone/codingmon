@@ -1,10 +1,17 @@
 import { http, HttpResponse } from 'msw'
+import { QueryClient } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api, pendingRequestCount } from './client'
 import { refreshAccessToken } from './refresh'
-import { endSession, getAccessToken, getGeneration, setAccessToken } from './session'
+import { endSession, getAccessToken, getGeneration, setAccessToken, startSession } from './session'
 import { server } from '@/mocks/server'
+import { forgetSessionIfUnauthorized } from '@/features/auth/session'
+import { submitCode } from '@/features/solve/submitQuery'
+
+function jwtFor(user: string, version: string): string {
+  return `header.${btoa(JSON.stringify({ sub: user, version }))}.signature`
+}
 
 /** 갱신 응답. 호출 수를 세고 매번 다른 토큰을 준다. */
 function refreshReturns(token: string | null) {
@@ -33,6 +40,28 @@ describe('refreshAccessToken (COM-04)', () => {
 
     expect(token).toBe('new.1')
     expect(getAccessToken()).toBe('new.1')
+  })
+
+  it('공유 쿠키가 다른 계정의 JWT를 주면 권한을 바꾸지 않는다', async () => {
+    const previous = jwtFor('2', 'old')
+    setAccessToken(previous)
+    server.use(
+      http.post('*/api/auth/refresh', () =>
+        HttpResponse.json({ accessToken: jwtFor('1', 'from-late-cookie') }),
+      ),
+    )
+    expect(await refreshAccessToken(previous)).toBeNull()
+    // 다음 요청도 원래 계정에 묶이도록 기존 토큰을 남긴다.
+    expect(getAccessToken()).toBe(previous)
+    expect(await refreshAccessToken(previous)).toBeNull()
+  })
+
+  it('같은 계정의 JWT 갱신은 정상적으로 적용한다', async () => {
+    const previous = jwtFor('2', 'old')
+    const next = jwtFor('2', 'new')
+    setAccessToken(previous)
+    server.use(http.post('*/api/auth/refresh', () => HttpResponse.json({ accessToken: next })))
+    expect(await refreshAccessToken(previous)).toBe(next)
   })
 
   it('실패하면 null이고 들고 있던 토큰도 버린다', async () => {
@@ -81,6 +110,39 @@ describe('refreshAccessToken (COM-04)', () => {
 
     expect(await refreshAccessToken('old')).toBeNull()
     expect(getAccessToken()).toBeNull()
+  })
+
+  it('갱신 중 새 로그인으로 교체되면 예전 갱신 결과를 버린다', async () => {
+    setAccessToken('old')
+    server.use(
+      http.post('*/api/auth/refresh', () => {
+        startSession('account-b')
+        return HttpResponse.json({ accessToken: 'old-session-refreshed' })
+      }),
+    )
+    expect(await refreshAccessToken('old')).toBeNull()
+    expect(getAccessToken()).toBe('account-b')
+  })
+
+  it('Web Lock을 기다리는 동안 세션이 바뀌면 새 토큰을 가져가지 않는다', async () => {
+    setAccessToken('old')
+    const calls = refreshReturns('refreshed')
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: async (_name: string, run: () => Promise<unknown>) => {
+          startSession('account-b')
+          return run()
+        },
+      },
+    })
+    try {
+      expect(await refreshAccessToken('old')).toBeNull()
+      expect(calls()).toBe(0)
+      expect(getAccessToken()).toBe('account-b')
+    } finally {
+      delete (navigator as { locks?: unknown }).locks
+    }
   })
 
   /** 실패했다고 그사이 로그인이 심어 둔 유효한 토큰까지 지우면 안 된다. */
@@ -152,6 +214,84 @@ describe('refreshAccessToken (COM-04)', () => {
 describe('세션 미들웨어 (api/client.ts)', () => {
   afterEach(() => {
     setAccessToken(null)
+  })
+
+  it('인증 없이 시작한 변경 요청에 나중에 받은 쿠키 권한을 붙이지 않는다', async () => {
+    setAccessToken(null)
+    const refreshes = refreshReturns('new-account')
+    server.use(
+      http.delete('*/api/users/me', () => HttpResponse.json({ status: 401 }, { status: 401 })),
+    )
+    expect((await api.DELETE('/api/users/me')).response.status).toBe(401)
+    expect(refreshes()).toBe(0)
+  })
+
+  it('이전 계정의 늦은 401로 새 계정의 탈퇴를 재시도하지 않는다', async () => {
+    setAccessToken('account-a')
+    let release!: () => void
+    let arrived!: () => void
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const entered = new Promise<void>((resolve) => {
+      arrived = resolve
+    })
+    const sent: (string | null)[] = []
+    server.use(
+      http.delete('*/api/users/me', async ({ request }) => {
+        sent.push(request.headers.get('Authorization'))
+        if (sent.length === 1) {
+          arrived()
+          await held
+          return HttpResponse.json({ status: 401 }, { status: 401 })
+        }
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+
+    const pending = api.DELETE('/api/users/me')
+    await entered
+    endSession()
+    startSession('account-b')
+    release()
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(sent).toEqual(['Bearer account-a'])
+    expect(getAccessToken()).toBe('account-b')
+    expect(pendingRequestCount()).toBe(0)
+  })
+
+  it('이전 제출의 실패 콜백도 새 계정의 캐시를 로그아웃시키지 않는다', async () => {
+    const client = new QueryClient()
+    setAccessToken('account-a')
+    let release!: () => void
+    let arrived!: () => void
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const entered = new Promise<void>((resolve) => {
+      arrived = resolve
+    })
+    server.use(
+      http.post('*/api/submissions', async () => {
+        arrived()
+        await held
+        return HttpResponse.json({ status: 401 }, { status: 401 })
+      }),
+    )
+    const pending = submitCode({ problemId: 1, language: 'PYTHON', sourceCode: 'print(1)' }).catch(
+      (error: unknown) => {
+        forgetSessionIfUnauthorized(client, error)
+        return error
+      },
+    )
+    await entered
+    startSession('account-b')
+    client.setQueryData(['me'], { id: 2 })
+    release()
+    expect(await pending).toMatchObject({ name: 'AbortError' })
+    expect(client.getQueryData(['me'])).toEqual({ id: 2 })
+    client.clear()
   })
 
   it('토큰이 있으면 Authorization 헤더로 보낸다', async () => {

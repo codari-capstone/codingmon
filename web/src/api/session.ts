@@ -14,7 +14,7 @@
 let accessToken: string | null = null
 
 /**
- * 세션 세대. 로그아웃할 때마다 올라간다.
+ * 세션 세대. 로그아웃하거나 새 로그인으로 계정을 대체할 때마다 올라간다. 같은 세션의 토큰 갱신은 올리지 않는다.
  *
  * 갱신 요청이 떠 있는 동안 로그아웃하면, 늦게 도착한 응답이 방금 버린 세션의 토큰을 다시
  * 심는다 — 서버의 로그아웃은 refresh 계열만 폐기하고 **이미 발급된 access token은 만료까지
@@ -33,6 +33,13 @@ export function getGeneration(): number {
 
 export function setAccessToken(token: string | null): void {
   accessToken = token
+}
+
+/** 새 로그인은 이전 계정의 비동기 작업을 이어받지 않는다. 토큰 갱신은 setAccessToken을 쓴다. */
+export function startSession(token: string | null): void {
+  generation += 1
+  accessToken = token
+  channel?.postMessage('started')
 }
 
 /** 다른 탭이 로그아웃했음을 알리는 통로. 지원하지 않는 브라우저에서는 null. */

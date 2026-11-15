@@ -2,7 +2,7 @@ import createClient, { type ClientOptions, type Middleware } from 'openapi-fetch
 
 import { refreshAccessToken } from './refresh'
 import type { paths } from './schema'
-import { getAccessToken } from './session'
+import { getAccessToken, getGeneration } from './session'
 
 /**
  * 클라이언트 설정.
@@ -63,7 +63,7 @@ function isPublicAuthPath(url: string): boolean {
  * 응답이 오든 실패하든 바로 지운다. onResponse에서만 지웠더니 네트워크 오류나 abort로
  * fetch가 던질 때 사본이 남아, API에 닿지 못하는 동안 제출 본문까지 든 Request가 쌓였다.
  */
-const pending = new Map<string, { request: Request; token: string | null }>()
+const pending = new Map<string, { request: Request; token: string | null; generation: number }>()
 
 /**
  * 세션 미들웨어 (COM-04).
@@ -82,16 +82,27 @@ const sessionMiddleware: Middleware = {
 
     const token = getAccessToken()
     if (token !== null) request.headers.set('Authorization', `Bearer ${token}`)
-    pending.set(id, { request: request.clone(), token })
+    pending.set(id, { request: request.clone(), token, generation: getGeneration() })
     return request
   },
 
   async onResponse({ response, id }) {
     const original = pending.get(id)
     pending.delete(id)
+    if (original !== undefined && getGeneration() !== original.generation) {
+      throw new DOMException('이전 세션의 요청입니다', 'AbortError')
+    }
     if (response.status !== 401 || original === undefined) return response
+    // 화면을 다시 열 때의 조회는 쿠키로 세션을 복원한다. 인증 없이 시작한 변경 요청에는
+    // 나중에 생긴 쿠키의 권한을 덧붙이지 않는다. 보호된 화면은 me 조회를 마쳐야 변경할 수 있다.
+    if (original.token === null && !['GET', 'HEAD', 'OPTIONS'].includes(original.request.method)) {
+      return response
+    }
 
-    const token = await refreshAccessToken(original.token)
+    const token = await refreshAccessToken(original.token, original.generation)
+    if (getGeneration() !== original.generation) {
+      throw new DOMException('이전 세션의 요청입니다', 'AbortError')
+    }
     if (token === null) return response
 
     original.request.headers.set('Authorization', `Bearer ${token}`)
