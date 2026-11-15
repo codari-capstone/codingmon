@@ -28,7 +28,8 @@ import tools.jackson.databind.json.JsonMapper;
 // 더미 통계 3세트(LearningReportSamples)를 실제 모델에 보내 학습 리포트 프롬프트 v1을 평가한다(#84). LLM_URL과 LLM_MODEL이 없으면 건너뛴다.
 // 세트마다 LLM_EVAL_RUNS번(기본 1) 부른다. 응답 원문은 build/learning-report-eval/에 남긴다. 사람이 읽고 입문자가 이해할 문장인지,
 // 연습 방법이 구체적인지, 추천 이유가 문제와 개념을 잇는지 평가하는 데 쓴다.
-// summary.tsv에는 걸린 시간, 토큰과 함께 입력에 없는 수치(#85 대조의 시안)와 글 하나의 최대 수치 개수를 적는다. 여기서는 막지 않고 세기만 한다.
+// summary.tsv에는 걸린 시간, 토큰과 함께 입력에 없는 수치(#85 대조의 시안), 글 하나의 최대 수치 개수, 되풀이한 추천 이유 수를 적는다.
+// 여기서는 막지 않고 세기만 한다.
 // 여기서 막는 것은 스키마와 순서(alignedTo), 표기 규칙(마크다운·다른 나라 글자·영어 키 이름·코드)이다.
 @EnabledIfEnvironmentVariable(named = "LLM_URL", matches = ".+")
 @EnabledIfEnvironmentVariable(named = "LLM_MODEL", matches = ".+")
@@ -64,10 +65,13 @@ class LearningReportPromptIntegrationTest {
         List<String> texts = texts(result);
         Set<String> unknown = unknownNumbers(input, texts);
         int mostNumbers = texts.stream().mapToInt(text -> numbers(text).size()).max().orElse(0);
+        // 추천 이유가 순위마다 같은 문장이면 추천 이유를 따로 받는 뜻이 없다(지시가 막는다).
+        List<String> reasons = result.recommendations().stream().map(LearningReportResult.RecommendationReason::reason).toList();
+        long repeatedReasons = reasons.size() - reasons.stream().distinct().count();
         synchronized (SUMMARY) {
             SUMMARY.add(sample.name() + "\t" + run + "\t" + millis + "ms\t" + response.usage() + "\taligned="
                     + result.alignedTo(input).isPresent() + "\tunknownNumbers=" + (unknown.isEmpty() ? "-" : unknown)
-                    + "\tmostNumbersPerText=" + mostNumbers);
+                    + "\tmostNumbersPerText=" + mostNumbers + "\trepeatedReasons=" + repeatedReasons);
         }
 
         // 스키마가 개수와 이름·순위를 묶는다. 순서까지 맞는지 본다(어긋나도 서버가 맞추지만 지시를 따랐는지 본다).
