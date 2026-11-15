@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from '@/app/queryClient'
 import * as useAuthModule from '@/features/auth/useAuth'
 import { server } from '@/mocks/server'
+import { DEFAULT_PARAMS } from '@/features/problems/problemListParams'
+import { problemListQuery } from '@/features/problems/problemsQuery'
 import { Component as LandingPage } from './LandingPage'
 
 afterEach(() => vi.restoreAllMocks())
@@ -21,12 +23,17 @@ function renderLanding({ signedIn = false, loading = false } = {}) {
   const router = createMemoryRouter([{ path: '/', Component: LandingPage }], {
     initialEntries: ['/'],
   })
+  const client = createQueryClient()
   render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+  return client
 }
+
+/** 미리보기가 문제 목록 화면과 함께 쓰는 캐시 키 */
+const PREVIEW_KEY = problemListQuery(DEFAULT_PARAMS).queryKey
 
 describe('LandingPage (LAND-01~03)', () => {
   it('비로그인에게 가입 버튼과 로그인 링크를 보여 준다', () => {
@@ -50,9 +57,12 @@ describe('LandingPage (LAND-01~03)', () => {
     expect(screen.queryByRole('link', { name: '로그인' })).not.toBeInTheDocument()
   })
 
-  it('세션을 아직 모르면 가입·로그인으로 보내지 않는다', () => {
-    renderLanding({ loading: true })
+  it('세션을 아직 모르면 가입·로그인으로 보내지 않고, 문제 목록도 받지 않는다', () => {
+    const client = renderLanding({ loading: true })
 
+    // 토큰이 복원되기 전에 받으면 풀이 상태 없는 응답이 문제 목록 화면과 같은 키로 남는다
+    expect(client.getQueryState(PREVIEW_KEY)?.fetchStatus ?? 'idle').toBe('idle')
+    expect(client.getQueryData(PREVIEW_KEY)).toBeUndefined()
     expect(screen.queryByRole('link', { name: '무료로 시작하기' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '문제 풀러 가기' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '로그인' })).not.toBeInTheDocument()
@@ -79,17 +89,14 @@ describe('LandingPage (LAND-01~03)', () => {
   })
 
   it('문제를 불러오지 못하면 미리보기 구역을 숨긴다', async () => {
-    let calls = 0
-    server.use(
-      http.get('*/api/problems', () => {
-        calls += 1
-        return HttpResponse.json({}, { status: 500 })
-      }),
-    )
-    renderLanding()
+    server.use(http.get('*/api/problems', () => HttpResponse.json({}, { status: 500 })))
+    const client = renderLanding()
 
-    // 앱 기본값이 한 번 더 묻는다(retry: 1). 두 번 다 실패한 뒤 확인한다. FAQ는 그대로 있다
-    await waitFor(() => expect(calls).toBe(2), { timeout: 4000 })
+    // 앱 기본값이 한 번 더 묻는다(retry: 1). 쿼리가 오류로 끝난 뒤에 본다 — 로딩 중에도
+    // 구역은 없으니, 그 전에 보면 오류 분기를 확인하지 못한다. FAQ는 그대로 있다
+    await waitFor(() => expect(client.getQueryState(PREVIEW_KEY)?.status).toBe('error'), {
+      timeout: 4000,
+    })
     expect(
       screen.queryByRole('region', { name: '가볍게 하나 풀어 볼까요?' }),
     ).not.toBeInTheDocument()

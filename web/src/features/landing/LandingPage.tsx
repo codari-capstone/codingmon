@@ -266,7 +266,7 @@ export function Component() {
         </div>
       </section>
 
-      <ProblemPreview />
+      <ProblemPreview sessionKnown={signedIn !== undefined} />
 
       <section
         className={cn(
@@ -482,9 +482,14 @@ function SceneCorner({ src, width, height }: { src: string; width: number; heigh
   )
 }
 
-/** 문제 목록 첫 4개 (LAND-03). 문제 목록 화면과 같은 캐시를 쓴다. 불러오지 못하면 구역을 숨긴다. */
-function ProblemPreview() {
-  const { data } = useQuery(problemListQuery(DEFAULT_PARAMS))
+/**
+ * 문제 목록 첫 4개 (LAND-03). 문제 목록 화면과 같은 캐시를 쓴다. 불러오지 못하면 구역을 숨긴다.
+ *
+ * 세션을 알기 전에는 받지 않는다. 같은 키라서, 토큰이 복원되기 전에 받은 비로그인 응답(풀이
+ * 상태 없음)이 [문제 풀러 가기]로 간 문제 목록에 그대로 쓰인다. ProblemListPage와 같은 선택이다 (#297 리뷰).
+ */
+function ProblemPreview({ sessionKnown }: { sessionKnown: boolean }) {
+  const { data } = useQuery({ ...problemListQuery(DEFAULT_PARAMS), enabled: sessionKnown })
   const problems = data?.content.slice(0, 4) ?? []
   if (problems.length === 0) return null
 
