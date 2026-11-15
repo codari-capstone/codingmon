@@ -1068,18 +1068,14 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/Problem'
-        '429':
-          description: '미완료 작업 접수 상한에 닿음. code: JUDGE_QUEUE_FULL'
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
         '413':
           description: 요청 본문이 512KB를 넘음
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+        '429':
+          $ref: '#/components/responses/Problem'
 
   /api/submissions/{id}:
     get:
@@ -1413,18 +1409,14 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/Problem'
-        '429':
-          description: '미완료 작업 접수 상한에 닿음. code: JUDGE_QUEUE_FULL'
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
         '413':
           description: 요청 본문이 512KB를 넘음
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+        '429':
+          $ref: '#/components/responses/Problem'
 
   /api/sample-runs/{id}:
     get:
