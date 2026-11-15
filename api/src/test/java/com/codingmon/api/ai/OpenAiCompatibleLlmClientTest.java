@@ -54,7 +54,8 @@ class OpenAiCompatibleLlmClientTest {
     private static final LlmRequest<Answer> REQUEST = new LlmRequest<>("시스템 지시", "제출 코드", "answer", SCHEMA, Answer.class);
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
-    private static final Map<ReviewType, String> VERSIONS = Map.of(ReviewType.ANALYSIS, "analysis-v2", ReviewType.CODE_REVIEW, "review-v1");
+    private static final Map<ReviewType, String> VERSIONS = Map.of(ReviewType.ANALYSIS, "analysis-v2", ReviewType.CODE_REVIEW, "review-v1",
+            ReviewType.LEARNING_REPORT, "report-v1");
 
     record Answer(@NotBlank String summary, @NotEmpty List<Integer> lines) {
     }
@@ -311,5 +312,6 @@ class OpenAiCompatibleLlmClientTest {
         assertThat(client.model()).isEqualTo("test-model");
         assertThat(client.promptVersion(ReviewType.ANALYSIS)).isEqualTo("analysis-v2");
         assertThat(client.promptVersion(ReviewType.CODE_REVIEW)).isEqualTo("review-v1");
+        assertThat(client.promptVersion(ReviewType.LEARNING_REPORT)).isEqualTo("report-v1");
     }
 }
