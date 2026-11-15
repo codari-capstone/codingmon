@@ -525,7 +525,11 @@ paths:
       parameters:
         - in: query
           name: year
-          description: 볼 연도. 빼면 한국 시각으로 올해다. 2026년(서비스 시작)부터 올해까지 고를 수 있다
+          description: |
+            볼 연도. 2026년(서비스 시작)부터 올해까지 고를 수 있고, 올해는 한국 시각으로 정한다.
+            - 빼면 서버가 올해로 정한다. 예: 한국 시각 2026-12-31 23시에 빼고 요청하면 2026년 잔디를 준다.
+            - 화면은 처음 열 때 `year`를 빼고 요청하고, 고를 수 있는 마지막 연도는 그 응답의 `from` 연도로 정한다.
+              브라우저 시각으로 올해를 정하면 연말·연초에 한국과 연도가 달라 400이 날 수 있다.
           schema:
             type: integer
             minimum: 2026
@@ -537,7 +541,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/UserActivity'
         '400':
-          description: '`year`가 2026보다 앞이거나 올해보다 뒤이거나 정수가 아님'
+          description: '`year`를 고를 수 없는 경우. 2026보다 앞(예: 2025), 한국 시각으로 올해보다 뒤(예: 올해가 2026이면 2027), 정수가 아님(예: `abc`, `2026.5`)'
           content:
             application/problem+json:
               schema:
