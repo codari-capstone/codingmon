@@ -1,6 +1,7 @@
 package com.codingmon.api.submission;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -21,13 +22,20 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.ErrorResponseException;
 import org.springframework.web.context.WebApplicationContext;
 
+import com.codingmon.api.Language;
+
 // 실제 PostgreSQL의 서로 다른 트랜잭션으로 접수 상한을 경쟁시킨다. Judge0는 호출하지 않는다.
-@SpringBootTest(properties = { "app.judge0.url=", "app.judge.user-pending-limit=3", "app.judge.pending-limit=4" })
+// 채점 처리기는 끄고(app.judge0.url 비움) 상한만 켠다.
+@SpringBootTest(properties = { "app.judge0.url=", "app.judge.pending-limit-enabled=true", "app.judge.user-pending-limit=3",
+        "app.judge.pending-limit=4" })
 class SubmissionAdmissionTest {
     @Autowired JdbcClient jdbc;
     @Autowired WebApplicationContext context;
+    @Autowired TransactionTemplate transactions;
     MockMvc mvc;
     final List<Long> users = new ArrayList<>();
     long problemId;
@@ -86,6 +94,25 @@ class SubmissionAdmissionTest {
         assertThat(statuses.stream().filter(s -> s == 202).count()).isEqualTo(4);
         assertThat(statuses).allMatch(s -> s == 202 || s == 429);
         assertThat(count()).isEqualTo(4);
+    }
+
+    @Test
+    void 따로_정하지_않으면_채점_서버가_있을_때만_상한을_적용한다() {
+        // 채점 서버가 없으면 처리기가 돌지 않아 미완료 작업이 끝나지 않는다. 그때 상한을 걸면 영구히 429다.
+        var withJudge = new SubmissionRepository(jdbc, 1, 1, "", "http://127.0.0.1:2358");
+        var withoutJudge = new SubmissionRepository(jdbc, 1, 1, "", "");
+        long user = users.getFirst();
+        insert(withJudge, user);
+        assertThatThrownBy(() -> insert(withJudge, user)).isInstanceOfSatisfying(ErrorResponseException.class,
+                e -> assertThat(e.getBody().getProperties().get("code")).isEqualTo("JUDGE_QUEUE_FULL"));
+        insert(withoutJudge, user);
+        insert(withoutJudge, user);
+        assertThat(count()).isEqualTo(3);
+    }
+
+    private void insert(SubmissionRepository repository, long user) {
+        transactions.executeWithoutResult(s -> repository.insertQueued(user, versionId, SubmissionRepository.Kind.SUBMIT,
+                Language.PYTHON, "print(1)"));
     }
 
     private List<Integer> race(boolean differentUsers) throws Exception {

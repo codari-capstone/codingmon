@@ -83,15 +83,23 @@ class SubmissionRepository {
     private final JdbcClient jdbc;
     private final int userPendingLimit;
     private final int pendingLimit;
+    // 채점 서버가 없으면(JUDGE0_URL 비움) 처리기가 돌지 않아 미완료 작업이 끝나지 않는다. 그때 상한을 걸면 몇 건 뒤로 영구히 429다.
+    // 따로 정하지 않으면 채점 서버 설정을 따른다(AdminProblemController와 같은 기준). 접수 테스트는 처리기 없이 상한만 켠다.
+    private final boolean limitEnabled;
 
     SubmissionRepository(JdbcClient jdbc, @Value("${app.judge.user-pending-limit:3}") int userPendingLimit,
-            @Value("${app.judge.pending-limit:100}") int pendingLimit) {
+            @Value("${app.judge.pending-limit:100}") int pendingLimit,
+            @Value("${app.judge.pending-limit-enabled:}") String limitEnabled, @Value("${app.judge0.url:}") String judge0Url) {
         this.jdbc = jdbc;
         if (userPendingLimit < 1 || pendingLimit < userPendingLimit) {
             throw new IllegalArgumentException("채점 접수 상한은 1 <= 사용자 상한 <= 전체 상한이어야 한다");
         }
+        if (!limitEnabled.isBlank() && !limitEnabled.equals("true") && !limitEnabled.equals("false")) {
+            throw new IllegalArgumentException("app.judge.pending-limit-enabled는 비우거나 true·false여야 한다");
+        }
         this.userPendingLimit = userPendingLimit;
         this.pendingLimit = pendingLimit;
+        this.limitEnabled = limitEnabled.isBlank() ? !judge0Url.isBlank() : Boolean.parseBoolean(limitEnabled);
     }
 
     // 문제의 공개 버전과, 그 버전이 이 언어를 지원하는지. 공개 버전이 없으면 비어 있다.
@@ -239,6 +247,21 @@ class SubmissionRepository {
     // (UserActivityRepository.lockForSubmission).
     @Transactional(propagation = Propagation.MANDATORY)
     long insertQueued(long userId, long versionId, Kind kind, Language language, String source) {
+        if (limitEnabled) {
+            checkPendingLimit(userId);
+        }
+        return jdbc.sql("insert into submissions (user_id, problem_version_id, submission_kind, language, source_code, submitted_at)"
+                + " values (:userId, :versionId, :kind, :language, :source, clock_timestamp()) returning id")
+                .param("userId", userId)
+                .param("versionId", versionId)
+                .param("kind", kind.name())
+                .param("language", language.name())
+                .param("source", source)
+                .query(Long.class)
+                .single();
+    }
+
+    private void checkPendingLimit(long userId) {
         // 접수 트랜잭션끼리만 직렬화한다. 실행 중인 제출 행은 잠그지 않아 채점 완료·탈퇴의 잠금 순서와 충돌하지 않는다.
         // 잠금 대기 뒤 새 READ COMMITTED 스냅샷으로 세어야 하므로 잠금과 COUNT를 한 SQL로 합치지 않는다.
         jdbc.sql("select pg_advisory_xact_lock(1129140046, 1)").query((rs, n) -> 1).single();
@@ -253,15 +276,6 @@ class SubmissionRepository {
             throw ApiErrors.error(HttpStatus.TOO_MANY_REQUESTS, "JUDGE_QUEUE_FULL",
                     "채점을 기다리는 요청이 많아요. 진행 중인 채점이 끝난 뒤 다시 시도해 주세요");
         }
-        return jdbc.sql("insert into submissions (user_id, problem_version_id, submission_kind, language, source_code, submitted_at)"
-                + " values (:userId, :versionId, :kind, :language, :source, clock_timestamp()) returning id")
-                .param("userId", userId)
-                .param("versionId", versionId)
-                .param("kind", kind.name())
-                .param("language", language.name())
-                .param("source", source)
-                .query(Long.class)
-                .single();
     }
 
     private static ProblemHistory problemHistory(ResultSet rs, int n) throws SQLException {
