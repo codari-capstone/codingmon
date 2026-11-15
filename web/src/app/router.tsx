@@ -85,6 +85,8 @@ export const router = createBrowserRouter([
                 handle: { pageTone: 'subtle' } satisfies PageHandle,
               },
               { path: 'me/report', lazy: () => import('@/features/report/ReportPage') },
+              // 리포트와 내 학습 탭(LearnNav)을 같이 쓰는 화면이라 바탕도 같게 둔다
+              { path: 'me/badges', lazy: () => import('@/features/badges/MyBadgesPage') },
               {
                 // RequireAdmin은 역할만 본다. 비로그인이 403을 보지 않도록 RequireAuth 안에 둔다.
                 Component: RequireAdmin,

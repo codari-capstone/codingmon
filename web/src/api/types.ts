@@ -104,6 +104,10 @@ export type UserActivity = components['schemas']['UserActivity']
 /** 연속 학습 (STREAK-01·02). `week`는 이번 주 월~일 7칸이다. */
 export type UserStreak = components['schemas']['UserStreak']
 
+/** 배지 (BADGE-01·03). 서버는 코드만 준다 — 이름·문구·그림은 화면이 가진다(badgeInfo.ts). */
+export type BadgeCode = components['schemas']['BadgeCode']
+export type UserBadge = components['schemas']['UserBadge']
+
 /** 목록 조회 쿼리. toQuery와 목 테스트가 이 타입에 맞춘다. */
 export type ProblemListQuery = NonNullable<operations['listProblems']['parameters']['query']>
 

@@ -65,4 +65,12 @@ export async function adoptSession(client: QueryClient, user: CurrentUser): Prom
   client.removeQueries({ queryKey: ['code-review'] })
   // 오늘 남은 AI 횟수(AI-01)도 본인 것이다. 남기면 B에게 A의 0회가 보여 [AI 분석]이 꺼진다.
   client.removeQueries({ queryKey: ['ai-quota'] })
+  // 배지(BADGE-01)도 본인 것이다.
+  client.removeQueries({ queryKey: ['badges'] })
+  // 축하 창은 이번 세션에 낸 제출(['submit'] mutation)의 채점을 지켜본다(BadgeCelebrator).
+  // 앞사람의 제출을 남기면 B가 A의 제출을 404가 날 때까지 묻는다. 지금 이 코드를 부르는
+  // 로그인 mutation은 남겨야 해서 제출 기록만 지운다(#248 리뷰). 키는 submitQuery.ts의
+  // SUBMIT_MUTATION_KEY다 — 그 파일이 이 파일을 불러 순환이 되므로 글자로 적고 테스트로 묶는다.
+  const mutations = client.getMutationCache()
+  mutations.findAll({ mutationKey: ['submit'] }).forEach((m) => mutations.remove(m))
 }
