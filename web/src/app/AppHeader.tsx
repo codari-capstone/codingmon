@@ -15,13 +15,7 @@ import {
 import { useAuth } from '@/features/auth/useAuth'
 import { useLogout } from '@/features/auth/useLogout'
 import { StreakChip } from '@/features/streak/StreakChip'
-
-const MENU: { to: string; label: string; also?: string }[] = [
-  { to: '/problems', label: '문제' },
-  { to: '/submissions', label: '제출 기록' },
-  // 배지 화면도 내 학습 탭(LearnNav)의 한 칸이라 함께 켠다 (BADGE-02)
-  { to: '/me/report', label: '내 학습', also: '/me/badges' },
-]
+import { MENU } from './menu'
 
 /** 학습자 화면에서 ADMIN에게만 더 보이는 입구 (COM-05). */
 const ADMIN_ENTRY = { to: '/admin', label: '관리자' }

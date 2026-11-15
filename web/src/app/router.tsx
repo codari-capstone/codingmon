@@ -1,4 +1,4 @@
-import { createBrowserRouter, redirect } from 'react-router'
+import { createBrowserRouter } from 'react-router'
 
 import type { PageHandle } from './AppShell'
 import { RequireAdmin } from './RequireAdmin'
@@ -19,7 +19,12 @@ export const router = createBrowserRouter([
       {
         Component: RootLayout,
         children: [
-          { index: true, loader: () => redirect('/problems') },
+          // 히어로 남색 무대가 좌우 끝까지 간다 (#244)
+          {
+            index: true,
+            lazy: () => import('@/features/landing/LandingPage'),
+            handle: { bleed: true } satisfies PageHandle,
+          },
           // 필터는 화면 안에 둔다. 제목·검색칸이 필터와 표 위 전체 폭에 걸친다 (#235)
           { path: 'problems', lazy: () => import('@/features/problems/ProblemListPage') },
           // 왼쪽 남색 패널이 좌우 끝까지 간다 (#241)
