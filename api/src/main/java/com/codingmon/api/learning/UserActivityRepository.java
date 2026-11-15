@@ -8,11 +8,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 // MY-05 풀이 요약과 잔디, STREAK-01·02 연속 학습. 맞힌·틀린 수는 판정이 난 제출만 쌓이는 user_problem_stats로,
 // 잔디와 연속 학습은 판정과 관계없이 사용자 제출(SUBMIT)로 센다.
@@ -21,7 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserActivityRepository {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final int DAYS_BEFORE_TODAY = 364;
+    // 서비스를 시작한 해. 잔디는 이 해부터 고를 수 있다. 올해가 아니므로 해가 바뀌어도 고치지 않는다.
+    private static final int FIRST_YEAR = 2026;
     // 난이도별 맞힌 수는 공개 중인 버전의 난이도로 센다. 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다.
     // 배지(#248)도 같은 기준으로 센다.
     private static final String SOLVED_FROM = """
@@ -60,11 +63,18 @@ public class UserActivityRepository {
     private record Summary(int solved, int wrong, SolvedByDifficulty byDifficulty) {
     }
 
+    // 잔디는 year의 1월 1일 ~ 12월 31일이다. year를 빼면 한국 시각으로 올해다.
     // 요약과 잔디가 같은 시점을 보게 묶는다.
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    UserActivity find(long userId) {
-        LocalDate to = LocalDate.now(KST);
-        LocalDate from = to.minusDays(DAYS_BEFORE_TODAY);
+    UserActivity find(long userId, Integer year) {
+        int thisYear = LocalDate.now(KST).getYear();
+        int y = year == null ? thisYear : year;
+        if (y < FIRST_YEAR || y > thisYear) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "year는 " + FIRST_YEAR + "부터 올해(" + thisYear + ")까지다");
+        }
+        LocalDate from = LocalDate.of(y, 1, 1);
+        LocalDate to = LocalDate.of(y, 12, 31);
         Summary summary = jdbc.sql("""
                 select count(*) filter (where s.solved) as solved,
                        count(*) filter (where not s.solved) as wrong,

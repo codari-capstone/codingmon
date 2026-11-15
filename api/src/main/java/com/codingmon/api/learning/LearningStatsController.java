@@ -3,6 +3,7 @@ package com.codingmon.api.learning;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.codingmon.api.learning.LearningStatsRepository.LearningStats;
@@ -26,8 +27,9 @@ class LearningStatsController {
 
     // MY-05
     @GetMapping("/api/users/me/activity")
-    UserActivityRepository.UserActivity activity(@AuthenticationPrincipal Jwt jwt) {
-        return activity.find(Long.parseLong(jwt.getSubject()));
+    UserActivityRepository.UserActivity activity(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) Integer year) {
+        return activity.find(Long.parseLong(jwt.getSubject()), year);
     }
 
     // STREAK-01·02
