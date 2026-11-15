@@ -545,7 +545,9 @@ describe('AnalysisPanel', () => {
       stored(analysis({ suspectLines: [2, 99] }))
       renderResult(WRONG)
 
-      expect(await screen.findByText('노란색으로 표시한 줄은 AI가 의심한 줄이에요.')).toBeInTheDocument()
+      expect(
+        await screen.findByText('노란색으로 표시한 줄은 AI가 의심한 줄이에요.'),
+      ).toBeInTheDocument()
       const marked = document.querySelectorAll('[data-highlighted]')
       expect(marked).toHaveLength(1)
       expect([...marked[0].parentElement!.children].indexOf(marked[0])).toBe(1)
