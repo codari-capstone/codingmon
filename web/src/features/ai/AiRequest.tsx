@@ -16,6 +16,9 @@ interface AiResult {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
+/** 한도가 풀릴 시각이 지났는데 아직 안 풀렸을 때(브라우저 시계가 서버보다 빠름) 다시 물을 간격 */
+export const QUOTA_RECHECK_MS = 30_000
+
 const RESETS_AT = new Intl.DateTimeFormat('ko-KR', {
   month: 'long',
   day: 'numeric',
@@ -46,7 +49,7 @@ export function AiRequest({
   /** 처음 누르는 버튼 이름. 실패한 뒤에는 '다시 시도'다 */
   label: string
 }) {
-  const quota = useQuery(aiQuotaQuery()).data
+  const { data: quota, dataUpdatedAt } = useQuery(aiQuotaQuery())
 
   const abandonedToday =
     result?.status === 'FAILED' &&
@@ -58,28 +61,34 @@ export function AiRequest({
     ? `오늘 AI 분석·리뷰 ${quota.limit}회를 다 썼어요. ${RESETS_AT.format(new Date(quota.resetsAt))}에 다시 쓸 수 있어요.`
     : ''
   // 누른 뒤 한도 초과를 받았으면 그 안내를 alert로 읽힌다. 아래 줄은 live region이 아니라 소리 없이 바뀐다.
-  // 캐시의 remaining이 아니라 오류 코드로 가린다 — 네트워크 오류 뒤 다시 받은 remaining 0을
-  // 한도 초과로 읽으면 다른 실패가 '다 썼어요'로 바뀐다(#272 리뷰)
-  const limitHit =
-    request.isError &&
-    problemCode(request.error) === 'AI_DAILY_LIMIT_EXCEEDED' &&
-    quota !== undefined
+  // 오류 코드와 지금 한도를 함께 본다. 코드만 보면 한도가 풀린 뒤에도 '다 썼어요'가 남고(#298 리뷰),
+  // remaining만 보면 네트워크 오류 뒤 다시 받은 0 때문에 다른 실패가 '다 썼어요'로 바뀐다(#272 리뷰)
+  const limitError = request.isError && problemCode(request.error) === 'AI_DAILY_LIMIT_EXCEEDED'
+  const limitHit = limitError && outOfQuota
+  // 한도가 풀렸으면 지난 429는 더 알릴 것이 없다
+  const showError = request.isError && !(limitError && !outOfQuota)
 
-  // 한도가 풀리는 시각에 다시 받는다. 화면을 켜 둔 채 지나면 꺼진 버튼과 지난 시각 안내가 남는다(#272 리뷰)
+  // 한도가 풀리는 시각에 다시 받는다. 화면을 켜 둔 채 지나면 꺼진 버튼과 지난 시각 안내가 남는다(#272 리뷰).
+  // 받을 때마다 다시 건다. 시계가 빨라 일찍 울려 같은 resetsAt을 받아도 다음 확인이 걸린다(#298 리뷰)
   const queryClient = useQueryClient()
   const resetsAt = quota?.resetsAt
   useEffect(() => {
     if (!resetsAt) return
+    const reset = Date.parse(resetsAt)
+    // 아직 안 지났으면 그 시각에. 지났는데 그 전에 받은 값이면 바로. 지난 뒤 받았는데도 그대로면
+    // 서버는 아직이다(시계 차이) — 간격을 두고 다시 묻는다
+    const delay =
+      reset > Date.now() ? reset - Date.now() : dataUpdatedAt < reset ? 0 : QUOTA_RECHECK_MS
     const timer = setTimeout(
       () => void queryClient.invalidateQueries({ queryKey: AI_QUOTA_QUERY_KEY }),
-      Math.max(Date.parse(resetsAt) - Date.now(), 0),
+      delay,
     )
     return () => clearTimeout(timer)
-  }, [resetsAt, queryClient])
+  }, [resetsAt, dataUpdatedAt, queryClient])
 
   return (
     <>
-      {request.isError ? (
+      {showError ? (
         <p
           role="alert"
           className={invite ? 'text-inverse-foreground text-sm' : 'text-destructive-text text-sm'}
