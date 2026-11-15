@@ -20,9 +20,22 @@ class AiReviewRepository {
 
     enum Status { PENDING, COMPLETED, FAILED }
 
-    // FAILED인 이유(#81, contracts의 failureReason). 앞의 네 값은 AiReviewRunner가 LlmException.Kind에서 바꾼다.
-    // INTERNAL은 모델과 상관없는 이 서버의 오류다(입력 준비·결과 저장 실패).
-    enum FailureReason { UNAVAILABLE, RATE_LIMITED, BUSY, INVALID_RESPONSE, INTERNAL }
+    // FAILED인 이유(#81, contracts의 failureReason). 앞의 네 값은 LlmException.Kind에서 바꾼다(of).
+    // INTERNAL은 모델과 상관없는 이 서버의 오류다(입력 준비·결과 저장 실패). 학습 리포트(learning_reports)도 같은 값을 쓴다.
+    enum FailureReason {
+        UNAVAILABLE, RATE_LIMITED, BUSY, INVALID_RESPONSE, INTERNAL;
+
+        // 빠짐없는 switch라 Kind에 값이 늘면 컴파일이 깨진다. 이름으로 바꾸면(valueOf) 빠진 값이 콜백 안에서 예외가 되어
+        // 실패를 기록하는 곳에 닿지 못하고, 그 행은 재시작할 때까지 PENDING으로 남는다.
+        static FailureReason of(LlmException.Kind kind) {
+            return switch (kind) {
+                case UNAVAILABLE -> UNAVAILABLE;
+                case RATE_LIMITED -> RATE_LIMITED;
+                case BUSY -> BUSY;
+                case INVALID_RESPONSE -> INVALID_RESPONSE;
+            };
+        }
+    }
 
     // 시도 하나. attempt는 그 시도를 시작한 created_at이다.
     record Claim(long id, OffsetDateTime attempt) {
@@ -58,6 +71,11 @@ class AiReviewRepository {
 
         String condition(String alias) {
             return CONDITION.replace("r.", alias + ".");
+        }
+
+        // 시도를 시작한 시각의 열 이름이 created_at이 아닌 표(learning_reports.generated_at)에 쓴다.
+        String condition(String alias, String startedAt) {
+            return CONDITION.replace("r.created_at", "r." + startedAt).replace("r.", alias + ".");
         }
 
         // 배열을 그대로 넘기면 NamedParameterJdbcTemplate이 IN 목록처럼 펼치므로 PostgreSQL 배열 글자로 넘긴다.

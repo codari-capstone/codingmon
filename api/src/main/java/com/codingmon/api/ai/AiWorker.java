@@ -8,6 +8,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,10 +45,17 @@ class AiWorker {
         this.workers = workers;
     }
 
+    // 오답 분석·코드 리뷰. 쓴 토큰을 ai_reviews 행에 더한다.
     <T> CompletableFuture<LlmResponse<T>> submit(long reviewId, LlmRequest<T> request) {
+        return submit("AI 리뷰 " + reviewId, usage -> reviews.addUsage(reviewId, usage), request);
+    }
+
+    // target은 로그에 남길 이름, usage는 쓴 토큰을 더할 곳이다. 학습 리포트는 learning_reports 행에 더한다.
+    // 표마다 번호가 따로 매겨지므로 번호만 받으면 다른 표의 같은 번호 행에 더하게 된다.
+    <T> CompletableFuture<LlmResponse<T>> submit(String target, Consumer<LlmUsage> usage, LlmRequest<T> request) {
         CompletableFuture<LlmResponse<T>> result;
         try {
-            result = CompletableFuture.supplyAsync(() -> run(reviewId, request), workers);
+            result = CompletableFuture.supplyAsync(() -> run(target, usage, request), workers);
         } catch (RejectedExecutionException e) {
             LlmException.Kind kind = workers.isShutdown() ? LlmException.Kind.UNAVAILABLE : LlmException.Kind.BUSY;
             return CompletableFuture.failedFuture(new LlmException(kind, "AI 요청을 받을 수 없다", e, LlmUsage.NONE));
@@ -61,26 +69,26 @@ class AiWorker {
         return result;
     }
 
-    private <T> LlmResponse<T> run(long reviewId, LlmRequest<T> request) {
+    private <T> LlmResponse<T> run(String target, Consumer<LlmUsage> usage, LlmRequest<T> request) {
         try {
             LlmResponse<T> response = llm.complete(request);
-            recordUsage(reviewId, response.usage());
+            recordUsage(target, usage, response.usage());
             return response;
         } catch (LlmException e) {
-            recordUsage(reviewId, e.usage());
+            recordUsage(target, usage, e.usage());
             throw e;
         }
     }
 
     // 기록이 실패해도 이미 받은 응답이나 원래 오류를 가리지 않는다.
-    private void recordUsage(long reviewId, LlmUsage usage) {
+    private static void recordUsage(String target, Consumer<LlmUsage> sink, LlmUsage usage) {
         if (usage.equals(LlmUsage.NONE)) {
             return;
         }
         try {
-            reviews.addUsage(reviewId, usage);
+            sink.accept(usage);
         } catch (RuntimeException e) {
-            log.warn("AI 리뷰 {}의 토큰 수를 기록하지 못했다", reviewId, e);
+            log.warn("{}의 토큰 수를 기록하지 못했다", target, e);
         }
     }
 
