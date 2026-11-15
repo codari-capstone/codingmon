@@ -255,25 +255,28 @@ describe('AnalysisPanel', () => {
     it('429를 받은 뒤 한도가 풀리면 지난 안내를 거두고 남은 횟수를 보여 준다', async () => {
       // 오류 코드만 보면 버튼은 켜졌는데 '다 썼어요'가 남았다(#298 리뷰)
       const user = userEvent.setup()
-      const resetsAt = new Date(Date.now() + 800).toISOString()
+      const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString()
       let calls = 0
       server.use(
         http.get('*/api/users/me/ai-quota', () => {
           calls += 1
           return calls === 1
-            ? HttpResponse.json({ ...QUOTA, used: 19, remaining: 1, resetsAt })
-            : HttpResponse.json({
-                ...QUOTA,
-                resetsAt: new Date(Date.now() + 86_400_000).toISOString(),
-              })
+            ? HttpResponse.json({ ...QUOTA, used: 19, remaining: 1, resetsAt: tomorrow() })
+            : HttpResponse.json({ ...QUOTA, resetsAt: tomorrow() })
         }),
+        // 거절한 순간 곧 풀리는 시각을 싣는다. 렌더 전에 정하면 느린 실행에서 누르기 전에 지나 버린다
         http.post('*/api/submissions/:id/analysis', () =>
           HttpResponse.json(
             {
               status: 429,
               code: 'AI_DAILY_LIMIT_EXCEEDED',
               detail: '오늘 쓸 수 있는 AI 분석·리뷰 20회를 모두 썼어요.',
-              quota: { ...QUOTA, used: 20, remaining: 0, resetsAt },
+              quota: {
+                ...QUOTA,
+                used: 20,
+                remaining: 0,
+                resetsAt: new Date(Date.now() + 500).toISOString(),
+              },
             },
             { status: 429 },
           ),
@@ -295,11 +298,14 @@ describe('AnalysisPanel', () => {
       // 같은 resetsAt을 받으면 타이머가 다시 걸리지 않아 버튼이 꺼진 채 남았다(#298 리뷰)
       vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] })
       try {
-        const resetsAt = new Date(Date.now() + 200).toISOString()
+        // 풀리는 시각은 첫 응답 때 정한다. 렌더 전에 정하면 느린 첫 실행에서 응답이 그 시각 뒤에 와,
+        // '지난 뒤 받은 값'으로 보고 30초를 기다린다
+        let resetsAt = ''
         let calls = 0
         server.use(
           http.get('*/api/users/me/ai-quota', () => {
             calls += 1
+            resetsAt ||= new Date(Date.now() + 200).toISOString()
             // 두 번째까지는 서버가 아직 안 풀었다
             return calls <= 2
               ? HttpResponse.json({ ...QUOTA, used: 20, remaining: 0, resetsAt })
@@ -318,6 +324,49 @@ describe('AnalysisPanel', () => {
         await vi.advanceTimersByTimeAsync(QUOTA_RECHECK_MS)
         await waitFor(() => expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled())
         expect(calls).toBe(3)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('리셋 시각에 다시 받기가 실패해도 조금 뒤 다시 묻는다', async () => {
+      // 실패하면 dataUpdatedAt이 그대로라 타이머가 다시 걸리지 않았다(#298 리뷰)
+      vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        let calls = 0
+        server.use(
+          http.get('*/api/users/me/ai-quota', () => {
+            calls += 1
+            if (calls === 1) {
+              // 풀리는 시각은 첫 응답 때 정한다(위 테스트와 같은 이유)
+              const resetsAt = new Date(Date.now() + 200).toISOString()
+              return HttpResponse.json({ ...QUOTA, used: 20, remaining: 0, resetsAt })
+            }
+            // 리셋 시각의 요청과 앱 기본 재시도 1회가 일시 장애로 실패한다
+            if (calls <= 3) {
+              return HttpResponse.json(
+                { status: 503, title: 'Service Unavailable' },
+                { status: 503 },
+              )
+            }
+            return HttpResponse.json({
+              ...QUOTA,
+              resetsAt: new Date(Date.now() + 86_400_000).toISOString(),
+            })
+          }),
+        )
+        renderResult(WRONG)
+
+        expect(await screen.findByRole('button', { name: 'AI 분석' })).toBeDisabled()
+        await waitFor(() => expect(calls).toBe(2))
+        // 재시도 지연(TanStack 기본 1초)을 실제로 기다리지 않는다. 부하가 걸리면 시간 제한을 넘겼다
+        await vi.advanceTimersByTimeAsync(1_000)
+        await waitFor(() => expect(calls).toBe(3))
+        expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
+
+        await vi.advanceTimersByTimeAsync(QUOTA_RECHECK_MS)
+        await waitFor(() => expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled())
+        expect(calls).toBe(4)
       } finally {
         vi.useRealTimers()
       }

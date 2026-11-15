@@ -49,7 +49,7 @@ export function AiRequest({
   /** 처음 누르는 버튼 이름. 실패한 뒤에는 '다시 시도'다 */
   label: string
 }) {
-  const { data: quota, dataUpdatedAt } = useQuery(aiQuotaQuery())
+  const { data: quota, dataUpdatedAt, errorUpdatedAt } = useQuery(aiQuotaQuery())
 
   const abandonedToday =
     result?.status === 'FAILED' &&
@@ -69,22 +69,23 @@ export function AiRequest({
   const showError = request.isError && !(limitError && !outOfQuota)
 
   // 한도가 풀리는 시각에 다시 받는다. 화면을 켜 둔 채 지나면 꺼진 버튼과 지난 시각 안내가 남는다(#272 리뷰).
-  // 받을 때마다 다시 건다. 시계가 빨라 일찍 울려 같은 resetsAt을 받아도 다음 확인이 걸린다(#298 리뷰)
+  // 물을 때마다(받았든 실패했든) 다시 건다. 시계가 빨라 같은 resetsAt을 받아도, 다시 받기가 실패해도
+  // 다음 확인이 걸린다(#298 리뷰)
   const queryClient = useQueryClient()
   const resetsAt = quota?.resetsAt
   useEffect(() => {
     if (!resetsAt) return
     const reset = Date.parse(resetsAt)
-    // 아직 안 지났으면 그 시각에. 지났는데 그 전에 받은 값이면 바로. 지난 뒤 받았는데도 그대로면
-    // 서버는 아직이다(시계 차이) — 간격을 두고 다시 묻는다
-    const delay =
-      reset > Date.now() ? reset - Date.now() : dataUpdatedAt < reset ? 0 : QUOTA_RECHECK_MS
+    // 아직 안 지났으면 그 시각에. 지난 뒤 한 번도 묻지 않았으면 바로. 지난 뒤 물었는데 그대로이거나
+    // 실패했으면 서버가 아직이다(시계 차이·일시 장애) — 간격을 두고 다시 묻는다
+    const lastAsked = Math.max(dataUpdatedAt, errorUpdatedAt)
+    const delay = reset > Date.now() ? reset - Date.now() : lastAsked < reset ? 0 : QUOTA_RECHECK_MS
     const timer = setTimeout(
       () => void queryClient.invalidateQueries({ queryKey: AI_QUOTA_QUERY_KEY }),
       delay,
     )
     return () => clearTimeout(timer)
-  }, [resetsAt, dataUpdatedAt, queryClient])
+  }, [resetsAt, dataUpdatedAt, errorUpdatedAt, queryClient])
 
   return (
     <>
