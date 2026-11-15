@@ -5,6 +5,8 @@ interface ProgressProps {
   /** 기본 100 */
   max?: number
   label?: string
+  /** 보조기기가 읽는 막대 이름. 기본은 label. label이 수치('25%')라 무엇의 막대인지 알 수 없을 때 준다 */
+  name?: string
   /** `value / max` 숫자를 오른쪽에 보인다 */
   showValue?: boolean
   /** 다 채웠으면 success */
@@ -23,6 +25,7 @@ export function Progress({
   value,
   max = 100,
   label,
+  name = label,
   showValue,
   tone = 'brand',
   className,
@@ -47,7 +50,7 @@ export function Progress({
         aria-valuemin={0}
         aria-valuemax={Math.max(max, 0)}
         aria-valuetext={now === value ? undefined : `${value} / ${max}`}
-        aria-label={label}
+        aria-label={name}
         className="bg-muted dark:bg-background h-2.5 overflow-hidden rounded-full"
       >
         <div

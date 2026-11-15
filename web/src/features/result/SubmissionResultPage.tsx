@@ -201,7 +201,8 @@ function canReview(result: SubmissionResult | undefined): boolean {
   return result?.status === 'COMPLETED' && result.verdict === 'ACCEPTED'
 }
 
-const FILE_NAME = { PYTHON: 'solution.py', CPP: 'main.cpp' } satisfies Record<Language, string>
+// Judge0가 실행하는 파일 이름이다. 에러 원문의 `File "script.py", line N`과 맞아야 줄을 맞춰 본다(#268 리뷰)
+const FILE_NAME = { PYTHON: 'script.py', CPP: 'main.cpp' } satisfies Record<Language, string>
 
 /** 판정 옆 펭귄 장면. 장식이라 alt를 비운다. 채점 중에는 두지 않는다 */
 function Scene({ result }: { result: SubmissionResult }) {

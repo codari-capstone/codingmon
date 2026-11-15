@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 
 import wordmark from '@/assets/brand/codingmon_wordmark.png'
 import hero from '@/assets/mascot/Mascot/codingmon_hero_large.png'
@@ -103,7 +103,9 @@ const LEAD = 'text-muted-foreground m-0 text-[17px] leading-[1.7] lg:text-lg'
 const CARD = 'bg-card rounded-[20px] border'
 const MOCK =
   'bg-muted relative flex min-h-[320px] items-center justify-center rounded-[32px] px-4 pt-24 pb-12 sm:px-6 lg:min-h-[380px] lg:px-10'
-const FEATURE = 'grid items-center gap-10 lg:grid-cols-2 lg:gap-16'
+// lg 미만도 열을 minmax(0,1fr)로 정한다. 암묵적 auto 열은 코드 예시(pre)의 폭 밑으로 줄지 않아
+// 좁은 화면에서 페이지가 가로로 넘친다(#297 리뷰)
+const FEATURE = 'grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16'
 
 /** 랜딩 (LAND-01~03). 로그인 여부와 관계없이 보여 주고, 시작 버튼만 바뀐다. */
 export function Component() {
@@ -361,6 +363,9 @@ function StartButton({ signedIn }: { signedIn: boolean | undefined }) {
 }
 
 function Hero({ signedIn }: { signedIn: boolean | undefined }) {
+  // 상단 바의 로그인과 같이 지금 주소를 싣는다. 로그인 뒤 같은 곳으로 돌아온다(COM-07, #297 리뷰)
+  const location = useLocation()
+  const from = `${location.pathname}${location.search}`
   return (
     // 남색 무대는 페이지에 닿으므로 둥근 모서리 없이 좌우 끝까지 (디자인 규칙)
     <section className="bg-inverse w-full overflow-hidden">
@@ -393,7 +398,11 @@ function Hero({ signedIn }: { signedIn: boolean | undefined }) {
           {signedIn !== false ? null : (
             <p className="text-inverse-muted m-0 text-sm">
               이미 계정이 있나요?{' '}
-              <Link to="/login" className="text-inverse-foreground font-semibold underline">
+              <Link
+                to="/login"
+                state={{ from }}
+                className="text-inverse-foreground font-semibold underline"
+              >
                 로그인
               </Link>
             </p>

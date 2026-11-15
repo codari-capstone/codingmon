@@ -48,6 +48,8 @@ const COLUMNS: TableColumn<Row>[] = [
         value={concept.solvedCount}
         max={concept.problemCount}
         label={percent(concept.solveRate)}
+        // 보이는 글자는 수치다. 막대 이름까지 '25%'면 무엇의 막대인지 읽히지 않는다(#271 리뷰)
+        name={`${concept.name} 해결률`}
         showValue
         tone={concept.solvedCount === concept.problemCount ? 'success' : 'brand'}
         // 좁은 화면에서 열이 줄어 '100%'와 '2 / 2'가 붙지 않게 한다 (표는 가로 스크롤)

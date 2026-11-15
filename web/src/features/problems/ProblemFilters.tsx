@@ -120,7 +120,8 @@ export function ProblemFilters() {
                 onChange={() => apply({ tag: toggled(params.tag, tag.slug) })}
               />
             ))}
-            {tags.length > CONCEPTS_SHOWN ? (
+            {/* 걸린 개념까지 펴서 숨은 것이 없으면 [더 보기]가 아무것도 펴지 못한다(#265 리뷰) */}
+            {conceptsOpen || visibleTags.length < tags.length ? (
               <Button
                 type="button"
                 variant="ghost"

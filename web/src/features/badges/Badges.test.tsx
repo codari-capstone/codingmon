@@ -344,6 +344,21 @@ describe('BadgeCelebrator (BADGE-03)', () => {
     await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull())
   })
 
+  // 창을 띄운 사이 세션이 끊기면 축하 기록 POST가 401이다. 버리면 상단 바가 로그인인 채 남는다(#294 리뷰)
+  it('축하 기록이 401이면 세션을 버린다', async () => {
+    serveBadges(['STREAK_3'])
+    server.use(
+      http.post('*/api/users/me/badges/:code/celebrated', () =>
+        HttpResponse.json({ status: 401, title: 'Unauthorized' }, { status: 401 }),
+      ),
+    )
+    const { client } = renderAt('/submissions/1')
+    await submitLikeSolvePage(client)
+
+    await screen.findByRole('dialog', { name: "'3일 연속' 배지를 받았어요" })
+    await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull())
+  })
+
   // 첫 조회가 503이면 폴링이 멈춘다(isDeadEnd). 남겨 두면 다시 묻지도, 배지를 보지도 않는다
   it('채점 조회가 포기되면 그 제출을 내려놓고 배지를 한 번 본다', async () => {
     serveBadges(['STREAK_3'])

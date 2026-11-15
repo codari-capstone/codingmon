@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { SubmissionAnalysis } from '@/api/types'
 import { createQueryClient, POLL_INTERVAL_MS } from '@/app/queryClient'
@@ -12,6 +12,7 @@ import { Component as SubmissionResultPage } from '@/features/result/SubmissionR
 import { resetSubmissions } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 import { FAILING_INTERVAL_MS, submissionResultQuery } from '@/features/result/resultQuery'
+import { QUOTA_RECHECK_MS } from './AiRequest'
 import { analysisPollingInterval } from './analysisQuery'
 import { countLines } from './countLines'
 
@@ -195,6 +196,180 @@ describe('AnalysisPanel', () => {
       )
       expect(screen.getAllByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toHaveLength(1)
       expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
+    })
+
+    it('한도 초과가 아닌 실패는 남은 횟수가 0으로 바뀌어도 그 실패를 알린다', async () => {
+      // 서버가 시도를 잡은 뒤 응답이 끊기면, 다시 받은 분석이 remaining 0을 싣는다(#272 리뷰)
+      const user = userEvent.setup()
+      quotaLeft(1)
+      server.use(
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            { status: 503, title: 'Service Unavailable', detail: '잠시 뒤 다시 시도해 주세요.' },
+            { status: 503 },
+          ),
+        ),
+      )
+      const { client } = renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+      await screen.findByRole('alert')
+      client.setQueryData(['ai-quota'], { ...QUOTA, used: 20, remaining: 0 })
+
+      // 캐시가 0으로 바뀐 뒤에도 503 안내(code가 없어 공통 문구)가 그대로다
+      await waitFor(() =>
+        expect(screen.getByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toBeVisible(),
+      )
+      expect(screen.getByRole('alert')).toHaveTextContent(/잠시 후 다시 시도해 주세요/)
+      expect(screen.getByRole('alert')).not.toHaveTextContent(/다 썼어요/)
+    })
+
+    it('한도가 풀리는 시각이 지나면 다시 받아 버튼을 켠다', async () => {
+      // 화면을 켜 둔 채 한도가 풀리면 꺼진 버튼과 지난 시각 안내가 남았다(#272 리뷰)
+      let calls = 0
+      server.use(
+        http.get('*/api/users/me/ai-quota', () => {
+          calls += 1
+          return calls === 1
+            ? HttpResponse.json({
+                ...QUOTA,
+                used: 20,
+                remaining: 0,
+                resetsAt: new Date(Date.now() + 300).toISOString(),
+              })
+            : HttpResponse.json({
+                ...QUOTA,
+                resetsAt: new Date(Date.now() + 86_400_000).toISOString(),
+              })
+        }),
+      )
+      renderResult(WRONG)
+
+      expect(await screen.findByRole('button', { name: 'AI 분석' })).toBeDisabled()
+      await waitFor(() => expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled(), {
+        timeout: 3000,
+      })
+      expect(screen.getByText('오늘 남은 AI 분석·리뷰 20 / 20회')).toBeInTheDocument()
+    })
+
+    it('429를 받은 뒤 한도가 풀리면 지난 안내를 거두고 남은 횟수를 보여 준다', async () => {
+      // 오류 코드만 보면 버튼은 켜졌는데 '다 썼어요'가 남았다(#298 리뷰)
+      const user = userEvent.setup()
+      const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString()
+      let calls = 0
+      server.use(
+        http.get('*/api/users/me/ai-quota', () => {
+          calls += 1
+          return calls === 1
+            ? HttpResponse.json({ ...QUOTA, used: 19, remaining: 1, resetsAt: tomorrow() })
+            : HttpResponse.json({ ...QUOTA, resetsAt: tomorrow() })
+        }),
+        // 거절한 순간 곧 풀리는 시각을 싣는다. 렌더 전에 정하면 느린 실행에서 누르기 전에 지나 버린다
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            {
+              status: 429,
+              code: 'AI_DAILY_LIMIT_EXCEEDED',
+              detail: '오늘 쓸 수 있는 AI 분석·리뷰 20회를 모두 썼어요.',
+              quota: {
+                ...QUOTA,
+                used: 20,
+                remaining: 0,
+                resetsAt: new Date(Date.now() + 500).toISOString(),
+              },
+            },
+            { status: 429 },
+          ),
+        ),
+      )
+      renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(/다 썼어요/)
+
+      expect(
+        await screen.findByText('오늘 남은 AI 분석·리뷰 20 / 20회', {}, { timeout: 3000 }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled()
+    })
+
+    it('시계가 빨라 일찍 다시 받았는데 그대로면 조금 뒤 다시 묻는다', async () => {
+      // 같은 resetsAt을 받으면 타이머가 다시 걸리지 않아 버튼이 꺼진 채 남았다(#298 리뷰)
+      vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        // 풀리는 시각은 첫 응답 때 정한다. 렌더 전에 정하면 느린 첫 실행에서 응답이 그 시각 뒤에 와,
+        // '지난 뒤 받은 값'으로 보고 30초를 기다린다
+        let resetsAt = ''
+        let calls = 0
+        server.use(
+          http.get('*/api/users/me/ai-quota', () => {
+            calls += 1
+            resetsAt ||= new Date(Date.now() + 200).toISOString()
+            // 두 번째까지는 서버가 아직 안 풀었다
+            return calls <= 2
+              ? HttpResponse.json({ ...QUOTA, used: 20, remaining: 0, resetsAt })
+              : HttpResponse.json({
+                  ...QUOTA,
+                  resetsAt: new Date(Date.now() + 86_400_000).toISOString(),
+                })
+          }),
+        )
+        renderResult(WRONG)
+
+        expect(await screen.findByRole('button', { name: 'AI 분석' })).toBeDisabled()
+        await waitFor(() => expect(calls).toBe(2), { timeout: 3000 })
+        expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
+
+        await vi.advanceTimersByTimeAsync(QUOTA_RECHECK_MS)
+        await waitFor(() => expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled())
+        expect(calls).toBe(3)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('리셋 시각에 다시 받기가 실패해도 조금 뒤 다시 묻는다', async () => {
+      // 실패하면 dataUpdatedAt이 그대로라 타이머가 다시 걸리지 않았다(#298 리뷰)
+      vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        let calls = 0
+        server.use(
+          http.get('*/api/users/me/ai-quota', () => {
+            calls += 1
+            if (calls === 1) {
+              // 풀리는 시각은 첫 응답 때 정한다(위 테스트와 같은 이유)
+              const resetsAt = new Date(Date.now() + 200).toISOString()
+              return HttpResponse.json({ ...QUOTA, used: 20, remaining: 0, resetsAt })
+            }
+            // 리셋 시각의 요청과 앱 기본 재시도 1회가 일시 장애로 실패한다
+            if (calls <= 3) {
+              return HttpResponse.json(
+                { status: 503, title: 'Service Unavailable' },
+                { status: 503 },
+              )
+            }
+            return HttpResponse.json({
+              ...QUOTA,
+              resetsAt: new Date(Date.now() + 86_400_000).toISOString(),
+            })
+          }),
+        )
+        renderResult(WRONG)
+
+        expect(await screen.findByRole('button', { name: 'AI 분석' })).toBeDisabled()
+        await waitFor(() => expect(calls).toBe(2))
+        // 재시도 지연(TanStack 기본 1초)을 실제로 기다리지 않는다. 부하가 걸리면 시간 제한을 넘겼다
+        await vi.advanceTimersByTimeAsync(1_000)
+        await waitFor(() => expect(calls).toBe(3))
+        expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
+
+        await vi.advanceTimersByTimeAsync(QUOTA_RECHECK_MS)
+        await waitFor(() => expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled())
+        expect(calls).toBe(4)
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('마지막 1회로 요청한 분석이 만들다 실패하면 돌아온 횟수로 다시 시도할 수 있다', async () => {
