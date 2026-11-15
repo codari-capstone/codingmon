@@ -4,9 +4,14 @@ import { expect, test } from '@playwright/test'
  * 빌드한 정적 파일이 Nginx와 같은 방식(preview 서버)으로 떠서
  * 라우팅이 동작하는지 확인한다. 시연 흐름 E2E는 담당 이슈에서 추가한다.
  */
-test('루트 주소는 문제 목록으로 보낸다', async ({ page }) => {
+test('루트 주소는 랜딩을 보여 준다 (#244)', async ({ page }) => {
   await page.goto('/')
-  await expect(page).toHaveURL(/\/problems$/)
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('heading', { level: 1, name: /틀린 이유까지/ })).toBeVisible()
+})
+
+test('문제 목록 주소를 바로 열 수 있다', async ({ page }) => {
+  await page.goto('/problems')
   await expect(page.getByRole('heading', { name: '문제 목록' })).toBeVisible()
 })
 
