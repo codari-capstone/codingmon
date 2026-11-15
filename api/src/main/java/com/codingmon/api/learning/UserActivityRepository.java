@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserActivityRepository {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final int DAYS_BEFORE_TODAY = 364;
     // 난이도별 맞힌 수는 공개 중인 버전의 난이도로 센다. 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다.
     // 배지(#248)도 같은 기준으로 센다.
     private static final String SOLVED_FROM = """
@@ -60,11 +59,12 @@ public class UserActivityRepository {
     private record Summary(int solved, int wrong, SolvedByDifficulty byDifficulty) {
     }
 
+    // 잔디는 year의 1월 1일 ~ 12월 31일이다. year 범위는 컨트롤러가 검사한다.
     // 요약과 잔디가 같은 시점을 보게 묶는다.
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    UserActivity find(long userId) {
-        LocalDate to = LocalDate.now(KST);
-        LocalDate from = to.minusDays(DAYS_BEFORE_TODAY);
+    UserActivity find(long userId, int year) {
+        LocalDate from = LocalDate.of(year, 1, 1);
+        LocalDate to = LocalDate.of(year, 12, 31);
         Summary summary = jdbc.sql("""
                 select count(*) filter (where s.solved) as solved,
                        count(*) filter (where not s.solved) as wrong,
