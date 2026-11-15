@@ -95,6 +95,16 @@ describe('ProblemFilters', () => {
       expect(await screen.findByRole('checkbox', { name: '그래프' })).toBeChecked()
       expect(screen.queryByRole('checkbox', { name: '스택' })).not.toBeInTheDocument()
     })
+
+    it('걸린 개념까지 다 보이면 더 보기가 없다', async () => {
+      // 6개 중 6번째가 걸려 있으면 접혀 있어도 6개가 다 보인다. 눌러도 펼 것이 없다
+      server.use(http.get('*/api/concept-tags', () => HttpResponse.json(SEVEN.slice(0, 6))))
+      renderFilters('/problems?tag=t5')
+
+      expect(await screen.findByRole('checkbox', { name: '스택' })).toBeChecked()
+      expect(conceptBoxes()).toHaveLength(6)
+      expect(screen.queryByRole('button', { name: '더 보기' })).not.toBeInTheDocument()
+    })
   })
 
   it('개념이 5개 이하면 더 보기가 없다', async () => {

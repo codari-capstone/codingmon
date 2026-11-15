@@ -20,16 +20,22 @@ function renderLanding({ signedIn = false, loading = false } = {}) {
     isAuthenticated: signedIn,
     isLoading: loading,
   })
-  const router = createMemoryRouter([{ path: '/', Component: LandingPage }], {
-    initialEntries: ['/'],
-  })
+  const router = createMemoryRouter(
+    [
+      { path: '/', Component: LandingPage },
+      { path: '/login', element: <h1>로그인 화면</h1> },
+    ],
+    { initialEntries: ['/'] },
+  )
   const client = createQueryClient()
+  // 실패 분기를 재시도 지연(약 1초) 없이 본다(#297 리뷰)
+  client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, retry: false } })
   render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
-  return client
+  return { client, router }
 }
 
 /** 미리보기가 문제 목록 화면과 함께 쓰는 캐시 키 */
@@ -47,6 +53,14 @@ describe('LandingPage (LAND-01~03)', () => {
     expect(screen.queryByRole('link', { name: '문제 풀러 가기' })).not.toBeInTheDocument()
   })
 
+  it('히어로의 로그인은 상단 바처럼 지금 주소를 실어 로그인 뒤 돌아오게 한다', async () => {
+    const { router } = renderLanding()
+
+    await userEvent.click(screen.getByRole('link', { name: '로그인' }))
+    expect(router.state.location.pathname).toBe('/login')
+    expect(router.state.location.state).toEqual({ from: '/' })
+  })
+
   it('로그인한 사용자에게는 가입 대신 문제 목록 버튼을 보여 준다', () => {
     renderLanding({ signedIn: true })
 
@@ -58,7 +72,7 @@ describe('LandingPage (LAND-01~03)', () => {
   })
 
   it('세션을 아직 모르면 가입·로그인으로 보내지 않고, 문제 목록도 받지 않는다', () => {
-    const client = renderLanding({ loading: true })
+    const { client } = renderLanding({ loading: true })
 
     // 토큰이 복원되기 전에 받으면 풀이 상태 없는 응답이 문제 목록 화면과 같은 키로 남는다
     expect(client.getQueryState(PREVIEW_KEY)?.fetchStatus ?? 'idle').toBe('idle')
@@ -90,13 +104,11 @@ describe('LandingPage (LAND-01~03)', () => {
 
   it('문제를 불러오지 못하면 미리보기 구역을 숨긴다', async () => {
     server.use(http.get('*/api/problems', () => HttpResponse.json({}, { status: 500 })))
-    const client = renderLanding()
+    const { client } = renderLanding()
 
-    // 앱 기본값이 한 번 더 묻는다(retry: 1). 쿼리가 오류로 끝난 뒤에 본다 — 로딩 중에도
-    // 구역은 없으니, 그 전에 보면 오류 분기를 확인하지 못한다. FAQ는 그대로 있다
-    await waitFor(() => expect(client.getQueryState(PREVIEW_KEY)?.status).toBe('error'), {
-      timeout: 4000,
-    })
+    // 쿼리가 오류로 끝난 뒤에 본다 — 로딩 중에도 구역은 없으니, 그 전에 보면 오류 분기를
+    // 확인하지 못한다. FAQ는 그대로 있다
+    await waitFor(() => expect(client.getQueryState(PREVIEW_KEY)?.status).toBe('error'))
     expect(
       screen.queryByRole('region', { name: '가볍게 하나 풀어 볼까요?' }),
     ).not.toBeInTheDocument()

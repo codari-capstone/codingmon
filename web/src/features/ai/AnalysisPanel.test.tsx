@@ -197,6 +197,60 @@ describe('AnalysisPanel', () => {
       expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
     })
 
+    it('한도 초과가 아닌 실패는 남은 횟수가 0으로 바뀌어도 그 실패를 알린다', async () => {
+      // 서버가 시도를 잡은 뒤 응답이 끊기면, 다시 받은 분석이 remaining 0을 싣는다(#272 리뷰)
+      const user = userEvent.setup()
+      quotaLeft(1)
+      server.use(
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            { status: 503, title: 'Service Unavailable', detail: '잠시 뒤 다시 시도해 주세요.' },
+            { status: 503 },
+          ),
+        ),
+      )
+      const { client } = renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+      await screen.findByRole('alert')
+      client.setQueryData(['ai-quota'], { ...QUOTA, used: 20, remaining: 0 })
+
+      // 캐시가 0으로 바뀐 뒤에도 503 안내(code가 없어 공통 문구)가 그대로다
+      await waitFor(() =>
+        expect(screen.getByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toBeVisible(),
+      )
+      expect(screen.getByRole('alert')).toHaveTextContent(/잠시 후 다시 시도해 주세요/)
+      expect(screen.getByRole('alert')).not.toHaveTextContent(/다 썼어요/)
+    })
+
+    it('한도가 풀리는 시각이 지나면 다시 받아 버튼을 켠다', async () => {
+      // 화면을 켜 둔 채 한도가 풀리면 꺼진 버튼과 지난 시각 안내가 남았다(#272 리뷰)
+      let calls = 0
+      server.use(
+        http.get('*/api/users/me/ai-quota', () => {
+          calls += 1
+          return calls === 1
+            ? HttpResponse.json({
+                ...QUOTA,
+                used: 20,
+                remaining: 0,
+                resetsAt: new Date(Date.now() + 300).toISOString(),
+              })
+            : HttpResponse.json({
+                ...QUOTA,
+                resetsAt: new Date(Date.now() + 86_400_000).toISOString(),
+              })
+        }),
+      )
+      renderResult(WRONG)
+
+      expect(await screen.findByRole('button', { name: 'AI 분석' })).toBeDisabled()
+      await waitFor(() => expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled(), {
+        timeout: 3000,
+      })
+      expect(screen.getByText('오늘 남은 AI 분석·리뷰 20 / 20회')).toBeInTheDocument()
+    })
+
     it('마지막 1회로 요청한 분석이 만들다 실패하면 돌아온 횟수로 다시 시도할 수 있다', async () => {
       // 계약: FAILED는 세지 않는다. 요청 응답의 remaining 0이 남으면 [다시 시도]가 꺼졌다(#272 리뷰)
       const user = userEvent.setup()

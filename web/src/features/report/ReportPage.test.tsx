@@ -58,6 +58,8 @@ describe('ReportPage (REP-01·02)', () => {
 
     const dp = within(rows[0]).getAllByRole('cell')
     expect(dp[1]).toHaveTextContent('25%1 / 4')
+    // 막대 이름은 수치가 아니라 무엇의 막대인지다(#271 리뷰)
+    expect(within(dp[1]).getByRole('progressbar')).toHaveAccessibleName('동적 계획법 해결률')
     expect(dp[2]).toHaveTextContent('2.5')
     expect(dp[3]).toHaveTextContent('4.5')
     expect(dp[4]).toHaveTextContent('0.8')

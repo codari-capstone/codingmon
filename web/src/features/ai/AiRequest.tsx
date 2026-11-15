@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 
 import type { SubmissionAnalysis } from '@/api/types'
 import { Button } from '@/components/ui/button'
-import { problemMessage } from '@/features/auth/problemCode'
-import { aiQuotaQuery } from './analysisQuery'
+import { problemCode, problemMessage } from '@/features/auth/problemCode'
+import { AI_QUOTA_QUERY_KEY, aiQuotaQuery } from './analysisQuery'
 
 /** 분석·리뷰가 같은 모양으로 주는 상태 (계약 `SubmissionAnalysis`·`SubmissionCodeReview`). */
 interface AiResult {
@@ -56,8 +57,25 @@ export function AiRequest({
   const exhausted = quota
     ? `오늘 AI 분석·리뷰 ${quota.limit}회를 다 썼어요. ${RESETS_AT.format(new Date(quota.resetsAt))}에 다시 쓸 수 있어요.`
     : ''
-  // 누른 뒤 한도 초과를 받았으면 그 안내를 alert로 읽힌다. 아래 줄은 live region이 아니라 소리 없이 바뀐다
-  const limitHit = request.isError && outOfQuota
+  // 누른 뒤 한도 초과를 받았으면 그 안내를 alert로 읽힌다. 아래 줄은 live region이 아니라 소리 없이 바뀐다.
+  // 캐시의 remaining이 아니라 오류 코드로 가린다 — 네트워크 오류 뒤 다시 받은 remaining 0을
+  // 한도 초과로 읽으면 다른 실패가 '다 썼어요'로 바뀐다(#272 리뷰)
+  const limitHit =
+    request.isError &&
+    problemCode(request.error) === 'AI_DAILY_LIMIT_EXCEEDED' &&
+    quota !== undefined
+
+  // 한도가 풀리는 시각에 다시 받는다. 화면을 켜 둔 채 지나면 꺼진 버튼과 지난 시각 안내가 남는다(#272 리뷰)
+  const queryClient = useQueryClient()
+  const resetsAt = quota?.resetsAt
+  useEffect(() => {
+    if (!resetsAt) return
+    const timer = setTimeout(
+      () => void queryClient.invalidateQueries({ queryKey: AI_QUOTA_QUERY_KEY }),
+      Math.max(Date.parse(resetsAt) - Date.now(), 0),
+    )
+    return () => clearTimeout(timer)
+  }, [resetsAt, queryClient])
 
   return (
     <>

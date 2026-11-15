@@ -130,9 +130,13 @@ function Celebrator() {
 
   const current = queue[0]
   useEffect(() => {
-    // 실패하면 다음 채점이 끝날 때 다시 뜬다(이 세션에서는 queued가 막는다)
-    if (current) markCelebrated(current).catch(() => {})
-  }, [current])
+    // 실패하면 다음 채점이 끝날 때 다시 뜬다(이 세션에서는 queued가 막는다).
+    // 세션이 끊겼으면 배지 조회 실패와 같이 로그인 화면으로 보낸다(#294 리뷰)
+    if (current)
+      markCelebrated(current).catch((error: unknown) => {
+        if (alive.current) forgetSessionIfUnauthorized(queryClient, error)
+      })
+  }, [current, queryClient])
 
   // 닫히는 동안에도 마지막 배지를 그린다. 렌더 중 상태 갱신으로 바뀐 때를 잡는다(Modal과 같은 방식)
   const [shown, setShown] = useState(current)
