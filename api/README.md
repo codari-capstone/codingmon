@@ -14,6 +14,8 @@ API, 채점 처리기, AI 처리기, 리포트 계산을 패키지로 나눈 하
 만들지 않고 429 `JUDGE_QUEUE_FULL`을 준다. 끝난 작업은 바로 몫을 돌려준다. 관리자 정답 검증은 이 접수 상한의 대상이 아니다.
 접수 트랜잭션은 PostgreSQL advisory lock으로 직렬화하므로 여러 연결에서 동시에 요청해도 같은 상한을 지킨다.
 `JUDGE0_URL` 없이 띄운 서버는 채점 처리기가 돌지 않아 작업이 끝나지 않으므로 이 상한을 적용하지 않는다.
+접수 테스트(`SubmissionAdmissionTest`)는 DB 전체의 미완료 수를 세므로 `JUDGE0_URL`이 있으면 건너뛰고(다른 테스트 컨텍스트의
+처리기가 행을 가져간다), 테스트 DB에 학습자의 미완료 제출이 남아 있으면 이유를 밝히고 실패한다.
 
 ```bash
 DB_URL=... DB_USERNAME=... DB_PASSWORD=... JUDGE0_URL=http://127.0.0.1:2358 JUDGE0_AUTHN_TOKEN=... ./gradlew test

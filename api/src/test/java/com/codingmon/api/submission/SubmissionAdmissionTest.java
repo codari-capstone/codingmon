@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -30,6 +31,9 @@ import com.codingmon.api.Language;
 
 // 실제 PostgreSQL의 서로 다른 트랜잭션으로 접수 상한을 경쟁시킨다. Judge0는 호출하지 않는다.
 // 채점 처리기는 끄고(app.judge0.url 비움) 상한만 켠다.
+// 전체 상한은 DB 전체의 미완료 작업을 세므로 다른 처리기가 돌면 결과가 흔들린다. JUDGE0_URL이 있으면 캐시에 남은
+// 다른 테스트 컨텍스트의 처리기가 5초마다 QUEUED를 가져가 끝내 버려 건너뛴다.
+@DisabledIfEnvironmentVariable(named = "JUDGE0_URL", matches = ".+")
 @SpringBootTest(properties = { "app.judge0.url=", "app.judge.pending-limit-enabled=true", "app.judge.user-pending-limit=3",
         "app.judge.pending-limit=4" })
 class SubmissionAdmissionTest {
@@ -43,6 +47,10 @@ class SubmissionAdmissionTest {
 
     @BeforeEach
     void setUp() {
+        // 남아 있는 학습자 미완료 작업이 있으면 접수 개수가 달라진다. 엉뚱한 개수 대신 이유를 밝히고 멈춘다.
+        assertThat(jdbc.sql("select count(*) from submissions where submission_kind in ('SUBMIT', 'SAMPLE_RUN')"
+                + " and job_status in ('QUEUED', 'COMPILING', 'RUNNING')").query(Integer.class).single())
+                .as("테스트 DB에 학습자의 미완료 제출이 남아 있으면 전체 상한 결과가 달라진다").isZero();
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(SecurityMockMvcConfigurers.springSecurity()).build();
         String suffix = UUID.randomUUID().toString();
         for (int i = 0; i < 3; i++) {
@@ -61,6 +69,9 @@ class SubmissionAdmissionTest {
 
     @AfterEach
     void cleanUp() {
+        if (users.isEmpty()) {
+            return;
+        }
         jdbc.sql("delete from users where id in (:ids)").param("ids", users).update();
         jdbc.sql("delete from problem_versions where id = :id").param("id", versionId).update();
         jdbc.sql("delete from problems where id = :id").param("id", problemId).update();
