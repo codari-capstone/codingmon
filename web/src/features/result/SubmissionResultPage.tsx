@@ -178,7 +178,10 @@ function SubmittedCode({ result, suspect }: { result: SubmissionResult; suspect:
         highlight={suspect}
       />
       {suspect.length > 0 ? (
-        <p className="text-muted-foreground text-[13px]">빨간 줄은 AI가 의심한 줄이에요.</p>
+        // CodeBlock은 의심 줄을 빨강이 아니라 노란 막대와 옅은 바탕으로 칠한다(highlight 토큰)
+        <p className="text-muted-foreground text-[13px]">
+          노란색으로 표시한 줄은 AI가 의심한 줄이에요.
+        </p>
       ) : null}
     </section>
   )
