@@ -67,13 +67,15 @@ function Celebrator() {
   const [queue, setQueue] = useState<BadgeCode[]>([])
 
   // 로그아웃하면 이 인스턴스는 사라진다. 그 뒤 도착한 앞사람의 응답이 다음 사람의 세션을 건드리지 않게 한다
+  // setup에서 다시 켠다. StrictMode 개발 모드는 마운트 직후 setup→cleanup→setup을 돌고 ref는 그대로라,
+  // cleanup에서만 끄면 그 뒤로 응답을 늘 버린다(#294 3차 리뷰)
   const alive = useRef(true)
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    alive.current = true
+    return () => {
       alive.current = false
-    },
-    [],
-  )
+    }
+  }, [])
 
   // 축하 창이 낸 조회의 순번. 둘이 거꾸로 도착하면 늦게 낸 쪽만 캐시에 넣는다
   const latest = useRef(0)

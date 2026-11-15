@@ -13,14 +13,15 @@ import type { BadgeCode, UserBadge } from '@/api/types'
 export function badgesQuery() {
   return queryOptions({
     queryKey: ['badges'] as const,
-    queryFn: fetchMyBadges,
+    // signal을 넘겨야 축하 창의 cancelQueries가 배지 화면의 요청을 실제로 끊는다(#294 3차 리뷰, analysisQuery와 같음)
+    queryFn: ({ signal }) => fetchMyBadges(signal),
     staleTime: 0,
   })
 }
 
 /** 캐시를 거치지 않는 조회. 축하 창은 진행 중인 요청을 함께 쓰면 안 돼서 이걸 직접 부른다(BadgeCelebrator). */
-export async function fetchMyBadges(): Promise<UserBadge[]> {
-  const result = await api.GET('/api/users/me/badges')
+export async function fetchMyBadges(signal?: AbortSignal): Promise<UserBadge[]> {
+  const result = await api.GET('/api/users/me/badges', { signal })
   if (result.data === undefined) fail(result)
   return result.data.badges
 }

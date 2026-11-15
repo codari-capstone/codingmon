@@ -3,6 +3,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, Link, Outlet, RouterProvider } from 'react-router'
+import { StrictMode } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { BadgeCode } from '@/api/types'
@@ -47,7 +48,7 @@ function serveBadges(waiting: BadgeCode[] = []) {
   return celebrated
 }
 
-function renderAt(url: string, client: QueryClient = createQueryClient()) {
+function renderAt(url: string, client: QueryClient = createQueryClient(), { strict = false } = {}) {
   client.setQueryData(ME_QUERY_KEY, USER)
   const router = createMemoryRouter(
     [
@@ -78,11 +79,13 @@ function renderAt(url: string, client: QueryClient = createQueryClient()) {
     ],
     { initialEntries: [url] },
   )
-  render(
+  const app = (
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  // main.tsx처럼 StrictMode로 감싸면 effect가 setup→cleanup→setup을 돈다(개발 모드)
+  render(strict ? <StrictMode>{app}</StrictMode> : app)
   return { client, router }
 }
 
@@ -181,6 +184,32 @@ describe('BadgeCelebrator (BADGE-03)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
+  // 개발 모드(main.tsx의 StrictMode)에서도 뜬다. cleanup에서 끈 ref를 setup에서 다시 켜지 않으면 응답을 늘 버린다
+  it('StrictMode에서도 축하 창을 띄운다', async () => {
+    serveBadges(['STREAK_3'])
+    const { client } = renderAt('/submissions/1', createQueryClient(), { strict: true })
+    await submitLikeSolvePage(client)
+
+    expect(
+      await screen.findByRole('dialog', { name: "'3일 연속' 배지를 받았어요" }),
+    ).toBeInTheDocument()
+  })
+
+  it('StrictMode에서도 배지 조회가 401이면 세션을 버린다', async () => {
+    server.use(
+      http.get('*/api/submissions/:id', () =>
+        HttpResponse.json({ status: 401, title: 'Unauthorized' }, { status: 401 }),
+      ),
+      http.get('*/api/users/me/badges', () =>
+        HttpResponse.json({ status: 401, title: 'Unauthorized' }, { status: 401 }),
+      ),
+    )
+    const { client } = renderAt('/submissions/1', createQueryClient(), { strict: true })
+    await submitLikeSolvePage(client)
+
+    await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull())
+  })
+
   it('축하 전 배지가 없으면 채점이 끝나도 띄우지 않는다', async () => {
     let asked = 0
     server.use(
@@ -227,13 +256,15 @@ describe('BadgeCelebrator (BADGE-03)', () => {
   it('진행 중인 배지 조회를 함께 쓰지 않고, 늦게 온 옛 응답이 화면을 덮지 않는다', async () => {
     let calls = 0
     let heldDone = false
+    let firstAborted = false
     let release = () => {}
     const held = new Promise<void>((resolve) => (release = resolve))
     server.use(
-      http.get('*/api/users/me/badges', async () => {
+      http.get('*/api/users/me/badges', async ({ request }) => {
         calls++
         if (calls === 1) {
           await held
+          firstAborted = request.signal.aborted
           heldDone = true
           return HttpResponse.json({ badges: badgesFor(1) })
         }
@@ -265,6 +296,8 @@ describe('BadgeCelebrator (BADGE-03)', () => {
       .getAllByRole('listitem')
       .find((li) => li.textContent?.startsWith('한 번에 맞힘'))
     expect(card).toHaveTextContent('2026.11.15 획득')
+    // 결과만 버리지 않고 배지 화면의 옛 요청을 실제로 끊는다(queryFn이 signal을 넘김)
+    expect(firstAborted).toBe(true)
   })
 
   it('로그아웃 뒤 도착한 배지 응답은 캐시에 넣지 않는다', async () => {
