@@ -12,16 +12,23 @@ function shift(date: string, days: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10)
 }
 
+/** 한국 시각으로 올해 (계약: `year`를 빼면 서버가 이 해로 정한다). */
+export function kstYear(now = Date.now()): number {
+  return Number(kstToday(now).slice(0, 4))
+}
+
 /**
  * 풀이 요약·잔디 목 데이터 (MY-05). 날짜는 오늘에 맞춰 만든다 — 고정 날짜를 두면 며칠 뒤
- * 잔디가 비어 보인다.
+ * 잔디가 비어 보인다. 범위는 계약처럼 `year`(빼면 올해)의 1월 1일 ~ 12월 31일이고, 제출은
+ * 오늘까지 120일 중 그 해에 든 날만 담는다.
  *
  * 1번(코다리)은 맞힌 문제 7개로 학습 통계 fixture와 수를 맞추고, 진하기 다섯 단계가 모두
  * 보이게 제출 수를 돌린다. 그 밖의 사용자(관리자)는 제출이 없는 화면을 보여 준다.
  */
-export function activityFor(userId: number, now = Date.now()): UserActivity {
-  const to = kstToday(now)
-  const from = shift(to, -364)
+export function activityFor(userId: number, now = Date.now(), year = kstYear(now)): UserActivity {
+  const today = kstToday(now)
+  const from = `${year}-01-01`
+  const to = `${year}-12-31`
   if (userId !== 1) {
     return {
       solvedCount: 0,
@@ -36,9 +43,9 @@ export function activityFor(userId: number, now = Date.now()): UserActivity {
 
   const COUNTS = [1, 3, 0, 5, 0, 0, 7, 2, 0, 1, 0, 4]
   const days = Array.from({ length: 120 }, (_, i) => ({
-    date: shift(to, -119 + i),
+    date: shift(today, -119 + i),
     count: COUNTS[i % COUNTS.length]!,
-  })).filter((day) => day.count > 0)
+  })).filter((day) => day.count > 0 && day.date >= from && day.date <= to)
 
   return {
     solvedCount: 7,

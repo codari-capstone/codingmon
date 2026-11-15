@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
@@ -7,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import type { CurrentUser } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
-import { activityFor } from '@/mocks/fixtures/activity'
+import { activityFor, kstYear } from '@/mocks/fixtures/activity'
 import { server } from '@/mocks/server'
 import { Component as MyPage } from './MyPage'
 
@@ -40,6 +41,11 @@ function renderMyPage(user: CurrentUser, activity: number | 'error' = user.id) {
         : HttpResponse.json(activityFor(activity)),
     ),
   )
+  mountMyPage(user)
+}
+
+/** 활동 응답을 테스트가 직접 정했을 때 화면만 그린다. */
+function mountMyPage(user: CurrentUser) {
   const client = createQueryClient()
   client.setQueryData(ME_QUERY_KEY, user)
   const router = createMemoryRouter([{ path: '/me', Component: MyPage }], {
@@ -128,7 +134,9 @@ describe('MyPage 계정 정보 — 서버가 새 필드를 아직 보내지 않�
 })
 
 describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
-  it('최근 1년에는 제출이 없지만 전에 푼 문제가 있으면 기간을 밝혀 안내한다', async () => {
+  const YEAR = kstYear()
+
+  it('고른 해에는 제출이 없지만 전에 푼 문제가 있으면 그 해를 밝혀 안내한다', async () => {
     server.use(
       http.get('*/api/users/me/activity', () =>
         HttpResponse.json({ ...activityFor(1), days: [], totalActiveDays: 0 }),
@@ -145,7 +153,7 @@ describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
       </QueryClientProvider>,
     )
 
-    expect(await screen.findByText('최근 1년 동안 제출한 날이 없어요.')).toBeInTheDocument()
+    expect(await screen.findByText(`${YEAR}년에는 제출한 날이 없어요.`)).toBeInTheDocument()
     expect(screen.queryByText('아직 제출한 문제가 없어요.')).not.toBeInTheDocument()
     expect(statValue(document.body, '맞힌 문제')).toHaveTextContent('7')
   })
@@ -158,19 +166,23 @@ describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
     await screen.findByText('맞힌 문제')
     expect(statValue(document.body, '맞힌 문제')).toHaveTextContent('7')
     expect(statValue(document.body, '틀린 문제')).toHaveTextContent('3')
-    expect(statValue(document.body, '활동한 날')).toHaveTextContent(
+    // 활동한 날만 고른 해 안에서 센다(계약). 라벨에 해를 붙인다
+    expect(statValue(document.body, `${YEAR}년 활동한 날`)).toHaveTextContent(
       String(activity.totalActiveDays),
     )
 
     const grass = screen.getByRole('region', { name: '활동 기록' })
-    expect(
-      within(grass).getByText(new RegExp(`최근 12개월 중.*총 ${activity.totalActiveDays}일`)),
-    ).toBeInTheDocument()
+    expect(grass).toHaveTextContent(`총 ${activity.totalActiveDays}일`)
+    expect(grass).not.toHaveTextContent(/최근|개월/)
     expect(
       within(grass).getByRole('img', {
-        name: `최근 1년 동안 ${activity.totalActiveDays}일 제출했어요`,
+        name: `${YEAR}년에 ${activity.totalActiveDays}일 제출했어요`,
       }),
     ).toBeInTheDocument()
+    // 해가 하나뿐이어도 드롭다운이 있다. 서비스를 시작한 해(2026)부터 올해까지다
+    const select = within(grass).getByRole('combobox', { name: '잔디 연도' })
+    expect(select).toHaveValue(String(YEAR))
+    expect(within(select).getAllByRole('option').at(-1)).toHaveTextContent('2026년')
 
     // 난이도 막대의 기준은 맞힌 문제 전체(7)다
     const byDifficulty = screen.getByRole('region', { name: '난이도별 맞힌 문제' })
@@ -193,7 +205,47 @@ describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
     renderMyPage(EMAIL_USER, 2)
     expect(await screen.findByText('아직 제출한 문제가 없어요.')).toBeInTheDocument()
     expect(statValue(document.body, '맞힌 문제')).toHaveTextContent('0')
-    expect(screen.getByRole('img', { name: '최근 1년 동안 0일 제출했어요' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: `${YEAR}년에 0일 제출했어요` })).toBeInTheDocument()
+  })
+
+  it('해를 고르면 그 해의 잔디를 받고, 마지막 해는 year 없이 받은 응답의 해다', async () => {
+    // 서버의 올해가 2028이라고 둔다. 브라우저 시각이 아니라 응답의 from으로 목록을 만드는지 본다
+    const SERVER_YEAR = 2028
+    const asked: (string | null)[] = []
+    server.use(
+      http.get('*/api/users/me/activity', ({ request }) => {
+        const year = new URL(request.url).searchParams.get('year')
+        asked.push(year)
+        return HttpResponse.json(activityFor(1, Date.now(), Number(year ?? SERVER_YEAR)))
+      }),
+    )
+    const user = userEvent.setup()
+    mountMyPage(EMAIL_USER)
+
+    const select = await screen.findByRole('combobox', { name: '잔디 연도' })
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['2028년', '2027년', '2026년'])
+    expect(asked).toEqual([null])
+
+    await user.selectOptions(select, '2026')
+    const picked = activityFor(1, Date.now(), 2026)
+    expect(
+      await screen.findByRole('img', { name: `2026년에 ${picked.totalActiveDays}일 제출했어요` }),
+    ).toBeInTheDocument()
+    expect(statValue(document.body, '2026년 활동한 날')).toHaveTextContent(
+      String(picked.totalActiveDays),
+    )
+    expect(asked).toContain('2026')
+    // 고르는 동안 드롭다운이 사라지지 않아 포커스를 잃지 않는다
+    expect(screen.getByRole('combobox', { name: '잔디 연도' })).toBe(select)
+
+    // 마지막 해로 돌아가면 year 없이 받은 캐시를 다시 쓴다
+    await user.selectOptions(select, '2028')
+    expect(await screen.findByRole('img', { name: '2028년에 0일 제출했어요' })).toBeInTheDocument()
+    expect(asked.filter((year) => year === '2028')).toEqual([])
   })
 
   it('불러오지 못하면 오류와 다시 시도를 보여 준다', async () => {

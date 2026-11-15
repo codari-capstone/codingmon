@@ -40,7 +40,7 @@ import {
 } from './fixtures/adminProblems'
 import { pastSubmission, problemHistories, submissionsOf } from './fixtures/history'
 import { learningReportOf, learningStatsReady } from './fixtures/learning'
-import { activityFor, streakFor } from './fixtures/activity'
+import { activityFor, kstYear, streakFor } from './fixtures/activity'
 import { BADGE_CODES, badgesFor, celebrate } from './fixtures/badges'
 import { problemDetails } from './fixtures/problemDetails'
 import { conceptTags, problems } from './fixtures/problems'
@@ -1258,10 +1258,20 @@ export const handlers: RequestHandler[] = [
     })
   }),
 
-  /** 풀이 요약·잔디 (MY-05). 사용자마다 다르다(1번은 기록 있음, 그 밖은 제출 없음). */
+  /**
+   * 풀이 요약·잔디 (MY-05). 사용자마다 다르다(1번은 기록 있음, 그 밖은 제출 없음).
+   * `year`는 2026 ~ 올해(한국 시각)의 정수만 받고, 그 밖은 code 없는 400이다(계약, #296).
+   */
   http.get('*/api/users/me/activity', ({ request }) => {
     const id = userIdFromToken(bearer(request))
-    return id === null ? unauthorized() : HttpResponse.json(activityFor(id))
+    if (id === null) return unauthorized()
+    const raw = new URL(request.url).searchParams.get('year')
+    if (raw === null) return HttpResponse.json(activityFor(id))
+    const year = Number(raw)
+    if (!/^\d+$/.test(raw) || year < 2026 || year > kstYear()) {
+      return badRequest('고를 수 없는 연도다')
+    }
+    return HttpResponse.json(activityFor(id, Date.now(), year))
   }),
 
   /** 연속 학습 (STREAK-01·02). 1번은 어제까지 3일, 그 밖은 제출 없음. */

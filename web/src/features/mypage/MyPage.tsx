@@ -1,5 +1,5 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import type { CurrentUser, UserActivity } from '@/api/types'
@@ -9,14 +9,15 @@ import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { Select } from '@/components/ui/select'
 import { StatCard } from '@/components/ui/stat-card'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { cn } from '@/lib/utils'
-import { activeMonths, buildWeeks, grassLevel, monthLabels } from './grass'
+import { buildWeeks, grassLevel, monthLabels } from './grass'
 import { MY_CARD as CARD, MyLayout } from './MyLayout'
-import { activityQuery } from './myPageQuery'
+import { activityQuery, FIRST_ACTIVITY_YEAR } from './myPageQuery'
 
 const LOGIN_METHOD_LABEL: Record<CurrentUser['loginMethod'], string> = {
   EMAIL: '이메일',
@@ -58,14 +59,22 @@ function AccountInfo({ user }: { user: CurrentUser }) {
   )
 }
 
-/** 맞힌·틀린 수와 활동한 날 (MY-05). 가장 자랑할 숫자(활동한 날)만 남색이다(StatCard 규칙). */
+/** 잔디가 보여 주는 해. 응답의 `from`(그 해 1월 1일)에서 읽는다 — 고르는 중에도 그려진 데이터와 맞는다. */
+function yearOf(activity: UserActivity): number {
+  return Number(activity.from.slice(0, 4))
+}
+
+/**
+ * 맞힌·틀린 수와 활동한 날 (MY-05). 가장 자랑할 숫자(활동한 날)만 남색이다(StatCard 규칙).
+ * 맞힌·틀린 수는 전체 기간, 활동한 날은 고른 해 안에서 센다(계약). 그래서 활동한 날에만 해를 붙인다.
+ */
 function Stats({ activity }: { activity: UserActivity }) {
   return (
     <div className="grid gap-4 sm:grid-cols-3">
       <StatCard label="맞힌 문제" value={activity.solvedCount} unit="개" icon="check" />
       <StatCard label="틀린 문제" value={activity.wrongCount} unit="개" icon="x" />
       <StatCard
-        label="활동한 날"
+        label={`${yearOf(activity)}년 활동한 날`}
         value={activity.totalActiveDays}
         unit="일"
         icon="calendar"
@@ -116,8 +125,9 @@ function ByDifficulty({ activity }: { activity: UserActivity }) {
 const LEVEL_CLASS = ['bg-border', 'bg-primary/25', 'bg-primary/50', 'bg-primary/75', 'bg-primary']
 
 /**
- * 최근 1년 잔디 (MY-05). 365칸을 하나하나 읽게 하면 화면 낭독기 사용자가 지나갈 수 없어
- * 그림 하나로 묶고 요약을 이름으로 준다. 칸마다 날짜·제출 수는 마우스를 올리면 보인다.
+ * 고른 해의 잔디 (MY-05). 1월 1일~12월 31일을 늘 다 그리고, 오늘 뒤 칸은 제출 없는 날과 같다.
+ * 365칸을 하나하나 읽게 하면 화면 낭독기 사용자가 지나갈 수 없어 그림 하나로 묶고 요약을 이름으로
+ * 준다. 칸마다 날짜·제출 수는 마우스를 올리면 보인다.
  */
 function Grass({ activity }: { activity: UserActivity }) {
   const weeks = buildWeeks(activity)
@@ -133,7 +143,7 @@ function Grass({ activity }: { activity: UserActivity }) {
         <div
           dir="ltr"
           role="img"
-          aria-label={`최근 1년 동안 ${activity.totalActiveDays}일 제출했어요`}
+          aria-label={`${yearOf(activity)}년에 ${activity.totalActiveDays}일 제출했어요`}
           className="grid w-full min-w-[560px] grid-flow-col gap-[3px]"
           style={{ gridTemplateRows: 'auto repeat(7, auto)', gridAutoColumns: 'minmax(0, 1fr)' }}
         >
@@ -178,7 +188,15 @@ function Grass({ activity }: { activity: UserActivity }) {
 
 /** 풀이 요약·활동 기록 (MY-05). */
 function Activity() {
-  const { data, isPending, error, refetch } = useQuery(activityQuery())
+  // 고른 해. undefined는 올해다 — 서버가 한국 시각으로 정한 해를 그대로 쓴다(계약)
+  const [year, setYear] = useState<number>()
+  // 고를 수 있는 마지막 해는 year 없이 받은 응답의 해다. 브라우저 시각으로 정하면 연말·연초에 400이 난다
+  const current = useQuery(activityQuery())
+  // 해를 바꾸는 동안 이전 해를 흐리게 둔다. 스켈레톤으로 바꾸면 드롭다운이 사라져 포커스를 잃는다
+  const picked = useQuery({ ...activityQuery(year), placeholderData: keepPreviousData })
+  const { data, isPlaceholderData, refetch } = picked
+  const error = picked.error ?? current.error
+  const lastYear = current.data ? yearOf(current.data) : undefined
 
   const queryClient = useQueryClient()
   useEffect(() => {
@@ -186,35 +204,69 @@ function Activity() {
   }, [queryClient, error])
 
   if (error) return <ErrorState problem={error} onRetry={() => void refetch()} />
-  if (isPending) return <ListSkeleton rows={3} />
+  // 오류는 위에서 거른다. 고른 해의 error와 올해의 error를 합쳐 봐서 data가 좁혀지지 않는다
+  if (data === undefined) return <ListSkeleton rows={3} />
 
+  const shown = yearOf(data)
   return (
     <>
       <Stats activity={data} />
-      <section aria-labelledby="activity-heading" className={cn(CARD, 'gap-4')}>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <section
+        aria-labelledby="activity-heading"
+        aria-busy={isPlaceholderData || undefined}
+        className={cn(CARD, 'gap-4')}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <h2 id="activity-heading" className="text-foreground text-lg font-semibold">
             활동 기록
           </h2>
-          <span className="text-muted-foreground text-sm">
-            최근 12개월 중{' '}
-            <strong className="text-foreground font-bold">{activeMonths(data)}개월</strong> 활동 ·
-            총 {data.totalActiveDays}일
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-muted-foreground text-sm">
+              총 <strong className="text-foreground font-bold">{data.totalActiveDays}일</strong>
+            </span>
+            {/* 해가 하나뿐이어도 보인다. 무엇을 기준으로 센 숫자인지 알려 준다(#253) */}
+            {lastYear !== undefined ? (
+              <Select
+                aria-label="잔디 연도"
+                className="w-32"
+                value={year ?? lastYear}
+                onChange={(event) => {
+                  const next = Number(event.target.value)
+                  setYear(next === lastYear ? undefined : next)
+                }}
+              >
+                {Array.from({ length: lastYear - FIRST_ACTIVITY_YEAR + 1 }, (_, i) => {
+                  const option = lastYear - i
+                  return (
+                    <option key={option} value={option}>
+                      {option}년
+                    </option>
+                  )
+                })}
+              </Select>
+            ) : null}
+          </div>
         </div>
         {/*
-          제출이 없어도 숫자는 0, 잔디는 빈 칸으로 그린다(명세 MY-05). 잔디는 최근 1년,
-          맞힌·틀린 수는 전체 기간이라 둘을 함께 본다 — 1년 전에만 푼 사람에게 '맞힌 문제 7'과
+          제출이 없어도 숫자는 0, 잔디는 빈 칸으로 그린다(명세 MY-05). 잔디는 고른 해,
+          맞힌·틀린 수는 전체 기간이라 둘을 함께 본다 — 다른 해에만 푼 사람에게 '맞힌 문제 7'과
           '아직 제출한 문제가 없어요'가 같이 나오면 안 된다.
         */}
         {data.days.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             {data.solvedCount === 0 && data.wrongCount === 0
               ? '아직 제출한 문제가 없어요.'
-              : '최근 1년 동안 제출한 날이 없어요.'}
+              : `${shown}년에는 제출한 날이 없어요.`}
           </p>
         ) : null}
-        <Grass activity={data} />
+        <div
+          className={cn(
+            'transition-opacity motion-reduce:transition-none',
+            isPlaceholderData && 'opacity-60',
+          )}
+        >
+          <Grass activity={data} />
+        </div>
       </section>
       <ByDifficulty activity={data} />
     </>
