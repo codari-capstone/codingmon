@@ -21,6 +21,7 @@ class PasswordResetService {
     static final Duration RESET_TTL = Duration.ofMinutes(10);
 
     private static final String EMAIL_CLAIM = "email";
+    private static final String USER_ID_CLAIM = "userId";
     private static final String TOKEN_VERSION_CLAIM = "tokenVersion";
 
     private final UserRepository users;
@@ -58,10 +59,12 @@ class PasswordResetService {
     // 맞으면 10분 동안 쓸 수 있는 재설정 증명서를 준다. 그 시점의 token_version을 담아 한 번만 쓰이게 한다.
     String verifyCode(String rawEmail, String code) {
         String email = AccountRules.email(rawEmail);
+        // 인증 도중 삭제·재가입되더라도 처음 선택한 계정에만 증명서를 발급한다.
+        User user = users.findByEmail(email).filter(found -> found.getPasswordHash() != null)
+                .orElseThrow(PasswordResetService::expired);
         codes.verify(email, EmailCode.Purpose.RESET_PASSWORD, code);
-        int tokenVersion = users.findByEmail(email).orElseThrow(PasswordResetService::expired).getTokenVersion();
         return certificates.issue(AuthCertificates.Purpose.PASSWORD_RESET, RESET_TTL,
-                Map.of(EMAIL_CLAIM, email, TOKEN_VERSION_CLAIM, tokenVersion));
+                Map.of(USER_ID_CLAIM, user.getId(), EMAIL_CLAIM, email, TOKEN_VERSION_CLAIM, user.getTokenVersion()));
     }
 
     // 비밀번호를 바꾸고 token_version을 올려 모든 기기를 로그아웃시킨다.
@@ -70,10 +73,16 @@ class PasswordResetService {
         Jwt certificate = certificates.verify(resetToken, AuthCertificates.Purpose.PASSWORD_RESET)
                 .orElseThrow(PasswordResetService::expired);
         String email = certificate.getClaimAsString(EMAIL_CLAIM);
-        Number tokenVersion = certificate.getClaim(TOKEN_VERSION_CLAIM);
+        Object userIdClaim = certificate.getClaim(USER_ID_CLAIM);
+        Object versionClaim = certificate.getClaim(TOKEN_VERSION_CLAIM);
+        // 고유 ID가 없는 이전 증명서는 이메일로 대체하지 않는다. 다시 인증하면 새 증명서를 받을 수 있다.
+        if (!(userIdClaim instanceof Number userId) || !(versionClaim instanceof Number tokenVersion)) {
+            throw expired();
+        }
         // 이미 쓴 증명서면 비밀번호 규칙을 보기 전에 만료로 답한다. 실제 변경은 아래 UPDATE가 다시 확인한다.
-        User user = users.findByEmail(email)
-                .filter(found -> found.getTokenVersion() == tokenVersion.intValue() && found.getPasswordHash() != null)
+        User user = users.findById(userId.longValue())
+                .filter(found -> found.getEmail() != null && found.getEmail().equalsIgnoreCase(email)
+                        && found.getTokenVersion() == tokenVersion.intValue() && found.getPasswordHash() != null)
                 .orElseThrow(PasswordResetService::expired);
         AccountRules.password(password, passwordConfirm);
         if (passwordEncoder.matches(password, user.getPasswordHash())) {
