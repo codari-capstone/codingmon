@@ -56,6 +56,7 @@ function mountMyPage(user: CurrentUser) {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+  return client
 }
 
 /** StatCard의 숫자. 이름(span)은 아이콘과 같은 줄 div 안에 있고, 숫자는 그 div 다음 문단이다. */
@@ -135,6 +136,9 @@ describe('MyPage 계정 정보 — 서버가 새 필드를 아직 보내지 않�
 
 describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
   const YEAR = kstYear()
+  /** 해 고르기 테스트의 '오늘'과 서버의 올해. 목의 제출이 오늘에 맞춰 만들어져 고정한다 */
+  const NOW = Date.parse('2026-11-16T03:00:00Z')
+  const SERVER_YEAR = 2028
 
   it('고른 해에는 제출이 없지만 전에 푼 문제가 있으면 그 해를 밝혀 안내한다', async () => {
     server.use(
@@ -209,14 +213,14 @@ describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
   })
 
   it('해를 고르면 그 해의 잔디를 받고, 마지막 해는 year 없이 받은 응답의 해다', async () => {
-    // 서버의 올해가 2028이라고 둔다. 브라우저 시각이 아니라 응답의 from으로 목록을 만드는지 본다
-    const SERVER_YEAR = 2028
+    // 서버의 올해가 2028이라고 둔다. 브라우저 시각이 아니라 응답의 from으로 목록을 만드는지 본다.
+    // 목의 제출은 '오늘'에 맞춰 만들어지니 오늘을 고정한다 — 실제 날짜가 2028년이 되면 깨진다(#307 리뷰)
     const asked: (string | null)[] = []
     server.use(
       http.get('*/api/users/me/activity', ({ request }) => {
         const year = new URL(request.url).searchParams.get('year')
         asked.push(year)
-        return HttpResponse.json(activityFor(1, Date.now(), Number(year ?? SERVER_YEAR)))
+        return HttpResponse.json(activityFor(1, NOW, Number(year ?? SERVER_YEAR)))
       }),
     )
     const user = userEvent.setup()
@@ -231,7 +235,7 @@ describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
     expect(asked).toEqual([null])
 
     await user.selectOptions(select, '2026')
-    const picked = activityFor(1, Date.now(), 2026)
+    const picked = activityFor(1, NOW, 2026)
     expect(
       await screen.findByRole('img', { name: `2026년에 ${picked.totalActiveDays}일 제출했어요` }),
     ).toBeInTheDocument()
@@ -246,6 +250,35 @@ describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
     await user.selectOptions(select, '2028')
     expect(await screen.findByRole('img', { name: '2028년에 0일 제출했어요' })).toBeInTheDocument()
     expect(asked.filter((year) => year === '2028')).toEqual([])
+  })
+
+  it('지난 해를 보다 올해 조회만 실패해도 다시 시도로 둘 다 다시 받아 풀린다', async () => {
+    // 오류 화면은 두 질의의 오류를 합쳐 보이는데 다시 시도가 고른 해만 받으면 풀리지 않았다(#307 리뷰)
+    let failCurrent = false
+    server.use(
+      http.get('*/api/users/me/activity', ({ request }) => {
+        const year = new URL(request.url).searchParams.get('year')
+        if (year === null && failCurrent) {
+          return HttpResponse.json({ status: 503, title: 'Service Unavailable' }, { status: 503 })
+        }
+        return HttpResponse.json(activityFor(1, NOW, Number(year ?? SERVER_YEAR)))
+      }),
+    )
+    const user = userEvent.setup()
+    const client = mountMyPage(EMAIL_USER)
+    client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, retry: false } })
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: '잔디 연도' }), '2026')
+    await screen.findByRole('img', { name: /^2026년에/ })
+
+    // 다시 연결된 것처럼 둘 다 다시 받는데 올해만 실패한다
+    failCurrent = true
+    await client.refetchQueries({ queryKey: ['activity'] })
+    const retry = await screen.findByRole('button', { name: /다시/ })
+
+    failCurrent = false
+    await user.click(retry)
+    expect(await screen.findByRole('img', { name: /^2026년에/ })).toBeInTheDocument()
   })
 
   it('불러오지 못하면 오류와 다시 시도를 보여 준다', async () => {

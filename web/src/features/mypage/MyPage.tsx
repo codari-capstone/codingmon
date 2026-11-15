@@ -194,7 +194,7 @@ function Activity() {
   const current = useQuery(activityQuery())
   // 해를 바꾸는 동안 이전 해를 흐리게 둔다. 스켈레톤으로 바꾸면 드롭다운이 사라져 포커스를 잃는다
   const picked = useQuery({ ...activityQuery(year), placeholderData: keepPreviousData })
-  const { data, isPlaceholderData, refetch } = picked
+  const { data, isPlaceholderData } = picked
   const error = picked.error ?? current.error
   const lastYear = current.data ? yearOf(current.data) : undefined
 
@@ -203,7 +203,11 @@ function Activity() {
     forgetSessionIfUnauthorized(queryClient, error)
   }, [queryClient, error])
 
-  if (error) return <ErrorState problem={error} onRetry={() => void refetch()} />
+  if (error) {
+    // 오류는 두 질의를 합쳐 보이니 다시 시도도 둘 다 한다. 고른 해만 받으면 올해의 오류가 남는다(#307 리뷰)
+    const retry = () => void queryClient.refetchQueries({ queryKey: ['activity'], type: 'active' })
+    return <ErrorState problem={error} onRetry={retry} />
+  }
   // 오류는 위에서 거른다. 고른 해의 error와 올해의 error를 합쳐 봐서 data가 좁혀지지 않는다
   if (data === undefined) return <ListSkeleton rows={3} />
 

@@ -14,6 +14,7 @@ import type {
 } from '@/api/types'
 import { DIFFICULTY_RANK, type Difficulty, type SolveStatus } from '@/api/types'
 import { EMAIL_PATTERN, isValidNickname, isValidPassword } from '@/features/auth/accountRules'
+import { FIRST_ACTIVITY_YEAR } from '@/features/mypage/myPageQuery'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import {
   invalidateToken,
@@ -1268,7 +1269,7 @@ export const handlers: RequestHandler[] = [
     const raw = new URL(request.url).searchParams.get('year')
     if (raw === null) return HttpResponse.json(activityFor(id))
     const year = Number(raw)
-    if (!/^\d+$/.test(raw) || year < 2026 || year > kstYear()) {
+    if (!/^\d+$/.test(raw) || year < FIRST_ACTIVITY_YEAR || year > kstYear()) {
       return badRequest('고를 수 없는 연도다')
     }
     return HttpResponse.json(activityFor(id, Date.now(), year))
