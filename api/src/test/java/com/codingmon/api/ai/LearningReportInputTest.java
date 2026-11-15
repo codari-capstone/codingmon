@@ -136,29 +136,52 @@ class LearningReportInputTest {
 
     @Test
     void 긴_제목과_이유는_잘라서_넣는다() {
-        LearningReportInput.Recommendation long_ = LearningReportInput.Recommendation.of(1, "가".repeat(150), "EASY", null, false);
+        LearningReportInput.Recommendation long_ = LearningReportInput.Recommendation.of(1, "가".repeat(200), "EASY", null, false);
         List<LearningReportInput.NextConcept> gathered = LearningReportInput.gather(
-                List.of(next(1, "나".repeat(150), 1, "개념", "다".repeat(400), null)));
+                List.of(next(1, "나".repeat(200), 1, "개념", "다".repeat(400), null)));
 
-        assertThat(long_.title()).startsWith("가".repeat(LearningReportInput.TITLE_MAX_CHARS)).endsWith("자 생략]");
-        assertThat(gathered.get(0).problems().get(0)).startsWith("나".repeat(LearningReportInput.TITLE_MAX_CHARS));
+        // 제목에는 줄바꿈과 남은 글자 수를 붙이지 않는다. 모델이 문장에 옮겨도 수치 대조를 통과하는 수가 생기지 않게 한다.
+        assertThat(long_.title()).isEqualTo("가".repeat(LearningReportInput.TITLE_MAX_CHARS) + "…");
+        assertThat(gathered.get(0).problems()).containsExactly("나".repeat(LearningReportInput.TITLE_MAX_CHARS) + "…");
+        assertThat(LearningReportInput.clipTitle("짧은 제목")).isEqualTo("짧은 제목");
+        // 한글 외 코드 포인트도 반으로 자르지 않는다.
+        assertThat(LearningReportInput.clipTitle("😀".repeat(150))).isEqualTo("😀".repeat(LearningReportInput.TITLE_MAX_CHARS) + "…");
         assertThat(gathered.get(0).reason()).startsWith("다".repeat(LearningReportInput.NEXT_CONCEPT_REASON_MAX_CHARS))
                 .endsWith("100자 생략]");
     }
 
     @Test
+    void 한_리뷰가_같은_태그로_권한_이름_여럿은_한_번으로_센다() {
+        // "DP"와 "메모이제이션"은 같은 별칭 묶음이라 둘 다 동적계획법 태그와 맞는다(ConceptTagMatcher).
+        NextConceptRepository.Tag dp = new NextConceptRepository.Tag(7, "dp", "동적계획법");
+        List<NextConceptRepository.NextConcept> recent = List.of(
+                next(9, "가", 1, "DP", "이유", dp),
+                next(9, "가", 2, "메모이제이션", "이유", dp),
+                next(8, "나", 1, "정렬", "이유", null),
+                next(7, "다", 1, "정렬", "이유", null));
+
+        List<LearningReportInput.NextConcept> gathered = LearningReportInput.gather(recent);
+
+        // 동적계획법을 권한 리뷰는 하나라 두 리뷰가 권한 정렬보다 뒤에 온다.
+        assertThat(gathered).extracting(LearningReportInput.NextConcept::name).containsExactly("정렬", "동적계획법");
+        assertThat(gathered).extracting(LearningReportInput.NextConcept::count).containsExactly(2, 1);
+        assertThat(gathered.get(1).problems()).containsExactly("가");
+    }
+
+    @Test
     void 개념_통계가_많아도_입력은_작다() {
-        // 개념 태그는 수십 개다. 모든 태그를 넣고 다음 개념과 추천이 상한에 닿아도 프롬프트 몫이 작다.
+        // 개념 태그는 수십 개다. 모든 태그를 넣고 다음 개념과 추천이 상한에 닿아도(다음 개념마다 서로 다른 긴 제목 3개) 프롬프트 몫이 작다.
         List<ConceptStat> concepts = IntStream.range(0, 40)
                 .mapToObj(i -> stat("tag-" + i, "개념 이름 " + "가".repeat(20) + i, 12, 7, "0.58", "2.42", "1.33", "0.30", i < 2))
                 .toList();
         List<LearningReportInput.Recommendation> recommendations = IntStream.rangeClosed(1, 3)
-                .mapToObj(rank -> LearningReportInput.Recommendation.of(rank, "제".repeat(150), "HARD", "개념", true)).toList();
+                .mapToObj(rank -> LearningReportInput.Recommendation.of(rank, "제".repeat(200), "HARD", "개념", true)).toList();
         List<NextConceptRepository.NextConcept> recent = IntStream.range(0, 30)
-                .mapToObj(i -> next(100 - i, "문".repeat(150), 1, "개념 " + (i % 5), "이".repeat(300), null)).toList();
+                .mapToObj(i -> next(100 - i, i + "문".repeat(200), 1, "개념 " + (i % 5), "이".repeat(300), null)).toList();
 
         String json = LearningReportInput.of(new LearningStats(40, 5, 0, concepts), recommendations, recent).toJson();
 
-        assertThat(json.length()).isLessThan(10_000);
+        // 이 최악의 경우가 약 1만 자다(한국어라 토큰도 그 안팎이다). 모델 문맥에 비해 작다.
+        assertThat(json.length()).isLessThan(12_000);
     }
 }

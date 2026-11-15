@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import com.codingmon.api.learning.LearningStatsRepository.ConceptStat;
@@ -27,12 +26,14 @@ record LearningReportInput(int solvedProblemCount, List<Concept> concepts, List<
     static final int NEXT_CONCEPT_MAX_COUNT = 5;
     // 다음 개념마다 그 개념을 권한 리뷰의 문제 제목을 최근 순으로 넣는 수
     static final int NEXT_CONCEPT_PROBLEM_MAX_COUNT = 3;
+    // 제목은 problem_versions.title이 200자까지다. 입력이 커지지 않게 앞부분만 넣는다(clipTitle).
     static final int TITLE_MAX_CHARS = 100;
     // 코드 리뷰 스키마의 상한(CodeReviewResult.CONCEPT_REASON_MAX_CHARS)과 같다. 이전 버전 리뷰가 더 길게 남아 있어도 이만큼만 넣는다.
     static final int NEXT_CONCEPT_REASON_MAX_CHARS = 300;
 
     // 개념 태그 하나의 통계. weak는 서버가 고른 취약 개념이다(상위 2개 중 0점이 아닌 태그, LearningStatsRepository).
-    // averageAttempts는 문제마다 첫 정답까지 낸 횟수의 평균, averageHintLevel은 첫 정답까지 연 가장 높은 힌트 단계(0~3)의 평균이다.
+    // averageAttempts는 문제마다 첫 정답까지 낸 횟수(맞히지 못했으면 지금까지 낸 횟수)의 평균, averageHintLevel은 첫 정답까지 연 가장
+    // 높은 힌트 단계(0~3)의 평균이다.
     record Concept(String name, boolean weak, int problemCount, int solvedCount, String solveRate,
             String averageAttempts, String averageHintLevel) {
 
@@ -42,14 +43,14 @@ record LearningReportInput(int solvedProblemCount, List<Concept> concepts, List<
         }
     }
 
-    // 서버가 고른 추천 문제(RecommendationRepository). concept는 추천의 근거가 된 취약 개념 이름이고, 없으면 취약 개념 후보가 모자라
+    // 서버가 고른 추천 문제(RecommendationRepository). concept는 추천의 근거가 된 개념 이름이다. 대개 취약 개념이지만 그 후보가 모자라면
+    // 점수가 0보다 큰 다음 순위 개념(weak가 false)일 수 있다. 없으면 근거 개념 후보가 모자라
     // 난이도로 고른 도전 문제다. attempted는 냈지만 아직 맞히지 못한 문제다(추천 후보는 아직 맞히지 않은 문제뿐이다).
     record Recommendation(int rank, String title, String difficulty, String concept, boolean attempted) {
 
         // difficulty는 problem_versions.difficulty(EASY·MEDIUM·HARD)다. 화면과 같은 한국어 이름으로 바꿔 보낸다.
         static Recommendation of(int rank, String title, String difficulty, String concept, boolean attempted) {
-            return new Recommendation(rank, AnalysisInput.clip(title, TITLE_MAX_CHARS), difficultyName(difficulty), concept,
-                    attempted);
+            return new Recommendation(rank, clipTitle(title), difficultyName(difficulty), concept, attempted);
         }
     }
 
@@ -83,27 +84,38 @@ record LearningReportInput(int solvedProblemCount, List<Concept> concepts, List<
         return recommendations.stream().map(Recommendation::rank).toList();
     }
 
-    // 같은 개념 태그와 맞춘 개념은 하나로 모은다. 맞는 태그가 없으면 띄어쓰기와 대소문자만 무시한 이름이 같을 때 모은다.
+    // 같은 개념 태그와 맞춘 개념은 하나로 모은다. 맞는 태그가 없으면 띄어쓰기와 대소문자만 무시한 이름(ConceptAliases.key)이 같을 때 모은다.
     // 이름은 태그 이름, 태그가 없으면 가장 최근에 쓴 원문이다. 많이 나온 순, 같으면 최근에 나온 순으로 NEXT_CONCEPT_MAX_COUNT개만 넣는다.
     static List<NextConcept> gather(List<NextConceptRepository.NextConcept> recent) {
         Map<String, List<NextConceptRepository.NextConcept>> groups = new LinkedHashMap<>();
         for (NextConceptRepository.NextConcept concept : recent) {
             String key = concept.tag() != null ? "tag:" + concept.tag().id()
-                    : "name:" + concept.name().replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+                    : "name:" + ConceptAliases.key(concept.name());
             groups.computeIfAbsent(key, k -> new ArrayList<>()).add(concept);
         }
         List<NextConcept> gathered = new ArrayList<>();
         for (List<NextConceptRepository.NextConcept> group : groups.values()) {
             NextConceptRepository.NextConcept latest = group.get(0);
             String name = latest.tag() != null ? latest.tag().name() : latest.name().strip();
-            List<String> problems = group.stream().map(c -> AnalysisInput.clip(c.problemTitle(), TITLE_MAX_CHARS))
-                    .distinct().limit(NEXT_CONCEPT_PROBLEM_MAX_COUNT).toList();
-            gathered.add(new NextConcept(name, group.size(), problems,
+            List<String> problems = group.stream().map(c -> clipTitle(c.problemTitle())).distinct()
+                    .limit(NEXT_CONCEPT_PROBLEM_MAX_COUNT).toList();
+            // 리뷰 하나가 같은 태그로 맞는 이름을 둘 권할 수 있다("DP"와 "메모이제이션"). 행이 아니라 리뷰를 센다.
+            int reviews = (int) group.stream().mapToLong(NextConceptRepository.NextConcept::reviewId).distinct().count();
+            gathered.add(new NextConcept(name, reviews, problems,
                     AnalysisInput.clip(latest.reason(), NEXT_CONCEPT_REASON_MAX_CHARS)));
         }
         // 정렬이 안정적이라 같은 횟수에서는 처음 나온 순서(최근 순)가 유지된다.
         gathered.sort(Comparator.comparingInt(NextConcept::count).reversed());
         return List.copyOf(gathered.subList(0, Math.min(NEXT_CONCEPT_MAX_COUNT, gathered.size())));
+    }
+
+    // 긴 제목은 앞 TITLE_MAX_CHARS자에 "…"만 붙인다. AnalysisInput.clip의 "[…뒤 N자 생략]" 표시는 모델이 제목과 함께 문장에
+    // 옮길 수 있고, 그 수가 입력에 있는 수라 수치 대조(#85)도 통과한다.
+    static String clipTitle(String title) {
+        if (title.codePointCount(0, title.length()) <= TITLE_MAX_CHARS) {
+            return title;
+        }
+        return title.substring(0, title.offsetByCodePoints(0, TITLE_MAX_CHARS)) + "…";
     }
 
     // 0.49 → "49%". 해결률은 소수 둘째 자리까지라 100을 곱하면 정수다. 화면(ReportPage)과 같이 반올림해 정수로 쓴다.
