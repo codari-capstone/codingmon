@@ -16,6 +16,7 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { cn } from '@/lib/utils'
 import { LearnNav } from './LearnNav'
 import { AiAnalysis, ReportMeta, RequestError, type ReportRequest } from './ReportAnalysis'
+import { ReportRecommendations } from './ReportRecommendations'
 import { isDeadEnd } from '@/features/result/resultQuery'
 import {
   learningReportQuery,
@@ -285,6 +286,7 @@ export function Component() {
         <>
           <ReportMeta report={shown} request={request} today={today} />
           <AiAnalysis report={shown} request={request} today={today} />
+          <ReportRecommendations recommendations={shown.recommendations} />
           <ConceptTable concepts={shown.concepts} />
         </>
       ) : null}

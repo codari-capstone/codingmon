@@ -23,7 +23,7 @@ const MADE_AT = new Intl.DateTimeFormat('ko-KR', {
 })
 
 /** 모델 문장. 띄어쓰기 없는 긴 식·주소가 오면 줄을 바꿀 곳이 없어 카드 밖으로 넘친다(#311 리뷰) */
-const AI_TEXT = 'break-keep whitespace-pre-line [overflow-wrap:anywhere]'
+export const AI_TEXT = 'break-keep whitespace-pre-line [overflow-wrap:anywhere]'
 
 /** 요청이 실패한 이유. 리포트의 FAILED가 아니라 요청 자체(네트워크·409 등)의 실패다. */
 export function RequestError({ request }: { request: ReportRequest }) {

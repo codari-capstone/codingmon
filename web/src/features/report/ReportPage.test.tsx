@@ -407,3 +407,48 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
     expect(await screen.findByRole('button', { name: /다시/ })).toBeInTheDocument()
   })
 })
+
+describe('ReportPage — 다음에 풀 문제 (REP-04)', () => {
+  const nextRegion = () => screen.findByRole('region', { name: '다음에 풀 문제' })
+
+  it('서버 순서 그대로 순위·제목·난이도·근거 개념과 점수·추천 이유를 보이고, 누르면 그 문제로 간다', async () => {
+    const report = learningReportOf('COMPLETED', now())
+    storedReport(report)
+    renderReport()
+
+    const cards = within(await nextRegion()).getAllByRole('link')
+    // 다시 정렬하지 않는다
+    expect(cards.map((card) => card.getAttribute('href'))).toEqual(
+      report.recommendations.map((r) => `/problems/${r.problemId}`),
+    )
+    const [first, , challenge] = cards
+    expect(first).toHaveTextContent(`추천 1위`)
+    expect(first).toHaveTextContent(report.recommendations[0].title)
+    expect(first).toHaveTextContent('동적 계획법 · 취약 점수 0.8')
+    expect(first).toHaveTextContent(report.recommendations[0].reason!)
+    // 근거 개념이 없으면 도전 문제다. 개념·점수를 보이지 않는다
+    expect(challenge).toHaveTextContent('도전 문제')
+    expect(challenge).not.toHaveTextContent('취약 점수')
+  })
+
+  it('만드는 중이라 추천 이유가 없어도 카드는 보이고 문장만 뺀다', async () => {
+    const report = learningReportOf('PENDING', now())
+    storedReport(report)
+    renderReport()
+
+    const cards = within(await nextRegion()).getAllByRole('link')
+    expect(cards).toHaveLength(3)
+    // 대체 문구를 만들지 않는다(#84 결정)
+    const done = learningReportOf('COMPLETED', now())
+    done.recommendations.forEach((r, i) => expect(cards[i]).not.toHaveTextContent(r.reason!))
+  })
+
+  it('추천할 문제가 없으면 그렇다고 알린다', async () => {
+    storedReport({ ...learningReportOf('COMPLETED', now()), recommendations: [] })
+    renderReport()
+
+    const region = await nextRegion()
+    expect(within(region).getByText(/추천할 문제가 없어요/)).toBeInTheDocument()
+    expect(within(region).queryByRole('link')).not.toBeInTheDocument()
+  })
+})
