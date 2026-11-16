@@ -14,7 +14,11 @@
 let accessToken: string | null = null
 
 /**
- * 세션 세대. 로그아웃하거나 새 로그인으로 계정을 대체할 때마다 올라간다. 같은 세션의 토큰 갱신은 올리지 않는다.
+ * 세션 세대. **이 탭에서** 로그아웃하거나 새로 로그인할 때마다 올라간다. 같은 세션의 토큰 갱신과
+ * 다른 탭의 알림은 올리지 않는다. 세대가 바뀌면 이 탭에 떠 있던 요청의 응답을 버리는데(client.ts),
+ * 다른 탭의 알림으로 버리면 서버가 접수한 제출이 실패로 보여 다시 누르게 되고, 로그아웃을 알려 줄
+ * me 조회의 401이 오류로 바뀌어 화면이 로그인 상태로 남는다. 다른 탭의 알림은 remoteLogouts와
+ * 계정(owner)이 맡는다.
  *
  * 갱신 요청이 떠 있는 동안 로그아웃하면, 늦게 도착한 응답이 방금 버린 세션의 토큰을 다시
  * 심는다 — 서버의 로그아웃은 refresh 계열만 폐기하고 **이미 발급된 access token은 만료까지
@@ -41,12 +45,33 @@ let owner: { subject: string | null } | null = null
  */
 let replaced = false
 
+/**
+ * 다른 탭이 로그아웃한 횟수. 그 순간 떠 있던 갱신 응답은 방금 끝낸 세션의 토큰일 수 있어 버린다
+ * (refresh.ts). 다른 탭의 로그인은 갱신 결과를 계정(owner)과 비교하는 것으로 충분하다.
+ */
+let remoteLogouts = 0
+
+/**
+ * 다른 탭의 로그인 알림으로 버린 토큰. 그 토큰으로 이미 보낸 요청이 401을 받으면, 토큰이 비었다고
+ * 세션이 끝난 것으로 보지 않고 다시 갱신해 계정을 확인한다(refresh.ts).
+ */
+let droppedByOtherLogin: string | null = null
+
 export function getAccessToken(): string | null {
   return accessToken
 }
 
 export function getGeneration(): number {
   return generation
+}
+
+export function getRemoteLogouts(): number {
+  return remoteLogouts
+}
+
+/** 이 토큰을 다른 탭의 로그인 알림으로 버렸는지. */
+export function wasDroppedByOtherLogin(token: string | null): boolean {
+  return token !== null && token === droppedByOtherLogin
 }
 
 /** 같은 세션 안에서 토큰만 바꾼다(갱신에 실패해 비우기 등). 세션의 계정은 그대로다. */
@@ -103,6 +128,7 @@ export function startSession(token: string | null): void {
   // 토큰 없이 시작하는 GitHub 로그인 복귀는 곧 갱신으로 받는 토큰의 계정이 세션의 계정이 된다.
   owner = token === null ? null : { subject: tokenSubject(token) }
   replaced = false
+  droppedByOtherLogin = null
   channel?.postMessage('started')
 }
 
@@ -127,13 +153,16 @@ export function endSession(): void {
   accessToken = null
   owner = null
   replaced = false
+  droppedByOtherLogin = null
   generation += 1
   channel?.postMessage('ended')
 }
 
-channel?.addEventListener('message', () => {
+channel?.addEventListener('message', (event: MessageEvent) => {
   // 알린 탭이 아니라 받은 탭에서 도는 자리다. 다시 알리지 않는다(서로 알리면 고리가 된다).
   // 계정(owner)은 남긴다. 다음 갱신이 쿠키의 계정과 비교해 이어 쓸지 세션을 끝낼지 정한다.
+  // 세대는 올리지 않는다 — 이 탭에 떠 있던 요청의 응답은 이 탭 세션의 것이다(generation 주석).
+  if (event.data === 'ended') remoteLogouts += 1
+  else droppedByOtherLogin = accessToken
   accessToken = null
-  generation += 1
 })

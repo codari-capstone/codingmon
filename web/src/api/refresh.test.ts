@@ -526,6 +526,81 @@ describe('세션 정리', () => {
     }
   })
 
+  /** 다른 탭의 알림으로 버리면 서버가 접수한 제출이 실패로 보여 다시 누르게 된다(중복 제출). */
+  it('다른 탭의 로그인 알림이 와도 이 탭에 떠 있던 제출 응답은 그대로 받는다', async () => {
+    startSession(jwtFor('1', 'a'))
+    const channel = new BroadcastChannel('codingmon-session')
+    server.use(
+      http.post('*/api/submissions', async () => {
+        // 접수가 끝나기 전에 다른 탭이 같은 계정으로 다시 로그인한다.
+        channel.postMessage('started')
+        await vi.waitFor(() => expect(getAccessToken()).toBeNull())
+        return HttpResponse.json({ id: 7 }, { status: 202 })
+      }),
+    )
+
+    try {
+      const result = await api.POST('/api/submissions', {
+        body: { problemId: 1, language: 'PYTHON', sourceCode: 'print(1)' },
+      })
+      expect(result.data?.id).toBe(7)
+    } finally {
+      channel.close()
+    }
+  })
+
+  it('다른 탭의 로그인 알림 뒤에 도착한 401도 같은 계정이면 갱신해 다시 보낸다', async () => {
+    const again = jwtFor('1', 'again')
+    startSession(jwtFor('1', 'a'))
+    const channel = new BroadcastChannel('codingmon-session')
+    server.use(
+      http.post('*/api/auth/refresh', () => HttpResponse.json({ accessToken: again })),
+      http.post('*/api/submissions', async ({ request }) => {
+        if (request.headers.get('Authorization') === `Bearer ${again}`) {
+          return HttpResponse.json({ id: 7 }, { status: 202 })
+        }
+        // 만료된 토큰으로 보낸 요청의 401이 오기 전에 다른 탭이 로그인한다. 토큰이 비었다고
+        // 세션이 끝난 것으로 보면 같은 계정인데도 로그인 화면으로 간다.
+        channel.postMessage('started')
+        await vi.waitFor(() => expect(getAccessToken()).toBeNull())
+        return HttpResponse.json({ status: 401 }, { status: 401 })
+      }),
+    )
+
+    try {
+      const result = await api.POST('/api/submissions', {
+        body: { problemId: 1, language: 'PYTHON', sourceCode: 'print(1)' },
+      })
+      expect(result.data?.id).toBe(7)
+    } finally {
+      channel.close()
+    }
+  })
+
+  /**
+   * 갱신 중에 다른 탭이 로그아웃하면 그 응답이 방금 끝낸 세션의 토큰일 수 있다. 버리되 401로 끝내야
+   * me 조회가 null을 돌려 화면이 로그인 화면으로 간다. 오류로 끝내면 useAuth가 이전 사용자를 남긴다.
+   */
+  it('다른 탭이 로그아웃할 때 갱신 중이던 조회는 401로 끝난다', async () => {
+    startSession(jwtFor('1', 'a'))
+    const channel = new BroadcastChannel('codingmon-session')
+    server.use(
+      http.get('*/api/users/me', () => HttpResponse.json({ status: 401 }, { status: 401 })),
+      http.post('*/api/auth/refresh', async () => {
+        channel.postMessage('ended')
+        await vi.waitFor(() => expect(getAccessToken()).toBeNull())
+        return HttpResponse.json({ accessToken: jwtFor('1', 'raced') })
+      }),
+    )
+
+    try {
+      expect((await api.GET('/api/users/me')).response.status).toBe(401)
+      expect(getAccessToken()).toBeNull()
+    } finally {
+      channel.close()
+    }
+  })
+
   /** 로그아웃마다 세대가 올라가야 떠 있던 갱신 응답을 버릴 수 있다. */
   it('로그아웃하면 세대가 올라간다', () => {
     const before = getGeneration()
