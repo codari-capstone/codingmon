@@ -3,6 +3,7 @@ package com.codingmon.api.auth;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -60,9 +61,11 @@ class PasswordResetService {
     String verifyCode(String rawEmail, String code) {
         String email = AccountRules.email(rawEmail);
         // 인증 도중 삭제·재가입되더라도 처음 선택한 계정에만 증명서를 발급한다.
-        User user = users.findByEmail(email).filter(found -> found.getPasswordHash() != null)
-                .orElseThrow(PasswordResetService::expired);
+        // 계정이 없다는 답은 인증번호를 확인한 뒤에 한다. 먼저 답하면 횟수 제한이 없는 이 주소로 가입 여부를 알 수 있다
+        // (가입 여부는 IP 제한을 거치는 sendCode에서만 알려 준다).
+        Optional<User> selected = users.findByEmail(email).filter(found -> found.getPasswordHash() != null);
         codes.verify(email, EmailCode.Purpose.RESET_PASSWORD, code);
+        User user = selected.orElseThrow(PasswordResetService::expired);
         return certificates.issue(AuthCertificates.Purpose.PASSWORD_RESET, RESET_TTL,
                 Map.of(USER_ID_CLAIM, user.getId(), EMAIL_CLAIM, email, TOKEN_VERSION_CLAIM, user.getTokenVersion()));
     }
