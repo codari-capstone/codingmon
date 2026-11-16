@@ -6,8 +6,15 @@ import type { ProblemListQuery, ProblemPage } from '@/api/types'
 import { MOCK_CODE, resetEmailCodes } from './fixtures/emailCodes'
 import { kstYear } from './fixtures/activity'
 import { conceptTags, problems } from './fixtures/problems'
-import { mockAccounts } from './fixtures/users'
-import { resetConceptTags, resetLearningReport, resetSessions, resetSubmissions } from './handlers'
+import { mockAccessToken, mockAccounts } from './fixtures/users'
+import {
+  reportsSent,
+  resetConceptTags,
+  resetLearningReport,
+  resetReports,
+  resetSessions,
+  resetSubmissions,
+} from './handlers'
 import { server } from './server'
 
 async function fetchProblems(query: ProblemListQuery): Promise<ProblemPage> {
@@ -692,6 +699,76 @@ describe('제출 목의 검사 순서', () => {
     })
 
     expect(code(res)).toBe('SOURCE_EMPTY')
+  })
+})
+
+describe('문제 신고 목 (SOLVE-12, #226)', () => {
+  afterEach(() => resetReports())
+  const asCodari = { headers: { Authorization: `Bearer ${mockAccessToken(1)}` } }
+  const report = (
+    id: number,
+    body: unknown,
+    init: { headers: Record<string, string> } = asCodari,
+  ) =>
+    fetch(`/api/problems/${id}/reports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...init.headers },
+      body: JSON.stringify(body),
+    })
+
+  it('보내면 204이고, 관리자 목이 읽을 신고가 앞뒤 공백을 뗀 내용으로 쌓인다', async () => {
+    const response = await report(1, { type: 'SAMPLE', content: '  예제가 달라요 ' })
+    expect(response.status).toBe(204)
+    expect(reportsSent()).toMatchObject([
+      { problemId: 1, type: 'SAMPLE', content: '예제가 달라요', status: 'RECEIVED', reporterId: 1 },
+    ])
+  })
+
+  it.each([
+    ['공백뿐인 내용', { type: 'TYPO', content: '   ' }],
+    ['1,000자를 넘는 내용', { type: 'TYPO', content: '가'.repeat(1001) }],
+  ])('%s은 400 INVALID_REPORT_CONTENT다', async (_what, body) => {
+    const response = await report(1, body)
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({ code: 'INVALID_REPORT_CONTENT' })
+  })
+
+  it.each([
+    ['유형이 목록에 없음', { type: 'WRONG', content: '내용' }],
+    ['내용이 빠짐', { type: 'TYPO' }],
+  ])('%s은 code 없는 400이다', async (_what, body) => {
+    const response = await report(1, body)
+    expect(response.status).toBe(400)
+    expect(await response.json()).not.toHaveProperty('code')
+  })
+
+  it('내용 길이는 서버처럼 코드 포인트로 잰다 — 이모지 1,000개는 받는다', async () => {
+    const response = await report(1, { type: 'OTHER', content: '😀'.repeat(1000) })
+    expect(response.status).toBe(204)
+  })
+
+  it('본문이 JSON이 아니면 code 없는 400이다', async () => {
+    // 그대로 두면 목이 던져 네트워크 오류가 됐다(코드 리뷰)
+    const response = await fetch('/api/problems/1/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...asCodari.headers },
+      body: '{not json',
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).not.toHaveProperty('code')
+  })
+
+  it('없는 문제는 404 PROBLEM_NOT_FOUND, 토큰이 없으면 401이다', async () => {
+    const missing = await report(9999, { type: 'TYPO', content: '내용' })
+    expect(missing.status).toBe(404)
+    expect(await missing.json()).toMatchObject({ code: 'PROBLEM_NOT_FOUND' })
+
+    server.use(
+      http.post('*/api/auth/refresh', () => HttpResponse.json({ status: 401 }, { status: 401 })),
+    )
+    const anonymous = await report(1, { type: 'TYPO', content: '내용' }, { headers: {} })
+    expect(anonymous.status).toBe(401)
+    expect(reportsSent()).toHaveLength(0)
   })
 })
 

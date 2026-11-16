@@ -15,6 +15,7 @@ import { CodeEditor } from './CodeEditor'
 import { getEditorSettings } from './editorSettings'
 import { LanguagePicker } from './LanguagePicker'
 import { formatTimeLimit, LANGUAGE_LABEL } from './labels'
+import { ReportProblem } from './ReportProblem'
 import { RunButton, SampleRun } from './SampleRun'
 import { useSampleRun } from './sampleRunQuery'
 import { Samples } from './Samples'
@@ -43,7 +44,11 @@ function Header({
 }) {
   return (
     <div className="flex flex-col gap-2.5">
-      <h1 className="page-title">{problem.title}</h1>
+      {/* 디자인처럼 제목 줄 오른쪽에 [문제 신고] (SOLVE-12) */}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <h1 className="page-title">{problem.title}</h1>
+        <ReportProblem problem={problem} />
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="outline">{DIFFICULTY_LABEL[problem.difficulty]}</Badge>
         {problem.tags.map((tag) => (
