@@ -461,7 +461,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 개념별 학습 통계·취약 개념 (REP-01, REP-02)
+         * 개념별 학습 통계·취약 개념 (REP-01)
          * @description 서버가 풀이 기록으로 계산한 개념 태그별 통계다. AI가 판단하지 않는다. 식과 규칙은 `docs/AI_FEATURES.md` 7절이 기준이다.
          *     맞힌 서로 다른 문제가 `requiredProblemCount`(5)개 미만이면 `concepts`는 빈 배열이고 `remainingProblemCount`로 남은 개수를 알려 준다.
          *     조건을 채우면 맞히지 못한 문제를 포함해 제출한 모든 문제로 계산한다. 예제 실행·채점 불가·채점 중인 제출은 세지 않는다.

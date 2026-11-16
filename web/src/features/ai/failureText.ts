@@ -6,7 +6,7 @@ import type { SubmissionAnalysis } from '@/api/types'
  */
 export function failureText(
   reason: SubmissionAnalysis['failureReason'],
-  what: '분석을' | '리뷰를',
+  what: '분석을' | '리뷰를' | '리포트를',
 ): string {
   switch (reason) {
     case 'UNAVAILABLE':
@@ -14,7 +14,10 @@ export function failureText(
     case 'RATE_LIMITED':
       return `AI 서버에 요청이 몰려 ${what} 만들지 못했어요. 잠시 후 다시 시도해 주세요.`
     case 'BUSY':
-      return `지금 ${what} 기다리는 제출이 많아요. 잠시 후 다시 시도해 주세요.`
+      // 리포트는 제출에 딸린 것이 아니라 '기다리는 제출'이 맞지 않는다. 같은 AI 대기열이 찬 것이다
+      return what === '리포트를'
+        ? 'AI가 처리할 일이 많아 리포트를 만들지 못했어요. 잠시 후 다시 시도해 주세요.'
+        : `지금 ${what} 기다리는 제출이 많아요. 잠시 후 다시 시도해 주세요.`
     default:
       return `${what} 만들지 못했어요. 다시 시도해 주세요.`
   }
