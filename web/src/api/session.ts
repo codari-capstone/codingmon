@@ -121,14 +121,23 @@ export function adoptRefreshedToken(token: string): boolean {
   return true
 }
 
-/** 새 로그인은 이전 계정의 비동기 작업을 이어받지 않는다. 토큰 갱신은 adoptRefreshedToken을 쓴다. */
+/**
+ * 새 로그인은 이전 계정의 비동기 작업을 이어받지 않는다. 토큰 갱신은 adoptRefreshedToken을 쓴다.
+ *
+ * 토큰 없이 시작하는 GitHub 로그인 복귀는 곧 갱신으로 받는 토큰의 계정이 세션의 계정이 된다. 그때는
+ * 세션이 생겼는지 아직 모르므로 다른 탭에 알리지 않는다. 토큰을 받은 뒤 announceLogin으로 알린다.
+ */
 export function startSession(token: string | null): void {
   generation += 1
   accessToken = token
-  // 토큰 없이 시작하는 GitHub 로그인 복귀는 곧 갱신으로 받는 토큰의 계정이 세션의 계정이 된다.
   owner = token === null ? null : { subject: tokenSubject(token) }
   replaced = false
   droppedByOtherLogin = null
+  if (token !== null) announceLogin()
+}
+
+/** 다른 탭에 로그인을 알린다. 그 탭들은 토큰을 버리고, 다음 갱신에서 계정이 같은지 본다. */
+export function announceLogin(): void {
   channel?.postMessage('started')
 }
 

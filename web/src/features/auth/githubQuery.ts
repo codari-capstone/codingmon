@@ -1,7 +1,7 @@
 import { api } from '@/api/client'
 import { fail } from '@/api/fail'
 import { refreshAccessToken } from '@/api/refresh'
-import { setAccessToken, startSession } from '@/api/session'
+import { announceLogin, setAccessToken, startSession } from '@/api/session'
 import type { CurrentUser } from '@/api/types'
 
 /** 시작 주소. 계약이 "브라우저를 이 주소로 이동시킨다(fetch가 아님)"고 적는다. */
@@ -67,10 +67,12 @@ export function takeGitHubReturnPath(): string | null {
  * 첫 걸음이다. 그 뒤는 같다 — 닉네임은 토큰이 아니라 `/api/users/me`로 받는다.
  */
 export async function resumeGitHubSession(): Promise<CurrentUser> {
+  // 이 탭의 이전 세션은 먼저 끊고, 다른 탭에는 쿠키로 토큰을 받은 뒤에 알린다. 세션이 없으면 알리지 않는다.
   startSession(null)
   const token = await refreshAccessToken(null)
   // 쿠키가 없거나 이미 폐기됐다. 성공이라고 돌아왔지만 세션이 없다.
   if (token === null) throw new Error('GITHUB_SESSION_MISSING')
+  announceLogin()
 
   const me = await api.GET('/api/users/me')
   if (me.data === undefined) {

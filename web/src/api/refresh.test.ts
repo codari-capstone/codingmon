@@ -6,6 +6,7 @@ import { api, pendingRequestCount } from './client'
 import { refreshAccessToken } from './refresh'
 import { endSession, getAccessToken, getGeneration, setAccessToken, startSession } from './session'
 import { server } from '@/mocks/server'
+import { resumeGitHubSession } from '@/features/auth/githubQuery'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { submitCode } from '@/features/solve/submitQuery'
 
@@ -598,6 +599,27 @@ describe('세션 정리', () => {
       expect(getAccessToken()).toBeNull()
     } finally {
       channel.close()
+    }
+  })
+
+  /** 세션이 생기기 전에 알리면 쿠키가 그대로여도 다른 탭이 토큰을 버리고 한 번 더 갱신한다. */
+  it('GitHub 복귀는 쿠키로 토큰을 받은 뒤에만 다른 탭에 로그인을 알린다', async () => {
+    const posted = vi.spyOn(BroadcastChannel.prototype, 'postMessage')
+    try {
+      refreshReturns(null)
+      await expect(resumeGitHubSession()).rejects.toThrow('GITHUB_SESSION_MISSING')
+      expect(posted).not.toHaveBeenCalledWith('started')
+
+      refreshReturns('github')
+      server.use(
+        http.get('*/api/users/me', () =>
+          HttpResponse.json({ id: 1, nickname: '코다리', role: 'USER' }),
+        ),
+      )
+      await resumeGitHubSession()
+      expect(posted).toHaveBeenCalledWith('started')
+    } finally {
+      posted.mockRestore()
     }
   })
 
