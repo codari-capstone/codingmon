@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { Link, matchPath, useLocation, useMatch } from 'react-router'
 
 import wordmark from '@/assets/brand/codingmon_wordmark.png'
@@ -12,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { unresolvedReportCountQuery } from '@/features/admin/adminReportQuery'
 import { useAuth } from '@/features/auth/useAuth'
 import { useLogout } from '@/features/auth/useLogout'
 import { StreakChip } from '@/features/streak/StreakChip'
@@ -27,6 +29,7 @@ const ADMIN_ENTRY = { to: '/admin', label: '관리자' }
 const ADMIN_MENU: MenuItem[] = [
   // 문제 관리는 /admin 자체다. 앞부분 일치로 두면 /admin/tags에서도 켜진다
   { to: '/admin', label: '문제', end: true, also: '/admin/problems' },
+  { to: '/admin/reports', label: '신고' },
   { to: '/admin/tags', label: '태그' },
 ]
 
@@ -41,6 +44,11 @@ export function AppHeader() {
   // 관리자 메뉴를 두어야 새로고침 때 학습자 메뉴 3개 -> 1개로 흔들리지 않는다.
   const menu: MenuItem[] =
     inAdmin && (isAdmin || isLoading) ? ADMIN_MENU : isAdmin ? [...MENU, ADMIN_ENTRY] : MENU
+  // 관리자 메뉴가 보일 때만 센다. 학습자가 부르면 403이다
+  const { data: unresolved } = useQuery({
+    ...unresolvedReportCountQuery(),
+    enabled: inAdmin && isAdmin,
+  })
   // 로그인 화면에서 넘어왔다면 그 화면이 들고 있던 돌아갈 주소를 이어 준다. 아니면 지금 주소.
   // 값은 로그인 화면의 safeRedirect가 검사하므로 여기서는 거르지 않는다.
   const from =
@@ -90,6 +98,18 @@ export function AppHeader() {
                 }`}
               >
                 {item.label}
+                {item.to === '/admin/reports' && unresolved ? (
+                  // 처리 안 한 신고 수 (ADM-10, 시안 Header). 숫자만 읽히면 뜻을 모르니 화면 낭독기에는 말로 준다
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className="bg-destructive text-destructive-foreground ml-1.5 inline-flex h-5 items-center rounded-full px-[7px] text-xs font-bold tabular-nums"
+                    >
+                      {unresolved}
+                    </span>
+                    <span className="sr-only">, 처리 안 한 신고 {unresolved}건</span>
+                  </>
+                ) : null}
               </Link>
             )
           })}
