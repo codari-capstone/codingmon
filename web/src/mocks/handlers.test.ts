@@ -763,12 +763,33 @@ describe('문제 신고 목 (SOLVE-12, #226)', () => {
     expect(missing.status).toBe(404)
     expect(await missing.json()).toMatchObject({ code: 'PROBLEM_NOT_FOUND' })
 
-    server.use(
-      http.post('*/api/auth/refresh', () => HttpResponse.json({ status: 401 }, { status: 401 })),
-    )
+    // 날 fetch라 갱신(refresh) 경로를 거치지 않는다. 토큰 없이 보내면 바로 401이다
     const anonymous = await report(1, { type: 'TYPO', content: '내용' }, { headers: {} })
     expect(anonymous.status).toBe(401)
     expect(reportsSent()).toHaveLength(0)
+  })
+
+  // 서버(ProblemReportController)와 같은 판정이다. trim()으로 보던 목은 이 셋을 204로 받았다(#314 리뷰)
+  it('널 문자가 든 내용은 code 없는 400이다', async () => {
+    const response = await report(1, { type: 'TYPO', content: `내용${String.fromCodePoint(0)}` })
+    expect(response.status).toBe(400)
+    expect(await response.json()).not.toHaveProperty('code')
+  })
+
+  it('Java strip()으로 비는 내용(단위 구분자뿐)은 INVALID_REPORT_CONTENT다', async () => {
+    const response = await report(1, { type: 'TYPO', content: String.fromCodePoint(0x1f) })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      code: 'INVALID_REPORT_CONTENT',
+      detail: '신고 내용을 입력해 주세요',
+    })
+  })
+
+  it('줄바꿈 없는 공백은 Java가 글자로 보아 받고, 앞뒤는 strip()처럼 뗀다', async () => {
+    const nbsp = String.fromCodePoint(0xa0)
+    const response = await report(1, { type: 'TYPO', content: ` ${nbsp} ` })
+    expect(response.status).toBe(204)
+    expect(reportsSent()[0]?.content).toBe(nbsp)
   })
 })
 

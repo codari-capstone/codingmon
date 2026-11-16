@@ -23,7 +23,13 @@ import { TAG_NAME_MAX, TAG_SLUG_MAX, TAG_SLUG_PATTERN } from '@/features/admin/t
 import { FIRST_ACTIVITY_YEAR } from '@/features/mypage/myPageQuery'
 import { REPORT_TYPE_LABEL } from '@/features/problems/labels'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
-import { REPORT_CONTENT_MAX, reportLength } from '@/features/solve/reportRules'
+import {
+  hasContentLikeServer,
+  hasNul,
+  REPORT_CONTENT_MAX,
+  reportLength,
+  stripLikeServer,
+} from '@/features/solve/reportRules'
 import {
   invalidateToken,
   isSignedUp,
@@ -769,15 +775,24 @@ export const handlers: RequestHandler[] = [
     const body = (await request.json().catch(() => null)) as Partial<
       Record<keyof ReportInput, unknown>
     > | null
+    // 판정 순서와 문구는 서버(ProblemReportController)와 같다: 형식·널 문자 → 길이 → 빈 내용(Java strip)
     if (
       body === null ||
       typeof body.content !== 'string' ||
-      !REPORT_TYPES.includes(body.type as ReportType)
+      !REPORT_TYPES.includes(body.type as ReportType) ||
+      hasNul(body.content)
     ) {
       return badRequest('type·content가 맞지 않다')
     }
-    if (reportLength(body.content) > REPORT_CONTENT_MAX || body.content.trim().length === 0) {
-      return problem(400, 'INVALID_REPORT_CONTENT', '신고 내용을 1자 이상 1,000자 이하로 써 주세요')
+    if (reportLength(body.content) > REPORT_CONTENT_MAX) {
+      return problem(
+        400,
+        'INVALID_REPORT_CONTENT',
+        '신고 내용이 1,000자를 넘어요. 1,000자 이하로 줄여 주세요',
+      )
+    }
+    if (!hasContentLikeServer(body.content)) {
+      return problem(400, 'INVALID_REPORT_CONTENT', '신고 내용을 입력해 주세요')
     }
     const detail = problemDetails.find((item) => item.id === id)
     if (!detail) return problem(404, 'PROBLEM_NOT_FOUND', '문제를 찾을 수 없어요')
@@ -788,7 +803,7 @@ export const handlers: RequestHandler[] = [
       problemTitle: detail.title,
       versionNo: detail.versionNo,
       type: body.type as ReportType,
-      content: body.content.trim(),
+      content: stripLikeServer(body.content),
       reporterId,
       reporterNickname: reporter?.nickname ?? null,
       createdAt: new Date().toISOString(),

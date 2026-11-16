@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { problemMessage } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { REPORT_TYPE_LABEL } from '@/features/problems/labels'
-import { REPORT_CONTENT_MAX, reportLength } from './reportRules'
+import { hasContentLikeServer, hasNul, REPORT_CONTENT_MAX, reportLength } from './reportRules'
 
 const TYPE_OPTIONS = (Object.keys(REPORT_TYPE_LABEL) as ReportType[]).map((value) => ({
   value,
@@ -43,7 +43,10 @@ export function ReportProblem({ problem }: { problem: ProblemDetailView }) {
   })
 
   const length = reportLength(content)
-  const canSend = type !== undefined && content.trim().length > 0 && length <= REPORT_CONTENT_MAX
+  const nul = hasNul(content)
+  // 빈 내용 판정은 서버의 strip()과 같게 한다. JS trim()과 공백으로 보는 글자가 다르다(#314 리뷰)
+  const canSend =
+    type !== undefined && hasContentLikeServer(content) && length <= REPORT_CONTENT_MAX && !nul
 
   // 다시 열 때 지난 신고를 보냈으면 새 신고로 시작한다. 닫을 때 비우지 않는 까닭: 보내는 중에 닫고
   // 그 뒤 성공하면 닫을 때는 아직 성공이 아니라, 다시 열었을 때 '보냈어요'가 남았다(코드 리뷰).
@@ -116,11 +119,19 @@ export function ReportProblem({ problem }: { problem: ProblemDetailView }) {
       >
         {send.isSuccess ? null : (
           <div className="flex flex-col gap-5">
+            {/*
+              보내는 동안은 고치지 못하게 둔다. 요청에는 누를 때의 값만 가서, 그동안 고친 것은 성공하면
+              조용히 사라진다(#314 리뷰). 글칸은 읽기만 막아 포커스와 내용은 그대로 보인다
+            */}
             <RadioGroup
               label="어떤 문제인가요?"
               name="report-type"
               variant="card"
-              options={TYPE_OPTIONS}
+              options={
+                send.isPending
+                  ? TYPE_OPTIONS.map((option) => ({ ...option, disabled: true }))
+                  : TYPE_OPTIONS
+              }
               value={type}
               onChange={(next) => {
                 setType(next)
@@ -136,13 +147,22 @@ export function ReportProblem({ problem }: { problem: ProblemDetailView }) {
                 rows={5}
                 placeholder="예: 예제 2의 출력이 문제 설명과 달라요."
                 value={content}
+                readOnly={send.isPending}
                 onChange={(event) => {
                   setContent(event.target.value)
                   clearError()
                 }}
-                aria-invalid={length > REPORT_CONTENT_MAX || undefined}
-                aria-describedby={`${contentId}-count`}
+                aria-invalid={length > REPORT_CONTENT_MAX || nul || undefined}
+                aria-describedby={
+                  nul ? `${contentId}-nul ${contentId}-count` : `${contentId}-count`
+                }
               />
+              {nul ? (
+                // 서버는 이 글자가 든 내용을 code 없는 400으로 거절해 일반 오류만 보인다. 먼저 알린다
+                <span id={`${contentId}-nul`} className="text-destructive-text text-[13px]">
+                  보낼 수 없는 글자(널 문자)가 들어 있어요. 지우고 다시 써 주세요.
+                </span>
+              ) : null}
               <span
                 id={`${contentId}-count`}
                 className={`self-end text-xs tabular-nums ${

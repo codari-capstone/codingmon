@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -22,11 +22,13 @@ afterEach(() => {
 })
 
 function renderButton() {
+  const client = createQueryClient()
   render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={client}>
       <ReportProblem problem={problem} />
     </QueryClientProvider>,
   )
+  return client
 }
 
 async function openDialog(user: ReturnType<typeof userEvent.setup>) {
@@ -163,16 +165,14 @@ describe('ReportProblem (SOLVE-12)', () => {
     // 닫을 때만 비우면 닫는 순간에는 아직 성공이 아니라 '보냈어요'가 남았다(코드 리뷰)
     let release!: () => void
     const held = new Promise<void>((resolve) => (release = resolve))
-    let sent = false
     server.use(
       http.post('*/api/problems/:id/reports', async () => {
         await held
-        sent = true
         return new HttpResponse(null, { status: 204 })
       }),
     )
     const user = userEvent.setup()
-    renderButton()
+    const client = renderButton()
     const dialog = await openDialog(user)
     await user.click(within(dialog).getByRole('radio', { name: '오탈자' }))
     await user.type(within(dialog).getByLabelText('자세한 내용'), '오타가 있어요')
@@ -181,10 +181,64 @@ describe('ReportProblem (SOLVE-12)', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
     release()
-    await waitFor(() => expect(sent).toBe(true))
+    // 응답을 줬다는 것만으로는 화면이 성공을 받았다고 할 수 없다(#314 리뷰). 뮤테이션이 성공으로 끝나고,
+    // TanStack이 관찰자에게 알리는 한 틱(setTimeout 0)과 React 커밋까지 지난 뒤에 연다
+    await waitFor(() =>
+      expect(client.getMutationCache().getAll().at(-1)?.state.status).toBe('success'),
+    )
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
     const again = await openDialog(user)
     expect(within(again).getByLabelText('자세한 내용')).toHaveValue('')
     expect(within(again).getByRole('button', { name: '신고 보내기' })).toBeDisabled()
+  })
+
+  it('보내는 동안은 유형과 내용을 고칠 수 없다', async () => {
+    // 요청에는 누를 때의 값만 간다. 그동안 고친 것은 성공하면 조용히 사라졌다(#314 리뷰)
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.post('*/api/problems/:id/reports', async () => {
+        await held
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderButton()
+    const dialog = await openDialog(user)
+    await user.click(within(dialog).getByRole('radio', { name: '오탈자' }))
+    await user.type(within(dialog).getByLabelText('자세한 내용'), '오타')
+    await user.click(within(dialog).getByRole('button', { name: '신고 보내기' }))
+
+    expect(within(dialog).getByLabelText('자세한 내용')).toHaveAttribute('readonly')
+    within(dialog)
+      .getAllByRole('radio')
+      .forEach((radio) => expect(radio).toBeDisabled())
+    release()
+    await screen.findByRole('dialog', { name: '신고를 보냈어요' })
+  })
+
+  it('서버가 공백으로 보는 제어 문자뿐이면 보낼 수 없다', async () => {
+    // 서버는 Java strip()으로 떼어 400을 낸다. trim()은 이 글자를 남겨 버튼이 켜졌다(#314 리뷰)
+    const user = userEvent.setup()
+    renderButton()
+    const dialog = await openDialog(user)
+    await user.click(within(dialog).getByRole('radio', { name: '기타' }))
+    await user.click(within(dialog).getByLabelText('자세한 내용'))
+    await user.paste(String.fromCodePoint(0x1f).repeat(3))
+    expect(within(dialog).getByRole('button', { name: '신고 보내기' })).toBeDisabled()
+  })
+
+  it('널 문자가 들어 있으면 보낼 수 없고 그 까닭을 알린다', async () => {
+    // 서버는 code 없는 400이라 일반 오류만 보였다(#314 리뷰)
+    const user = userEvent.setup()
+    renderButton()
+    const dialog = await openDialog(user)
+    await user.click(within(dialog).getByRole('radio', { name: '기타' }))
+    const box = within(dialog).getByLabelText('자세한 내용')
+    await user.click(box)
+    await user.paste(`예제${String.fromCodePoint(0)}가 이상해요`)
+    expect(within(dialog).getByRole('button', { name: '신고 보내기' })).toBeDisabled()
+    expect(box).toHaveAccessibleDescription(/보낼 수 없는 글자\(널 문자\)가 들어 있어요/)
   })
 
   it('잘못 닫아도 다시 열면 쓰던 내용이 남아 있다', async () => {
