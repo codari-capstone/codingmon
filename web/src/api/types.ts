@@ -52,6 +52,7 @@ export type SampleRunCase = SampleRunResult['cases'][number]
 export type Language = components['schemas']['Language']
 
 export type ConceptTag = components['schemas']['ConceptTag']
+export type ConceptTagInput = components['schemas']['ConceptTagInput']
 export type ProblemSummary = components['schemas']['ProblemSummary']
 export type ProblemPage = components['schemas']['ProblemPage']
 

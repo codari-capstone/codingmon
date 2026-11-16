@@ -4,6 +4,8 @@ import type {
   AdminSolution,
   AdminTestCase,
   AiQuota,
+  ConceptTag,
+  ConceptTagInput,
   Language,
   LoginRequest,
   ProblemInput,
@@ -14,6 +16,7 @@ import type {
 } from '@/api/types'
 import { DIFFICULTY_RANK, type Difficulty, type SolveStatus } from '@/api/types'
 import { EMAIL_PATTERN, isValidNickname, isValidPassword } from '@/features/auth/accountRules'
+import { TAG_NAME_MAX, TAG_SLUG_MAX, TAG_SLUG_PATTERN } from '@/features/admin/tagRules'
 import { FIRST_ACTIVITY_YEAR } from '@/features/mypage/myPageQuery'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import {
@@ -372,6 +375,19 @@ function reviewView(
   }
 }
 
+/** 관리자가 목에서 등록한 개념 태그(ADM-11). fixture 배열은 다른 목도 읽으니 따로 쌓는다. */
+let createdConceptTags: ConceptTag[] = []
+
+/** 서버처럼 등록한 순서(id 순)다 — fixture 뒤에 붙는다(ProblemRepository.findAllTags). */
+function allConceptTags(): ConceptTag[] {
+  return [...conceptTags, ...createdConceptTags]
+}
+
+/** 테스트 사이에 등록한 태그가 새지 않게 비운다. */
+export function resetConceptTags(): void {
+  createdConceptTags = []
+}
+
 /**
  * 관리자 문제 상태. 등록·수정 핸들러가 이 배열과 그 안의 버전을 고친다.
  *
@@ -431,7 +447,7 @@ function checkProblemInput(body: ProblemInput) {
     )
   }
 
-  const unknown = body.tags.find((slug) => !conceptTags.some((tag) => tag.slug === slug))
+  const unknown = body.tags.find((slug) => !allConceptTags().some((tag) => tag.slug === slug))
   if (unknown !== undefined) {
     return problem(400, 'TAG_NOT_FOUND', `'${unknown}' 태그가 없어요`)
   }
@@ -631,7 +647,39 @@ function unauthorized() {
  * 개발 서버와 jsdom에서 다르다. 와일드카드로 두면 양쪽에서 같은 핸들러가 걸린다.
  */
 export const handlers: RequestHandler[] = [
-  http.get('*/api/concept-tags', () => HttpResponse.json(conceptTags)),
+  http.get('*/api/concept-tags', () => HttpResponse.json(allConceptTags())),
+
+  /**
+   * 개념 태그 등록 (ADM-11). 규칙은 계약 `ConceptTagInput`이다. 형식이 틀리면 화면이 막으므로
+   * `code` 없는 400, 이름(앞뒤 공백 뗀 값)이나 slug가 이미 있으면 409 `CONCEPT_TAG_EXISTS`다.
+   * 관리자 문제 목처럼 권한은 보지 않는다(RequireAdmin 뒤의 화면).
+   */
+  http.post('*/api/admin/concept-tags', async ({ request }) => {
+    const body = (await request.json()) as Partial<Record<keyof ConceptTagInput, unknown>>
+    // 빠졌거나 글자가 아닌 값도 서버처럼 400이다. 그대로 .trim()을 부르면 목이 500을 낸다
+    if (typeof body.slug !== 'string' || typeof body.name !== 'string') {
+      return badRequest('slug·name은 글자여야 한다')
+    }
+    const { slug } = body
+    const name = body.name.trim()
+    if (!TAG_SLUG_PATTERN.test(slug) || slug.length > TAG_SLUG_MAX) {
+      return badRequest('slug 형식이 맞지 않다')
+    }
+    if (name.length === 0 || name.length > TAG_NAME_MAX) {
+      return badRequest('name이 비었거나 너무 길다')
+    }
+    // 서버는 DB의 UNIQUE(정확히 같은 값)로 막는다. 문구도 서버와 같게 둔다(AdminConceptTagController)
+    if (allConceptTags().some((tag) => tag.slug === slug || tag.name === name)) {
+      return problem(
+        409,
+        'CONCEPT_TAG_EXISTS',
+        '같은 이름이나 같은 영문 이름의 태그가 이미 있어요. 다른 이름을 입력해 주세요',
+      )
+    }
+    const created = { slug, name }
+    createdConceptTags.push(created)
+    return HttpResponse.json(created, { status: 201 })
+  }),
 
   http.get('*/api/problems', ({ request }) => {
     const query = new URL(request.url).searchParams

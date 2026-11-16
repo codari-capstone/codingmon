@@ -7,7 +7,7 @@ import { MOCK_CODE, resetEmailCodes } from './fixtures/emailCodes'
 import { kstYear } from './fixtures/activity'
 import { conceptTags, problems } from './fixtures/problems'
 import { mockAccounts } from './fixtures/users'
-import { resetLearningReport, resetSessions, resetSubmissions } from './handlers'
+import { resetConceptTags, resetLearningReport, resetSessions, resetSubmissions } from './handlers'
 import { server } from './server'
 
 async function fetchProblems(query: ProblemListQuery): Promise<ProblemPage> {
@@ -692,6 +692,57 @@ describe('제출 목의 검사 순서', () => {
     })
 
     expect(code(res)).toBe('SOURCE_EMPTY')
+  })
+})
+
+describe('개념 태그 등록 목 (ADM-11, #221)', () => {
+  afterEach(() => resetConceptTags())
+
+  it('등록하면 201로 이름의 앞뒤 공백을 지운 태그를 주고, 목록에 붙는다', async () => {
+    const created = await api.POST('/api/admin/concept-tags', {
+      body: { slug: 'binary-search', name: '  이분 탐색 ' },
+    })
+    expect(created.response.status).toBe(201)
+    expect(created.data).toEqual({ slug: 'binary-search', name: '이분 탐색' })
+
+    const { data } = await api.GET('/api/concept-tags')
+    expect(data).toHaveLength(conceptTags.length + 1)
+    expect(data?.at(-1)?.slug).toBe('binary-search')
+  })
+
+  it.each([
+    ['이름', { slug: 'brand-new', name: ` ${conceptTags[0].name} ` }],
+    ['slug', { slug: conceptTags[0].slug, name: '새 이름' }],
+  ])('같은 %s이 있으면 409 CONCEPT_TAG_EXISTS다', async (_what, body) => {
+    const res = await api.POST('/api/admin/concept-tags', { body })
+    expect(res.response.status).toBe(409)
+    expect(code(res)).toBe('CONCEPT_TAG_EXISTS')
+  })
+
+  it.each([
+    ['slug 형식', { slug: 'Binary_Search', name: '이분 탐색' }],
+    ['slug 80자 넘음', { slug: 'a'.repeat(81), name: '이분 탐색' }],
+    ['공백뿐인 이름', { slug: 'blank', name: '   ' }],
+    ['이름 100자 넘음', { slug: 'long', name: '가'.repeat(101) }],
+  ])('%s은 code 없는 400이다', async (_what, body) => {
+    const res = await api.POST('/api/admin/concept-tags', { body })
+    expect(res.response.status).toBe(400)
+    expect(code(res)).toBeUndefined()
+  })
+
+  // 빠졌거나 글자가 아닌 값에 .trim()을 부르면 목이 500을 냈다(코드 리뷰). 서버처럼 400이다
+  it.each([
+    ['name 없음', { slug: 'no-name' }],
+    ['name이 null', { slug: 'null-name', name: null }],
+    ['slug 없음', { name: '이름만' }],
+  ])('%s도 code 없는 400이다', async (_what, body) => {
+    const response = await fetch('/api/admin/concept-tags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).not.toHaveProperty('code')
   })
 })
 

@@ -53,6 +53,10 @@ describe('라우터 보호 구조', () => {
     expect(guards.indexOf('RequireAuth')).toBeLessThan(guards.indexOf('RequireAdmin'))
   })
 
+  it('관리자 태그 화면(admin/tags)도 RequireAdmin 아래에 있다 (#221)', () => {
+    expect(guardsOf('tags')).toContain('RequireAdmin')
+  })
+
   it.each(['problems', 'login', 'signup', 'password-reset', 'forbidden', '*'])(
     '%s는 보호하지 않는다',
     (path) => {

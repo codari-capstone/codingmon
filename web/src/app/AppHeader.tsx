@@ -15,7 +15,7 @@ import {
 import { useAuth } from '@/features/auth/useAuth'
 import { useLogout } from '@/features/auth/useLogout'
 import { StreakChip } from '@/features/streak/StreakChip'
-import { MENU } from './menu'
+import { MENU, type MenuItem } from './menu'
 
 /** 학습자 화면에서 ADMIN에게만 더 보이는 입구 (COM-05). */
 const ADMIN_ENTRY = { to: '/admin', label: '관리자' }
@@ -24,7 +24,11 @@ const ADMIN_ENTRY = { to: '/admin', label: '관리자' }
  * 관리자 화면(/admin 아래)의 메뉴 (ADM-10). 디자인은 대시보드·문제·회원·신고(숫자)·태그다.
  * 아직 없는 화면의 메뉴는 그 화면 이슈에서 더한다.
  */
-const ADMIN_MENU = [{ to: '/admin', label: '문제' }]
+const ADMIN_MENU: MenuItem[] = [
+  // 문제 관리는 /admin 자체다. 앞부분 일치로 두면 /admin/tags에서도 켜진다
+  { to: '/admin', label: '문제', end: true, also: '/admin/problems' },
+  { to: '/admin/tags', label: '태그' },
+]
 
 /** COM-01 상단 바. 로그인 상태는 useAuth만 본다. */
 export function AppHeader() {
@@ -35,7 +39,7 @@ export function AppHeader() {
   const isAdmin = user?.role === 'ADMIN'
   // /admin 아래에 남는 사람은 ADMIN뿐이다(아니면 /forbidden으로 간다). 세션을 모르는 동안에도
   // 관리자 메뉴를 두어야 새로고침 때 학습자 메뉴 3개 -> 1개로 흔들리지 않는다.
-  const menu: typeof MENU =
+  const menu: MenuItem[] =
     inAdmin && (isAdmin || isLoading) ? ADMIN_MENU : isAdmin ? [...MENU, ADMIN_ENTRY] : MENU
   // 로그인 화면에서 넘어왔다면 그 화면이 들고 있던 돌아갈 주소를 이어 준다. 아니면 지금 주소.
   // 값은 로그인 화면의 safeRedirect가 검사하므로 여기서는 거르지 않는다.
@@ -72,9 +76,10 @@ export function AppHeader() {
           {menu.map((item) => {
             // NavLink는 aria-current를 자기 주소에만 붙인다. `also`까지 같은 규칙(구간 단위 앞부분 일치)으로
             // 직접 가려 색과 화면 낭독기의 '현재 페이지'가 함께 가게 한다(#248 리뷰)
-            const active = [item.to, item.also].some(
-              (path) => path && matchPath({ path, end: false }, location.pathname),
-            )
+            const active =
+              matchPath({ path: item.to, end: item.end ?? false }, location.pathname) !== null ||
+              (item.also !== undefined &&
+                matchPath({ path: item.also, end: false }, location.pathname) !== null)
             return (
               <Link
                 key={item.to}
