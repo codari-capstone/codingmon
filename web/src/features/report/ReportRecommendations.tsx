@@ -37,21 +37,34 @@ export function ReportRecommendations({
         <ol className="m-0 grid list-none gap-4 p-0 md:grid-cols-3">
           {recommendations.map((r) => (
             <li key={r.rank} className="min-w-0">
+              {/*
+                링크 이름은 순위·제목·풀이 상태만이다. 카드 전체가 링크라 그대로 두면 여러 문장짜리 추천 이유까지
+                이름이 되어, 링크 목록에서 문제를 고르기 어렵다(#312 리뷰). 이유는 카드를 읽을 때 보인다
+              */}
               <Link
                 to={`/problems/${r.problemId}`}
+                aria-labelledby={`next-${r.rank}-rank next-${r.rank}-title next-${r.rank}-status`}
                 className="bg-card hover:border-primary hover:shadow-hover focus-visible:outline-ring flex h-full flex-col gap-3 rounded-lg border p-5 no-underline transition-[border-color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
               >
                 <span className="flex items-center justify-between gap-2">
-                  <span className="bg-accent text-primary-text inline-flex size-7 items-center justify-center rounded-full text-sm font-bold tabular-nums">
-                    <span className="sr-only">추천 </span>
-                    {r.rank}
-                    <span className="sr-only">위</span>
+                  <span
+                    id={`next-${r.rank}-rank`}
+                    className="bg-accent text-primary-text inline-flex size-7 items-center justify-center rounded-full text-sm font-bold tabular-nums"
+                  >
+                    {/* 낭독은 '추천 1위'로 한 덩어리다. 글자를 나누면 이름을 지을 때 띄어쓰기가 빠진다 */}
+                    <span className="sr-only">추천 {r.rank}위</span>
+                    <span aria-hidden="true">{r.rank}</span>
                   </span>
-                  <StatusText tone={SOLVE_STATUS_TONE[r.solveStatus]} className="text-[13px]">
-                    {SOLVE_STATUS_LABEL[r.solveStatus]}
-                  </StatusText>
+                  <span id={`next-${r.rank}-status`}>
+                    <StatusText tone={SOLVE_STATUS_TONE[r.solveStatus]} className="text-[13px]">
+                      {SOLVE_STATUS_LABEL[r.solveStatus]}
+                    </StatusText>
+                  </span>
                 </span>
-                <span className="text-foreground text-[17px] leading-[1.4] font-bold tracking-[-0.01em] break-keep [overflow-wrap:anywhere]">
+                <span
+                  id={`next-${r.rank}-title`}
+                  className="text-foreground text-[17px] leading-[1.4] font-bold tracking-[-0.01em] break-keep [overflow-wrap:anywhere]"
+                >
                   {r.title}
                 </span>
                 <span className="flex flex-wrap items-center gap-1.5">

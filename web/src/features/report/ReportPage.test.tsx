@@ -9,6 +9,7 @@ import type { LearningReport } from '@/api/types'
 import { createQueryClient, POLL_INTERVAL_MS } from '@/app/queryClient'
 import { FAILING_INTERVAL_MS } from '@/features/result/resultQuery'
 import { learningReportOf, learningStatsReady, learningStatsShort } from '@/mocks/fixtures/learning'
+import { DIFFICULTY_LABEL, SOLVE_STATUS_LABEL } from '@/features/problems/labels'
 import { resetLearningReport } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 import { Component as ReportPage } from './ReportPage'
@@ -422,10 +423,19 @@ describe('ReportPage — 다음에 풀 문제 (REP-04)', () => {
       report.recommendations.map((r) => `/problems/${r.problemId}`),
     )
     const [first, , challenge] = cards
+    const top = report.recommendations[0]
     expect(first).toHaveTextContent(`추천 1위`)
-    expect(first).toHaveTextContent(report.recommendations[0].title)
+    expect(first).toHaveTextContent(top.title)
+    // 난이도·풀이 상태는 값(enum)이 아니라 화면 이름으로 보인다(#312 리뷰)
+    expect(first).toHaveTextContent(DIFFICULTY_LABEL[top.difficulty])
+    expect(first).toHaveTextContent(SOLVE_STATUS_LABEL[top.solveStatus])
+    expect(first).not.toHaveTextContent(top.difficulty)
     expect(first).toHaveTextContent('동적 계획법 · 취약 점수 0.8')
-    expect(first).toHaveTextContent(report.recommendations[0].reason!)
+    expect(first).toHaveTextContent(top.reason!)
+    // 링크 이름은 순위·제목·풀이 상태뿐이다. 여러 문장짜리 추천 이유는 넣지 않는다(#312 리뷰)
+    expect(first).toHaveAccessibleName(
+      `추천 1위 ${top.title} ${SOLVE_STATUS_LABEL[top.solveStatus]}`,
+    )
     // 근거 개념이 없으면 도전 문제다. 개념·점수를 보이지 않는다
     expect(challenge).toHaveTextContent('도전 문제')
     expect(challenge).not.toHaveTextContent('취약 점수')
