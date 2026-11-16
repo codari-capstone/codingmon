@@ -1,6 +1,7 @@
 import { http, HttpResponse, type RequestHandler } from 'msw'
 
 import type {
+  AdminReportDetail,
   AdminSolution,
   AdminTestCase,
   AiQuota,
@@ -9,6 +10,8 @@ import type {
   Language,
   LoginRequest,
   ProblemInput,
+  ReportInput,
+  ReportType,
   SolutionInput,
   SubmissionAnalysis,
   SubmissionCodeReview,
@@ -18,7 +21,15 @@ import { DIFFICULTY_RANK, type Difficulty, type SolveStatus } from '@/api/types'
 import { EMAIL_PATTERN, isValidNickname, isValidPassword } from '@/features/auth/accountRules'
 import { TAG_NAME_MAX, TAG_SLUG_MAX, TAG_SLUG_PATTERN } from '@/features/admin/tagRules'
 import { FIRST_ACTIVITY_YEAR } from '@/features/mypage/myPageQuery'
+import { REPORT_TYPE_LABEL } from '@/features/problems/labels'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
+import {
+  hasContentLikeServer,
+  hasNul,
+  REPORT_CONTENT_MAX,
+  reportLength,
+  stripLikeServer,
+} from '@/features/solve/reportRules'
 import {
   invalidateToken,
   isSignedUp,
@@ -373,6 +384,21 @@ function reviewView(
     ],
     completedAt: createdAt,
   }
+}
+
+/** 학습자가 목에서 보낸 문제 신고(SOLVE-12). 관리자 신고 화면(ADM-13)이 읽는다. */
+let mockReports: AdminReportDetail[] = []
+// 유형은 화면의 이름 표에서 가져온다. Record<ReportType, …>라 계약에 유형이 늘면 거기서 먼저 막힌다
+const REPORT_TYPES = Object.keys(REPORT_TYPE_LABEL) as ReportType[]
+
+/** 테스트 사이에 보낸 신고가 새지 않게 비운다. */
+export function resetReports(): void {
+  mockReports = []
+}
+
+/** 목에 쌓인 신고. 테스트가 보낸 내용을 확인할 때 쓴다. */
+export function reportsSent(): readonly AdminReportDetail[] {
+  return mockReports
 }
 
 /** 관리자가 목에서 등록한 개념 태그(ADM-11). fixture 배열은 다른 목도 읽으니 따로 쌓는다. */
@@ -733,6 +759,59 @@ export const handlers: RequestHandler[] = [
       content: sorted.slice(page * size, page * size + size),
       totalElements: sorted.length,
     })
+  }),
+
+  /**
+   * 문제 신고 (SOLVE-12). 학습자는 보낸 신고를 다시 볼 수 없어 204만 준다(계약). 관리자 신고 목이 읽게 쌓는다.
+   * 내용은 받은 그대로(코드 포인트) 1,000자를 넘거나 앞뒤 공백을 뗀 뒤 비면 400 `INVALID_REPORT_CONTENT`다.
+   * 문제 상세와 달리 세션을 본다 — 신고자를 남겨야 한다.
+   */
+  http.post('*/api/problems/:id/reports', async ({ request, params }) => {
+    const reporterId = userIdFromToken(bearer(request))
+    if (reporterId === null) return unauthorized()
+    const id = Number(params.id)
+    if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
+    // 본문이 비었거나 JSON이 아니면 서버처럼 400이다. 그대로 두면 목이 던져 네트워크 오류가 된다
+    const body = (await request.json().catch(() => null)) as Partial<
+      Record<keyof ReportInput, unknown>
+    > | null
+    // 판정 순서와 문구는 서버(ProblemReportController)와 같다: 형식·널 문자 → 길이 → 빈 내용(Java strip)
+    if (
+      body === null ||
+      typeof body.content !== 'string' ||
+      !REPORT_TYPES.includes(body.type as ReportType) ||
+      hasNul(body.content)
+    ) {
+      return badRequest('type·content가 맞지 않다')
+    }
+    if (reportLength(body.content) > REPORT_CONTENT_MAX) {
+      return problem(
+        400,
+        'INVALID_REPORT_CONTENT',
+        '신고 내용이 1,000자를 넘어요. 1,000자 이하로 줄여 주세요',
+      )
+    }
+    if (!hasContentLikeServer(body.content)) {
+      return problem(400, 'INVALID_REPORT_CONTENT', '신고 내용을 입력해 주세요')
+    }
+    const detail = problemDetails.find((item) => item.id === id)
+    if (!detail) return problem(404, 'PROBLEM_NOT_FOUND', '문제를 찾을 수 없어요')
+    const reporter = mockAccounts.find((item) => item.user.id === reporterId)?.user ?? null
+    mockReports.push({
+      id: mockReports.length + 1,
+      problemId: id,
+      problemTitle: detail.title,
+      versionNo: detail.versionNo,
+      type: body.type as ReportType,
+      content: stripLikeServer(body.content),
+      reporterId,
+      reporterNickname: reporter?.nickname ?? null,
+      createdAt: new Date().toISOString(),
+      status: 'RECEIVED',
+      adminMemo: null,
+      updatedAt: null,
+    })
+    return new HttpResponse(null, { status: 204 })
   }),
 
   /**

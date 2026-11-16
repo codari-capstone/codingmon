@@ -1,4 +1,4 @@
-import type { Difficulty, SolveStatus } from '@/api/types'
+import type { Difficulty, ReportType, SolveStatus } from '@/api/types'
 import type { StatusTone } from '@/components/StatusText'
 
 export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
@@ -19,4 +19,14 @@ export const SOLVE_STATUS_TONE: Record<SolveStatus, StatusTone> = {
   SOLVED: 'success',
   WRONG: 'danger',
   UNSOLVED: 'muted',
+}
+
+/** 문제 신고 유형 (SOLVE-12, 계약 `ReportType`). 신고 창과 관리자 신고 화면(ADM-13)이 같이 쓴다. */
+export const REPORT_TYPE_LABEL: Record<ReportType, string> = {
+  STATEMENT: '문제 설명 오류',
+  IO_DESCRIPTION: '입력/출력 설명 오류',
+  SAMPLE: '예제 오류',
+  TEST_CASE: '테스트케이스 오류',
+  TYPO: '오탈자',
+  OTHER: '기타',
 }

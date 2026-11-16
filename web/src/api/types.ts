@@ -53,6 +53,9 @@ export type Language = components['schemas']['Language']
 
 export type ConceptTag = components['schemas']['ConceptTag']
 export type ConceptTagInput = components['schemas']['ConceptTagInput']
+export type ReportType = components['schemas']['ReportType']
+export type ReportInput = components['schemas']['ReportInput']
+export type AdminReportDetail = components['schemas']['AdminReportDetail']
 export type ProblemSummary = components['schemas']['ProblemSummary']
 export type ProblemPage = components['schemas']['ProblemPage']
 
