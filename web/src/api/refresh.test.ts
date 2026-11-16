@@ -27,8 +27,9 @@ function refreshReturns(token: string | null) {
 }
 
 describe('refreshAccessToken (COM-04)', () => {
+  // 토큰만이 아니라 세션의 계정까지 지운다. 남기면 다음 테스트의 갱신이 다른 계정으로 읽힌다.
   afterEach(() => {
-    setAccessToken(null)
+    endSession()
     vi.restoreAllMocks()
   })
 
@@ -42,24 +43,27 @@ describe('refreshAccessToken (COM-04)', () => {
     expect(getAccessToken()).toBe('new.1')
   })
 
-  it('공유 쿠키가 다른 계정의 JWT를 주면 권한을 바꾸지 않는다', async () => {
+  it('공유 쿠키가 다른 계정의 JWT를 주면 받지 않고 이 탭의 세션을 끝낸다', async () => {
     const previous = jwtFor('2', 'old')
-    setAccessToken(previous)
+    startSession(previous)
+    let calls = 0
     server.use(
-      http.post('*/api/auth/refresh', () =>
-        HttpResponse.json({ accessToken: jwtFor('1', 'from-late-cookie') }),
-      ),
+      http.post('*/api/auth/refresh', () => {
+        calls += 1
+        return HttpResponse.json({ accessToken: jwtFor('1', 'from-late-cookie') })
+      }),
     )
     expect(await refreshAccessToken(previous)).toBeNull()
-    // 다음 요청도 원래 계정에 묶이도록 기존 토큰을 남긴다.
-    expect(getAccessToken()).toBe(previous)
-    expect(await refreshAccessToken(previous)).toBeNull()
+    expect(getAccessToken()).toBeNull()
+    // 다시 물어도 같은 답이다. 물을 때마다 그 계정의 refresh token만 회전시키지 않는다.
+    expect(await refreshAccessToken(null)).toBeNull()
+    expect(calls).toBe(1)
   })
 
   it('같은 계정의 JWT 갱신은 정상적으로 적용한다', async () => {
     const previous = jwtFor('2', 'old')
     const next = jwtFor('2', 'new')
-    setAccessToken(previous)
+    startSession(previous)
     server.use(http.post('*/api/auth/refresh', () => HttpResponse.json({ accessToken: next })))
     expect(await refreshAccessToken(previous)).toBe(next)
   })
@@ -213,7 +217,7 @@ describe('refreshAccessToken (COM-04)', () => {
 
 describe('세션 미들웨어 (api/client.ts)', () => {
   afterEach(() => {
-    setAccessToken(null)
+    endSession()
   })
 
   it('인증 없이 시작한 변경 요청에 나중에 받은 쿠키 권한을 붙이지 않는다', async () => {
@@ -409,7 +413,7 @@ describe('세션 미들웨어 (api/client.ts)', () => {
 })
 
 describe('세션 정리', () => {
-  afterEach(() => setAccessToken(null))
+  afterEach(() => endSession())
 
   /**
    * 전에는 쿠키 세션이라 탭끼리 함께 끊겼다. access token이 탭마다의 메모리에 있어,
@@ -427,6 +431,74 @@ describe('세션 정리', () => {
       // 바쁠 때(실제 타이머를 쓰는 폴링 테스트와 같이 돌 때) 한 틱 안에 안 오고,
       // 전체 실행에서만 간헐적으로 실패했다.
       await vi.waitFor(() => expect(getAccessToken()).toBeNull())
+    } finally {
+      channel.close()
+    }
+  })
+
+  /**
+   * refresh 쿠키는 탭끼리 함께 쓴다. 다른 탭이 B로 로그인하면 쿠키도 B의 것이 된다. 이 탭이
+   * A의 화면을 그린 채 B의 토큰을 받아 들이면, A의 확인 문구로 B가 탈퇴되는 식의 일이 생긴다.
+   */
+  it('다른 탭이 다른 계정으로 로그인하면 이 탭은 그 권한을 이어받지 않는다', async () => {
+    const accountB = jwtFor('2', 'b')
+    startSession(jwtFor('1', 'a'))
+    let refreshes = 0
+    const sent: (string | null)[] = []
+    const onlyB = ({ request }: { request: Request }) => {
+      sent.push(request.headers.get('Authorization'))
+      return request.headers.get('Authorization') === `Bearer ${accountB}`
+        ? new HttpResponse(null, { status: 204 })
+        : HttpResponse.json({ status: 401 }, { status: 401 })
+    }
+    server.use(
+      http.post('*/api/auth/refresh', () => {
+        refreshes += 1
+        return HttpResponse.json({ accessToken: accountB })
+      }),
+      http.get('*/api/users/me', onlyB),
+      http.delete('*/api/users/me', onlyB),
+    )
+    const channel = new BroadcastChannel('codingmon-session')
+
+    try {
+      channel.postMessage('started')
+      await vi.waitFor(() => expect(getAccessToken()).toBeNull())
+
+      expect((await api.GET('/api/users/me')).response.status).toBe(401)
+      expect((await api.DELETE('/api/users/me')).response.status).toBe(401)
+      // B의 토큰은 한 번도 나가지 않고, 다른 계정임을 안 뒤로는 갱신도 다시 묻지 않는다.
+      expect(sent).toEqual([null, null])
+      expect(refreshes).toBe(1)
+      expect(getAccessToken()).toBeNull()
+    } finally {
+      channel.close()
+    }
+  })
+
+  it('다른 탭이 같은 계정으로 다시 로그인하면 이 탭의 변경 요청은 이어진다', async () => {
+    const again = jwtFor('1', 'again')
+    startSession(jwtFor('1', 'a'))
+    server.use(
+      http.post('*/api/auth/refresh', () => HttpResponse.json({ accessToken: again })),
+      http.post('*/api/submissions', ({ request }) =>
+        request.headers.get('Authorization') === `Bearer ${again}`
+          ? HttpResponse.json({ id: 7 }, { status: 202 })
+          : HttpResponse.json({ status: 401 }, { status: 401 }),
+      ),
+    )
+    const channel = new BroadcastChannel('codingmon-session')
+
+    try {
+      channel.postMessage('started')
+      await vi.waitFor(() => expect(getAccessToken()).toBeNull())
+
+      // 토큰은 버렸어도 이 탭의 세션(계정 1)은 남아 있어, 쿠키로 같은 계정의 토큰을 받아 다시 보낸다.
+      const result = await api.POST('/api/submissions', {
+        body: { problemId: 1, language: 'PYTHON', sourceCode: 'print(1)' },
+      })
+      expect(result.data?.id).toBe(7)
+      expect(getAccessToken()).toBe(again)
     } finally {
       channel.close()
     }
@@ -451,7 +523,7 @@ describe('세션 정리', () => {
  * 뒤에도 다음 요청이 멀쩡하다"로 본다 — Map이 새면 같은 id가 재사용되며 어긋난다.
  */
 describe('요청 사본 정리', () => {
-  afterEach(() => setAccessToken(null))
+  afterEach(() => endSession())
 
   it('fetch가 던져도 사본을 남기지 않는다', async () => {
     setAccessToken('mock-access.1.1')
