@@ -14,6 +14,7 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -99,6 +100,13 @@ class PasswordResetIdentityTest {
         resets.reset(proof, "Changed123!", "Changed123!");
     }
 
+    @Test
+    void 가입하지_않은_이메일도_인증번호가_없으면_같은_오류로_답한다() {
+        // 가입 여부는 IP 제한을 거치는 인증번호 발송에서만 알려 준다. 확인 주소가 먼저 답하면 제한 없이 가입 여부를 알 수 있다.
+        assertCode(() -> resets.verifyCode(UUID.randomUUID() + "@test.local", "000000"), "CODE_EXPIRED");
+        assertCode(() -> resets.verifyCode(email, "000000"), "CODE_EXPIRED");
+    }
+
     private String proof() throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(JwtConfig.decodeSecret(secret), "HmacSHA256"));
@@ -114,8 +122,11 @@ class PasswordResetIdentityTest {
     }
 
     private void assertExpired(String proof) {
-        assertThatThrownBy(() -> resets.reset(proof, "Changed123!", "Changed123!"))
-                .isInstanceOfSatisfying(ErrorResponseException.class,
-                        e -> assertThat(e.getBody().getProperties().get("code")).isEqualTo("RESET_EXPIRED"));
+        assertCode(() -> resets.reset(proof, "Changed123!", "Changed123!"), "RESET_EXPIRED");
+    }
+
+    private static void assertCode(ThrowingCallable call, String code) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(ErrorResponseException.class,
+                e -> assertThat(e.getBody().getProperties().get("code")).isEqualTo(code));
     }
 }
