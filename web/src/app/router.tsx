@@ -97,12 +97,14 @@ export const router = createBrowserRouter([
                 Component: RequireAdmin,
                 children: [
                   {
-                    // 문제 관리를 /admin 자체에 둔다. 관리자 화면이 이것뿐이라 리다이렉트를
+                    // 문제 관리를 /admin 자체에 둔다. 관리자 첫 화면이라 리다이렉트를
                     // 둘 이유가 없고, AppHeader의 /admin 링크도 그대로 쓴다. #50 관리자
                     // 대시보드가 오면 그쪽이 index가 되고 목록은 'problems'로 내려간다.
                     path: 'admin',
                     children: [
                       { index: true, lazy: () => import('@/features/admin/AdminProblemListPage') },
+                      // 개념 태그 목록·등록 (ADM-11, #221)
+                      { path: 'tags', lazy: () => import('@/features/admin/AdminTagsPage') },
                       // 등록·수정·버전 보기가 한 컴포넌트다. 폼이 같고 어디서 값을 읽는지만
                       // 다르다 (AdminProblemFormPage 주석).
                       {

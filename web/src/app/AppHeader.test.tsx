@@ -186,7 +186,7 @@ describe('AppHeader', () => {
       within(nav)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['문제'])
+    ).toEqual(['문제', '태그'])
   })
 
   it('관리자 화면에서는 관리자 메뉴로 바뀐다 (ADM-10)', () => {
@@ -205,8 +205,31 @@ describe('AppHeader', () => {
 
     const nav = screen.getByRole('navigation', { name: '주요 메뉴' })
     const links = within(nav).getAllByRole('link')
-    expect(links.map((link) => link.textContent)).toEqual(['문제'])
+    expect(links.map((link) => link.textContent)).toEqual(['문제', '태그'])
     expect(links[0]).toHaveAttribute('href', '/admin')
+    expect(links[1]).toHaveAttribute('href', '/admin/tags')
+    // 문제 수정 화면은 '문제'가 지금 화면이다
+    expect(links[0]).toHaveAttribute('aria-current', 'page')
+    expect(links[1]).not.toHaveAttribute('aria-current')
+  })
+
+  it('태그 화면에서는 태그만 지금 화면이다 — 문제(/admin)가 앞부분 일치로 같이 켜지지 않는다', () => {
+    mockAuth({
+      user: {
+        id: 2,
+        nickname: '관리자',
+        role: 'ADMIN',
+        email: 'ad***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
+      isAuthenticated: true,
+    })
+    renderHeaderAt('/admin/tags')
+
+    const nav = screen.getByRole('navigation', { name: '주요 메뉴' })
+    expect(within(nav).getByRole('link', { name: '태그' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('link', { name: '문제' })).not.toHaveAttribute('aria-current')
   })
 
   it('비로그인에게도 제출 기록·내 학습 링크는 보인다', () => {
