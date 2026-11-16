@@ -36,16 +36,23 @@ const DAY_MS = 24 * 60 * 60 * 1000
  * 다시 받지 않아 '오늘 리포트를 새로 만들 수 있어요'가 뜨지 않았다(#311 리뷰).
  */
 export function useUtcToday(): string {
-  const [today, setToday] = useState(() => new Date().toISOString().slice(0, 10))
+  const [today, setToday] = useState(utcToday)
   useEffect(() => {
-    const now = Date.now()
-    const timer = setTimeout(
-      () => setToday(new Date().toISOString().slice(0, 10)),
-      DAY_MS - (now % DAY_MS),
-    )
+    let timer: ReturnType<typeof setTimeout>
+    // 울릴 때마다 다음 자정에 다시 건다. 날짜가 바뀔 때만 걸면, 타이머가 벽시계보다 조금 일찍 울려
+    // 같은 날짜를 읽은 경우 다음 타이머가 영영 걸리지 않는다(#311 리뷰)
+    const schedule = () => {
+      setToday(utcToday())
+      timer = setTimeout(schedule, DAY_MS - (Date.now() % DAY_MS) + 50)
+    }
+    schedule()
     return () => clearTimeout(timer)
-  }, [today])
+  }, [])
   return today
+}
+
+function utcToday(): string {
+  return new Date().toISOString().slice(0, 10)
 }
 
 /**

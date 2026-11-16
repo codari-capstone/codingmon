@@ -85,10 +85,12 @@ export function AiAnalysis({
   request: ReportRequest
   today: string
 }) {
-  // 실패한 리포트는 [다시 시도]를 누르는 동안에도 그 블록을 둔다. 사라지면 버튼과 함께 포커스를 잃는다(#311 리뷰)
+  // 요청 중인지는 보지 않는다. 누른 버튼이 기다림을 보이고, 응답이 PENDING이면 그때 바뀐다.
+  // 요청만으로 바꾸면 실패한 블록과 버튼이 사라지거나(#311 리뷰), 지난 리포트를 다시 만들다
+  // 실패했을 때 문장이 사라졌다 돌아온다
+  const working = report.status === 'PENDING'
   const failed = report.status === 'FAILED'
-  const working = report.status === 'PENDING' || (request.isPending && !failed)
-  const done = !working && report.status === 'COMPLETED'
+  const done = report.status === 'COMPLETED'
   const concepts = report.weakConcepts.filter((c) => c.explanation || c.practice)
 
   return (
@@ -96,11 +98,12 @@ export function AiAnalysis({
       aria-labelledby="report-ai-heading"
       className="bg-card flex flex-col gap-5 rounded-lg border p-6 sm:p-7"
     >
-      {/* live region은 늘 그대로 둔다. 만드는 중 → 끝남이 같은 요소의 글이 바뀌어야 읽힌다(AnalysisPanel과 같다) */}
-      <p role="status" className={working ? 'text-muted-foreground text-sm' : 'sr-only'}>
-        {working ? 'AI가 분석 문장을 쓰고 있어요. 숫자는 먼저 볼 수 있어요.' : ''}
-        {done ? 'AI 분석을 마쳤어요.' : ''}
-      </p>
+      {/* 보이는 안내다. 낭독은 화면에 늘 있는 ReportAnnouncer가 맡는다 — 이 구역은 리포트가 생길 때 새로 붙는다 */}
+      {working ? (
+        <p className="text-muted-foreground text-sm">
+          AI가 분석 문장을 쓰고 있어요. 숫자는 먼저 볼 수 있어요.
+        </p>
+      ) : null}
       <div className="-order-1 flex items-center gap-3">
         {/* 결과 화면 AI 분석과 같은 화자 표시. 장식이라 alt를 비운다 */}
         <span className="bg-accent inline-flex size-11 flex-none overflow-hidden rounded-full">

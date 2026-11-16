@@ -24,12 +24,13 @@ function renderReport() {
     ],
     { initialEntries: ['/me/report'] },
   )
+  const client = createQueryClient()
   render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
-  return router
+  return { router, client }
 }
 
 /** 저장된 리포트를 정해 둔다. 만들기(POST)는 목 그대로다. */
@@ -37,8 +38,9 @@ function storedReport(report: LearningReport) {
   server.use(http.get('*/api/users/me/learning-report', () => HttpResponse.json(report)))
 }
 
-const NOW = new Date().toISOString()
-const YESTERDAY = new Date(Date.now() - 86_400_000).toISOString()
+// 테스트마다 만든다. 모듈을 불러올 때 정하면 UTC 자정에 걸린 실행에서 '오늘'이 어긋난다(#311 리뷰)
+const now = () => new Date().toISOString()
+const yesterday = () => new Date(Date.now() - 86_400_000).toISOString()
 
 describe('ReportPage — 리포트가 없을 때 (REP-01)', () => {
   it('맞힌 문제가 모자라면 더 맞혀야 할 개수와 문제 목록 길을 알려 준다', async () => {
@@ -69,11 +71,34 @@ describe('ReportPage — 리포트가 없을 때 (REP-01)', () => {
 
     // 만드는 중(PENDING)에도 수치는 저장본에 있다(계약)
     expect(await screen.findByRole('table')).toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent('AI가 분석 문장을 쓰고 있어요')
+    // 누른 버튼이 사라졌으니 포커스는 새 머리 제목으로 간다(#311 리뷰)
+    expect(screen.getByRole('heading', { level: 1 })).toHaveFocus()
+    // 낭독은 처음부터 화면에 있던 live region이 맡는다. 새로 붙은 구역의 첫 글은 읽히지 않을 수 있다
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('AI가 분석 문장을 쓰고 있어요')
     // 다음 조회에 끝난다(목). 폴링이 이어받는다
     expect(
       await screen.findByText(/동적 계획법과 그래프를 조금 더 연습하면/, {}, { timeout: 3000 }),
     ).toBeInTheDocument()
+    expect(status).toHaveTextContent('AI 분석을 마쳤어요.')
+  })
+
+  it('리포트가 없다는 답을 받은 뒤 다시 받다 실패하면 권유 카드로 덮지 않고 오류를 보인다', async () => {
+    // '아직 없음'(null)은 지킬 화면이 아니다. 덮으면 다시 묻지도 않는다(#311 리뷰)
+    const { client } = renderReport()
+    await screen.findByRole('region', { name: '첫 학습 리포트를 만들어 볼까요?' })
+
+    server.use(
+      http.get('*/api/users/me/learning-report', () =>
+        HttpResponse.json({ status: 503, title: 'Service Unavailable' }, { status: 503 }),
+      ),
+    )
+    await client.refetchQueries({ queryKey: ['learning-report'] })
+
+    expect(await screen.findByRole('button', { name: /다시/ })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('region', { name: '첫 학습 리포트를 만들어 볼까요?' }),
+    ).not.toBeInTheDocument()
   })
 
   it('남은 수가 계약 밖 음수여도 본문을 비우지 않고 권유를 그린다', async () => {
@@ -115,7 +140,7 @@ describe('ReportPage — 리포트가 없을 때 (REP-01)', () => {
 
 describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
   it('표는 리포트 저장본의 값을 서버 순서 그대로 보여 주고, 해결률만 백분율로 적는다', async () => {
-    storedReport(learningReportOf('COMPLETED', NOW))
+    storedReport(learningReportOf('COMPLETED', now()))
     renderReport()
 
     await screen.findByRole('table')
@@ -139,7 +164,7 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
   })
 
   it('가장 취약한 개념을 제목으로 권하고 그 개념의 문제 목록으로 보낸다', async () => {
-    storedReport(learningReportOf('COMPLETED', NOW))
+    storedReport(learningReportOf('COMPLETED', now()))
     renderReport()
     expect(
       await screen.findByRole('heading', {
@@ -155,7 +180,7 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
   })
 
   it('오늘 만든 리포트는 만든 시각과 하루 한 번 안내만 보이고 새로 만들기 버튼은 없다', async () => {
-    storedReport(learningReportOf('COMPLETED', NOW))
+    storedReport(learningReportOf('COMPLETED', now()))
     renderReport()
 
     expect(await screen.findByText(/에 만든 리포트예요 · 하루 한 번/)).toBeInTheDocument()
@@ -163,7 +188,7 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
   })
 
   it('지난 날짜의 리포트면 오늘 리포트를 새로 만들 수 있다고 알린다', async () => {
-    storedReport(learningReportOf('COMPLETED', YESTERDAY))
+    storedReport(learningReportOf('COMPLETED', yesterday()))
     renderReport()
 
     expect(await screen.findByText('오늘 리포트를 새로 만들 수 있어요')).toBeInTheDocument()
@@ -171,7 +196,7 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
   })
 
   it('AI 문장은 글자 그대로 보이고, 서버가 지운(null) 글은 빼고 보여 준다', async () => {
-    storedReport(learningReportOf('COMPLETED', NOW))
+    storedReport(learningReportOf('COMPLETED', now()))
     renderReport()
 
     const ai = await screen.findByRole('region', { name: 'AI 분석' })
@@ -187,7 +212,7 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
   })
 
   it('문장이 모두 지워졌으면 보여 줄 문장이 없다고 한 줄 알린다', async () => {
-    const report = learningReportOf('COMPLETED', NOW)
+    const report = learningReportOf('COMPLETED', now())
     storedReport({
       ...report,
       summary: null,
@@ -200,12 +225,12 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
   })
 
   it('만들지 못했으면(FAILED) 이유와 다시 시도를 보이고, 누르면 다시 만든다', async () => {
-    storedReport({ ...learningReportOf('FAILED', NOW), failureReason: 'BUSY' })
+    storedReport({ ...learningReportOf('FAILED', now()), failureReason: 'BUSY' })
     let requested = 0
     server.use(
       http.post('*/api/users/me/learning-report', () => {
         requested += 1
-        return HttpResponse.json(learningReportOf('PENDING', NOW), { status: 202 })
+        return HttpResponse.json(learningReportOf('PENDING', now()), { status: 202 })
       }),
     )
     const user = userEvent.setup()
@@ -216,21 +241,38 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
       'AI가 처리할 일이 많아 리포트를 만들지 못했어요',
     )
     await user.click(screen.getByRole('button', { name: '다시 시도' }))
-    expect(
-      await screen.findByText('AI가 분석 문장을 쓰고 있어요. 숫자는 먼저 볼 수 있어요.'),
-    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('AI가 분석 문장을 쓰고 있어요'),
+    )
     expect(requested).toBe(1)
+  })
+
+  it('지난 리포트를 다시 만들다 실패하면 문장을 그대로 두고 마쳤다고 알리지 않는다', async () => {
+    // 요청 중이라는 이유로 문장을 숨겼다가 실패하면 '마쳤어요'를 낭독했다(#311 리뷰)
+    storedReport(learningReportOf('COMPLETED', yesterday()))
+    server.use(
+      http.post('*/api/users/me/learning-report', () =>
+        HttpResponse.json({ status: 503, title: 'Service Unavailable' }, { status: 503 }),
+      ),
+    )
+    const user = userEvent.setup()
+    renderReport()
+
+    await user.click(await screen.findByRole('button', { name: '리포트 보기' }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.getByText(/7문제를 맞혔고/)).toBeInTheDocument()
+    expect(screen.getByRole('status')).not.toHaveTextContent(/마쳤어요|쓰고 있어요/)
   })
 
   it('[다시 시도]를 누르는 동안 버튼이 사라지지 않고 기다림을 알린다', async () => {
     // 블록째 사라지면 키보드 포커스가 body로 떨어진다(#311 리뷰)
-    storedReport(learningReportOf('FAILED', NOW))
+    storedReport(learningReportOf('FAILED', now()))
     let release!: () => void
     const held = new Promise<void>((resolve) => (release = resolve))
     server.use(
       http.post('*/api/users/me/learning-report', async () => {
         await held
-        return HttpResponse.json(learningReportOf('PENDING', NOW), { status: 202 })
+        return HttpResponse.json(learningReportOf('PENDING', now()), { status: 202 })
       }),
     )
     const user = userEvent.setup()
@@ -242,9 +284,9 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
     expect(retry).toHaveAttribute('aria-busy', 'true')
 
     release()
-    expect(
-      await screen.findByText('AI가 분석 문장을 쓰고 있어요. 숫자는 먼저 볼 수 있어요.'),
-    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('AI가 분석 문장을 쓰고 있어요'),
+    )
   })
 
   it('만드는 중 폴링 한 번이 일시적으로 실패해도 화면을 내리지 않고, 다음 조회에 끝난 것을 알린다', async () => {
@@ -258,18 +300,18 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
       server.use(
         http.get('*/api/users/me/learning-report', () => {
           calls += 1
-          if (calls === 1) return HttpResponse.json(learningReportOf('PENDING', NOW))
+          if (calls === 1) return HttpResponse.json(learningReportOf('PENDING', now()))
           if (calls === 2) {
             return HttpResponse.json({ status: 503, title: 'Service Unavailable' }, { status: 503 })
           }
-          return HttpResponse.json(learningReportOf('COMPLETED', NOW))
+          return HttpResponse.json(learningReportOf('COMPLETED', now()))
         }),
       )
       renderReport()
 
-      const status = await screen.findByText(
-        'AI가 분석 문장을 쓰고 있어요. 숫자는 먼저 볼 수 있어요.',
-      )
+      await screen.findByRole('table')
+      const status = screen.getByRole('status')
+      expect(status).toHaveTextContent('AI가 분석 문장을 쓰고 있어요')
       await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
       await waitFor(() => expect(calls).toBe(2))
       // 오류 화면으로 바뀌지 않는다. 같은 live region이 남아 있다

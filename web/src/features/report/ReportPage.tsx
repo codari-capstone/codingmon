@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
 import type { ConceptStat, LearningReport } from '@/api/types'
@@ -31,6 +31,8 @@ import {
 function percent(rate: number): string {
   return `${Math.round(rate * 100)}%`
 }
+
+const HERO_TITLE_ID = 'report-title'
 
 type Row = ConceptStat & { id: string }
 
@@ -111,7 +113,12 @@ function Hero({ stats }: { stats: Pick<LearningReport, 'concepts' | 'solvedProbl
       <div className="flex min-w-0 flex-[999_1_420px] flex-col gap-3 pb-9">
         <p className="text-eyebrow text-inverse-accent">학습 리포트</p>
         {/* 시안처럼 '조금 더' 뒤에서 줄을 바꾼다(#275). 줄바꿈은 화면 낭독기에는 띄어쓰기로 읽힌다 */}
-        <h1 className="text-[28px] leading-[1.25] font-bold tracking-[-0.025em] break-keep whitespace-pre-line sm:text-[36px]">
+        {/* tabIndex -1: 첫 리포트가 생기면 포커스를 받는다(Component) */}
+        <h1
+          id={HERO_TITLE_ID}
+          tabIndex={-1}
+          className="text-[28px] leading-[1.25] font-bold tracking-[-0.025em] break-keep whitespace-pre-line outline-none sm:text-[36px]"
+        >
           {weakest
             ? `${weakest.name} 개념을 조금 더\n연습해 볼까요?`
             : '모든 개념을 고르게 잘 풀고 있어요'}
@@ -202,6 +209,27 @@ function ConceptTable({ concepts }: { concepts: ConceptStat[] }) {
   )
 }
 
+/**
+ * 만드는 중·끝남을 낭독한다. 화면에 늘 있어야 한다 — AI 분석 구역은 첫 리포트가 생길 때 새로 붙고,
+ * 많은 화면 낭독기는 새로 붙은 live region의 첫 글을 읽지 않는다(#311 리뷰).
+ * '마쳤어요'는 이 화면에서 만드는 중을 본 뒤 끝났을 때만 알린다 — 열자마자 끝난 리포트나
+ * 다시 만들기 요청이 실패해 돌아온 경우에 알리면 사실과 다르다.
+ */
+function ReportAnnouncer({ status }: { status: LearningReport['status'] | undefined }) {
+  const [last, setLast] = useState(status)
+  const [finished, setFinished] = useState(false)
+  if (status !== last) {
+    setFinished(last === 'PENDING' && status === 'COMPLETED')
+    setLast(status)
+  }
+  return (
+    <p role="status" className="sr-only">
+      {status === 'PENDING' ? 'AI가 분석 문장을 쓰고 있어요. 숫자는 먼저 볼 수 있어요.' : ''}
+      {finished ? 'AI 분석을 마쳤어요.' : ''}
+    </p>
+  )
+}
+
 /** 학습 리포트 (REP-01~05). 하루 1회 만든 저장본을 보여 준다(계약). */
 export function Component() {
   const { data: report, isPending, error, refetch } = useQuery(learningReportQuery())
@@ -215,15 +243,24 @@ export function Component() {
   }, [queryClient, error])
 
   // 받아 둔 리포트가 있는데 폴링 한 번이 일시적으로 실패하면 화면을 내리지 않는다 — 폴링이 간격을 늘려
-  // 계속 묻는다. 오류를 띄우는 때와 폴링을 멈추는 때가 같다(resultQuery의 isDeadEnd, #311 리뷰)
-  const deadEnd = isDeadEnd(error, report !== undefined)
+  // 계속 묻는다. 오류를 띄우는 때와 폴링을 멈추는 때가 같다(resultQuery의 isDeadEnd, #311 리뷰).
+  // '아직 없음'(null)은 지킬 화면이 아니다. 다시 받다 실패한 것을 권유 카드로 덮으면 다시 묻지도 않는다
+  const deadEnd = isDeadEnd(error, report != null)
   const shown = deadEnd ? undefined : report
+
+  // 권유 카드의 [리포트 보기]로 첫 리포트가 생기면 누른 버튼이 사라진다. 포커스를 새 머리 제목으로 옮긴다(#311 리뷰)
+  const hadReport = useRef(shown)
+  useEffect(() => {
+    if (hadReport.current === null && shown) document.getElementById(HERO_TITLE_ID)?.focus()
+    hadReport.current = shown
+  }, [shown])
 
   return (
     <section className="flex flex-col gap-7">
       <div>
         <LearnNav />
       </div>
+      <ReportAnnouncer status={shown?.status} />
 
       {/* 리포트가 있으면 남색 머리의 권유 문장이 h1이다. 없을 때도 화면 제목은 둔다 */}
       {shown ? <Hero stats={shown} /> : <h1 className="page-title">학습 리포트</h1>}
