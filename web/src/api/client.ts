@@ -112,7 +112,12 @@ const sessionMiddleware: Middleware = {
     if (token === null) return response
 
     original.request.headers.set('Authorization', `Bearer ${token}`)
-    return clientOptions.fetch!(original.request)
+    const retried = await clientOptions.fetch!(original.request)
+    // 재시도하는 동안 세션이 바뀌었으면 그 응답도 이전 세션의 것이다.
+    if (getGeneration() !== original.generation) {
+      throw new DOMException('이전 세션의 요청입니다', 'AbortError')
+    }
+    return retried
   },
 
   // fetch가 던지면 onResponse가 불리지 않는다. 사본을 여기서도 치운다.

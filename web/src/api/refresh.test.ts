@@ -384,6 +384,28 @@ describe('세션 미들웨어 (api/client.ts)', () => {
     expect(refreshes).toBe(0)
   })
 
+  it('갱신 뒤 재시도하는 동안 세션이 바뀌면 그 응답도 버린다', async () => {
+    setAccessToken('expired')
+    server.use(
+      http.post('*/api/auth/refresh', () => HttpResponse.json({ accessToken: 'fresh' })),
+      http.post('*/api/submissions', ({ request }) => {
+        if (request.headers.get('Authorization') !== 'Bearer fresh') {
+          return HttpResponse.json({ status: 401 }, { status: 401 })
+        }
+        // 재시도가 떠 있는 동안 다른 계정으로 로그인한다.
+        startSession('account-b')
+        return HttpResponse.json({ id: 7 }, { status: 202 })
+      }),
+    )
+
+    await expect(
+      api.POST('/api/submissions', {
+        body: { problemId: 1, language: 'PYTHON', sourceCode: 'print(1)' },
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(getAccessToken()).toBe('account-b')
+  })
+
   /**
    * 응답을 받은 뒤의 요청은 본문을 이미 흘려보낸 뒤라 그대로 다시 보낼 수 없다. 보내기
    * 전에 떠 둔 사본이 있어야 제출 같은 POST도 재시도된다.
