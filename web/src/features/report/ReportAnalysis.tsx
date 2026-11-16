@@ -1,0 +1,182 @@
+import type { LearningReport } from '@/api/types'
+import codingmonFace from '@/assets/brand/codingmon_face.png'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { failureText } from '@/features/ai/failureText'
+import { problemMessage } from '@/features/auth/problemCode'
+
+/** [리포트 보기]·[다시 시도]가 같이 쓰는 요청 (useRequestLearningReport). */
+export interface ReportRequest {
+  mutate: () => void
+  isPending: boolean
+  isError: boolean
+  error: unknown
+}
+
+const MADE_AT = new Intl.DateTimeFormat('ko-KR', {
+  month: 'long',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+/** 오늘(UTC) 만든 리포트인지. 하루 1회는 UTC 날짜로 센다(계약 `reportDate`). */
+function isTodays(report: LearningReport, now = Date.now()): boolean {
+  return report.reportDate === new Date(now).toISOString().slice(0, 10)
+}
+
+/** 요청이 실패한 이유. 리포트의 FAILED가 아니라 요청 자체(네트워크·409 등)의 실패다. */
+export function RequestError({ request }: { request: ReportRequest }) {
+  if (!request.isError) return null
+  return (
+    <p role="alert" className="text-destructive-text text-sm">
+      {problemMessage(request.error)}
+    </p>
+  )
+}
+
+/**
+ * 만든 날짜와 하루 1회 안내 (REP-05). `generatedAt`은 만들기 시작한 시각이다(계약).
+ * 하루는 UTC 날짜라 한국 시각 오전 9시에 바뀐다. 오늘 것이 아니면 새로 만들 수 있다고 알린다(계약).
+ */
+export function ReportMeta({
+  report,
+  request,
+}: {
+  report: LearningReport
+  request: ReportRequest
+}) {
+  const stale = !isTodays(report)
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p className="text-muted-foreground text-sm">
+          {MADE_AT.format(new Date(report.generatedAt))}에 만든 리포트예요 · 하루 한 번(오전 9시에
+          바뀌어요) 새로 만들 수 있어요
+        </p>
+        {stale ? (
+          <div className="flex items-center gap-3">
+            <span className="text-foreground text-sm font-semibold">
+              오늘 리포트를 새로 만들 수 있어요
+            </span>
+            <Button size="sm" loading={request.isPending} onClick={() => request.mutate()}>
+              리포트 보기
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      {stale ? <RequestError request={request} /> : null}
+    </div>
+  )
+}
+
+/**
+ * AI 분석 문장 (REP-03). 수치·개념은 서버가 계산한 저장본이고 AI는 문장만 쓴다(계약).
+ * 문장은 `COMPLETED`일 때만 있고, 서버가 수치를 대조해 지운 글은 null이다 — 빼고 보여 준다.
+ * 모델이 쓴 글이라 Markdown·HTML로 그리지 않고 글자 그대로 둔다(계약).
+ */
+export function AiAnalysis({
+  report,
+  request,
+}: {
+  report: LearningReport
+  request: ReportRequest
+}) {
+  const working = request.isPending || report.status === 'PENDING'
+  const failed = !working && report.status === 'FAILED'
+  const done = !working && report.status === 'COMPLETED'
+  const concepts = report.weakConcepts.filter((c) => c.explanation || c.practice)
+
+  return (
+    <section
+      aria-labelledby="report-ai-heading"
+      className="bg-card flex flex-col gap-5 rounded-lg border p-6 sm:p-7"
+    >
+      {/* live region은 늘 그대로 둔다. 만드는 중 → 끝남이 같은 요소의 글이 바뀌어야 읽힌다(AnalysisPanel과 같다) */}
+      <p role="status" className={working ? 'text-muted-foreground text-sm' : 'sr-only'}>
+        {working ? 'AI가 분석 문장을 쓰고 있어요. 숫자는 먼저 볼 수 있어요.' : ''}
+        {done ? 'AI 분석을 마쳤어요.' : ''}
+      </p>
+      <div className="-order-1 flex items-center gap-3">
+        {/* 결과 화면 AI 분석과 같은 화자 표시. 장식이라 alt를 비운다 */}
+        <span className="bg-accent inline-flex size-11 flex-none overflow-hidden rounded-full">
+          <img src={codingmonFace} alt="" width={44} height={44} className="block" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 id="report-ai-heading" className="text-foreground text-lg font-bold">
+            AI 분석
+          </h2>
+          <p className="text-muted-foreground mt-0.5 text-[13px]">
+            서버가 계산한 숫자를 AI가 쉬운 말로 풀어 썼어요. 숫자는 아래 표와 같아요.
+          </p>
+        </div>
+      </div>
+
+      {failed ? (
+        <div className="flex flex-col items-start gap-3">
+          <p role="alert" className="text-destructive-text text-sm">
+            {failureText(report.failureReason, '리포트를')}
+          </p>
+          {/* 지난 날짜면 위 [리포트 보기]가 같은 일을 한다. 버튼을 둘 두지 않는다 */}
+          {isTodays(report) ? (
+            <>
+              <Button
+                variant="secondary"
+                loading={request.isPending}
+                onClick={() => request.mutate()}
+              >
+                다시 시도
+              </Button>
+              <RequestError request={request} />
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {done && !report.summary && concepts.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          이번 리포트에는 보여 줄 수 있는 AI 분석 문장이 없어요. 숫자는 아래 표에서 볼 수 있어요.
+        </p>
+      ) : null}
+      {done && report.summary ? (
+        <p className="text-body-foreground text-base leading-[1.7] break-keep whitespace-pre-line">
+          {report.summary}
+        </p>
+      ) : null}
+      {done && concepts.length > 0 ? (
+        <ul className="m-0 grid list-none gap-4 p-0 md:grid-cols-2">
+          {concepts.map((concept) => (
+            <li key={concept.slug} className="bg-muted flex flex-col gap-3 rounded-lg p-5">
+              <h3 className="text-foreground flex items-center gap-2 text-base font-bold">
+                {concept.name}
+                <Badge tone="warning">취약</Badge>
+              </h3>
+              <dl className="m-0 flex flex-col gap-3">
+                {concept.explanation ? (
+                  <div className="flex flex-col gap-1">
+                    <dt className="text-muted-foreground text-[13px] font-semibold">
+                      무엇이 어려웠나요
+                    </dt>
+                    <dd className="text-body-foreground m-0 text-[15px] leading-[1.65] break-keep whitespace-pre-line">
+                      {concept.explanation}
+                    </dd>
+                  </div>
+                ) : null}
+                {concept.practice ? (
+                  <div className="flex flex-col gap-1">
+                    <dt className="text-muted-foreground text-[13px] font-semibold">
+                      이렇게 연습해 보세요
+                    </dt>
+                    <dd className="text-body-foreground m-0 text-[15px] leading-[1.65] break-keep whitespace-pre-line">
+                      {concept.practice}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  )
+}

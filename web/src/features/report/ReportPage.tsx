@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { Link } from 'react-router'
 
-import type { ConceptStat, LearningStats } from '@/api/types'
+import type { ConceptStat, LearningReport } from '@/api/types'
 import scene from '@/assets/scenes/streak_chart.png'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
@@ -15,7 +15,8 @@ import { Progress } from '@/components/ui/progress'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { cn } from '@/lib/utils'
 import { LearnNav } from './LearnNav'
-import { learningStatsQuery } from './reportQuery'
+import { AiAnalysis, ReportMeta, RequestError, type ReportRequest } from './ReportAnalysis'
+import { learningReportQuery, learningStatsQuery, useRequestLearningReport } from './reportQuery'
 
 /**
  * 해결률만 백분율로 바꾼다 (0.49 → 49%, 계약 `ConceptStat`). 서버가 소수 둘째 자리까지
@@ -91,8 +92,8 @@ const COLUMNS: TableColumn<Row>[] = [
   },
 ]
 
-/** 남색 머리: 가장 취약한 개념을 권한다. 순서는 서버가 정했다(취약 점수 높은 순). */
-function Hero({ stats }: { stats: LearningStats }) {
+/** 남색 머리: 가장 취약한 개념을 권한다. 순서는 서버가 정했다(취약 점수 높은 순). 리포트 저장본의 값이다. */
+function Hero({ stats }: { stats: Pick<LearningReport, 'concepts' | 'solvedProblemCount'> }) {
   const weakest = stats.concepts.find((concept) => concept.weak)
   return (
     <Card
@@ -136,9 +137,69 @@ function Hero({ stats }: { stats: LearningStats }) {
   )
 }
 
-/** 학습 리포트 — 개념별 통계 (REP-01·02). */
-export function Component() {
+/**
+ * 리포트를 한 번도 만들지 않았을 때 (REP-01). 학습 통계로 조건 미달 안내와 첫 리포트 권유를 가른다.
+ * 표와 머리는 리포트를 만든 뒤 저장본으로 그린다 — 숫자의 출처를 하나로 둔다(#46).
+ */
+function NoReport({ request }: { request: ReportRequest }) {
   const { data, isPending, error, refetch } = useQuery(learningStatsQuery())
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, error)
+  }, [queryClient, error])
+
+  if (error) return <ErrorState problem={error} onRetry={() => void refetch()} />
+  if (isPending) return <ListSkeleton rows={2} />
+  // 아래 권유(<= 0)와 빈틈없이 갈리게 > 0으로 본다. 계약 밖 음수도 권유로 간다
+  if (data.remainingProblemCount > 0) {
+    // 조건 미달이면 concepts는 빈 배열이다(계약). 갈 곳을 함께 준다 (UX-03).
+    return (
+      <EmptyState
+        title={`${data.remainingProblemCount}문제 더 맞히면 리포트를 볼 수 있어요`}
+        description={`맞힌 서로 다른 문제가 ${data.requiredProblemCount}개 이상이면 개념별 통계를 보여 줘요. 지금 ${data.solvedProblemCount}문제를 맞혔어요.`}
+        action={{ label: '문제 보러 가기', to: '/problems' }}
+      />
+    )
+  }
+  return (
+    <Card as="section" aria-labelledby="report-invite" className="flex flex-col items-start gap-3">
+      <h2 id="report-invite" className="text-foreground text-xl font-semibold">
+        첫 학습 리포트를 만들어 볼까요?
+      </h2>
+      <p className="text-muted-foreground text-[15px] leading-[1.65]">
+        맞힌 문제 {data.solvedProblemCount}개로 개념별 통계를 정리하고, AI가 약한 개념을 쉬운 말로
+        풀어 줘요. 하루 한 번 새로 만들 수 있어요.
+      </p>
+      <Button className="mt-1" loading={request.isPending} onClick={() => request.mutate()}>
+        리포트 보기
+      </Button>
+      <RequestError request={request} />
+    </Card>
+  )
+}
+
+/** 개념별 결과 표 (REP-02). 순서는 서버가 정했다(취약 점수 높은 순). 다시 정렬하지 않는다. */
+function ConceptTable({ concepts }: { concepts: ConceptStat[] }) {
+  return (
+    <section aria-labelledby="concept-results" className="flex flex-col gap-3.5">
+      <h2 id="concept-results" className="text-foreground text-xl font-semibold">
+        개념별 결과
+      </h2>
+      <div className="bg-card rounded-lg border px-3 py-2">
+        <Table
+          columns={COLUMNS}
+          rows={concepts.map((concept) => ({ ...concept, id: concept.slug }))}
+          className="whitespace-nowrap"
+        />
+      </div>
+    </section>
+  )
+}
+
+/** 학습 리포트 (REP-01~05). 하루 1회 만든 저장본을 보여 준다(계약). */
+export function Component() {
+  const { data: report, isPending, error, refetch } = useQuery(learningReportQuery())
+  const request = useRequestLearningReport()
 
   // 세션이 끊겼으면 로그인 화면으로 보낸다 (session.ts).
   const queryClient = useQueryClient()
@@ -146,45 +207,25 @@ export function Component() {
     forgetSessionIfUnauthorized(queryClient, error)
   }, [queryClient, error])
 
-  // 아래 안내(> 0)와 빈틈없이 갈리게 <= 0으로 본다. === 0이면 계약 밖 음수에서 본문이 통째로 빈다
-  const ready = data && !error && data.remainingProblemCount <= 0
-
   return (
     <section className="flex flex-col gap-7">
       <div>
         <LearnNav />
       </div>
 
-      {/* 통계가 있으면 남색 머리의 권유 문장이 h1이다. 없을 때도 화면 제목은 둔다 */}
-      {ready ? <Hero stats={data} /> : <h1 className="page-title">학습 리포트</h1>}
-
-      {isPending && !error ? <ListSkeleton rows={4} /> : null}
+      {/* 리포트가 있으면 남색 머리의 권유 문장이 h1이다. 없을 때도 화면 제목은 둔다 */}
+      {report ? <Hero stats={report} /> : <h1 className="page-title">학습 리포트</h1>}
 
       {error ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
+      {isPending && !error ? <ListSkeleton rows={4} /> : null}
+      {report === null && !error ? <NoReport request={request} /> : null}
 
-      {data && !error && data.remainingProblemCount > 0 ? (
-        // 조건 미달이면 concepts는 빈 배열이다(계약). 갈 곳을 함께 준다 (UX-03).
-        <EmptyState
-          title={`${data.remainingProblemCount}문제 더 맞히면 리포트를 볼 수 있어요`}
-          description={`맞힌 서로 다른 문제가 ${data.requiredProblemCount}개 이상이면 개념별 통계를 보여 줘요. 지금 ${data.solvedProblemCount}문제를 맞혔어요.`}
-          action={{ label: '문제 보러 가기', to: '/problems' }}
-        />
-      ) : null}
-
-      {ready ? (
-        <section aria-labelledby="concept-results" className="flex flex-col gap-3.5">
-          <h2 id="concept-results" className="text-foreground text-xl font-semibold">
-            개념별 결과
-          </h2>
-          {/* 순서는 서버가 정했다(취약 점수 높은 순). 다시 정렬하지 않는다. */}
-          <div className="bg-card rounded-lg border px-3 py-2">
-            <Table
-              columns={COLUMNS}
-              rows={data.concepts.map((concept) => ({ ...concept, id: concept.slug }))}
-              className="whitespace-nowrap"
-            />
-          </div>
-        </section>
+      {report && !error ? (
+        <>
+          <ReportMeta report={report} request={request} />
+          <AiAnalysis report={report} request={request} />
+          <ConceptTable concepts={report.concepts} />
+        </>
       ) : null}
     </section>
   )

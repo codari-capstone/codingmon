@@ -25,6 +25,7 @@ describe('adoptSession', () => {
     ['submissions', ['submissions', { problemId: 3, page: 1 }]],
     ['learning-stats', ['learning-stats']],
     ['activity', ['activity']],
+    ['learning-report', ['learning-report']],
     ['ai-quota', ['ai-quota']],
     ['code-review', ['code-review', 11]],
     ['badges', ['badges']],

@@ -1,13 +1,19 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
+import type { LearningReport } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
-import { learningStatsReady, learningStatsShort } from '@/mocks/fixtures/learning'
+import { learningReportOf, learningStatsReady, learningStatsShort } from '@/mocks/fixtures/learning'
+import { resetLearningReport } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 import { Component as ReportPage } from './ReportPage'
+
+// 목의 '오늘 만든 리포트'는 모듈 상태다. 테스트끼리 넘어가지 않게 비운다
+afterEach(() => resetLearningReport())
 
 function renderReport() {
   const router = createMemoryRouter(
@@ -25,7 +31,15 @@ function renderReport() {
   return router
 }
 
-describe('ReportPage (REP-01·02)', () => {
+/** 저장된 리포트를 정해 둔다. 만들기(POST)는 목 그대로다. */
+function storedReport(report: LearningReport) {
+  server.use(http.get('*/api/users/me/learning-report', () => HttpResponse.json(report)))
+}
+
+const NOW = new Date().toISOString()
+const YESTERDAY = new Date(Date.now() - 86_400_000).toISOString()
+
+describe('ReportPage — 리포트가 없을 때 (REP-01)', () => {
   it('맞힌 문제가 모자라면 더 맞혀야 할 개수와 문제 목록 길을 알려 준다', async () => {
     server.use(
       http.get('*/api/users/me/learning-stats', () => HttpResponse.json(learningStatsShort)),
@@ -39,11 +53,68 @@ describe('ReportPage (REP-01·02)', () => {
       '/problems',
     )
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    // 통계가 없어도 화면 제목은 있다
     expect(screen.getByRole('heading', { level: 1, name: '학습 리포트' })).toBeInTheDocument()
   })
 
-  it('개념별 통계를 서버 순서와 값 그대로 보여 주고, 해결률만 백분율로 적는다', async () => {
+  it('조건을 채웠으면 표 대신 첫 리포트를 권하고, 누르면 만들며 숫자를 먼저 보여 준 뒤 문장을 붙인다', async () => {
+    const user = userEvent.setup()
+    renderReport()
+
+    const invite = await screen.findByRole('region', { name: '첫 학습 리포트를 만들어 볼까요?' })
+    // 숫자의 출처는 리포트 저장본 하나다. 만들기 전에는 표를 그리지 않는다(#46)
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+
+    await user.click(within(invite).getByRole('button', { name: '리포트 보기' }))
+
+    // 만드는 중(PENDING)에도 수치는 저장본에 있다(계약)
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('AI가 분석 문장을 쓰고 있어요')
+    // 다음 조회에 끝난다(목). 폴링이 이어받는다
+    expect(
+      await screen.findByText(/동적 계획법과 그래프를 조금 더 연습하면/, {}, { timeout: 3000 }),
+    ).toBeInTheDocument()
+  })
+
+  it('남은 수가 계약 밖 음수여도 본문을 비우지 않고 권유를 그린다', async () => {
+    server.use(
+      http.get('*/api/users/me/learning-stats', () =>
+        HttpResponse.json({ ...learningStatsReady, remainingProblemCount: -1 }),
+      ),
+    )
+    renderReport()
+    expect(
+      await screen.findByRole('region', { name: '첫 학습 리포트를 만들어 볼까요?' }),
+    ).toBeInTheDocument()
+  })
+
+  it('만들려는데 맞힌 문제가 모자라다(409)고 하면 통계를 다시 받아 남은 개수를 알려 준다', async () => {
+    let stats = learningStatsReady
+    server.use(
+      http.get('*/api/users/me/learning-stats', () => HttpResponse.json(stats)),
+      http.post('*/api/users/me/learning-report', () => {
+        stats = learningStatsShort
+        return HttpResponse.json(
+          {
+            status: 409,
+            code: 'LEARNING_REPORT_NOT_AVAILABLE',
+            detail: '맞힌 문제가 모자라요',
+            remainingProblemCount: 3,
+          },
+          { status: 409 },
+        )
+      }),
+    )
+    const user = userEvent.setup()
+    renderReport()
+
+    await user.click(await screen.findByRole('button', { name: '리포트 보기' }))
+    expect(await screen.findByText('3문제 더 맞히면 리포트를 볼 수 있어요')).toBeInTheDocument()
+  })
+})
+
+describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
+  it('표는 리포트 저장본의 값을 서버 순서 그대로 보여 주고, 해결률만 백분율로 적는다', async () => {
+    storedReport(learningReportOf('COMPLETED', NOW))
     renderReport()
 
     await screen.findByRole('table')
@@ -55,7 +126,6 @@ describe('ReportPage (REP-01·02)', () => {
       '문자열',
       '수학',
     ])
-
     const dp = within(rows[0]).getAllByRole('cell')
     expect(dp[1]).toHaveTextContent('25%1 / 4')
     // 막대 이름은 수치가 아니라 무엇의 막대인지다(#271 리뷰)
@@ -63,12 +133,12 @@ describe('ReportPage (REP-01·02)', () => {
     expect(dp[2]).toHaveTextContent('2.5')
     expect(dp[3]).toHaveTextContent('4.5')
     expect(dp[4]).toHaveTextContent('0.8')
-
-    // 서버가 둘째 자리까지 반올림한 값(0.33)을 다시 계산하지 않고 33%로 옮긴다
-    expect(within(rows[1]).getAllByRole('cell')[1]).toHaveTextContent('33%1 / 3')
+    // 취약 여부는 서버의 weak만 따른다
+    expect(within(rows[3]).queryByText('취약')).not.toBeInTheDocument()
   })
 
   it('가장 취약한 개념을 제목으로 권하고 그 개념의 문제 목록으로 보낸다', async () => {
+    storedReport(learningReportOf('COMPLETED', NOW))
     renderReport()
     expect(
       await screen.findByRole('heading', {
@@ -77,11 +147,78 @@ describe('ReportPage (REP-01·02)', () => {
         name: /^동적 계획법 개념을 조금 더\s+연습해 볼까요\?$/,
       }),
     ).toBeInTheDocument()
-    // 문제 목록은 이름이 아니라 slug로 거른다
     expect(screen.getByRole('link', { name: '동적 계획법 문제 풀기' })).toHaveAttribute(
       'href',
       '/problems?tag=dp',
     )
+  })
+
+  it('오늘 만든 리포트는 만든 시각과 하루 한 번 안내만 보이고 새로 만들기 버튼은 없다', async () => {
+    storedReport(learningReportOf('COMPLETED', NOW))
+    renderReport()
+
+    expect(await screen.findByText(/에 만든 리포트예요 · 하루 한 번/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '리포트 보기' })).not.toBeInTheDocument()
+  })
+
+  it('지난 날짜의 리포트면 오늘 리포트를 새로 만들 수 있다고 알린다', async () => {
+    storedReport(learningReportOf('COMPLETED', YESTERDAY))
+    renderReport()
+
+    expect(await screen.findByText('오늘 리포트를 새로 만들 수 있어요')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '리포트 보기' })).toBeEnabled()
+  })
+
+  it('AI 문장은 글자 그대로 보이고, 서버가 지운(null) 글은 빼고 보여 준다', async () => {
+    storedReport(learningReportOf('COMPLETED', NOW))
+    renderReport()
+
+    const ai = await screen.findByRole('region', { name: 'AI 분석' })
+    expect(within(ai).getByText(/7문제를 맞혔고/)).toBeInTheDocument()
+    const cards = within(ai).getAllByRole('listitem')
+    expect(cards.map((card) => within(card).getByRole('heading').textContent)).toEqual([
+      '동적 계획법취약',
+      '그래프취약',
+    ])
+    // 그래프의 설명은 수치가 맞지 않아 서버가 지웠다(fixture). 연습 방법만 남는다
+    expect(within(cards[1]).queryByText('무엇이 어려웠나요')).not.toBeInTheDocument()
+    expect(within(cards[1]).getByText('이렇게 연습해 보세요')).toBeInTheDocument()
+  })
+
+  it('문장이 모두 지워졌으면 보여 줄 문장이 없다고 한 줄 알린다', async () => {
+    const report = learningReportOf('COMPLETED', NOW)
+    storedReport({
+      ...report,
+      summary: null,
+      weakConcepts: report.weakConcepts.map((c) => ({ ...c, explanation: null, practice: null })),
+    })
+    renderReport()
+
+    expect(await screen.findByText(/보여 줄 수 있는 AI 분석 문장이 없어요/)).toBeInTheDocument()
+    expect(screen.getByRole('table')).toBeInTheDocument()
+  })
+
+  it('만들지 못했으면(FAILED) 이유와 다시 시도를 보이고, 누르면 다시 만든다', async () => {
+    storedReport({ ...learningReportOf('FAILED', NOW), failureReason: 'BUSY' })
+    let requested = 0
+    server.use(
+      http.post('*/api/users/me/learning-report', () => {
+        requested += 1
+        return HttpResponse.json(learningReportOf('PENDING', NOW), { status: 202 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderReport()
+
+    // BUSY는 리포트에 맞는 문구다('기다리는 제출'이 아니다)
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'AI가 처리할 일이 많아 리포트를 만들지 못했어요',
+    )
+    await user.click(screen.getByRole('button', { name: '다시 시도' }))
+    expect(
+      await screen.findByText('AI가 분석 문장을 쓰고 있어요. 숫자는 먼저 볼 수 있어요.'),
+    ).toBeInTheDocument()
+    expect(requested).toBe(1)
   })
 
   it('내 학습 탭: 학습 리포트가 지금 화면이고 배지 화면으로 갈 수 있다 (BADGE-02)', async () => {
@@ -94,27 +231,10 @@ describe('ReportPage (REP-01·02)', () => {
     expect(within(nav).getByRole('link', { name: '배지' })).toHaveAttribute('href', '/me/badges')
   })
 
-  // 취약 여부는 서버의 `weak`만 따른다. 상위 2개·0점 규칙은 서버가 판단한다(계약).
-  it('weak가 false인 개념에는 취약 표시가 없다', async () => {
-    renderReport()
-    const math = (await screen.findByText('수학')).closest('tr')!
-    expect(within(math).queryByText('취약')).not.toBeInTheDocument()
-  })
-
-  it('남은 수가 계약 밖 음수여도 본문을 비우지 않고 표를 그린다', async () => {
-    server.use(
-      http.get('*/api/users/me/learning-stats', () =>
-        HttpResponse.json({ ...learningStatsReady, remainingProblemCount: -1 }),
-      ),
-    )
-    renderReport()
-    expect(await screen.findByRole('table')).toBeInTheDocument()
-  })
-
   it('불러오지 못하면 오류와 다시 시도를 보여 준다', async () => {
     server.use(
-      http.get('*/api/users/me/learning-stats', () =>
-        HttpResponse.json({ code: 'INTERNAL', message: 'x' }, { status: 500 }),
+      http.get('*/api/users/me/learning-report', () =>
+        HttpResponse.json({ status: 500, title: 'x' }, { status: 500 }),
       ),
     )
     renderReport()

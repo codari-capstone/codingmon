@@ -53,8 +53,10 @@ export async function adoptSession(client: QueryClient, user: CurrentUser): Prom
   // 한 글자 차이라 위 줄이 이 키들을 지워 주지 않는다.
   client.removeQueries({ queryKey: ['problem-history'] })
   client.removeQueries({ queryKey: ['submissions'] })
-  // 학습 통계(REP-01·02)도 본인 풀이로 계산한 값이라 같은 이유로 지운다.
+  // 학습 통계(REP-01)도 본인 풀이로 계산한 값이라 같은 이유로 지운다.
   client.removeQueries({ queryKey: ['learning-stats'] })
+  // 학습 리포트(REP-02~05)도 본인 것만 온다. 남기면 B에게 A의 리포트가 보인다.
+  client.removeQueries({ queryKey: ['learning-report'] })
   // 풀이 요약·잔디(MY-05)도 본인 제출로 센 값이다.
   client.removeQueries({ queryKey: ['activity'] })
   // 연속 학습(STREAK-01·02)도 본인 제출로 센 값이다.
