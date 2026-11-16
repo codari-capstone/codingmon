@@ -1,12 +1,13 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { LearningReport } from '@/api/types'
-import { createQueryClient } from '@/app/queryClient'
+import { createQueryClient, POLL_INTERVAL_MS } from '@/app/queryClient'
+import { FAILING_INTERVAL_MS } from '@/features/result/resultQuery'
 import { learningReportOf, learningStatsReady, learningStatsShort } from '@/mocks/fixtures/learning'
 import { resetLearningReport } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
@@ -219,6 +220,91 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
       await screen.findByText('AI가 분석 문장을 쓰고 있어요. 숫자는 먼저 볼 수 있어요.'),
     ).toBeInTheDocument()
     expect(requested).toBe(1)
+  })
+
+  it('[다시 시도]를 누르는 동안 버튼이 사라지지 않고 기다림을 알린다', async () => {
+    // 블록째 사라지면 키보드 포커스가 body로 떨어진다(#311 리뷰)
+    storedReport(learningReportOf('FAILED', NOW))
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.post('*/api/users/me/learning-report', async () => {
+        await held
+        return HttpResponse.json(learningReportOf('PENDING', NOW), { status: 202 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderReport()
+
+    const retry = await screen.findByRole('button', { name: '다시 시도' })
+    await user.click(retry)
+    expect(retry).toBeInTheDocument()
+    expect(retry).toHaveAttribute('aria-busy', 'true')
+
+    release()
+    expect(
+      await screen.findByText('AI가 분석 문장을 쓰고 있어요. 숫자는 먼저 볼 수 있어요.'),
+    ).toBeInTheDocument()
+  })
+
+  it('만드는 중 폴링 한 번이 일시적으로 실패해도 화면을 내리지 않고, 다음 조회에 끝난 것을 알린다', async () => {
+    // 받아 둔 리포트가 있는데 503 한 번에 화면이 오류로 바뀌면 live region도 새로 생겨 '마쳤어요'를 못 읽는다(#311 리뷰)
+    vi.useFakeTimers({
+      shouldAdvanceTime: true,
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+    })
+    try {
+      let calls = 0
+      server.use(
+        http.get('*/api/users/me/learning-report', () => {
+          calls += 1
+          if (calls === 1) return HttpResponse.json(learningReportOf('PENDING', NOW))
+          if (calls === 2) {
+            return HttpResponse.json({ status: 503, title: 'Service Unavailable' }, { status: 503 })
+          }
+          return HttpResponse.json(learningReportOf('COMPLETED', NOW))
+        }),
+      )
+      renderReport()
+
+      const status = await screen.findByText(
+        'AI가 분석 문장을 쓰고 있어요. 숫자는 먼저 볼 수 있어요.',
+      )
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      await waitFor(() => expect(calls).toBe(2))
+      // 오류 화면으로 바뀌지 않는다. 같은 live region이 남아 있다
+      expect(status).toBeInTheDocument()
+      expect(screen.getByRole('table')).toBeInTheDocument()
+
+      // 일시 실패 뒤에는 간격을 늘려 다시 묻는다
+      await vi.advanceTimersByTimeAsync(FAILING_INTERVAL_MS)
+      await waitFor(() => expect(status).toHaveTextContent('AI 분석을 마쳤어요.'))
+      expect(screen.getByText(/7문제를 맞혔고/)).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('켜 둔 채 UTC 자정(한국 시각 오전 9시)을 넘기면 오늘 리포트를 새로 만들 수 있다고 알린다', async () => {
+    // 끝난 리포트는 다시 받지 않아 날짜가 바뀐 것을 알 길이 없었다(#311 리뷰)
+    vi.useFakeTimers({
+      shouldAdvanceTime: true,
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    })
+    try {
+      vi.setSystemTime(new Date('2026-11-16T23:59:59.000Z'))
+      storedReport(learningReportOf('COMPLETED', '2026-11-16T01:00:00.000Z'))
+      renderReport()
+
+      await screen.findByText(/에 만든 리포트예요/)
+      expect(screen.queryByRole('button', { name: '리포트 보기' })).not.toBeInTheDocument()
+
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(await screen.findByText('오늘 리포트를 새로 만들 수 있어요')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '리포트 보기' })).toBeEnabled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('내 학습 탭: 학습 리포트가 지금 화면이고 배지 화면으로 갈 수 있다 (BADGE-02)', async () => {

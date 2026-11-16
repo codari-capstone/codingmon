@@ -20,10 +20,8 @@ const MADE_AT = new Intl.DateTimeFormat('ko-KR', {
   minute: '2-digit',
 })
 
-/** 오늘(UTC) 만든 리포트인지. 하루 1회는 UTC 날짜로 센다(계약 `reportDate`). */
-function isTodays(report: LearningReport, now = Date.now()): boolean {
-  return report.reportDate === new Date(now).toISOString().slice(0, 10)
-}
+/** 모델 문장. 띄어쓰기 없는 긴 식·주소가 오면 줄을 바꿀 곳이 없어 카드 밖으로 넘친다(#311 리뷰) */
+const AI_TEXT = 'break-keep whitespace-pre-line [overflow-wrap:anywhere]'
 
 /** 요청이 실패한 이유. 리포트의 FAILED가 아니라 요청 자체(네트워크·409 등)의 실패다. */
 export function RequestError({ request }: { request: ReportRequest }) {
@@ -42,11 +40,14 @@ export function RequestError({ request }: { request: ReportRequest }) {
 export function ReportMeta({
   report,
   request,
+  today,
 }: {
   report: LearningReport
   request: ReportRequest
+  /** 오늘(UTC 날짜). useUtcToday가 날짜가 바뀌면 다시 그린다 */
+  today: string
 }) {
-  const stale = !isTodays(report)
+  const stale = report.reportDate !== today
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -78,12 +79,15 @@ export function ReportMeta({
 export function AiAnalysis({
   report,
   request,
+  today,
 }: {
   report: LearningReport
   request: ReportRequest
+  today: string
 }) {
-  const working = request.isPending || report.status === 'PENDING'
-  const failed = !working && report.status === 'FAILED'
+  // 실패한 리포트는 [다시 시도]를 누르는 동안에도 그 블록을 둔다. 사라지면 버튼과 함께 포커스를 잃는다(#311 리뷰)
+  const failed = report.status === 'FAILED'
+  const working = report.status === 'PENDING' || (request.isPending && !failed)
   const done = !working && report.status === 'COMPLETED'
   const concepts = report.weakConcepts.filter((c) => c.explanation || c.practice)
 
@@ -118,7 +122,7 @@ export function AiAnalysis({
             {failureText(report.failureReason, '리포트를')}
           </p>
           {/* 지난 날짜면 위 [리포트 보기]가 같은 일을 한다. 버튼을 둘 두지 않는다 */}
-          {isTodays(report) ? (
+          {report.reportDate === today ? (
             <>
               <Button
                 variant="secondary"
@@ -139,14 +143,14 @@ export function AiAnalysis({
         </p>
       ) : null}
       {done && report.summary ? (
-        <p className="text-body-foreground text-base leading-[1.7] break-keep whitespace-pre-line">
+        <p className={`text-body-foreground text-base leading-[1.7] ${AI_TEXT}`}>
           {report.summary}
         </p>
       ) : null}
       {done && concepts.length > 0 ? (
         <ul className="m-0 grid list-none gap-4 p-0 md:grid-cols-2">
           {concepts.map((concept) => (
-            <li key={concept.slug} className="bg-muted flex flex-col gap-3 rounded-lg p-5">
+            <li key={concept.slug} className="bg-muted flex min-w-0 flex-col gap-3 rounded-lg p-5">
               <h3 className="text-foreground flex items-center gap-2 text-base font-bold">
                 {concept.name}
                 <Badge tone="warning">취약</Badge>
@@ -157,7 +161,9 @@ export function AiAnalysis({
                     <dt className="text-muted-foreground text-[13px] font-semibold">
                       무엇이 어려웠나요
                     </dt>
-                    <dd className="text-body-foreground m-0 text-[15px] leading-[1.65] break-keep whitespace-pre-line">
+                    <dd
+                      className={`text-body-foreground m-0 text-[15px] leading-[1.65] ${AI_TEXT}`}
+                    >
                       {concept.explanation}
                     </dd>
                   </div>
@@ -167,7 +173,9 @@ export function AiAnalysis({
                     <dt className="text-muted-foreground text-[13px] font-semibold">
                       이렇게 연습해 보세요
                     </dt>
-                    <dd className="text-body-foreground m-0 text-[15px] leading-[1.65] break-keep whitespace-pre-line">
+                    <dd
+                      className={`text-body-foreground m-0 text-[15px] leading-[1.65] ${AI_TEXT}`}
+                    >
                       {concept.practice}
                     </dd>
                   </div>

@@ -1,4 +1,5 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 
 import { api } from '@/api/client'
 import { fail } from '@/api/fail'
@@ -26,6 +27,26 @@ export function learningStatsQuery() {
 }
 
 export const LEARNING_REPORT_QUERY_KEY = ['learning-report'] as const
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/**
+ * 오늘(UTC 날짜, `YYYY-MM-DD`). 리포트의 하루 1회는 UTC 날짜로 센다(계약 `reportDate`).
+ * 다음 UTC 자정(한국 시각 오전 9시)에 다시 그린다 — 화면을 켜 둔 채 넘기면 끝난 리포트는
+ * 다시 받지 않아 '오늘 리포트를 새로 만들 수 있어요'가 뜨지 않았다(#311 리뷰).
+ */
+export function useUtcToday(): string {
+  const [today, setToday] = useState(() => new Date().toISOString().slice(0, 10))
+  useEffect(() => {
+    const now = Date.now()
+    const timer = setTimeout(
+      () => setToday(new Date().toISOString().slice(0, 10)),
+      DAY_MS - (now % DAY_MS),
+    )
+    return () => clearTimeout(timer)
+  }, [today])
+  return today
+}
 
 /**
  * 마지막 학습 리포트 (REP-02~05). 한 번도 만들지 않았으면 null이다 — 계약의 404

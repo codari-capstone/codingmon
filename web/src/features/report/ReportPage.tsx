@@ -16,7 +16,13 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { cn } from '@/lib/utils'
 import { LearnNav } from './LearnNav'
 import { AiAnalysis, ReportMeta, RequestError, type ReportRequest } from './ReportAnalysis'
-import { learningReportQuery, learningStatsQuery, useRequestLearningReport } from './reportQuery'
+import { isDeadEnd } from '@/features/result/resultQuery'
+import {
+  learningReportQuery,
+  learningStatsQuery,
+  useRequestLearningReport,
+  useUtcToday,
+} from './reportQuery'
 
 /**
  * 해결률만 백분율로 바꾼다 (0.49 → 49%, 계약 `ConceptStat`). 서버가 소수 둘째 자리까지
@@ -200,12 +206,18 @@ function ConceptTable({ concepts }: { concepts: ConceptStat[] }) {
 export function Component() {
   const { data: report, isPending, error, refetch } = useQuery(learningReportQuery())
   const request = useRequestLearningReport()
+  const today = useUtcToday()
 
   // 세션이 끊겼으면 로그인 화면으로 보낸다 (session.ts).
   const queryClient = useQueryClient()
   useEffect(() => {
     forgetSessionIfUnauthorized(queryClient, error)
   }, [queryClient, error])
+
+  // 받아 둔 리포트가 있는데 폴링 한 번이 일시적으로 실패하면 화면을 내리지 않는다 — 폴링이 간격을 늘려
+  // 계속 묻는다. 오류를 띄우는 때와 폴링을 멈추는 때가 같다(resultQuery의 isDeadEnd, #311 리뷰)
+  const deadEnd = isDeadEnd(error, report !== undefined)
+  const shown = deadEnd ? undefined : report
 
   return (
     <section className="flex flex-col gap-7">
@@ -214,17 +226,17 @@ export function Component() {
       </div>
 
       {/* 리포트가 있으면 남색 머리의 권유 문장이 h1이다. 없을 때도 화면 제목은 둔다 */}
-      {report ? <Hero stats={report} /> : <h1 className="page-title">학습 리포트</h1>}
+      {shown ? <Hero stats={shown} /> : <h1 className="page-title">학습 리포트</h1>}
 
-      {error ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
-      {isPending && !error ? <ListSkeleton rows={4} /> : null}
-      {report === null && !error ? <NoReport request={request} /> : null}
+      {deadEnd ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
+      {isPending && !deadEnd ? <ListSkeleton rows={4} /> : null}
+      {shown === null ? <NoReport request={request} /> : null}
 
-      {report && !error ? (
+      {shown ? (
         <>
-          <ReportMeta report={report} request={request} />
-          <AiAnalysis report={report} request={request} />
-          <ConceptTable concepts={report.concepts} />
+          <ReportMeta report={shown} request={request} today={today} />
+          <AiAnalysis report={shown} request={request} today={today} />
+          <ConceptTable concepts={shown.concepts} />
         </>
       ) : null}
     </section>
