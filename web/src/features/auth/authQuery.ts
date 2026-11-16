@@ -2,7 +2,7 @@ import { queryOptions } from '@tanstack/react-query'
 
 import { api } from '@/api/client'
 import { fail } from '@/api/fail'
-import { endSession, setAccessToken } from '@/api/session'
+import { endSession, setAccessToken, startSession } from '@/api/session'
 import type { CurrentUser, LoginRequest } from '@/api/types'
 
 export const ME_QUERY_KEY = ['me'] as const
@@ -48,7 +48,7 @@ export async function loginRequest(body: LoginRequest): Promise<CurrentUser> {
   const result = await api.POST('/api/auth/login', { body })
   if (result.data === undefined) fail(result)
 
-  setAccessToken(result.data.accessToken)
+  startSession(result.data.accessToken)
   const me = await api.GET('/api/users/me')
   if (me.data === undefined) {
     // 방금 받은 토큰으로 자기 정보를 못 받는 경우다. 반쪽 세션을 남기지 않는다.

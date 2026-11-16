@@ -1,4 +1,12 @@
-import { getAccessToken, getGeneration, setAccessToken } from './session'
+import {
+  adoptRefreshedToken,
+  getAccessToken,
+  getGeneration,
+  getRemoteLogouts,
+  isSessionReplaced,
+  setAccessToken,
+  wasDroppedByOtherLogin,
+} from './session'
 
 /** 갱신 요청이 쓰는 잠금 이름. 탭끼리 공유된다. */
 const LOCK_NAME = 'codingmon-auth-refresh'
@@ -46,27 +54,41 @@ async function requestNewToken(): Promise<string | null> {
  * T1이라 "바뀐 것이 없다"로 읽혀 한 번 더 갱신했다. 보낸 토큰과 비교하면 그 요청이 **낡은
  * 토큰으로 실패했다**는 사실이 그대로 드러난다.
  */
-export async function refreshAccessToken(used: string | null): Promise<string | null> {
-  const run = async (): Promise<string | null> => {
-    // 그사이 다른 요청이 이미 새 토큰을 받아 왔다. 그것을 쓴다.
-    // 세션이 끝나 null이 된 경우도 여기서 걸러져, 나머지 401들이 각자 갱신을 또
-    // 요청하지 않는다(그러면 실패 요청이 401 개수만큼 나간다).
-    const current = getAccessToken()
-    if (current !== used) return current
+export async function refreshAccessToken(
+  used: string | null,
+  generation = getGeneration(),
+): Promise<string | null> {
+  // 다른 탭의 로그아웃도 세션을 끝낸다. 그 순간 떠 있던 갱신 결과는 방금 끝낸 세션의 토큰일 수 있다.
+  const remoteLogouts = getRemoteLogouts()
+  const sessionChanged = () =>
+    getGeneration() !== generation || getRemoteLogouts() !== remoteLogouts
 
-    const startedAt = getGeneration()
+  const run = async (): Promise<string | null> => {
+    // 원래 요청을 보낸 뒤, 또는 Web Lock을 기다리는 동안 세션이 바뀌었으면 이어가지 않는다.
+    if (sessionChanged()) return null
+    // 쿠키가 다른 계정의 것임을 이미 확인했다. 다시 물으면 그 계정의 refresh token만 회전한다.
+    if (isSessionReplaced()) return null
+    // 그사이 다른 요청이 이미 새 토큰을 받아 왔다. 그것을 쓴다. 같은 세대 안에서 토큰을 들이는 것은
+    // 이 함수(계정을 확인한 뒤)뿐이라 같은 계정의 토큰이다.
+    // 세션이 끝나 null이 된 경우도 여기서 걸러져, 나머지 401들이 각자 갱신을 또
+    // 요청하지 않는다(그러면 실패 요청이 401 개수만큼 나간다). 다만 다른 탭의 로그인 알림이
+    // 버린 토큰이면 세션은 남아 있으니 다시 받아 계정을 확인한다.
+    const current = getAccessToken()
+    if (current !== used && !(current === null && wasDroppedByOtherLogin(used))) return current
+
     const token = await requestNewToken()
 
     // 기다리는 동안 로그아웃했다. 방금 버린 세션의 토큰을 되살리지 않는다 (session.ts).
-    if (getGeneration() !== startedAt) return null
+    if (sessionChanged()) return null
 
     if (token === null) {
       // 실패했어도 그사이 다른 경로(로그인 등)가 유효한 토큰을 심었으면 지우지 않는다.
       if (getAccessToken() === used) setAccessToken(null)
       return null
     }
-    setAccessToken(token)
-    return token
+    // 다른 탭의 로그인이 공유 refresh 쿠키를 바꿨을 수 있다. 이 탭 세션의 계정이 아니면
+    // 받지 않고 이 탭의 세션을 끝낸다(session.ts의 owner).
+    return adoptRefreshedToken(token) ? token : null
   }
 
   if (typeof navigator === 'undefined' || navigator.locks === undefined) return run()
