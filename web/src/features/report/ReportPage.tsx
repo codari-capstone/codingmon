@@ -233,7 +233,7 @@ function ReportAnnouncer({ status }: { status: LearningReport['status'] | undefi
 /** 학습 리포트 (REP-01~05). 하루 1회 만든 저장본을 보여 준다(계약). */
 export function Component() {
   const { data: report, isPending, error, refetch } = useQuery(learningReportQuery())
-  const request = useRequestLearningReport()
+  const mutation = useRequestLearningReport()
   const today = useUtcToday()
 
   // 세션이 끊겼으면 로그인 화면으로 보낸다 (session.ts).
@@ -248,12 +248,24 @@ export function Component() {
   const deadEnd = isDeadEnd(error, report != null)
   const shown = deadEnd ? undefined : report
 
-  // 권유 카드의 [리포트 보기]로 첫 리포트가 생기면 누른 버튼이 사라진다. 포커스를 새 머리 제목으로 옮긴다(#311 리뷰)
-  const hadReport = useRef(shown)
+  // [리포트 보기]·[다시 시도]가 성공하면 누른 버튼이 사라진다(권유 카드, 지난 날짜 안내, 실패 블록).
+  // 요청이 끝났는데 포커스가 body로 떨어졌으면 머리 제목으로 옮긴다. 버튼이 남았으면 그대로 둔다(#311 리뷰)
+  const pressed = useRef(false)
   useEffect(() => {
-    if (hadReport.current === null && shown) document.getElementById(HERO_TITLE_ID)?.focus()
-    hadReport.current = shown
-  }, [shown])
+    if (!pressed.current || mutation.isPending) return
+    pressed.current = false
+    const active = document.activeElement
+    if (shown && (active === null || active === document.body)) {
+      document.getElementById(HERO_TITLE_ID)?.focus()
+    }
+  }, [shown, mutation.isPending])
+  const request = {
+    ...mutation,
+    mutate: () => {
+      pressed.current = true
+      mutation.mutate()
+    },
+  }
 
   return (
     <section className="flex flex-col gap-7">

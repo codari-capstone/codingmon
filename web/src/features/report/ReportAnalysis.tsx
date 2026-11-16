@@ -10,7 +10,9 @@ export interface ReportRequest {
   mutate: () => void
   isPending: boolean
   isError: boolean
+  isSuccess: boolean
   error: unknown
+  data?: LearningReport
 }
 
 const MADE_AT = new Intl.DateTimeFormat('ko-KR', {
@@ -48,6 +50,9 @@ export function ReportMeta({
   today: string
 }) {
   const stale = report.reportDate !== today
+  // '오늘'은 브라우저 시계다. 서버 시계가 늦으면 눌러도 같은 날짜의 리포트가 돌아온다(계약: 오늘 것이 있으면 그것).
+  // 아무 반응 없는 버튼으로 두지 않고 알린다 — 시계 차이만큼 지나 다시 누르면 만들어진다(#311 리뷰)
+  const serverNotYet = stale && request.isSuccess && request.data?.reportDate === report.reportDate
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -67,6 +72,11 @@ export function ReportMeta({
         ) : null}
       </div>
       {stale ? <RequestError request={request} /> : null}
+      {serverNotYet ? (
+        <p role="status" className="text-muted-foreground text-sm">
+          서버 시각으로는 아직 하루가 지나지 않았어요. 잠시 후 다시 눌러 주세요.
+        </p>
+      ) : null}
     </div>
   )
 }

@@ -264,6 +264,44 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
     expect(screen.getByRole('status')).not.toHaveTextContent(/마쳤어요|쓰고 있어요/)
   })
 
+  // 성공하면 누른 버튼이 사라진다. 포커스가 body로 떨어지지 않게 머리 제목으로 옮긴다(#311 리뷰)
+  it.each([
+    ['지난 리포트의 [리포트 보기]', 'COMPLETED', 'yesterday', '리포트 보기'],
+    ['실패한 리포트의 [다시 시도]', 'FAILED', 'today', '다시 시도'],
+  ] as const)('%s가 성공하면 머리 제목으로 포커스를 옮긴다', async (_name, status, day, button) => {
+    storedReport(learningReportOf(status, day === 'today' ? now() : yesterday()))
+    server.use(
+      http.post('*/api/users/me/learning-report', () =>
+        HttpResponse.json(learningReportOf('PENDING', now()), { status: 202 }),
+      ),
+    )
+    const user = userEvent.setup()
+    renderReport()
+
+    await user.click(await screen.findByRole('button', { name: button }))
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveFocus())
+    expect(screen.queryByRole('button', { name: button })).not.toBeInTheDocument()
+  })
+
+  it('브라우저 시계가 빨라 [리포트 보기]에 같은 날짜의 리포트가 돌아오면 아직 하루가 지나지 않았다고 알린다', async () => {
+    // 서버는 아직 같은 날이라 기존 리포트를 준다. 아무 반응 없는 버튼으로 두지 않는다(#311 리뷰)
+    const old = learningReportOf('COMPLETED', yesterday())
+    storedReport(old)
+    server.use(http.post('*/api/users/me/learning-report', () => HttpResponse.json(old)))
+    const user = userEvent.setup()
+    renderReport()
+
+    const button = await screen.findByRole('button', { name: '리포트 보기' })
+    await user.click(button)
+    expect(
+      await screen.findByText(
+        '서버 시각으로는 아직 하루가 지나지 않았어요. 잠시 후 다시 눌러 주세요.',
+      ),
+    ).toBeInTheDocument()
+    // 버튼은 남는다. 포커스도 그대로다
+    expect(button).toHaveFocus()
+  })
+
   it('[다시 시도]를 누르는 동안 버튼이 사라지지 않고 기다림을 알린다', async () => {
     // 블록째 사라지면 키보드 포커스가 body로 떨어진다(#311 리뷰)
     storedReport(learningReportOf('FAILED', now()))
