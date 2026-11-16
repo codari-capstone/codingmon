@@ -1,6 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -9,6 +10,7 @@ import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { conceptTags } from '@/mocks/fixtures/problems'
 import { resetConceptTags } from '@/mocks/handlers'
+import { server } from '@/mocks/server'
 import { Component as AdminTagsPage } from './AdminTagsPage'
 
 // 목에서 등록한 태그는 모듈 상태다. 테스트끼리 넘어가지 않게 비운다
@@ -68,13 +70,22 @@ describe('AdminTagsPage (ADM-11)', () => {
     expect(within(form()).getByText('영문 이름은 80자까지예요')).toBeInTheDocument()
   })
 
+  it('태그가 하나도 없으면 등록 폼의 자리를 말하지 않고 안내한다', async () => {
+    // 좁은 폭에서는 폼이 목록 아래로 내려가 '오른쪽'이 맞지 않는다(#313 리뷰)
+    server.use(http.get('*/api/concept-tags', () => HttpResponse.json([])))
+    renderPage()
+    expect(await screen.findByText('아직 태그가 없어요')).toBeInTheDocument()
+    expect(screen.getByText('새 태그 등록에서 첫 태그를 등록해 주세요.')).toBeInTheDocument()
+  })
+
+  // slug 앞뒤 공백은 떼고 보낸다. 복사해 붙인 보이지 않는 공백으로 막히지 않는다(#313 리뷰)
   it('등록하면 목록에 바로 붙어 방금 등록 표시가 되고, 문제 작성 화면이 읽는 캐시에도 들어가며 폼을 비운다', async () => {
     const user = userEvent.setup()
     const client = renderPage()
     await screen.findByRole('region', { name: '태그 목록' })
 
     await user.type(within(form()).getByLabelText('이름'), '  이분 탐색 ')
-    await user.type(within(form()).getByLabelText('영문 이름 (slug)'), 'binary-search')
+    await user.type(within(form()).getByLabelText('영문 이름 (slug)'), ' binary-search ')
     await user.click(within(form()).getByRole('button', { name: '등록' }))
 
     const row = (await screen.findByText('binary-search')).closest('tr')!

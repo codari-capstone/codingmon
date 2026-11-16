@@ -29,6 +29,9 @@ const tagSchema = z.object({
     .max(TAG_NAME_MAX, `이름은 ${TAG_NAME_MAX}자까지예요`),
   slug: z
     .string()
+    // 복사해 붙인 값의 보이지 않는 앞뒤 공백이 형식 오류로 막히지 않게 떼고 보낸다(#313 리뷰).
+    // 서버는 slug를 떼지 않으니, 뗀 값은 계약의 형식 그대로다
+    .trim()
     .min(1, '영문 이름을 입력해 주세요')
     .max(TAG_SLUG_MAX, `영문 이름은 ${TAG_SLUG_MAX}자까지예요`)
     .regex(TAG_SLUG_PATTERN, '영문 소문자·숫자를 - 로 이어 주세요 (예: binary-search)'),
@@ -116,7 +119,8 @@ export function Component() {
           ) : tags.data.length === 0 ? (
             <EmptyState
               title="아직 태그가 없어요"
-              description="오른쪽에서 첫 태그를 등록해 주세요."
+              // 좁은 폭에서는 등록 폼이 목록 아래로 내려간다. 자리를 말하지 않는다(#313 리뷰)
+              description="새 태그 등록에서 첫 태그를 등록해 주세요."
             />
           ) : (
             <Table
