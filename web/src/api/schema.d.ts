@@ -671,6 +671,10 @@ export interface paths {
          * 코드 제출 (SOLVE-09)
          * @description 제출을 채점 대기(`QUEUED`)로 저장하고 바로 답한다. 채점 상태와 판정은 결과 조회(#30)로 확인한다.
          *     문제의 지금 공개된 버전으로 채점한다. 제출할 때마다 새 제출로 저장해 시도 횟수를 센다.
+         *     제출·예제 실행의 미완료 작업(`QUEUED`·`COMPILING`·`RUNNING`)은 사용자당 기본 3개, 전체 학습자 기준 기본 100개까지 접수한다.
+         *     상한은 서버 설정으로 조정하며 두 주소가 함께 센다. 관리자 정답 검증은 이 접수 상한의 대상이 아니다.
+         *     상한에 닿으면 429 `JUDGE_QUEUE_FULL`이며 새 제출·시도·학습 활동을 저장하지 않는다. 진행 중인 작업이 끝난 뒤 다시 요청할 수 있다.
+         *     채점 서버가 설정되지 않은 서버(로컬 개발 등)는 작업이 끝나지 않으므로 이 상한을 적용하지 않는다.
          *     오류 `code`: `SOURCE_EMPTY`(빈 코드 또는 공백뿐), `SOURCE_TOO_LONG`(UTF-8 기준 64KB 초과), `PROBLEM_NOT_FOUND`(없는 문제 또는 공개된 버전이 없는 문제),
          *     `LANGUAGE_NOT_SUPPORTED`(지금 공개된 버전이 그 언어를 지원하지 않음. 열어 둔 화면 사이에 새 버전이 공개된 경우).
          *     모르는 언어, NUL 문자가 든 코드는 `code` 없는 400이다.
@@ -831,6 +835,7 @@ export interface paths {
          * @description 작성한 코드를 문제의 공개 예제로만 실행하도록 대기(`QUEUED`)로 저장하고 바로 답한다. 결과는 예제 실행 결과(`GET /api/sample-runs/{id}`)로 확인한다.
          *     시도 횟수·풀이 상태·제출 기록에 들어가지 않는다.
          *     요청 본문과 오류는 코드 제출(`POST /api/submissions`)과 같다.
+         *     미완료 작업 접수 상한도 코드 제출과 공유하며, 넘으면 새 실행을 저장하지 않고 429 `JUDGE_QUEUE_FULL`을 준다.
          */
         post: operations["runSamples"];
         delete?: never;
@@ -3362,6 +3367,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
+            429: components["responses"]["Problem"];
         };
     };
     getSubmissionResult: {
@@ -3707,6 +3713,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetail"];
                 };
             };
+            429: components["responses"]["Problem"];
         };
     };
     getSampleRunResult: {
