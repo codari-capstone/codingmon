@@ -4,17 +4,25 @@ import { api } from '@/api/client'
 import { fail } from '@/api/fail'
 import type { CurrentUser, UserActivity } from '@/api/types'
 
+/** 잔디를 고를 수 있는 첫 해. 서비스를 시작한 해라 해가 바뀌어도 그대로다(계약 `year`). */
+export const FIRST_ACTIVITY_YEAR = 2026
+
 /**
- * 풀이 요약·최근 1년 잔디 (MY-05). 제출하고 돌아오면 오늘 칸이 바로 늘어야 하므로 매번 새로
+ * 풀이 요약·연도별 잔디 (MY-05). 제출하고 돌아오면 오늘 칸이 바로 늘어야 하므로 매번 새로
  * 받는다(학습 통계와 같은 이유).
  *
- * 사용자별 응답이라 키가 `adoptSession`의 제거 대상에 들어 있어야 한다(session.ts).
+ * `year`를 빼면 서버가 올해(한국 시각)로 정한다. 화면은 이 응답의 `from` 연도로 고를 수 있는
+ * 마지막 해를 정한다 — 브라우저 시각으로 정하면 연말·연초에 400이 난다(계약).
+ *
+ * 사용자별 응답이라 키가 `adoptSession`의 제거 대상(`['activity']` 접두)에 들어 있어야 한다(session.ts).
  */
-export function activityQuery() {
+export function activityQuery(year?: number) {
   return queryOptions({
-    queryKey: ['activity'] as const,
+    queryKey: ['activity', year ?? 'current'] as const,
     queryFn: async (): Promise<UserActivity> => {
-      const result = await api.GET('/api/users/me/activity')
+      const result = await api.GET('/api/users/me/activity', {
+        params: { query: year === undefined ? {} : { year } },
+      })
       if (result.data === undefined) fail(result)
       return result.data
     },

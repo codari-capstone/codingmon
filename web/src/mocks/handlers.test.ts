@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { api } from '@/api/client'
 import type { ProblemListQuery, ProblemPage } from '@/api/types'
 import { MOCK_CODE, resetEmailCodes } from './fixtures/emailCodes'
+import { kstYear } from './fixtures/activity'
 import { conceptTags, problems } from './fixtures/problems'
 import { mockAccounts } from './fixtures/users'
 import { resetLearningReport, resetSessions, resetSubmissions } from './handlers'
@@ -692,6 +693,38 @@ describe('제출 목의 검사 순서', () => {
 
     expect(code(res)).toBe('SOURCE_EMPTY')
   })
+})
+
+describe('잔디 목 (MY-05, #253)', () => {
+  afterEach(() => resetSessions())
+
+  async function asCodari() {
+    const login = await api.POST('/api/auth/login', {
+      body: { email: 'user@codari.test', password: 'Codari!test1' },
+    })
+    return { headers: { Authorization: `Bearer ${login.data!.accessToken}` } }
+  }
+
+  it('year를 빼면 올해(한국 시각)의 1월 1일 ~ 12월 31일이고, 제출은 그 안에만 있다', async () => {
+    const { data } = await api.GET('/api/users/me/activity', await asCodari())
+    const year = kstYear()
+
+    expect(data?.from).toBe(`${year}-01-01`)
+    expect(data?.to).toBe(`${year}-12-31`)
+    expect(data!.days.every((day) => day.date.startsWith(`${year}-`))).toBe(true)
+    expect(data?.totalActiveDays).toBe(data?.days.length)
+  })
+
+  it.each(['2025', String(kstYear() + 1), 'abc', '2026.5'])(
+    'year=%s는 고를 수 없어 code 없는 400이다',
+    async (year) => {
+      const auth = await asCodari()
+      const response = await fetch(`/api/users/me/activity?year=${year}`, auth)
+
+      expect(response.status).toBe(400)
+      expect(await response.json()).not.toHaveProperty('code')
+    },
+  )
 })
 
 describe('학습 리포트 목', () => {

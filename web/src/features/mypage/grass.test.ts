@@ -1,32 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { activeMonths, buildWeeks, grassLevel, monthLabels } from './grass'
-
-describe('activeMonths', () => {
-  it('잔디 범위에서 제출한 달을 센다. 같은 달은 한 번, 맨 앞 달도 센다', () => {
-    expect(
-      activeMonths({
-        days: [
-          // '총 N일'과 같은 기간이다. 맨 앞 달만 제출해도 0개월이 아니다(#274 리뷰)
-          { date: '2025-11-20', count: 1 },
-          { date: '2025-12-01', count: 2 },
-          { date: '2025-12-31', count: 1 },
-          { date: '2026-06-10', count: 1 },
-          { date: '2026-11-13', count: 4 },
-        ],
-      }),
-    ).toBe(4)
-  })
-
-  it('1년이 달력 13달에 걸쳐도 12를 넘지 않는다', () => {
-    const days = Array.from({ length: 13 }, (_, i) => {
-      const month = ((10 + i) % 12) + 1 // 2025-11 ~ 2026-11
-      const year = i < 2 ? 2025 : 2026
-      return { date: `${year}-${String(month).padStart(2, '0')}-15`, count: 1 }
-    })
-    expect(activeMonths({ days })).toBe(12)
-  })
-})
+import { buildWeeks, grassLevel, monthLabels } from './grass'
 
 describe('buildWeeks', () => {
   // 2026-11-01은 일요일이다.
@@ -73,21 +47,16 @@ describe('grassLevel', () => {
 })
 
 describe('monthLabels', () => {
-  it('달이 바뀐 주에만 달 이름을 붙이고, 맨 앞 주는 범위의 첫 달이다', () => {
-    const labels = monthLabels(buildWeeks({ from: '2026-10-20', to: '2026-11-14', days: [] }))
-    expect(labels[0]).toBe('10월')
-    expect(labels.filter(Boolean)).toEqual(['10월', '11월'])
+  it('한 해를 그리면 1월부터 12월까지 달마다 한 번씩 이름을 붙인다', () => {
+    // 범위는 늘 그 해 1월 1일 ~ 12월 31일이다(계약, #253)
+    const labels = monthLabels(buildWeeks({ from: '2026-01-01', to: '2026-12-31', days: [] }))
+    expect(labels[0]).toBe('1월')
+    expect(labels.filter(Boolean)).toEqual(Array.from({ length: 12 }, (_, i) => `${i + 1}월`))
   })
 
-  // 리뷰에서 나온 두 경우(#186). 글자가 칸보다 넓어 바로 옆 열의 이름과 포개진다.
-  it('from이 토요일이라 맨 앞 주가 하루뿐이어도 같은 달 이름을 두 번 붙이지 않는다', () => {
+  // 리뷰에서 나온 경우(#186). 2025-11-01은 토요일이라 맨 앞 주가 그날뿐이다.
+  it('맨 앞 주가 하루뿐이어도 같은 달 이름을 두 번 붙이지 않는다', () => {
     const labels = monthLabels(buildWeeks({ from: '2025-11-01', to: '2025-11-30', days: [] }))
-    expect(labels.filter(Boolean)).toEqual(['11월'])
-  })
-
-  it('맨 앞 주의 이름이 바로 다음 주 이름과 붙으면 앞 것을 뺀다', () => {
-    const labels = monthLabels(buildWeeks({ from: '2025-10-29', to: '2025-11-30', days: [] }))
-    expect(labels[0]).toBeNull()
     expect(labels.filter(Boolean)).toEqual(['11월'])
   })
 })

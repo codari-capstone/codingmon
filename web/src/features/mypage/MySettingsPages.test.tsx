@@ -232,7 +232,7 @@ describe('회원 탈퇴 /me/withdraw (MY-04)', () => {
     expect(
       await screen.findByText(
         new RegExp(
-          `맞힌 문제가 ${activity.solvedCount}개, 최근 1년 동안 공부한 날이 ${activity.totalActiveDays}일`,
+          `맞힌 문제가 ${activity.solvedCount}개, 올해 공부한 날이 ${activity.totalActiveDays}일`,
         ),
       ),
     ).toBeInTheDocument()

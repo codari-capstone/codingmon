@@ -57,43 +57,19 @@ export function grassLevel(count: number): 0 | 1 | 2 | 3 | 4 {
 }
 
 /**
- * 잔디 범위(`from`~`to`, 1년)에서 제출한 달의 수 (디자인 '최근 12개월 중 N개월 활동').
- * 같은 줄의 '총 N일'·잔디와 같은 기간을 센다 — 기간이 다르면 '0개월 활동 · 총 5일'처럼 어긋난다(#274 리뷰).
- * 1년은 달력으로 13달에 걸칠 수 있어 '12개월 중 13개월'이 나오지 않게 12에서 멈춘다.
- */
-export function activeMonths(activity: Pick<UserActivity, 'days'>): number {
-  // `days`는 그 기간에 제출한 날만 담는다(계약)
-  const months = new Set(
-    activity.days.filter((day) => day.count > 0).map((day) => day.date.slice(0, 7)),
-  )
-  return Math.min(months.size, 12)
-}
-
-/**
- * 달 이름이 다음 이름과 겹치지 않으려면 떨어져야 하는 주 수. 한 주는 14px(칸 11 + 간격 3)이고
- * '12월'은 11px 글자로 24px쯤이라 두 주면 들어간다.
- */
-const LABEL_GAP_WEEKS = 2
-
-/**
  * 주마다 달 이름. 주의 첫 날짜가 앞 주와 다른 달이면 그 달 이름을 붙인다. 맨 앞 주는 범위의
  * 첫 달이다.
  *
- * 맨 앞 주의 이름이 다음 이름과 가까우면 앞 것을 뺀다. 글자가 칸보다 넓어 바로 옆 열의
- * 이름과 포개진다(`from`이 그달 말일 무렵이면 '10월'과 '11월'이 나란히 붙는다). `from`은
- * 매일 바뀌므로 자주 생긴다.
+ * 범위는 늘 1월 1일에 시작해(계약, #253) 다음 이름(2월)은 4~5주 뒤에 온다. 그래서 '최근 365일'
+ * 때처럼 맨 앞 이름이 바로 옆 이름과 포개지는 일이 없어, 그때 두었던 맨 앞 이름 빼기는 지웠다.
  */
 export function monthLabels(weeks: GrassCell[][]): (string | null)[] {
   const monthOf = (week: GrassCell[]) => week.find((cell) => cell.date !== null)?.date?.slice(5, 7)
 
-  const labels = weeks.map((week, i) => {
+  return weeks.map((week, i) => {
     const month = monthOf(week)
     if (month === undefined) return null
     if (i > 0 && monthOf(weeks[i - 1]!) === month) return null
     return `${Number(month)}월`
   })
-
-  const next = labels.findIndex((label, i) => i > 0 && label !== null)
-  if (labels[0] !== null && next !== -1 && next < LABEL_GAP_WEEKS) labels[0] = null
-  return labels
 }
