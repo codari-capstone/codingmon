@@ -30,6 +30,7 @@ const EMAIL_USER: CurrentUser = {
   email: 'us***@codari.test',
   loginMethod: 'EMAIL',
   githubUsername: null,
+  welcomeSeen: true,
 }
 
 const GITHUB_USER: CurrentUser = {

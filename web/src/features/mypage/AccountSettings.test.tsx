@@ -22,6 +22,7 @@ const ALICE: CurrentUser = {
   email: 'al***@codari.test',
   loginMethod: 'EMAIL',
   githubUsername: null,
+  welcomeSeen: true,
 }
 
 const problem = (status: number, code: string, detail: string) =>

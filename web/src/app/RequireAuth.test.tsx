@@ -81,6 +81,7 @@ describe('RequireAuth', () => {
         email: 'us***@codari.test',
         loginMethod: 'EMAIL',
         githubUsername: null,
+        welcomeSeen: true,
       },
       isAuthenticated: true,
     })
@@ -100,6 +101,7 @@ describe('RequireAdmin', () => {
         email: 'us***@codari.test',
         loginMethod: 'EMAIL',
         githubUsername: null,
+        welcomeSeen: true,
       },
       isAuthenticated: true,
     })
@@ -120,6 +122,7 @@ describe('RequireAdmin', () => {
         email: 'ad***@codari.test',
         loginMethod: 'EMAIL',
         githubUsername: null,
+        welcomeSeen: true,
       },
       isAuthenticated: true,
     })

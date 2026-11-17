@@ -55,6 +55,7 @@ export const mockAccounts: MockAccount[] = [
       email: 'us***@codari.test',
       loginMethod: 'EMAIL',
       githubUsername: null,
+      welcomeSeen: true,
     },
   },
   {
@@ -67,6 +68,7 @@ export const mockAccounts: MockAccount[] = [
       email: 'ad***@codari.test',
       loginMethod: 'EMAIL',
       githubUsername: null,
+      welcomeSeen: true,
     },
   },
 ]

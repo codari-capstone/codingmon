@@ -20,6 +20,7 @@ const EMAIL_USER: CurrentUser = {
   email: 'us***@codari.test',
   loginMethod: 'EMAIL',
   githubUsername: null,
+  welcomeSeen: true,
 }
 
 const GITHUB_USER: CurrentUser = {
@@ -30,6 +31,7 @@ const GITHUB_USER: CurrentUser = {
   email: null,
   loginMethod: 'GITHUB',
   githubUsername: 'octo-kim',
+  welcomeSeen: true,
 }
 
 /** `activity`가 숫자면 그 사용자의 fixture, 'error'면 500을 준다. */
