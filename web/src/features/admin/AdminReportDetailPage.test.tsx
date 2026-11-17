@@ -71,6 +71,15 @@ describe('AdminReportDetailPage (ADM-13)', () => {
     expect(await stored(10)).toMatchObject({ status: 'RESOLVED', adminMemo: '예제 2를 고쳤어요' })
   })
 
+  it('신고자는 회원 상세로 가는 링크다 (ADM-15)', async () => {
+    renderPage(1)
+    const info = await screen.findByRole('region', { name: '신고 내용' })
+    expect(within(info).getByRole('link', { name: '코다리' })).toHaveAttribute(
+      'href',
+      '/admin/members/1',
+    )
+  })
+
   it('탈퇴한 신고자는 탈퇴한 회원으로 보인다', async () => {
     renderPage(8)
     const info = await screen.findByRole('region', { name: '신고 내용' })
@@ -81,8 +90,12 @@ describe('AdminReportDetailPage (ADM-13)', () => {
     renderPage(11)
     const info = await screen.findByRole('region', { name: '신고 내용' })
 
-    // 문제로 가는 길이 없다
-    expect(within(info).queryByRole('link')).not.toBeInTheDocument()
+    // 문제로 가는 길이 없다. 남는 링크는 신고자(코딩왕) 하나다
+    expect(
+      within(info)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(['/admin/members/3'])
     expect(within(info).getByText('삭제된 문제')).toBeInTheDocument()
     expect(within(handle()).getByRole('radio', { name: /접수/ })).toBeDisabled()
     expect(within(handle()).getByRole('radio', { name: /확인 중/ })).toBeDisabled()

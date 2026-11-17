@@ -110,6 +110,12 @@ export const router = createBrowserRouter([
                         lazy: () => import('@/features/admin/AdminDashboardPage'),
                       },
                       { path: 'members', lazy: () => import('@/features/admin/AdminMembersPage') },
+                      // 회원 상세·정지·강제 탈퇴 (ADM-15·16)
+                      {
+                        path: 'members/:id',
+                        lazy: () => import('@/features/admin/AdminMemberDetailPage'),
+                        handle: { pageTone: 'subtle' } satisfies PageHandle,
+                      },
                       // 개념 태그 목록·등록 (ADM-11, #221)
                       { path: 'tags', lazy: () => import('@/features/admin/AdminTagsPage') },
                       // 신고 목록·상세 (ADM-13, #226)

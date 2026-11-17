@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
@@ -21,6 +22,7 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { cn } from '@/lib/utils'
 import { ADMIN_PAGE_SIZE } from './adminProblemQuery'
 import { adminUserListQuery, type AdminUserFilter } from './adminUserQuery'
+import { formatJoinedOn } from './labels'
 
 /** 검색어를 조회에 반영하기까지 기다리는 시간. 문제 관리 목록과 같은 값이다 */
 const SEARCH_DEBOUNCE_MS = 300
@@ -30,16 +32,6 @@ const FILTERS = [
   { value: 'ACTIVE', label: '정상', count: 'active' },
   { value: 'SUSPENDED', label: '정지', count: 'suspended' },
 ] as const satisfies readonly { value: AdminUserFilter; label: string; count: string }[]
-
-// en-CA는 2026-11-03 모양이다(시안). 받은 시각은 UTC라 한국 날짜로 바꾼다
-const KST_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' })
-
-/** 가입일. 기록하기 전에 가입한 회원은 null이고 '—'로 보인다(계약) */
-function formatJoinedOn(iso: string | null) {
-  if (iso === null) return '—'
-  const at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? '—' : KST_DATE.format(at)
-}
 
 /** 관리자 회원 목록 (ADM-14). 최근 가입순이다 */
 export function Component() {
@@ -165,7 +157,12 @@ export function Component() {
                             <span aria-hidden="true" className="flex shrink-0">
                               <Avatar name={user.nickname} size={28} />
                             </span>
-                            {user.nickname}
+                            <Link
+                              to={`/admin/members/${user.id}`}
+                              className="hover:text-primary-text break-keep [overflow-wrap:anywhere] hover:underline"
+                            >
+                              {user.nickname}
+                            </Link>
                             {user.role === 'ADMIN' ? <Badge tone="brand">관리자</Badge> : null}
                           </span>
                         </TableCell>

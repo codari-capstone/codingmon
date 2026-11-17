@@ -46,6 +46,10 @@ describe('AdminMembersPage (ADM-14)', () => {
     expect(rows[9]).toHaveTextContent(/^16큐큐대기열\(GitHub\)/)
     // 아바타는 장식이다. 이름 옆이라 그림으로도 읽히면 줄마다 이름이 두 번 들린다
     expect(within(rows[1]!).queryByRole('img')).not.toBeInTheDocument()
+    expect(within(rows[1]!).getByRole('link', { name: '코린이' })).toHaveAttribute(
+      'href',
+      '/admin/members/24',
+    )
   })
 
   it('다음 페이지에서 가입일 없는 회원은 —, 관리자에는 배지, 정지 회원은 정지로 보인다', async () => {

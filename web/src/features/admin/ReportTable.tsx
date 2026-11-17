@@ -28,6 +28,19 @@ function formatReportedOn(iso: string, now = new Date()) {
   return (at.getFullYear() === now.getFullYear() ? THIS_YEAR : OTHER_YEAR).format(at)
 }
 
+/** 신고자. 회원 상세(ADM-15)로 간다. 탈퇴했으면 둘 다 null이고 글자만 남는다(계약) */
+export function Reporter({ id, nickname }: { id: number | null; nickname: string | null }) {
+  if (id === null || nickname === null) return <>탈퇴한 회원</>
+  return (
+    <Link
+      to={`/admin/members/${id}`}
+      className="hover:text-primary-text break-keep [overflow-wrap:anywhere] hover:underline"
+    >
+      {nickname}
+    </Link>
+  )
+}
+
 /** 신고 표 (ADM-13 목록, ADM-12 대시보드의 최근 신고). 두 시안의 열이 같다 */
 export function ReportTable({ reports }: { reports: AdminReportSummary[] }) {
   return (
@@ -68,8 +81,7 @@ export function ReportTable({ reports }: { reports: AdminReportSummary[] }) {
             </TableCell>
             <TableCell>{REPORT_TYPE_LABEL[report.type]}</TableCell>
             <TableCell className={cn(report.reporterNickname === null && 'text-muted-foreground')}>
-              {/* 회원 상세로 가는 링크는 회원 상세 화면(#228)에서 붙인다 */}
-              {report.reporterNickname ?? '탈퇴한 회원'}
+              <Reporter id={report.reporterId} nickname={report.reporterNickname} />
             </TableCell>
             <TableCell className="text-muted-foreground tabular-nums">
               {formatReportedOn(report.createdAt)}
