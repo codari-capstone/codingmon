@@ -35,6 +35,9 @@ public class User {
     // created_at·suspension_reason은 DB 기본값과 관리자 SQL이 다뤄 여기에 두지 않는다.
     private Instant suspendedAt;
 
+    // 처음 안내를 열었는지(WELCOME-01). 바꾸는 쪽은 UserRepository.markWelcomeSeen이다. 가입하면 false다.
+    private boolean welcomeSeen;
+
     protected User() {
     }
 
@@ -81,5 +84,9 @@ public class User {
 
     public Role getRole() {
         return role;
+    }
+
+    public boolean isWelcomeSeen() {
+        return welcomeSeen;
     }
 }

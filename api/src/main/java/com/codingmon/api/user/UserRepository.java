@@ -35,6 +35,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("update User u set u.nickname = :nickname where u.id = :id")
     int updateNickname(Long id, String nickname);
 
+    // 이미 true여도 그대로 둔다. 탭 두 개에서 동시에 불러도 같은 결과다.
+    @Transactional
+    @Modifying
+    @Query("update User u set u.welcomeSeen = true where u.id = :id")
+    int markWelcomeSeen(Long id);
+
     @Modifying
     @Query(value = "delete from submissions where user_id = :id", nativeQuery = true)
     void deleteSubmissions(Long id);

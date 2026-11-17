@@ -13,7 +13,7 @@ import com.codingmon.api.user.Role;
 import com.codingmon.api.user.User;
 import com.codingmon.api.user.UserRepository;
 
-// 마이페이지의 계정 정보·닉네임 변경·비밀번호 변경·회원 탈퇴(MY-01~04).
+// 마이페이지의 계정 정보·닉네임 변경·비밀번호 변경·회원 탈퇴(MY-01~04)와 처음 안내를 봤음(WELCOME-01).
 @Service
 class MyAccountService {
 
@@ -22,7 +22,7 @@ class MyAccountService {
     }
 
     record CurrentUser(Long id, String nickname, Role role, String avatarUrl, String email, LoginMethod loginMethod,
-            String githubUsername) {
+            String githubUsername, boolean welcomeSeen) {
     }
 
     private final UserRepository users;
@@ -53,7 +53,12 @@ class MyAccountService {
                 .orElse(null);
         return new CurrentUser(user.getId(), user.getNickname(), user.getRole(), user.getAvatarUrl(),
                 maskEmail(user.getEmail()), user.getPasswordHash() == null ? LoginMethod.GITHUB : LoginMethod.EMAIL,
-                githubUsername);
+                githubUsername, user.isWelcomeSeen());
+    }
+
+    // WELCOME-01. 처음 안내 화면이 열리면 부른다.
+    void markWelcomeSeen(long userId) {
+        users.markWelcomeSeen(userId);
     }
 
     // 중복은 유일 인덱스가 최종 판정한다. 인덱스가 lower(nickname)이고 자기 행은 충돌하지 않아 alice -> Alice도 된다.
