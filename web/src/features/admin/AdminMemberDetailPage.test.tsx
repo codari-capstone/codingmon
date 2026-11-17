@@ -1,12 +1,16 @@
-import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { focusManager, QueryClientProvider } from '@tanstack/react-query'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
+import { server } from '@/mocks/server'
 import { Component as AdminMemberDetailPage } from './AdminMemberDetailPage'
+
+const unauthorized = () => HttpResponse.json({ status: 401 }, { status: 401 })
 
 // 시드(fixtures/adminUsers): 1 코다리(정상, 제출 92·푼 문제 12), 2 관리자, 3 코딩왕(50시간 전 정지·사유 있음),
 // 8 밤샘코더(2시간 전 정지·사유 없음). 제출·푼 문제는 1·3만 있다
@@ -22,6 +26,7 @@ function renderPage(id: number | string) {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+  return client
 }
 
 describe('AdminMemberDetailPage (ADM-15)', () => {
@@ -77,6 +82,79 @@ describe('AdminMemberDetailPage (ADM-15)', () => {
     expect(await screen.findByText('정지된 계정이에요')).toBeInTheDocument()
     expect(screen.queryByText(/강제 탈퇴할 수 있어요/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^사유:/)).not.toBeInTheDocument()
+  })
+
+  it('올해가 아닌 정지 시각·처음 푼 날에는 연도를 붙인다', async () => {
+    server.use(
+      http.get('*/api/admin/users/1', () =>
+        HttpResponse.json({
+          id: 1,
+          nickname: '코다리',
+          email: 'user@codari.test',
+          role: 'USER',
+          createdAt: null,
+          suspendedAt: '2020-12-30T01:00:00Z',
+          loginMethod: 'EMAIL',
+          suspensionReason: null,
+          aiQuota: { limit: 20, used: 0, remaining: 20, resetsAt: '2026-11-18T00:00:00Z' },
+        }),
+      ),
+      http.get('*/api/admin/users/1/solved-problems', () =>
+        HttpResponse.json([
+          { problemId: 1, title: 'A+B', firstSolvedAt: '2020-12-30T01:00:00Z', attemptCount: 1 },
+        ]),
+      ),
+    )
+    renderPage(1)
+    expect(await screen.findByText(/2020년 12월 30일 10:00에 정지했어요/)).toBeInTheDocument()
+    const solved = await screen.findByRole('region', { name: '푼 문제' })
+    expect(
+      await within(solved).findByRole('cell', { name: '2020년 12월 30일' }),
+    ).toBeInTheDocument()
+  })
+
+  it('탭에 돌아오면 상세를 다시 받는다 — 앱 기본값은 다시 받지 않는다', async () => {
+    let calls = 0
+    server.use(
+      http.get('*/api/admin/users/1', () => {
+        calls += 1
+        return undefined
+      }),
+    )
+    renderPage(1)
+    await screen.findByRole('heading', { level: 1, name: '코다리' })
+    expect(calls).toBe(1)
+
+    // staleTime(30초)이 지나야 다시 받는다. 시계만 앞당긴다
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(Date.now() + 31_000)
+      act(() => {
+        focusManager.setFocused(false)
+        focusManager.setFocused(true)
+      })
+      await waitFor(() => expect(calls).toBe(2))
+    } finally {
+      vi.useRealTimers()
+      focusManager.setFocused(undefined)
+    }
+  })
+
+  it.each([
+    ['푼 문제', '*/api/admin/users/1/solved-problems'],
+    ['제출 목록', '*/api/admin/users/1/submissions'],
+  ])('%s 조회가 401이면 세션을 버려 로그인 화면으로 보낼 수 있게 한다', async (_name, path) => {
+    server.use(http.get(path, unauthorized))
+    const client = renderPage(1)
+    await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull(), { timeout: 3000 })
+  })
+
+  it('펼친 제출이 401이면 세션을 버린다', async () => {
+    const user = userEvent.setup()
+    server.use(http.get('*/api/admin/submissions/:id', unauthorized))
+    const client = renderPage(1)
+    await user.click(await screen.findByRole('button', { name: '코드와 결과 보기: 제출 #1193' }))
+    await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull(), { timeout: 3000 })
   })
 
   it('제출이 없는 회원은 빈 안내를 보인다', async () => {

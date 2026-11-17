@@ -1,7 +1,6 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { Fragment, useState } from 'react'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Fragment, useEffect, useState } from 'react'
 
-import type { Language } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Verdict } from '@/components/Verdict'
@@ -17,14 +16,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { formatSubmittedAt } from '@/features/history/formatSubmittedAt'
-import { LANGUAGE_LABEL } from '@/features/solve/labels'
+import { LANGUAGE_LABEL, SOURCE_FILE_NAME } from '@/features/solve/labels'
 import { cn } from '@/lib/utils'
 import { ADMIN_PAGE_SIZE } from './adminProblemQuery'
 import { adminSubmissionQuery, adminUserSubmissionsQuery } from './adminUserQuery'
-
-/** 결과 화면(SubmissionResultPage)과 같은 파일 이름 */
-const FILE_NAME = { PYTHON: 'script.py', CPP: 'main.cpp' } satisfies Record<Language, string>
 
 /** 회원의 제출 목록 (ADM-15). 최신순, 한 줄씩 펼쳐 코드와 결과를 본다 */
 export function MemberSubmissions({ userId }: { userId: number }) {
@@ -36,6 +33,12 @@ export function MemberSubmissions({ userId }: { userId: number }) {
     placeholderData: keepPreviousData,
   })
   const pages = data ? Math.max(1, Math.ceil(data.totalElements / ADMIN_PAGE_SIZE)) : 1
+
+  // 세션이 끊겼으면 캐시에서 지워 로그인 화면으로 보낸다. 페이지를 넘기다 401이 와도 오류만 남지 않게
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, error)
+  }, [queryClient, error])
 
   return (
     <section
@@ -146,6 +149,11 @@ export function MemberSubmissions({ userId }: { userId: number }) {
 /** 펼친 제출의 코드와 결과·시간·메모리. 케이스별 결과는 계약이 주지 않는다 */
 function SubmissionDetail({ id }: { id: number }) {
   const { data, error, refetch } = useQuery(adminSubmissionQuery(id))
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, error)
+  }, [queryClient, error])
+
   if (error) return <ErrorState problem={error} onRetry={() => void refetch()} />
   if (!data) return <ListSkeleton rows={3} />
 
@@ -174,7 +182,7 @@ function SubmissionDetail({ id }: { id: number }) {
       {data.sourceCode === null ? (
         <p className="text-muted-foreground text-sm">코드가 남아 있지 않아요.</p>
       ) : (
-        <CodeBlock code={data.sourceCode} title={FILE_NAME[data.language]} lineNumbers />
+        <CodeBlock code={data.sourceCode} title={SOURCE_FILE_NAME[data.language]} lineNumbers />
       )}
     </div>
   )

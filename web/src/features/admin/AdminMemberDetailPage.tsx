@@ -24,19 +24,28 @@ import { adminUserQuery, adminUserSolvedQuery, WITHDRAW_AFTER_MS } from './admin
 import { formatJoinedOn } from './labels'
 import { MemberSubmissions } from './MemberSubmissions'
 
-const KST = { timeZone: 'Asia/Seoul' } as const
-const AT = new Intl.DateTimeFormat('ko-KR', {
-  ...KST,
+/** 올해 것과 지난해 것(연도를 붙임) 한 쌍. 해가 다른 날을 가른다(formatSubmittedAt과 같은 선택) */
+function kstFormats(options: Intl.DateTimeFormatOptions) {
+  const base = { ...options, timeZone: 'Asia/Seoul' }
+  return {
+    thisYear: new Intl.DateTimeFormat('ko-KR', base),
+    otherYear: new Intl.DateTimeFormat('ko-KR', { ...base, year: 'numeric' }),
+  }
+}
+const AT = kstFormats({
   month: 'long',
   day: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23',
 })
-const DAY = new Intl.DateTimeFormat('ko-KR', { ...KST, month: 'long', day: 'numeric' })
-const format = (formatter: Intl.DateTimeFormat, iso: string) => {
+const DAY = kstFormats({ month: 'long', day: 'numeric' })
+const YEAR = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric' })
+
+function format(formats: ReturnType<typeof kstFormats>, iso: string, now = new Date()) {
   const at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? '—' : formatter.format(at)
+  if (Number.isNaN(at.getTime())) return '—'
+  return (YEAR.format(at) === YEAR.format(now) ? formats.thisYear : formats.otherYear).format(at)
 }
 
 /** AI 사용량이 다시 채워지는 한국 시각('오전 9시'). Intl의 오전·오후 표기는 실행 환경마다 달라 직접 만든다 */
@@ -56,17 +65,23 @@ export function Component() {
     error,
     refetch,
     dataUpdatedAt,
-  } = useQuery({ ...adminUserQuery(id), enabled: valid })
+  } = useQuery({
+    ...adminUserQuery(id),
+    enabled: valid,
+    // 앱 기본값(false)을 이 화면만 켠다. 탭에 돌아오면 정지 상태·24시간 판정·오늘 AI 사용량을 새로 받는다
+    refetchOnWindowFocus: true,
+  })
   const solved = useQuery({ ...adminUserSolvedQuery(id), enabled: valid })
   // 24시간 계산의 '지금'은 상세를 받은 시각이다. 정지하고 다시 받으면 함께 바뀐다(화면을 연 시각이면
   // 방금 정지한 회원이 '25시간 남음'이 된다).
-  // shortcut: 띄워 둔 채로는 남은 시간이 줄지 않는다. 창에 돌아오면 다시 받으므로 그때 맞는다
+  // shortcut: 탭을 떠나지 않고 띄워 두기만 하면 남은 시간이 줄지 않는다. 탭에 돌아오거나 다시 열면 맞는다
   const now = dataUpdatedAt
 
+  // 보조 쿼리(푼 문제)의 401도 세션을 정리한다. 상세만 보면 로그인 화면으로 가지 않고 오류만 남는다
   const queryClient = useQueryClient()
   useEffect(() => {
-    forgetSessionIfUnauthorized(queryClient, error)
-  }, [queryClient, error])
+    forgetSessionIfUnauthorized(queryClient, error ?? solved.error)
+  }, [queryClient, error, solved.error])
 
   if (!valid || problemCode(error) === 'USER_NOT_FOUND') {
     return (
