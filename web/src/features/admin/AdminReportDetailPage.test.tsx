@@ -1,6 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -8,6 +9,7 @@ import type { AdminReportDetail } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { patchReport, resetReports } from '@/mocks/handlers'
+import { server } from '@/mocks/server'
 import { Component as AdminReportDetailPage } from './AdminReportDetailPage'
 
 // 시드(fixtures/reports): 10 접수(두 수의 합) · 8 확인 중(탈퇴한 신고자) · 11 지워진 문제의 처리 완료 · 5 문제 삭제됨
@@ -28,6 +30,7 @@ function renderPage(id: number | string) {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+  return { client, router }
 }
 
 const stored = async (id: number) =>
@@ -135,6 +138,48 @@ describe('AdminReportDetailPage (ADM-13)', () => {
     await user.paste('가'.repeat(1001))
     expect(within(handle()).getByText('1,001 / 1,000')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled()
+  })
+
+  // #315 리뷰: 처리 칸이 받은 값을 한 번만 복사해 서버 값과 따로 놀았다
+  it('캐시에 있는 다른 신고로 옮기면 처리 칸도 그 신고의 값이다', async () => {
+    const { router } = renderPage(10)
+    await screen.findByRole('heading', { level: 1, name: '신고 #10' })
+    await act(() => router.navigate('/admin/reports/11'))
+    await screen.findByRole('heading', { level: 1, name: '신고 #11' })
+
+    // 10은 캐시에 있어 스켈레톤 없이 바로 그린다
+    await act(() => router.navigate(-1))
+    await screen.findByRole('heading', { level: 1, name: '신고 #10' })
+    expect(within(handle()).getByLabelText('관리자 메모')).toHaveValue('')
+    expect(within(handle()).getByRole('radio', { name: /접수/ })).toBeChecked()
+  })
+
+  it('고치지 않은 칸은 다시 받은 값(다른 관리자가 저장한 값)을 따르고, 고친 칸은 둔다', async () => {
+    const user = userEvent.setup()
+    const { client } = renderPage(10)
+    await screen.findByRole('heading', { level: 1, name: '신고 #10' })
+    await user.type(within(handle()).getByLabelText('관리자 메모'), '내 메모')
+
+    patchReport(10, { status: 'RESOLVED', adminMemo: '다른 관리자 메모' })
+    await act(() => client.invalidateQueries())
+    expect(await within(handle()).findByRole('radio', { name: /처리 완료/ })).toBeChecked()
+    expect(within(handle()).getByLabelText('관리자 메모')).toHaveValue('내 메모')
+  })
+
+  it('받은 값이 있는데 다시 받기가 실패하면 화면을 두고 알린다 — 쓰던 메모를 잃지 않는다', async () => {
+    const user = userEvent.setup()
+    const { client } = renderPage(10)
+    await screen.findByRole('heading', { level: 1, name: '신고 #10' })
+    await user.type(within(handle()).getByLabelText('관리자 메모'), '쓰던 메모')
+
+    server.use(
+      http.get('*/api/admin/reports/:id', () =>
+        HttpResponse.json({ status: 503, title: 'Service Unavailable' }, { status: 503 }),
+      ),
+    )
+    await act(() => client.invalidateQueries())
+    expect(await screen.findByText('최신 내용을 받지 못했어요')).toBeInTheDocument()
+    expect(within(handle()).getByLabelText('관리자 메모')).toHaveValue('쓰던 메모')
   })
 
   it('없는 신고는 찾을 수 없다고 하고 목록으로 돌려보낸다', async () => {

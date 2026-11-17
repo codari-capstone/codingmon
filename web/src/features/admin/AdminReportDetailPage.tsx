@@ -63,7 +63,9 @@ export function Component() {
       />
     )
   }
-  if (error) return <ErrorState problem={error} onRetry={() => void refetch()} />
+  // 받은 값이 없을 때만 화면을 오류로 바꾼다. 있는데 다시 받기가 실패했으면 화면을 두고 알린다 —
+  // 바꾸면 처리 칸이 사라져 저장하지 못한 메모를 잃는다(#315 리뷰)
+  if (error && !data) return <ErrorState problem={error} onRetry={() => void refetch()} />
   if (!data) return <ListSkeleton rows={6} />
 
   const deleted = data.problemId === null
@@ -75,6 +77,20 @@ export function Component() {
         </h1>
         <Badge tone={REPORT_STATUS_TONE[data.status]}>{REPORT_STATUS_LABEL[data.status]}</Badge>
       </div>
+
+      {error ? (
+        <Alert
+          tone="warning"
+          title="최신 내용을 받지 못했어요"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void refetch()}>
+              다시 받기
+            </Button>
+          }
+        >
+          지금 보이는 내용이 바뀌었을 수 있어요. 쓰던 메모는 그대로 있어요.
+        </Alert>
+      ) : null}
 
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <section
@@ -127,21 +143,27 @@ export function Component() {
           </div>
         </section>
 
-        <HandleForm report={data} />
+        {/* 다른 신고로 옮기면 고치던 값을 버린다. 캐시에 있으면 스켈레톤 없이 바로 바뀌어 남았다(#315 리뷰) */}
+        <HandleForm key={data.id} report={data} />
       </div>
     </section>
   )
 }
 
 /**
- * 처리 칸. 받은 값으로 한 번 채우고 그 뒤는 관리자가 고친 값을 둔다 — 저장 뒤 다시 받아도 쓰던 메모를 덮지 않는다.
+ * 처리 칸. 관리자가 고친 칸만 `draft`에 들고, 고치지 않은 칸은 늘 받은 값(`report`)을 보인다.
+ * 받은 값을 한 번 복사해 두면 캐시로 먼저 그린 뒤 다시 받은 새 값을 따라가지 못해, 다른 관리자가 저장한
+ * 상태·메모를 낡은 값으로 되돌렸다(#315 리뷰). 저장하면 draft를 비워 다시 받은 값을 따른다.
  * 보낼 수 있는 상태는 계약의 규칙 1~3이다(문제가 있으면 넷, 지워진 처리 완료·반려는 그 둘, 문제 삭제됨은 메모만).
  */
 function HandleForm({ report }: { report: AdminReportDetail }) {
   const queryClient = useQueryClient()
   const memoId = useId()
-  const [status, setStatus] = useState<ReportStatus>(report.status)
-  const [memo, setMemo] = useState(report.adminMemo ?? '')
+  const [draft, setDraft] = useState<{ status?: ReportStatus; memo?: string }>({})
+  // 문제 삭제됨은 서버만 정하고 그 뒤로는 그대로 보내야 한다(규칙 3). 고르던 상태가 있어도 따른다
+  const status =
+    report.status === 'PROBLEM_DELETED' ? report.status : (draft.status ?? report.status)
+  const memo = draft.memo ?? report.adminMemo ?? ''
 
   const save = useMutation({
     mutationFn: async (input: AdminReportUpdate) => {
@@ -151,14 +173,18 @@ function HandleForm({ report }: { report: AdminReportDetail }) {
       })
       if (!result.response.ok) fail(result)
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [ADMIN_REPORTS_KEY] }),
-    onError: async (error) => {
+    onSuccess: async () => {
+      // 다시 받은 뒤에 비운다. 먼저 비우면 그사이 저장 전 값이 한 번 보인다
+      await queryClient.invalidateQueries({ queryKey: [ADMIN_REPORTS_KEY] })
+      setDraft({})
+    },
+    onError: (error) => {
       forgetSessionIfUnauthorized(queryClient, error)
-      // 저장하는 사이 문제가 지워져 상태가 바뀌었다(계약). 다시 받아 지금 상태로 맞춘다. 쓰던 메모는 둔다
+      // 저장하는 사이 문제가 지워져 상태가 바뀌었다(계약). 고르던 상태를 버리고 다시 받은 상태를 따른다.
+      // 쓰던 메모는 둔다. 다시 받기가 실패해도 화면은 남는다(Component)
       if (problemCode(error) === 'REPORT_PROBLEM_DELETED') {
-        const fresh = await queryClient.fetchQuery({ ...adminReportQuery(report.id), staleTime: 0 })
-        setStatus(fresh.status)
-        void queryClient.invalidateQueries({ queryKey: [ADMIN_REPORTS_KEY, 'list'] })
+        setDraft(({ memo: kept }) => ({ memo: kept }))
+        void queryClient.invalidateQueries({ queryKey: [ADMIN_REPORTS_KEY] })
       }
     },
   })
@@ -207,7 +233,7 @@ function HandleForm({ report }: { report: AdminReportDetail }) {
             }))}
             value={status === 'PROBLEM_DELETED' ? undefined : status}
             onChange={(next) => {
-              setStatus(next)
+              setDraft((prev) => ({ ...prev, status: next }))
               edited()
             }}
           />
@@ -230,7 +256,7 @@ function HandleForm({ report }: { report: AdminReportDetail }) {
           value={memo}
           readOnly={save.isPending}
           onChange={(event) => {
-            setMemo(event.target.value)
+            setDraft((prev) => ({ ...prev, memo: event.target.value }))
             edited()
           }}
           aria-invalid={length > REPORT_CONTENT_MAX || nul || undefined}
