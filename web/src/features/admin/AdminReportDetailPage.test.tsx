@@ -182,6 +182,26 @@ describe('AdminReportDetailPage (ADM-13)', () => {
     expect(within(handle()).getByLabelText('관리자 메모')).toHaveValue('쓰던 메모')
   })
 
+  it('저장 뒤 다시 받기가 실패해도 처리 칸은 저장한 값이다 — 저장 전 값으로 돌아가지 않는다', async () => {
+    // invalidateQueries는 다시 받기가 실패해도 성공으로 끝난다. 그 뒤 칸을 비우면 저장 전 캐시가 보였다(#315 리뷰)
+    const user = userEvent.setup()
+    renderPage(10)
+    await screen.findByRole('heading', { level: 1, name: '신고 #10' })
+    await user.click(within(handle()).getByRole('radio', { name: /처리 완료/ }))
+    await user.type(within(handle()).getByLabelText('관리자 메모'), ' 고침 ')
+    server.use(
+      http.get('*/api/admin/reports/:id', () =>
+        HttpResponse.json({ status: 503, title: 'Service Unavailable' }, { status: 503 }),
+      ),
+    )
+
+    await user.click(screen.getByRole('button', { name: '저장' }))
+    expect(await screen.findByText('최신 내용을 받지 못했어요')).toBeInTheDocument()
+    // 서버처럼 앞뒤 공백을 뗀 값이다
+    expect(within(handle()).getByLabelText('관리자 메모')).toHaveValue('고침')
+    expect(within(handle()).getByRole('radio', { name: /처리 완료/ })).toBeChecked()
+  })
+
   it('없는 신고는 찾을 수 없다고 하고 목록으로 돌려보낸다', async () => {
     renderPage(999)
     expect(await screen.findByText('신고를 찾을 수 없어요')).toBeInTheDocument()

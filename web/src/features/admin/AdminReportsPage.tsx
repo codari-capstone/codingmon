@@ -133,7 +133,9 @@ export function Component() {
                   description="신고가 줄어 이 페이지는 비었어요. 앞 페이지로 돌아가세요."
                 />
               ) : (
-                <EmptyState title="이 상태의 신고가 없어요" />
+                <EmptyState
+                  title={filter === 'ALL' ? '아직 들어온 신고가 없어요' : '이 상태의 신고가 없어요'}
+                />
               )
             ) : (
               <div

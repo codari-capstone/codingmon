@@ -94,6 +94,15 @@ describe('AdminReportsPage (ADM-13)', () => {
     expect(within(withdrawn).getByText('탈퇴한 회원')).toHaveClass('text-muted-foreground')
   })
 
+  it('신고가 하나도 없으면 전체 탭에는 상태를 말하지 않는 안내를 보인다', async () => {
+    server.use(
+      http.get('*/api/admin/reports', () => HttpResponse.json({ content: [], totalElements: 0 })),
+    )
+    renderPage()
+    expect(await screen.findByText('아직 들어온 신고가 없어요')).toBeInTheDocument()
+    expect(screen.queryByText('이 상태의 신고가 없어요')).not.toBeInTheDocument()
+  })
+
   it('그 상태의 신고가 없으면 빈 안내를 보인다', async () => {
     server.use(
       http.get('*/api/admin/reports', ({ request }) =>

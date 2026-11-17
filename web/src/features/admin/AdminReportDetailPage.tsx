@@ -16,7 +16,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { problemCode, problemMessage } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { REPORT_TYPE_LABEL } from '@/features/problems/labels'
-import { hasNul, REPORT_CONTENT_MAX, reportLength } from '@/features/solve/reportRules'
+import {
+  hasNul,
+  REPORT_CONTENT_MAX,
+  reportLength,
+  stripLikeServer,
+} from '@/features/solve/reportRules'
 import { cn } from '@/lib/utils'
 import { ADMIN_REPORTS_KEY, adminReportQuery } from './adminReportQuery'
 import { REPORT_STATUS_HINT, REPORT_STATUS_LABEL, REPORT_STATUS_TONE } from './labels'
@@ -173,10 +178,16 @@ function HandleForm({ report }: { report: AdminReportDetail }) {
       })
       if (!result.response.ok) fail(result)
     },
-    onSuccess: async () => {
-      // 다시 받은 뒤에 비운다. 먼저 비우면 그사이 저장 전 값이 한 번 보인다
-      await queryClient.invalidateQueries({ queryKey: [ADMIN_REPORTS_KEY] })
+    onSuccess: (_, saved) => {
+      // 서버가 저장한 값(메모는 strip()하고 비면 null)으로 캐시를 먼저 고친 뒤 비운다. 다시 받기를 기다렸다
+      // 비우면, 그 다시 받기가 실패해도 invalidateQueries는 성공으로 끝나 저장 전 값으로 돌아갔다(#315 리뷰)
+      const memo = stripLikeServer(saved.adminMemo ?? '')
+      queryClient.setQueryData(adminReportQuery(report.id).queryKey, (old) =>
+        old ? { ...old, status: saved.status, adminMemo: memo === '' ? null : memo } : old,
+      )
       setDraft({})
+      // 목록·탭 건수·메뉴 숫자와 updatedAt은 서버에서 다시 받는다
+      void queryClient.invalidateQueries({ queryKey: [ADMIN_REPORTS_KEY] })
     },
     onError: (error) => {
       forgetSessionIfUnauthorized(queryClient, error)
