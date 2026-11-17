@@ -59,6 +59,7 @@ export type ReportStatus = components['schemas']['ReportStatus']
 export type AdminReportSummary = components['schemas']['AdminReportSummary']
 export type AdminReportDetail = components['schemas']['AdminReportDetail']
 export type AdminReportUpdate = components['schemas']['AdminReportUpdate']
+export type AdminUserSummary = components['schemas']['AdminUserSummary']
 export type ProblemSummary = components['schemas']['ProblemSummary']
 export type ProblemPage = components['schemas']['ProblemPage']
 

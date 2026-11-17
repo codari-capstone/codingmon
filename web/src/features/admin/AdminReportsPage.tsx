@@ -1,28 +1,18 @@
 import { keepPreviousData, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router'
 
 import type { ReportStatus } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
-import { Badge } from '@/components/ui/badge'
 import { Pagination } from '@/components/ui/pagination'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
-import { REPORT_TYPE_LABEL } from '@/features/problems/labels'
 import { cn } from '@/lib/utils'
 import { ADMIN_PAGE_SIZE } from './adminProblemQuery'
 import { adminReportListQuery, unresolvedReportCountQuery } from './adminReportQuery'
-import { REPORT_STATUS_LABEL, REPORT_STATUS_TONE } from './labels'
+import { REPORT_STATUS_LABEL } from './labels'
+import { ReportTable } from './ReportTable'
 
 type Filter = 'ALL' | ReportStatus
 
@@ -37,20 +27,6 @@ const FILTERS: Filter[] = [
 ]
 
 const filterStatuses = (filter: Filter): ReportStatus[] => (filter === 'ALL' ? [] : [filter])
-
-const THIS_YEAR = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' })
-const OTHER_YEAR = new Intl.DateTimeFormat('ko-KR', {
-  year: 'numeric',
-  month: 'long',
-  day: 'numeric',
-})
-
-/** 시안은 '11월 10일'이다. 올해가 아니면 연도를 붙인다(formatSubmittedAt과 같은 선택) */
-function formatReportedOn(iso: string, now = new Date()) {
-  const at = new Date(iso)
-  if (Number.isNaN(at.getTime())) return '—'
-  return (at.getFullYear() === now.getFullYear() ? THIS_YEAR : OTHER_YEAR).format(at)
-}
 
 /** 관리자 신고 목록 (ADM-13). 최신 신고가 위다 */
 export function Component() {
@@ -142,64 +118,7 @@ export function Component() {
                 aria-busy={isFetching}
                 className={cn('bg-card rounded-lg border px-3 py-2', isFetching && 'opacity-60')}
               >
-                {/* 좁은 화면에서는 열을 짜내지 않고 표 안에서 가로로 민다(문제 목록과 같다) */}
-                <Table className="min-w-[720px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-20">번호</TableHead>
-                      <TableHead>문제</TableHead>
-                      <TableHead className="w-40">유형</TableHead>
-                      <TableHead className="w-32">신고자</TableHead>
-                      <TableHead className="w-28">신고일</TableHead>
-                      <TableHead className="w-28">상태</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.content.map((report) => (
-                      <TableRow key={report.id}>
-                        <TableCell className="text-muted-foreground tabular-nums">
-                          {report.id}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {/*
-                            시안처럼 제목이 신고 상세로 간다. 같은 문제의 신고가 여럿이라 이름에 번호를 붙여 가른다.
-                            문제가 지워졌으면 회색 '(삭제된 문제)'를 붙인다 — 문제로 가는 길은 상세에도 없다(계약)
-                          */}
-                          <Link
-                            to={`/admin/reports/${report.id}`}
-                            aria-label={`신고 ${report.id}번 · ${
-                              report.problemId === null ? '(삭제된 문제) ' : ''
-                            }${report.problemTitle}`}
-                            className={cn(
-                              'hover:text-primary-text break-keep [overflow-wrap:anywhere] hover:underline',
-                              report.problemId === null && 'text-muted-foreground',
-                            )}
-                          >
-                            {report.problemId === null ? '(삭제된 문제) ' : ''}
-                            {report.problemTitle}
-                          </Link>
-                        </TableCell>
-                        <TableCell>{REPORT_TYPE_LABEL[report.type]}</TableCell>
-                        <TableCell
-                          className={cn(
-                            report.reporterNickname === null && 'text-muted-foreground',
-                          )}
-                        >
-                          {/* 회원 상세로 가는 링크는 회원 화면(#228)에서 붙인다 */}
-                          {report.reporterNickname ?? '탈퇴한 회원'}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground tabular-nums">
-                          {formatReportedOn(report.createdAt)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge tone={REPORT_STATUS_TONE[report.status]}>
-                            {REPORT_STATUS_LABEL[report.status]}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <ReportTable reports={data.content} />
               </div>
             )
           ) : null}

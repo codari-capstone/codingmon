@@ -63,6 +63,7 @@ import { BADGE_CODES, badgesFor, celebrate } from './fixtures/badges'
 import { problemDetails } from './fixtures/problemDetails'
 import { conceptTags, problems } from './fixtures/problems'
 import { seedReports } from './fixtures/reports'
+import { seedAdminUsers } from './fixtures/adminUsers'
 import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from './fixtures/users'
 
 /** 인증번호 오류의 문구. 실제 서버(EmailCodeService.java)의 문구와 같게 맞춘다. */
@@ -437,6 +438,9 @@ function reportStatusAllowed(report: AdminReportDetail, next: ReportStatus): boo
   if (next === 'PROBLEM_DELETED') return false
   return report.problemId !== null || next === 'RESOLVED' || next === 'REJECTED'
 }
+
+/** 관리자 회원 화면(ADM-14~16)의 회원. 정지·탈퇴 목이 오면 let과 reset으로 바꾼다 */
+const mockAdminUsers = seedAdminUsers()
 
 /** 관리자가 목에서 등록한 개념 태그(ADM-11). fixture 배열은 다른 목도 읽으니 따로 쌓는다. */
 let createdConceptTags: ConceptTag[] = []
@@ -824,6 +828,45 @@ export const handlers: RequestHandler[] = [
       updatedAt: new Date().toISOString(),
     })
     return new HttpResponse(null, { status: 204 })
+  }),
+
+  /**
+   * 관리자 회원 목록 (ADM-14). 최근 가입순(id 큰 것부터)이다. 관리자 문제 목처럼 권한은 보지 않는다.
+   * `counts`는 검색어만 반영하고 탭(status)은 반영하지 않는다(계약). 숫자만이면 그 id도 찾는다.
+   */
+  http.get('*/api/admin/users', ({ request }) => {
+    const query = new URL(request.url).searchParams
+    const status = query.get('status')
+    const range = pageRange(query)
+    if ((status !== null && status !== 'ACTIVE' && status !== 'SUSPENDED') || range === null) {
+      return badRequest(`status는 ACTIVE·SUSPENDED, page는 0 이상, size는 1~${MAX_PAGE_SIZE}이다`)
+    }
+    const keyword = query.get('keyword')?.trim().toLowerCase() ?? ''
+    const found = mockAdminUsers
+      .filter(
+        (user) =>
+          keyword === '' ||
+          user.nickname.toLowerCase().includes(keyword) ||
+          (user.email?.toLowerCase().includes(keyword) ?? false) ||
+          (/^\d+$/.test(keyword) && user.id === Number(keyword)),
+      )
+      .reverse()
+    const suspended = found.filter((user) => user.suspendedAt !== null)
+    const matched =
+      status === null
+        ? found
+        : status === 'SUSPENDED'
+          ? suspended
+          : found.filter((user) => user.suspendedAt === null)
+    return HttpResponse.json({
+      content: matched.slice(range.from, range.to),
+      totalElements: matched.length,
+      counts: {
+        all: found.length,
+        active: found.length - suspended.length,
+        suspended: suspended.length,
+      },
+    })
   }),
 
   http.get('*/api/problems', ({ request }) => {
