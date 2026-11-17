@@ -103,6 +103,13 @@ export const router = createBrowserRouter([
                     path: 'admin',
                     children: [
                       { index: true, lazy: () => import('@/features/admin/AdminProblemListPage') },
+                      // 대시보드·회원 목록 (ADM-12·14, #228). 대시보드를 index로 올리지 않는다 —
+                      // /admin 링크·e2e가 문제 목록을 가리킨다
+                      {
+                        path: 'dashboard',
+                        lazy: () => import('@/features/admin/AdminDashboardPage'),
+                      },
+                      { path: 'members', lazy: () => import('@/features/admin/AdminMembersPage') },
                       // 개념 태그 목록·등록 (ADM-11, #221)
                       { path: 'tags', lazy: () => import('@/features/admin/AdminTagsPage') },
                       // 신고 목록·상세 (ADM-13, #226)
