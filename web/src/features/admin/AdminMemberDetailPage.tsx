@@ -20,8 +20,14 @@ import {
 } from '@/components/ui/table'
 import { problemCode } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
-import { adminUserQuery, adminUserSolvedQuery, WITHDRAW_AFTER_MS } from './adminUserQuery'
+import {
+  adminUserQuery,
+  adminUserSolvedQuery,
+  adminUserSubmissionsQuery,
+  WITHDRAW_AFTER_MS,
+} from './adminUserQuery'
 import { formatJoinedOn } from './labels'
+import { MemberActions } from './MemberActions'
 import { MemberSubmissions } from './MemberSubmissions'
 
 /** 올해 것과 지난해 것(연도를 붙임) 한 쌍. 해가 다른 날을 가른다(formatSubmittedAt과 같은 선택) */
@@ -72,6 +78,8 @@ export function Component() {
     refetchOnWindowFocus: true,
   })
   const solved = useQuery({ ...adminUserSolvedQuery(id), enabled: valid })
+  // 첫 페이지의 totalElements가 강제 탈퇴 창의 '지워질 제출' 수다. 목록 카드와 같은 키라 한 번만 받는다
+  const submissions = useQuery({ ...adminUserSubmissionsQuery(id, 1), enabled: valid })
   // 24시간 계산의 '지금'은 상세를 받은 시각이다. 정지하고 다시 받으면 함께 바뀐다(화면을 연 시각이면
   // 방금 정지한 회원이 '25시간 남음'이 된다).
   // shortcut: 탭을 떠나지 않고 띄워 두기만 하면 남은 시간이 줄지 않는다. 탭에 돌아오거나 다시 열면 맞는다
@@ -104,7 +112,7 @@ export function Component() {
       <Breadcrumb items={[{ label: '회원', href: '/admin/members' }, { label: user.nickname }]} />
 
       {suspendedAt !== null ? (
-        // 화면에 처음부터 있는 상태라 알리지 않는다
+        // 화면에 처음부터 있는 상태라 알리지 않는다. 정지한 순간은 MemberActions가 알린다
         <Alert tone="danger" title="정지된 계정이에요" live={false}>
           {format(AT, suspendedAt)}에 정지했어요.{' '}
           {withdrawable ? '24시간이 지나 강제 탈퇴할 수 있어요. ' : ''}
@@ -147,6 +155,12 @@ export function Component() {
             </dd>
           </dl>
         </div>
+        <MemberActions
+          user={user}
+          now={now}
+          submissionCount={submissions.data?.totalElements}
+          solvedCount={solved.data?.length}
+        />
       </section>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">

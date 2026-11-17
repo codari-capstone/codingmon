@@ -3,22 +3,31 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
+import { reportsSent, resetAdminUsers, resetReports } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 import { Component as AdminMemberDetailPage } from './AdminMemberDetailPage'
 
 const unauthorized = () => HttpResponse.json({ status: 401 }, { status: 401 })
 
 // 시드(fixtures/adminUsers): 1 코다리(정상, 제출 92·푼 문제 12), 2 관리자, 3 코딩왕(50시간 전 정지·사유 있음),
-// 8 밤샘코더(2시간 전 정지·사유 없음). 제출·푼 문제는 1·3만 있다
+// 8 밤샘코더(2시간 전 정지). 제출·푼 문제는 1·3만 있다
+afterEach(() => {
+  resetAdminUsers()
+  resetReports()
+})
+
 function renderPage(id: number | string) {
   const client = createQueryClient()
   client.setQueryData(ME_QUERY_KEY, { id: 2, nickname: '관리자', role: 'ADMIN' })
   const router = createMemoryRouter(
-    [{ path: '/admin/members/:id', Component: AdminMemberDetailPage }],
+    [
+      { path: '/admin/members/:id', Component: AdminMemberDetailPage },
+      { path: '/admin/members', element: <h1>회원 목록 화면</h1> },
+    ],
     { initialEntries: [`/admin/members/${id}`] },
   )
   render(
@@ -26,17 +35,16 @@ function renderPage(id: number | string) {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
-  return client
+  return { client, router }
 }
 
-describe('AdminMemberDetailPage (ADM-15)', () => {
+describe('AdminMemberDetailPage (ADM-15·16)', () => {
   it('기본 정보, 오늘 AI 사용, 푼 문제, 제출 목록을 보인다', async () => {
     renderPage(1)
 
     expect(await screen.findByRole('heading', { level: 1, name: '코다리' })).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: '현재 위치' })).toHaveTextContent('회원코다리')
     expect(screen.getByText('— (기록 전 가입)')).toBeInTheDocument()
-    expect(screen.queryByText('정지된 계정이에요')).not.toBeInTheDocument()
     expect(screen.getByRole('progressbar', { name: 'AI 분석·리뷰' })).toHaveAttribute(
       'aria-valuemax',
       '20',
@@ -51,6 +59,10 @@ describe('AdminMemberDetailPage (ADM-15)', () => {
     expect(await within(submissions).findByText('총 92개')).toBeInTheDocument()
     expect(within(submissions).getAllByRole('row')).toHaveLength(21)
     expect(within(submissions).getByRole('button', { name: '5페이지' })).toBeInTheDocument()
+
+    // 정상 회원이라 정지만 할 수 있다
+    expect(screen.getByRole('button', { name: '계정 정지' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '강제 탈퇴' })).not.toBeInTheDocument()
   })
 
   it('제출을 펼치면 코드와 결과·시간·메모리가 보이고, 다시 누르면 접힌다', async () => {
@@ -70,17 +82,105 @@ describe('AdminMemberDetailPage (ADM-15)', () => {
     expect(within(submissions).queryByText('script.py')).not.toBeInTheDocument()
   })
 
-  it('정지하고 24시간이 지난 회원은 배너에 사유와 강제 탈퇴할 수 있음을 보인다', async () => {
-    renderPage(3)
+  it('사유를 적어 정지하면 배너와 해제 버튼이 보이고, 강제 탈퇴는 24시간 뒤까지 꺼져 있다', async () => {
+    const user = userEvent.setup()
+    renderPage(1)
+    await user.click(await screen.findByRole('button', { name: '계정 정지' }))
+
+    const dialog = screen.getByRole('dialog', { name: "'코다리' 계정을 정지할까요?" })
+    await user.type(within(dialog).getByLabelText(/정지 사유/), '  욕설 반복  ')
+    await user.click(within(dialog).getByRole('button', { name: '정지하기' }))
+
+    expect(await screen.findByText('계정을 정지했어요.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(await screen.findByText('정지된 계정이에요')).toBeInTheDocument()
-    expect(screen.getByText('사유: 다른 사람의 풀이를 그대로 제출함')).toBeInTheDocument()
+    // 서버처럼 앞뒤 공백을 뗀 사유가 돌아온다
+    expect(screen.getByText('사유: 욕설 반복')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '정지 해제' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '강제 탈퇴' })).toBeDisabled()
+    expect(screen.getByText(/정지 24시간 뒤에 할 수 있어요 · 24시간 남음/)).toBeInTheDocument()
+  })
+
+  it('정지 사유가 1,000자를 넘으면 정지하기를 막는다', async () => {
+    const user = userEvent.setup()
+    renderPage(1)
+    await user.click(await screen.findByRole('button', { name: '계정 정지' }))
+    const dialog = screen.getByRole('dialog')
+    const reason = within(dialog).getByLabelText(/정지 사유/)
+
+    await user.click(reason)
+    await user.paste('가'.repeat(1001))
+    expect(reason).toHaveAttribute('aria-invalid', 'true')
+    expect(within(dialog).getByRole('button', { name: '정지하기' })).toBeDisabled()
+  })
+
+  it('정지를 풀면 정상으로 돌아온다', async () => {
+    const user = userEvent.setup()
+    renderPage(8)
+    await user.click(await screen.findByRole('button', { name: '정지 해제' }))
+
+    expect(await screen.findByText('정지를 풀었어요.')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '계정 정지' })).toBeInTheDocument()
+    expect(screen.queryByText('정지된 계정이에요')).not.toBeInTheDocument()
+  })
+
+  it('정지하고 24시간이 지났으면 경고 창을 거쳐 강제 탈퇴하고 목록으로 간다', async () => {
+    const user = userEvent.setup()
+    const { router } = renderPage(3)
+    expect(await screen.findByText('사유: 다른 사람의 풀이를 그대로 제출함')).toBeInTheDocument()
     expect(screen.getByText(/24시간이 지나 강제 탈퇴할 수 있어요/)).toBeInTheDocument()
+    await screen.findByText('총 92개')
+
+    await user.click(screen.getByRole('button', { name: '강제 탈퇴' }))
+    const dialog = screen.getByRole('alertdialog', { name: "'코딩왕' 계정을 강제 탈퇴할까요?" })
+    expect(dialog).toHaveTextContent('해당 회원의 모든 정보가 지워집니다')
+    expect(dialog).toHaveTextContent('지워질 제출92개')
+    expect(dialog).toHaveTextContent('지워질 푼 문제12개')
+    await user.click(within(dialog).getByRole('button', { name: '강제 탈퇴' }))
+
+    expect(await screen.findByRole('heading', { name: '회원 목록 화면' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/admin/members')
+    // 보낸 신고는 남고 신고자 칸만 빈다(계약)
+    expect(reportsSent()).toHaveLength(0)
+  })
+
+  it('강제 탈퇴가 거절되면 서버 문구를 보이고 상세를 다시 받는다', async () => {
+    const user = userEvent.setup()
+    let detailCalls = 0
+    server.use(
+      http.get('*/api/admin/users/3', () => {
+        detailCalls += 1
+        return undefined
+      }),
+      http.delete('*/api/admin/users/3', () =>
+        HttpResponse.json(
+          {
+            status: 409,
+            title: 'Conflict',
+            code: 'USER_NOT_SUSPENDED',
+            detail: '정지된 회원만 강제 탈퇴할 수 있어요',
+          },
+          { status: 409 },
+        ),
+      ),
+    )
+    renderPage(3)
+    await screen.findByText('총 92개')
+    await user.click(await screen.findByRole('button', { name: '강제 탈퇴' }))
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: '강제 탈퇴' }),
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '정지된 회원만 강제 탈퇴할 수 있어요',
+    )
+    await vi.waitFor(() => expect(detailCalls).toBe(2))
   })
 
   it('정지한 지 24시간이 안 됐으면 배너에 강제 탈퇴 안내가 없고, 사유가 없으면 사유 줄도 없다', async () => {
     renderPage(8)
     expect(await screen.findByText('정지된 계정이에요')).toBeInTheDocument()
-    expect(screen.queryByText(/강제 탈퇴할 수 있어요/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/24시간이 지나 강제 탈퇴할 수 있어요/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^사유:/)).not.toBeInTheDocument()
   })
 
@@ -145,21 +245,22 @@ describe('AdminMemberDetailPage (ADM-15)', () => {
     ['제출 목록', '*/api/admin/users/1/submissions'],
   ])('%s 조회가 401이면 세션을 버려 로그인 화면으로 보낼 수 있게 한다', async (_name, path) => {
     server.use(http.get(path, unauthorized))
-    const client = renderPage(1)
+    const { client } = renderPage(1)
     await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull(), { timeout: 3000 })
   })
 
   it('펼친 제출이 401이면 세션을 버린다', async () => {
     const user = userEvent.setup()
     server.use(http.get('*/api/admin/submissions/:id', unauthorized))
-    const client = renderPage(1)
+    const { client } = renderPage(1)
     await user.click(await screen.findByRole('button', { name: '코드와 결과 보기: 제출 #1193' }))
     await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull(), { timeout: 3000 })
   })
 
-  it('제출이 없는 회원은 빈 안내를 보인다', async () => {
+  it('관리자 계정에는 정지·탈퇴 버튼이 없다', async () => {
     renderPage(2)
     expect(await screen.findByRole('heading', { level: 1, name: '관리자' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '계정 정지' })).not.toBeInTheDocument()
     expect(await screen.findByText('아직 제출이 없어요.')).toBeInTheDocument()
     expect(await screen.findByText('아직 맞힌 문제가 없어요.')).toBeInTheDocument()
   })
