@@ -29,7 +29,7 @@ const FILTERS = [
   { value: 'ALL', label: '전체', count: 'all' },
   { value: 'ACTIVE', label: '정상', count: 'active' },
   { value: 'SUSPENDED', label: '정지', count: 'suspended' },
-] as const satisfies { value: AdminUserFilter; label: string; count: string }[]
+] as const satisfies readonly { value: AdminUserFilter; label: string; count: string }[]
 
 // en-CA는 2026-11-03 모양이다(시안). 받은 시각은 UTC라 한국 날짜로 바꾼다
 const KST_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' })
@@ -161,7 +161,10 @@ export function Component() {
                         </TableCell>
                         <TableCell>
                           <span className="flex items-center gap-2.5 font-medium">
-                            <Avatar name={user.nickname} size={28} />
+                            {/* 바로 옆 글자가 닉네임이라 아바타는 장식이다. 두면 줄마다 이름을 두 번 읽는다 */}
+                            <span aria-hidden="true" className="flex shrink-0">
+                              <Avatar name={user.nickname} size={28} />
+                            </span>
                             {user.nickname}
                             {user.role === 'ADMIN' ? <Badge tone="brand">관리자</Badge> : null}
                           </span>

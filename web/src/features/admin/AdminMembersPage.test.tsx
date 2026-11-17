@@ -44,6 +44,8 @@ describe('AdminMembersPage (ADM-14)', () => {
     expect(rows[1]).toHaveTextContent(/^24코코린이newbie@example\.com\d{4}-\d{2}-\d{2}정상$/)
     // GitHub로 가입한 회원은 이메일 대신 '(GitHub)'
     expect(rows[9]).toHaveTextContent(/^16큐큐대기열\(GitHub\)/)
+    // 아바타는 장식이다. 이름 옆이라 그림으로도 읽히면 줄마다 이름이 두 번 들린다
+    expect(within(rows[1]!).queryByRole('img')).not.toBeInTheDocument()
   })
 
   it('다음 페이지에서 가입일 없는 회원은 —, 관리자에는 배지, 정지 회원은 정지로 보인다', async () => {

@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
@@ -49,6 +50,31 @@ describe('AdminDashboardPage (ADM-12)', () => {
       'href',
       '/admin/reports',
     )
+  })
+
+  it('신고 수만 실패해도 오류를 알리고, 다시 시도하면 수를 다시 받는다', async () => {
+    const user = userEvent.setup()
+    let failing = true
+    server.use(
+      http.get('*/api/admin/reports', ({ request }) => {
+        const status = new URL(request.url).searchParams.getAll('status')
+        if (failing && status.length === 1 && status[0] === 'RECEIVED') {
+          return HttpResponse.json({ status: 500, title: 'Server Error' }, { status: 500 })
+        }
+        return undefined
+      }),
+    )
+    renderPage()
+
+    // retry: 1이라 오류 상태가 1초 뒤에 온다(ProblemFilters.test.tsx와 같은 이유)
+    const retry = await screen.findByRole('button', { name: '다시 시도' }, { timeout: 3000 })
+    expect(screen.getByText('접수 –건 · 확인 중 3건')).toBeInTheDocument()
+    expect((await screen.findAllByRole('row')).length).toBe(6)
+
+    failing = false
+    await user.click(retry)
+    expect(await screen.findByText('접수 4건 · 확인 중 3건')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument()
   })
 
   it('신고가 없으면 빈 안내를 보인다', async () => {

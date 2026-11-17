@@ -30,11 +30,16 @@ export function Component() {
   const inProgress = useQuery(statusCount('IN_PROGRESS'))
   const recent = useQuery(adminReportListQuery([], 1, RECENT_REPORTS))
 
+  // 넷 중 하나라도 실패하면 한 번 알리고, 다시 시도는 실패한 것을 모두 다시 받는다.
+  // 수만 실패하면 표는 멀쩡한데 카드가 '–'에 멈춰 다시 받을 길이 없다
+  const queries = [unresolved, received, inProgress, recent]
+  const failure = queries.find((query) => query.error)?.error ?? null
+
   // 세션이 끊겼으면 캐시에서 지워 로그인 화면으로 보낸다(신고 목록과 같은 처리)
   const queryClient = useQueryClient()
   useEffect(() => {
-    forgetSessionIfUnauthorized(queryClient, recent.error ?? unresolved.error)
-  }, [queryClient, recent.error, unresolved.error])
+    forgetSessionIfUnauthorized(queryClient, failure)
+  }, [queryClient, failure])
 
   return (
     <section className="flex flex-col gap-8">
@@ -42,6 +47,13 @@ export function Component() {
         <p className="text-eyebrow text-primary-text">관리자</p>
         <h1 className="page-title">대시보드</h1>
       </div>
+
+      {failure ? (
+        <ErrorState
+          problem={failure}
+          onRetry={() => queries.forEach((query) => query.error && void query.refetch())}
+        />
+      ) : null}
 
       <section
         aria-label="처리할 신고"
@@ -81,10 +93,6 @@ export function Component() {
         </div>
 
         {recent.isPending && !recent.error ? <ListSkeleton rows={RECENT_REPORTS} /> : null}
-
-        {recent.error ? (
-          <ErrorState problem={recent.error} onRetry={() => void recent.refetch()} />
-        ) : null}
 
         {recent.data && !recent.error ? (
           recent.data.content.length === 0 ? (
