@@ -150,6 +150,7 @@ describe('AppHeader', () => {
         email: 'us***@codari.test',
         loginMethod: 'EMAIL',
         githubUsername: null,
+        welcomeSeen: true,
       },
       isAuthenticated: true,
     })
@@ -168,6 +169,7 @@ describe('AppHeader', () => {
         email: 'ad***@codari.test',
         loginMethod: 'EMAIL',
         githubUsername: null,
+        welcomeSeen: true,
       },
       isAuthenticated: true,
     })
@@ -198,6 +200,7 @@ describe('AppHeader', () => {
         email: 'ad***@codari.test',
         loginMethod: 'EMAIL',
         githubUsername: null,
+        welcomeSeen: true,
       },
       isAuthenticated: true,
     })
@@ -232,6 +235,7 @@ describe('AppHeader', () => {
         email: 'ad***@codari.test',
         loginMethod: 'EMAIL',
         githubUsername: null,
+        welcomeSeen: true,
       },
       isAuthenticated: true,
     })
@@ -258,6 +262,7 @@ describe('AppHeader', () => {
         email: 'ad***@codari.test',
         loginMethod: 'EMAIL',
         githubUsername: null,
+        welcomeSeen: true,
       },
       isAuthenticated: true,
     })
@@ -288,6 +293,7 @@ describe('AppHeader', () => {
         email: 'ad***@codari.test',
         loginMethod: 'EMAIL',
         githubUsername: null,
+        welcomeSeen: true,
       },
       isAuthenticated: true,
     })
@@ -315,6 +321,7 @@ describe('AppHeader', () => {
         email: 'us***@codari.test',
         loginMethod: 'EMAIL',
         githubUsername: null,
+        welcomeSeen: true,
       },
       isAuthenticated: true,
     })
@@ -343,6 +350,7 @@ describe('AppHeader', () => {
         email: 'us***@codari.test',
         loginMethod: 'EMAIL',
         githubUsername: null,
+        welcomeSeen: true,
       },
       isAuthenticated: true,
     })

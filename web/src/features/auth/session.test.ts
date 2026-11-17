@@ -13,6 +13,7 @@ const USER: CurrentUser = {
   email: 'ne***@codari.test',
   loginMethod: 'EMAIL',
   githubUsername: null,
+  welcomeSeen: true,
 }
 
 describe('adoptSession', () => {

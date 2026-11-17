@@ -411,6 +411,7 @@ paths:
       description: |
         서버는 `email`·`loginMethod`·`githubUsername`을 항상 준다(값이 없으면 null).
         상단의 사용자 메뉴(닉네임)와 관리자 메뉴(`role`), 마이페이지의 계정 정보에 쓴다. 닉네임은 바뀔 수 있어 토큰이 아니라 이 API로 받는다.
+        로그인 직후 `welcomeSeen`이 `false`면 화면은 처음 안내(`/welcome`, WELCOME-01)로 보낸다.
       tags: [users]
       responses:
         '200':
@@ -472,6 +473,21 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Problem'
+
+  /api/users/me/welcome-seen:
+    post:
+      operationId: markWelcomeSeen
+      summary: 처음 안내를 봤음 (WELCOME-01)
+      description: |
+        처음 안내 화면(`/welcome`)이 열리면 부른다. 그 뒤로는 `CurrentUser.welcomeSeen`이 `true`라 어느 기기에서도 다시 띄우지 않는다.
+        끝까지 보지 않고 나가거나 [건너뛰기]를 눌러도 이미 기록됐으므로 따로 부르지 않는다.
+        이미 봤으면 그대로 204다. 탭 두 개에서 동시에 불러도 오류가 나지 않는다.
+      tags: [users]
+      responses:
+        '204':
+          description: 봤음으로 기록함
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /api/users/me/password:
     put:
@@ -2647,7 +2663,7 @@ components:
 
     CurrentUser:
       type: object
-      required: [id, nickname, role, email, loginMethod, githubUsername]
+      required: [id, nickname, role, email, loginMethod, githubUsername, welcomeSeen]
       properties:
         id:
           type: integer
@@ -2672,6 +2688,11 @@ components:
         githubUsername:
           type: [string, 'null']
           description: 연결된 GitHub 아이디. 이메일 가입 계정은 null
+        welcomeSeen:
+          type: boolean
+          description: |
+            처음 안내(WELCOME-01)를 봤는지. 가입하면 `false`이고, 화면이 `POST /api/users/me/welcome-seen`을 부르면 `true`다.
+            이 기능 전에 가입한 회원은 `true`다.
 
     UserActivity:
       type: object

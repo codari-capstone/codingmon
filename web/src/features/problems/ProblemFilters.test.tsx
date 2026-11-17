@@ -33,6 +33,7 @@ function asLoggedIn() {
       email: 'ch***@codari.test',
       loginMethod: 'EMAIL',
       githubUsername: null,
+      welcomeSeen: true,
     },
     isAuthenticated: true,
     isLoading: false,

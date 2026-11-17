@@ -308,6 +308,7 @@ export interface paths {
          * 로그인한 사용자 정보 (COM-01, COM-05, MY-01)
          * @description 서버는 `email`·`loginMethod`·`githubUsername`을 항상 준다(값이 없으면 null).
          *     상단의 사용자 메뉴(닉네임)와 관리자 메뉴(`role`), 마이페이지의 계정 정보에 쓴다. 닉네임은 바뀔 수 있어 토큰이 아니라 이 API로 받는다.
+         *     로그인 직후 `welcomeSeen`이 `false`면 화면은 처음 안내(`/welcome`, WELCOME-01)로 보낸다.
          */
         get: operations["getCurrentUser"];
         put?: never;
@@ -332,6 +333,28 @@ export interface paths {
          *     `GET /api/auth/nickname-availability`는 로그인 사용자를 모르므로 이때 '사용 중'으로 답한다. 화면은 대소문자만 바뀌면 이 확인을 건너뛴다.
          */
         patch: operations["updateMyNickname"];
+        trace?: never;
+    };
+    "/api/users/me/welcome-seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 처음 안내를 봤음 (WELCOME-01)
+         * @description 처음 안내 화면(`/welcome`)이 열리면 부른다. 그 뒤로는 `CurrentUser.welcomeSeen`이 `true`라 어느 기기에서도 다시 띄우지 않는다.
+         *     끝까지 보지 않고 나가거나 [건너뛰기]를 눌러도 이미 기록됐으므로 따로 부르지 않는다.
+         *     이미 봤으면 그대로 204다. 탭 두 개에서 동시에 불러도 오류가 나지 않는다.
+         */
+        post: operations["markWelcomeSeen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/users/me/password": {
@@ -1505,6 +1528,11 @@ export interface components {
             loginMethod: "EMAIL" | "GITHUB";
             /** @description 연결된 GitHub 아이디. 이메일 가입 계정은 null */
             githubUsername: string | null;
+            /**
+             * @description 처음 안내(WELCOME-01)를 봤는지. 가입하면 `false`이고, 화면이 `POST /api/users/me/welcome-seen`을 부르면 `true`다.
+             *     이 기능 전에 가입한 회원은 `true`다.
+             */
+            welcomeSeen: boolean;
         };
         UserActivity: {
             /** @description 맞힌 서로 다른 문제 수. 공개가 내려간 문제도 센다 */
@@ -2842,6 +2870,25 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Problem"];
+        };
+    };
+    markWelcomeSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 봤음으로 기록함 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     changeMyPassword: {
