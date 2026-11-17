@@ -793,6 +793,86 @@ describe('문제 신고 목 (SOLVE-12, #226)', () => {
   })
 })
 
+describe('관리자 신고 목 (ADM-13, #226)', () => {
+  afterEach(() => resetReports())
+
+  const list = (query: string) => fetch(`/api/admin/reports${query}`)
+  const save = (id: number | string, body: unknown) =>
+    fetch(`/api/admin/reports/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  const detail = async (id: number) => (await fetch(`/api/admin/reports/${id}`)).json()
+
+  it('최신 신고부터 주고, status를 여러 번 보내면 그중 하나인 신고를 준다', async () => {
+    const all = await (await list('?page=0&size=20')).json()
+    expect(all.totalElements).toBe(21)
+    expect(all.content[0]).toMatchObject({ id: 21, status: 'RECEIVED' })
+    // 목록에는 상세 칸이 없다(계약 AdminReportSummary)
+    expect(all.content[0]).not.toHaveProperty('content')
+
+    const unresolved = await (await list('?status=RECEIVED&status=IN_PROGRESS&size=1')).json()
+    expect(unresolved.totalElements).toBe(7)
+    expect(unresolved.content).toHaveLength(1)
+  })
+
+  it('없는 상태나 범위 밖 page·size는 code 없는 400이다', async () => {
+    for (const query of ['?status=DONE', '?page=-1', '?size=21', '?size=0']) {
+      const response = await list(query)
+      expect(response.status).toBe(400)
+      expect(await response.json()).not.toHaveProperty('code')
+    }
+  })
+
+  it('없는 신고는 상세·저장 모두 404 REPORT_NOT_FOUND다', async () => {
+    const missing = await fetch('/api/admin/reports/999')
+    expect(missing.status).toBe(404)
+    expect(await missing.json()).toMatchObject({ code: 'REPORT_NOT_FOUND' })
+    expect((await save(999, { status: 'RESOLVED', adminMemo: null })).status).toBe(404)
+  })
+
+  it('문제가 있는 신고는 넷 사이를 오가고, 메모는 strip()하고 비면 null로 저장한다 (규칙 1)', async () => {
+    expect((await save(10, { status: 'IN_PROGRESS', adminMemo: '  확인 중  ' })).status).toBe(204)
+    expect(await detail(10)).toMatchObject({ status: 'IN_PROGRESS', adminMemo: '확인 중' })
+    expect((await save(10, { status: 'RECEIVED', adminMemo: '   ' })).status).toBe(204)
+    const saved = await detail(10)
+    expect(saved).toMatchObject({ status: 'RECEIVED', adminMemo: null })
+    expect(saved.updatedAt).not.toBeNull()
+  })
+
+  it('지워진 문제의 처리 완료·반려는 그 둘만 받는다 (규칙 2)', async () => {
+    expect((await save(11, { status: 'REJECTED', adminMemo: null })).status).toBe(204)
+    for (const status of ['RECEIVED', 'IN_PROGRESS', 'PROBLEM_DELETED']) {
+      const response = await save(11, { status, adminMemo: null })
+      expect(response.status).toBe(400)
+      expect(await response.json()).toMatchObject({ code: 'REPORT_PROBLEM_DELETED' })
+    }
+  })
+
+  it('문제 삭제됨은 그대로 보내야 메모만 저장하고, 문제가 있는 신고는 문제 삭제됨이 될 수 없다 (규칙 3)', async () => {
+    expect((await save(5, { status: 'PROBLEM_DELETED', adminMemo: '메모' })).status).toBe(204)
+    expect(await detail(5)).toMatchObject({ status: 'PROBLEM_DELETED', adminMemo: '메모' })
+    expect((await save(5, { status: 'RESOLVED', adminMemo: null })).status).toBe(400)
+    expect((await save(10, { status: 'PROBLEM_DELETED', adminMemo: null })).status).toBe(400)
+  })
+
+  it('메모가 코드 포인트로 1,000자를 넘으면 INVALID_REPORT_MEMO, 형식이 틀리면 code 없는 400이다', async () => {
+    expect((await save(10, { status: 'RESOLVED', adminMemo: '😀'.repeat(1000) })).status).toBe(204)
+    const long = await save(10, { status: 'RESOLVED', adminMemo: '가'.repeat(1001) })
+    expect(long.status).toBe(400)
+    expect(await long.json()).toMatchObject({ code: 'INVALID_REPORT_MEMO' })
+
+    for (const body of [{}, { status: 'DONE' }, { status: 'RESOLVED', adminMemo: 3 }]) {
+      const response = await save(10, body)
+      expect(response.status).toBe(400)
+      expect(await response.json()).not.toHaveProperty('code')
+    }
+    const nul = await save(10, { status: 'RESOLVED', adminMemo: `a${String.fromCodePoint(0)}` })
+    expect(nul.status).toBe(400)
+  })
+})
+
 describe('개념 태그 등록 목 (ADM-11, #221)', () => {
   afterEach(() => resetConceptTags())
 

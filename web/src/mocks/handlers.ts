@@ -2,6 +2,7 @@ import { http, HttpResponse, type RequestHandler } from 'msw'
 
 import type {
   AdminReportDetail,
+  AdminReportSummary,
   AdminSolution,
   AdminTestCase,
   AiQuota,
@@ -11,6 +12,7 @@ import type {
   LoginRequest,
   ProblemInput,
   ReportInput,
+  ReportStatus,
   ReportType,
   SolutionInput,
   SubmissionAnalysis,
@@ -21,6 +23,7 @@ import { DIFFICULTY_RANK, type Difficulty, type SolveStatus } from '@/api/types'
 import { EMAIL_PATTERN, isValidNickname, isValidPassword } from '@/features/auth/accountRules'
 import { TAG_NAME_MAX, TAG_SLUG_MAX, TAG_SLUG_PATTERN } from '@/features/admin/tagRules'
 import { FIRST_ACTIVITY_YEAR } from '@/features/mypage/myPageQuery'
+import { REPORT_STATUS_LABEL } from '@/features/admin/labels'
 import { REPORT_TYPE_LABEL } from '@/features/problems/labels'
 import { LANGUAGE_LABEL } from '@/features/solve/labels'
 import {
@@ -59,6 +62,7 @@ import { activityFor, kstYear, streakFor } from './fixtures/activity'
 import { BADGE_CODES, badgesFor, celebrate } from './fixtures/badges'
 import { problemDetails } from './fixtures/problemDetails'
 import { conceptTags, problems } from './fixtures/problems'
+import { seedReports } from './fixtures/reports'
 import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from './fixtures/users'
 
 /** 인증번호 오류의 문구. 실제 서버(EmailCodeService.java)의 문구와 같게 맞춘다. */
@@ -386,19 +390,52 @@ function reviewView(
   }
 }
 
-/** 학습자가 목에서 보낸 문제 신고(SOLVE-12). 관리자 신고 화면(ADM-13)이 읽는다. */
-let mockReports: AdminReportDetail[] = []
-// 유형은 화면의 이름 표에서 가져온다. Record<ReportType, …>라 계약에 유형이 늘면 거기서 먼저 막힌다
+/**
+ * 문제 신고. 시드(fixtures/reports) 뒤에 학습자가 목에서 보낸 신고(SOLVE-12)가 붙는다.
+ * 관리자 신고 화면(ADM-13)이 읽고 고친다. id는 늘 위치+1이다.
+ */
+let mockReports: AdminReportDetail[] = seedReports()
+const SEED_REPORT_COUNT = mockReports.length
+// 유형·상태는 화면의 이름 표에서 가져온다. Record<…>라 계약에 값이 늘면 거기서 먼저 막힌다
 const REPORT_TYPES = Object.keys(REPORT_TYPE_LABEL) as ReportType[]
+const REPORT_STATUSES = Object.keys(REPORT_STATUS_LABEL) as ReportStatus[]
 
-/** 테스트 사이에 보낸 신고가 새지 않게 비운다. */
+/** 테스트 사이에 보낸 신고와 관리자가 고친 것이 새지 않게 시드로 되돌린다. */
 export function resetReports(): void {
-  mockReports = []
+  mockReports = seedReports()
 }
 
-/** 목에 쌓인 신고. 테스트가 보낸 내용을 확인할 때 쓴다. */
+/** 학습자가 목에서 보낸 신고(시드 뒤). 테스트가 보낸 내용을 확인할 때 쓴다. */
 export function reportsSent(): readonly AdminReportDetail[] {
-  return mockReports
+  return mockReports.slice(SEED_REPORT_COUNT)
+}
+
+/** 신고 하나를 목에서 바로 고친다. 문제가 지워졌을 때처럼 서버만 만드는 상태를 테스트가 꾸밀 때 쓴다. */
+export function patchReport(id: number, patch: Partial<AdminReportDetail>): void {
+  mockReports = mockReports.map((item) => (item.id === id ? { ...item, ...patch } : item))
+}
+
+/** 목록 칸. 상세에만 있는 칸(content·versionNo·adminMemo·updatedAt)을 뺀다 — 화면이 없는 칸을 읽으면 테스트가 잡는다 */
+function reportSummary({
+  content: _content,
+  versionNo: _versionNo,
+  adminMemo: _adminMemo,
+  updatedAt: _updatedAt,
+  ...summary
+}: AdminReportDetail): AdminReportSummary {
+  return summary
+}
+
+/**
+ * 관리자 신고 저장(PUT)이 받을 수 있는 상태인지. 계약의 규칙 1~3이다.
+ * 1. 문제가 있으면 넷(PROBLEM_DELETED 빼고) 아무거나
+ * 2. 문제가 지워진 처리 완료·반려는 그 둘만
+ * 3. PROBLEM_DELETED는 그대로(메모만)
+ */
+function reportStatusAllowed(report: AdminReportDetail, next: ReportStatus): boolean {
+  if (report.status === 'PROBLEM_DELETED') return next === 'PROBLEM_DELETED'
+  if (next === 'PROBLEM_DELETED') return false
+  return report.problemId !== null || next === 'RESOLVED' || next === 'REJECTED'
 }
 
 /** 관리자가 목에서 등록한 개념 태그(ADM-11). fixture 배열은 다른 목도 읽으니 따로 쌓는다. */
@@ -705,6 +742,88 @@ export const handlers: RequestHandler[] = [
     const created = { slug, name }
     createdConceptTags.push(created)
     return HttpResponse.json(created, { status: 201 })
+  }),
+
+  /**
+   * 관리자 신고 목록 (ADM-13, 메뉴의 처리 안 한 신고 수). 최신 신고가 위다.
+   * `status`를 여러 번 보내면 그중 하나인 신고, 없으면 전체다. 관리자 문제 목처럼 권한은 보지 않는다.
+   */
+  http.get('*/api/admin/reports', ({ request }) => {
+    const query = new URL(request.url).searchParams
+    const statuses = query.getAll('status')
+    const page = Number(query.get('page') ?? 0)
+    const size = Number(query.get('size') ?? MAX_PAGE_SIZE)
+    if (
+      statuses.some((status) => !REPORT_STATUSES.includes(status as ReportStatus)) ||
+      !Number.isInteger(page) ||
+      page < 0 ||
+      !Number.isInteger(size) ||
+      size < 1 ||
+      size > MAX_PAGE_SIZE
+    ) {
+      return badRequest(`status는 목록의 값, page는 0 이상, size는 1~${MAX_PAGE_SIZE}이다`)
+    }
+    const matched = mockReports
+      .filter((item) => statuses.length === 0 || statuses.includes(item.status))
+      .reverse()
+    return HttpResponse.json({
+      content: matched.slice(page * size, page * size + size).map(reportSummary),
+      totalElements: matched.length,
+    })
+  }),
+
+  /** 관리자 신고 상세 (ADM-13). 없는 신고는 404 `REPORT_NOT_FOUND`다. */
+  http.get('*/api/admin/reports/:id', ({ params }) => {
+    const id = Number(params.id)
+    if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
+    const report = mockReports.find((item) => item.id === id)
+    if (!report) return problem(404, 'REPORT_NOT_FOUND', '신고를 찾을 수 없어요')
+    return HttpResponse.json(report)
+  }),
+
+  /**
+   * 관리자 신고 상태·메모 저장 (ADM-13). 판정 순서와 문구는 서버(AdminReportController)와 같다:
+   * 형식·널 문자 → 메모 길이(코드 포인트) → 없는 신고 → 상태 규칙 1~3. 메모는 strip()하고 비면 null이다.
+   */
+  http.put('*/api/admin/reports/:id', async ({ params, request }) => {
+    const id = Number(params.id)
+    if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
+    const body = (await request.json().catch(() => null)) as Partial<
+      Record<'status' | 'adminMemo', unknown>
+    > | null
+    const memo = body?.adminMemo ?? null
+    if (
+      body === null ||
+      !REPORT_STATUSES.includes(body.status as ReportStatus) ||
+      (memo !== null && typeof memo !== 'string') ||
+      (typeof memo === 'string' && hasNul(memo))
+    ) {
+      return badRequest('status·adminMemo가 맞지 않다')
+    }
+    if (typeof memo === 'string' && reportLength(memo) > REPORT_CONTENT_MAX) {
+      return problem(
+        400,
+        'INVALID_REPORT_MEMO',
+        '메모가 1,000자를 넘어요. 1,000자 이하로 줄여 주세요',
+      )
+    }
+    const report = mockReports.find((item) => item.id === id)
+    if (!report) return problem(404, 'REPORT_NOT_FOUND', '신고를 찾을 수 없어요')
+    const status = body.status as ReportStatus
+    if (!reportStatusAllowed(report, status)) {
+      return problem(
+        400,
+        'REPORT_PROBLEM_DELETED',
+        '삭제된 문제의 신고는 이 상태로 바꿀 수 없어요. 새로 고친 뒤 다시 확인해 주세요',
+      )
+    }
+    const stripped = typeof memo === 'string' ? stripLikeServer(memo) : ''
+    patchReport(id, {
+      status,
+      adminMemo: stripped === '' ? null : stripped,
+      updatedAt: new Date().toISOString(),
+    })
+    return new HttpResponse(null, { status: 204 })
   }),
 
   http.get('*/api/problems', ({ request }) => {

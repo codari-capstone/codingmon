@@ -105,6 +105,13 @@ export const router = createBrowserRouter([
                       { index: true, lazy: () => import('@/features/admin/AdminProblemListPage') },
                       // 개념 태그 목록·등록 (ADM-11, #221)
                       { path: 'tags', lazy: () => import('@/features/admin/AdminTagsPage') },
+                      // 신고 목록·상세 (ADM-13, #226)
+                      { path: 'reports', lazy: () => import('@/features/admin/AdminReportsPage') },
+                      {
+                        path: 'reports/:id',
+                        lazy: () => import('@/features/admin/AdminReportDetailPage'),
+                        handle: { pageTone: 'subtle' } satisfies PageHandle,
+                      },
                       // 등록·수정·버전 보기가 한 컴포넌트다. 폼이 같고 어디서 값을 읽는지만
                       // 다르다 (AdminProblemFormPage 주석).
                       {

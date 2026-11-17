@@ -1,4 +1,9 @@
-import type { ProblemVersionStatus, PublishCondition, SolutionStatus } from '@/api/types'
+import type {
+  ProblemVersionStatus,
+  PublishCondition,
+  ReportStatus,
+  SolutionStatus,
+} from '@/api/types'
 import type { BadgeTone } from '@/components/ui/badge'
 
 /** 버전 하나의 상태. 기능명세 ADM-01의 '작성 중·검증 중·공개' 문구를 쓴다. */
@@ -127,3 +132,32 @@ export const PUBLISH_CONDITION_LABEL: Record<
     tabLabel: '정답 코드',
   },
 }
+
+/** 신고 상태 (ADM-13). 시안 AdminReports의 문구다 */
+export const REPORT_STATUS_LABEL: Record<ReportStatus, string> = {
+  RECEIVED: '접수',
+  IN_PROGRESS: '확인 중',
+  RESOLVED: '처리 완료',
+  REJECTED: '반려',
+  PROBLEM_DELETED: '문제 삭제됨',
+}
+
+/** 신고 상태 배지의 색 (시안 AdminReports). 처리할 것일수록 눈에 띈다 */
+export const REPORT_STATUS_TONE: Record<ReportStatus, BadgeTone> = {
+  RECEIVED: 'danger',
+  IN_PROGRESS: 'warning',
+  RESOLVED: 'success',
+  REJECTED: 'neutral',
+  PROBLEM_DELETED: 'outline',
+}
+
+/** 신고 상세의 상태 고르기 설명 (시안 AdminReportDetail) */
+export const REPORT_STATUS_HINT: Record<Exclude<ReportStatus, 'PROBLEM_DELETED'>, string> = {
+  RECEIVED: '아직 보지 않음',
+  IN_PROGRESS: '살펴보는 중',
+  RESOLVED: '문제를 고쳤어요',
+  REJECTED: '고칠 게 없어요',
+}
+
+/** 처리 안 한 신고. 메뉴 숫자와 목록 머리가 센다(계약 listAdminReports) */
+export const UNRESOLVED_REPORT_STATUSES: ReportStatus[] = ['RECEIVED', 'IN_PROGRESS']

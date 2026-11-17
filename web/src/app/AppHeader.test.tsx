@@ -186,7 +186,7 @@ describe('AppHeader', () => {
       within(nav)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['문제', '태그'])
+    ).toEqual(['문제', '신고', '태그'])
   })
 
   it('관리자 화면에서는 관리자 메뉴로 바뀐다 (ADM-10)', () => {
@@ -205,9 +205,10 @@ describe('AppHeader', () => {
 
     const nav = screen.getByRole('navigation', { name: '주요 메뉴' })
     const links = within(nav).getAllByRole('link')
-    expect(links.map((link) => link.textContent)).toEqual(['문제', '태그'])
+    expect(links.map((link) => link.textContent)).toEqual(['문제', '신고', '태그'])
     expect(links[0]).toHaveAttribute('href', '/admin')
-    expect(links[1]).toHaveAttribute('href', '/admin/tags')
+    expect(links[1]).toHaveAttribute('href', '/admin/reports')
+    expect(links[2]).toHaveAttribute('href', '/admin/tags')
     // 문제 수정 화면은 '문제'가 지금 화면이다
     expect(links[0]).toHaveAttribute('aria-current', 'page')
     expect(links[1]).not.toHaveAttribute('aria-current')
@@ -230,6 +231,61 @@ describe('AppHeader', () => {
     const nav = screen.getByRole('navigation', { name: '주요 메뉴' })
     expect(within(nav).getByRole('link', { name: '태그' })).toHaveAttribute('aria-current', 'page')
     expect(within(nav).getByRole('link', { name: '문제' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('신고 메뉴에 처리 안 한 신고 수를 붙인다 (ADM-10)', async () => {
+    const asked: string[] = []
+    server.use(
+      http.get('*/api/admin/reports', ({ request }) => {
+        asked.push(new URL(request.url).search)
+        return HttpResponse.json({ content: [], totalElements: 7 })
+      }),
+    )
+    mockAuth({
+      user: {
+        id: 2,
+        nickname: '관리자',
+        role: 'ADMIN',
+        email: 'ad***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
+      isAuthenticated: true,
+    })
+    renderHeaderAt('/admin')
+
+    const nav = screen.getByRole('navigation', { name: '주요 메뉴' })
+    // 숫자만 읽히면 뜻을 모르니 이름에 말로 들어간다
+    expect(
+      await within(nav).findByRole('link', { name: /^신고.*처리 안 한 신고 7건$/ }),
+    ).toHaveAttribute('href', '/admin/reports')
+    // 계약대로 처리 안 한 두 상태를 한 번에, size 1로 센다
+    expect(asked).toEqual(['?status=RECEIVED&status=IN_PROGRESS&page=0&size=1'])
+  })
+
+  it('학습자 화면에서는 신고 수를 묻지 않는다 — 학습자가 부르면 403이다', async () => {
+    let asked = false
+    server.use(
+      http.get('*/api/admin/reports', () => {
+        asked = true
+        return HttpResponse.json({ content: [], totalElements: 7 })
+      }),
+    )
+    mockAuth({
+      user: {
+        id: 2,
+        nickname: '관리자',
+        role: 'ADMIN',
+        email: 'ad***@codari.test',
+        loginMethod: 'EMAIL',
+        githubUsername: null,
+      },
+      isAuthenticated: true,
+    })
+    renderHeaderAt('/problems')
+    await screen.findByRole('link', { name: '관리자' })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(asked).toBe(false)
   })
 
   it('비로그인에게도 제출 기록·내 학습 링크는 보인다', () => {
