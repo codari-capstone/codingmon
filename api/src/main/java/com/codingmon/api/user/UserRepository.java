@@ -35,6 +35,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("update User u set u.nickname = :nickname where u.id = :id")
     int updateNickname(Long id, String nickname);
 
+    // 이미 true면 쓰지 않는다. /welcome에 다시 들어올 때마다 행을 새로 쓰고 잠그지 않게 한다.
+    // 탭 두 개에서 동시에 불러도 같은 결과다.
+    @Transactional
+    @Modifying
+    @Query("update User u set u.welcomeSeen = true where u.id = :id and u.welcomeSeen = false")
+    int markWelcomeSeen(Long id);
+
     @Modifying
     @Query(value = "delete from submissions where user_id = :id", nativeQuery = true)
     void deleteSubmissions(Long id);
