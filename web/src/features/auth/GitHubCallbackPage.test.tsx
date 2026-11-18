@@ -88,7 +88,7 @@ describe('GitHubCallbackPage (COM-02)', () => {
   })
 
   it('result가 없으면(주소를 직접 친 경우) 실패로 본다', async () => {
-    // 계약은 세 값만 보낸다. 그 밖은 전부 실패다 — 모르는 값을 가입 화면으로 보내면
+    // 계약은 네 값(success·signup·suspended·error)만 보낸다. 그 밖은 전부 실패다 — 모르는 값을 가입 화면으로 보내면
     // 증명서 없이 가입을 누르게 된다.
     const { router } = renderCallback(null)
     await expectFailure(router, GITHUB_FAILED)

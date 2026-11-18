@@ -68,9 +68,16 @@ function yearOf(activity: UserActivity): number {
  * 맞힌·틀린 수와 활동한 날 (MY-05). 가장 자랑할 숫자(활동한 날)만 남색이다(StatCard 규칙).
  * 맞힌·틀린 수는 전체 기간, 활동한 날은 고른 해 안에서 센다(계약). 그래서 활동한 날에만 해를 붙인다.
  */
-function Stats({ activity }: { activity: UserActivity }) {
+function Stats({ activity, busy }: { activity: UserActivity; busy: boolean }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
+    // 해를 바꾸는 동안 잔디처럼 흐리게 둔다. 그대로 두면 '2027년 활동한 날'이 드롭다운의 다른 해와 함께 확정값처럼 보인다(#307 리뷰)
+    <div
+      aria-busy={busy || undefined}
+      className={cn(
+        'grid gap-4 transition-opacity motion-reduce:transition-none sm:grid-cols-3',
+        busy && 'opacity-60',
+      )}
+    >
       <StatCard label="맞힌 문제" value={activity.solvedCount} unit="개" icon="check" />
       <StatCard label="틀린 문제" value={activity.wrongCount} unit="개" icon="x" />
       <StatCard
@@ -214,7 +221,7 @@ function Activity() {
   const shown = yearOf(data)
   return (
     <>
-      <Stats activity={data} />
+      <Stats activity={data} busy={isPlaceholderData} />
       <section
         aria-labelledby="activity-heading"
         aria-busy={isPlaceholderData || undefined}

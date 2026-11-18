@@ -247,6 +247,40 @@ describe('AdminMemberDetailPage (ADM-15·16)', () => {
     expect(await screen.findByRole('button', { name: '계정 정지' })).toHaveFocus()
   })
 
+  it('정지 창의 버튼도 처리 중 disabled가 아니라 포커스가 창 안에 남는다', async () => {
+    // disabled가 되면 브라우저가 포커스를 body로 옮겨, 실패했을 때 포커스가 창 밖에 있다(#319 리뷰)
+    const user = userEvent.setup()
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.post('*/api/admin/users/1/suspend', async () => {
+        await held
+        return HttpResponse.json({ status: 500, title: 'Server Error' }, { status: 500 })
+      }),
+    )
+    renderPage(1)
+    await user.click(await screen.findByRole('button', { name: '계정 정지' }))
+    const dialog = screen.getByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: '정지하기' }))
+
+    const busy = within(dialog).getByRole('button', { name: '정지하는 중…' })
+    expect(busy).toBeEnabled()
+    expect(busy).toHaveAttribute('aria-disabled', 'true')
+    expect(busy).toHaveAttribute('aria-busy', 'true')
+    expect(busy).toHaveFocus()
+    const cancel = within(dialog).getByRole('button', { name: '취소' })
+    expect(cancel).toBeEnabled()
+    expect(cancel).toHaveAttribute('aria-disabled', 'true')
+    // 처리 중 [취소]는 창을 닫지 않는다
+    await user.click(cancel)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    release()
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
+    // 실패해도 포커스는 창 안([취소])에 남는다
+    expect(cancel).toHaveFocus()
+  })
+
   it('강제 탈퇴 처리 중에는 버튼이 포커스를 받고, 다시 눌러도 확인 창을 열지 않는다', async () => {
     const user = userEvent.setup()
     let release!: () => void
@@ -297,6 +331,18 @@ describe('AdminMemberDetailPage (ADM-15·16)', () => {
     await user.click(screen.getByRole('button', { name: '계정 정지' }))
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '정지하기' }))
     await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull(), { timeout: 3000 })
+  })
+
+  it('상세가 500이어도 푼 문제가 401이면 세션을 버린다', async () => {
+    // ??로 이으면 상세의 500에 가려 뒤의 401을 보지 못한다(#318 리뷰)
+    server.use(
+      http.get('*/api/admin/users/1', () =>
+        HttpResponse.json({ status: 500, title: 'Server Error' }, { status: 500 }),
+      ),
+      http.get('*/api/admin/users/1/solved-problems', unauthorized),
+    )
+    const { client } = renderPage(1)
+    await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull(), { timeout: 4000 })
   })
 
   it('정지를 풀면 정상으로 돌아온다', async () => {

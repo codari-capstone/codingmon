@@ -84,14 +84,21 @@ export function Component() {
         {/* 탭 여섯이 좁은 화면에서 넘치면 탭 줄 안에서 가로로 민다. 페이지는 밀리지 않는다 */}
         <div className="max-w-full overflow-x-auto p-1">
           <TabsList variant="pill" aria-label="신고 상태">
-            {FILTERS.map((item, index) => (
-              <TabsTrigger key={item} value={item}>
-                {item === 'ALL' ? '전체' : REPORT_STATUS_LABEL[item]}
-                <span className="text-muted-foreground tabular-nums">
-                  {counts[index]?.data ?? ''}
-                </span>
-              </TabsTrigger>
-            ))}
+            {FILTERS.map((item, index) => {
+              const label = item === 'ALL' ? '전체' : REPORT_STATUS_LABEL[item]
+              const count = counts[index]?.data
+              return (
+                <TabsTrigger
+                  key={item}
+                  value={item}
+                  // 글자와 건수가 '접수4'로 붙어 읽히지 않게 이름을 따로 준다(#315 리뷰)
+                  aria-label={count === undefined ? label : `${label}, ${count}건`}
+                >
+                  {label}
+                  <span className="text-muted-foreground tabular-nums">{count ?? ''}</span>
+                </TabsTrigger>
+              )
+            })}
           </TabsList>
         </div>
 

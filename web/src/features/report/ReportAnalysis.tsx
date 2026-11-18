@@ -13,6 +13,8 @@ export interface ReportRequest {
   isSuccess: boolean
   error: unknown
   data?: LearningReport
+  /** 마지막으로 누른 시각(ms). 누르지 않았으면 0 */
+  submittedAt: number
 }
 
 const MADE_AT = new Intl.DateTimeFormat('ko-KR', {
@@ -52,7 +54,11 @@ export function ReportMeta({
   const stale = report.reportDate !== today
   // '오늘'은 브라우저 시계다. 서버 시계가 늦으면 눌러도 같은 날짜의 리포트가 돌아온다(계약: 오늘 것이 있으면 그것).
   // 아무 반응 없는 버튼으로 두지 않고 알린다 — 시계 차이만큼 지나 다시 누르면 만들어진다(#311 리뷰)
-  const serverNotYet = stale && request.isSuccess && request.data?.reportDate === report.reportDate
+  // 오늘 누른 것만 본다. 어제 받은 오늘 리포트가 새날에 '같은 날짜가 돌아왔다'로 읽히지 않게 한다(#311 리뷰)
+  const pressedToday =
+    request.submittedAt > 0 && new Date(request.submittedAt).toISOString().slice(0, 10) === today
+  const serverNotYet =
+    stale && pressedToday && request.isSuccess && request.data?.reportDate === report.reportDate
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
