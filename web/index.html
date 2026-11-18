@@ -2,9 +2,75 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Codingmon</title>
+    <!--
+      검색·공유 미리보기 (#309). 카카오톡·슬랙의 미리보기 봇은 JS를 돌리지 않으므로 공통 값은 여기 둔다.
+      제목·설명은 src/app/PageHead.tsx의 DEFAULT_TITLE·DEFAULT_DESCRIPTION과 같아야 한다(PageHead.test가 묶는다).
+      화면별 제목·noindex·canonical은 PageHead가 단다.
+      og:url은 두지 않는다. 이 HTML은 모든 주소에 똑같이 나가서(nginx try_files), 박아 두면 어느 화면을
+      공유해도 홈으로 귀속된다. 없으면 미리보기 서비스는 받은 주소를 쓴다(#326 리뷰).
+    -->
+    <title>Codingmon | 틀린 이유까지 알려 주는 코딩 연습장</title>
+    <meta
+      name="description"
+      content="문제를 풀고 제출하면 어느 줄에서 왜 틀렸는지 AI가 짚어 주고, 정답 대신 다음 한 걸음을 힌트로 알려 주는 코딩 연습장이에요. Python·C++로 풀어 보세요."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Codingmon" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:title" content="Codingmon | 틀린 이유까지 알려 주는 코딩 연습장" />
+    <meta
+      property="og:description"
+      content="어느 줄에서 왜 틀렸는지 AI가 짚어 주고, 정답 대신 다음 한 걸음을 힌트로 알려 줘요."
+    />
+    <meta property="og:image" content="https://codingmon.tech/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="코딩몬 — 틀린 이유까지 알려 주는 코딩 연습장" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- 브라우저 주소창 색. index.css의 --background(라이트·다크)와 같다 -->
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e111d" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/png" href="/icon-192.png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <!-- AI 검색이 서비스 이름과 용도를 그대로 인용하도록 랜딩 문구와 맞춘다 -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://codingmon.tech/#website",
+            "url": "https://codingmon.tech/",
+            "name": "Codingmon",
+            "alternateName": "코딩몬",
+            "inLanguage": "ko-KR",
+            "publisher": { "@id": "https://codingmon.tech/#organization" }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://codingmon.tech/#organization",
+            "name": "Codingmon",
+            "alternateName": "코딩몬",
+            "url": "https://codingmon.tech/",
+            "logo": "https://codingmon.tech/icon-512.png"
+          },
+          {
+            "@type": "WebApplication",
+            "name": "Codingmon",
+            "alternateName": "코딩몬",
+            "url": "https://codingmon.tech/",
+            "applicationCategory": "EducationalApplication",
+            "operatingSystem": "Web",
+            "inLanguage": "ko-KR",
+            "description": "문제를 풀고 제출하면 어느 줄에서 왜 틀렸는지 AI가 짚어 주고, 정답 대신 다음 한 걸음을 힌트로 알려 주는 코딩 연습장. Python과 C++를 지원한다.",
+            "publisher": { "@id": "https://codingmon.tech/#organization" }
+          }
+        ]
+      }
+    </script>
     <!--
       테마를 번들보다 먼저 정한다.
 
