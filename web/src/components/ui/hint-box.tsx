@@ -7,7 +7,7 @@ const TONE = {
 } as const
 
 interface HintBoxProps {
-  /** 예: "1단계 힌트" */
+  /** 예: "힌트 1 · 관찰" */
   step?: string
   /** 한 줄 요약 */
   title?: React.ReactNode
@@ -18,7 +18,7 @@ interface HintBoxProps {
 }
 
 /**
- * AI 분석의 힌트 한 단계를 담는 옅은 상자(1단계 관찰 → 2단계 방향 → 3단계 원리).
+ * AI 분석의 힌트 한 단계를 담는 옅은 상자(관찰 → 방향 → 원리).
  * 정답 코드를 넣지 않고, 경고·오류를 담지 않는다.
  */
 export function HintBox({ step, title, tone = 'brand', children, className }: HintBoxProps) {

@@ -518,20 +518,15 @@ describe('AnalysisPanel', () => {
       stored(analysis({ facts: ['사실 하나', '사실 둘'], guesses: ['짐작 하나', '짐작 둘'] }))
       renderResult(WRONG)
 
+      // 문장마다 칸을 나누지 않는다. 종류마다 한 칸(배지 하나 + 목록 하나)이다
+      const items = (kind: string) =>
+        within(screen.getByText(kind, { selector: 'span' }).parentElement!)
+          .getAllByRole('listitem')
+          .map((li) => li.textContent)
       await screen.findByText('사실 하나')
-      // 문장마다 칸을 나누지 않는다. 종류마다 한 칸이다
-      const facts = screen.getByRole('region', { name: '실행 결과' })
-      const guesses = screen.getByRole('region', { name: '코드 분석' })
-      expect(
-        within(facts)
-          .getAllByRole('listitem')
-          .map((li) => li.textContent),
-      ).toEqual(['•사실 하나', '•사실 둘'])
-      expect(
-        within(guesses)
-          .getAllByRole('listitem')
-          .map((li) => li.textContent),
-      ).toEqual(['•짐작 하나', '•짐작 둘'])
+      expect(items('실행 결과')).toEqual(['사실 하나', '사실 둘'])
+      expect(items('코드 분석')).toEqual(['짐작 하나', '짐작 둘'])
+      expect(screen.getAllByText(/^(실행 결과|코드 분석)$/)).toHaveLength(2)
       expect(screen.getByText(/의심되는 줄/)).toHaveTextContent(/^의심되는 줄 · 2번$/)
     })
 
@@ -540,7 +535,7 @@ describe('AnalysisPanel', () => {
       renderResult(WRONG)
 
       await screen.findByText('사실 하나')
-      expect(screen.queryByRole('region', { name: '코드 분석' })).not.toBeInTheDocument()
+      expect(screen.queryByText('코드 분석')).not.toBeInTheDocument()
     })
 
     /** 계약: 서버가 범위를 검사하기(#79) 전에 저장된 분석이 남아 있다. 제출 코드는 4줄이다. */

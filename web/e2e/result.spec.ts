@@ -98,7 +98,7 @@ test.describe('제출 결과 화면', () => {
       await page.getByRole('button', { name: 'AI 분석' }).click()
       await expect(page.getByText(/별 120개로 나옵니다/)).toBeVisible({ timeout: 10_000 })
       // 힌트도 모델이 만든 글이다. 1단계 힌트에도 긴 토큰이 있다(handlers.ts).
-      await page.getByRole('button', { name: '1단계 힌트 보기' }).click()
+      await page.getByRole('button', { name: '1단계 관찰 보기' }).click()
       await expect(page.getByText(/한 줄이 길어집니다/)).toBeVisible()
 
       const sizes = await page.evaluate(() => {
@@ -151,9 +151,9 @@ test.describe('제출 결과 화면', () => {
    * 넓은 화면에서 제출한 코드와 AI 패널은 같은 폭, 같은 윗선이고, 패널을 따라 내려가도 코드가
    * 화면에 남는다. 배치는 브라우저만 잴 수 있다.
    */
-  for (const [label, id, button, ready] of [
-    ['AI 분석', 23, 'AI 분석', /별 120개로 나옵니다/],
-    ['AI 리뷰', 11, 'AI 리뷰', /구간 쿼리 처리 패턴/],
+  for (const [label, id, headingId, ready] of [
+    ['AI 분석', 23, 'analysis-heading', /별 120개로 나옵니다/],
+    ['AI 리뷰', 11, 'review-heading', /구간 쿼리 처리 패턴/],
   ] as const) {
     test(`1280px에서 제출한 코드와 ${label} 패널의 윗선·폭이 같고, 스크롤해도 코드가 보인다`, async ({
       page,
@@ -161,11 +161,14 @@ test.describe('제출 결과 화면', () => {
       await page.setViewportSize({ width: 1280, height: 600 })
       await login(page)
       await page.goto(`/submissions/${id}`)
-      await page.getByRole('button', { name: button }).click()
+      await page.getByRole('button', { name: label }).click()
       await expect(page.getByText(ready)).toBeVisible({ timeout: 10_000 })
 
-      const code = page.getByRole('region', { name: '제출한 코드' }).locator('figure')
-      const panel = page.locator('section[aria-labelledby$="-heading"]').filter({ hasText: label })
+      const code = page.locator('figure').filter({
+        has: page.getByRole('heading', { level: 2, name: /제출한 코드/ }),
+      })
+      // 패널은 제목 id로 집는다. 글자로 거르면 안쪽 힌트 구역까지 걸릴 수 있다(#328 리뷰)
+      const panel = page.locator(`section[aria-labelledby="${headingId}"]`)
       const [codeBox, panelBox] = [await code.boundingBox(), await panel.boundingBox()]
       expect(Math.abs(codeBox!.y - panelBox!.y)).toBeLessThanOrEqual(1)
       expect(Math.abs(codeBox!.width - panelBox!.width)).toBeLessThanOrEqual(1)

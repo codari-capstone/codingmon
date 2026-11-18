@@ -50,23 +50,28 @@ describe('HintSteps', () => {
     await analyzed()
     renderResult()
 
-    expect(await step('1단계 힌트')).toBeEnabled()
+    expect(await step('1단계 관찰')).toBeEnabled()
     // 뒤 단계는 버튼 없이 단계 표시로만 보인다. 앞 단계를 건너뛰어 열 길이 없다
-    expect(screen.queryByRole('button', { name: '2단계 힌트 보기' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '3단계 힌트 보기' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '2단계 방향 보기' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '3단계 원리 보기' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '1단계 힌트 보기' }))
+    await user.click(screen.getByRole('button', { name: '1단계 관찰 보기' }))
 
     const hint = await screen.findByText(/첫 줄과 마지막 줄 별 개수/)
     // 새 힌트가 버튼 위에 열린다. 무엇이 열렸는지 바로 읽도록 포커스를 옮긴다.
     await waitFor(() => expect(hint).toHaveFocus())
-    expect(screen.getByRole('button', { name: '2단계 힌트 보기' })).toBeEnabled()
-    expect(screen.queryByRole('button', { name: '3단계 힌트 보기' })).not.toBeInTheDocument()
-    // 처음 보는 사람도 순서를 알도록 단계는 번호로 적는다(관찰·방향·원리 대신)
-    const hints = screen.getByRole('region', { name: '단계별 힌트' })
-    expect(within(hints).getByText('1단계 힌트')).toBeInTheDocument()
-    expect(within(hints).getByText('3단계')).toBeInTheDocument()
-    expect(within(hints).queryByText(/^(관찰|방향|원리)$/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '2단계 방향 보기' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: '3단계 원리 보기' })).not.toBeInTheDocument()
+    // 단계 표시 아래는 순서가 바로 보이게 번호로, 힌트 상자는 그 단계의 뜻까지 적는다(#327)
+    const [stepper] = within(screen.getByRole('region', { name: '단계별 힌트' })).getAllByRole(
+      'list',
+    )
+    expect(
+      within(stepper!)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['1단계', '22단계', '33단계'])
+    expect(screen.getByText('힌트 1 · 관찰')).toBeInTheDocument()
   })
 
   it('세 단계를 다 열면 마지막 안내를 띄운다', async () => {
@@ -74,9 +79,9 @@ describe('HintSteps', () => {
     await analyzed()
     renderResult()
 
-    await user.click(await step('1단계 힌트'))
-    await user.click(await step('2단계 힌트'))
-    await user.click(await step('3단계 힌트'))
+    await user.click(await step('1단계 관찰'))
+    await user.click(await step('2단계 방향'))
+    await user.click(await step('3단계 원리'))
 
     expect(await screen.findByText(/3단계가 마지막 힌트예요/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /단계 .* 보기/ })).not.toBeInTheDocument()
@@ -94,7 +99,7 @@ describe('HintSteps', () => {
     })
     renderResult()
 
-    expect(await step('3단계 힌트')).toBeEnabled()
+    expect(await step('3단계 원리')).toBeEnabled()
     expect(screen.getByText(/첫 줄과 마지막 줄 별 개수/)).toBeInTheDocument()
     expect(screen.getByText(/줄 번호 i가 커질 때/)).toBeInTheDocument()
   })
@@ -114,10 +119,10 @@ describe('HintSteps', () => {
     )
     renderResult()
 
-    await user.click(await step('1단계 힌트'))
+    await user.click(await step('1단계 관찰'))
 
-    expect(screen.getByRole('button', { name: '1단계 힌트 보기' })).toBeDisabled()
-    await user.click(screen.getByRole('button', { name: '1단계 힌트 보기' }))
+    expect(screen.getByRole('button', { name: '1단계 관찰 보기' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: '1단계 관찰 보기' }))
     expect(requests).toBe(1)
     release()
   })
@@ -130,7 +135,7 @@ describe('HintSteps', () => {
     client.setQueryData(['learning-stats'], { stale: true })
     client.setQueryData(['problem-history', { page: 0 }], { stale: true })
 
-    await user.click(await step('1단계 힌트'))
+    await user.click(await step('1단계 관찰'))
     await screen.findByText(/첫 줄과 마지막 줄 별 개수/)
 
     expect(client.getQueryState(['learning-stats'])?.isInvalidated).toBe(true)
@@ -155,7 +160,7 @@ describe('HintSteps', () => {
     )
     renderResult()
 
-    await user.click(await step('1단계 힌트'))
+    await user.click(await step('1단계 관찰'))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('앞 단계 힌트를 먼저 열어 주세요')
     // 다시 받은 분석(1단계까지 열림)이 화면에 든다.

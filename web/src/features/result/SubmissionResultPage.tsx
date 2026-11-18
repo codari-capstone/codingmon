@@ -168,18 +168,16 @@ function SubmittedCode({ result, suspect }: { result: SubmissionResult; suspect:
   if (result.sourceCode === null || result.sourceCode === undefined) return null
 
   return (
-    <section aria-labelledby="submitted-code-heading" className="flex min-w-0 flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       {/*
-        제목은 코드 상자의 머리줄에 보인다. 상자 위에 따로 두면 옆 AI 카드보다 한 줄 내려가 윗선이 어긋난다.
-        제목 단계는 낭독기용으로 남긴다
+        제목은 코드 상자의 머리줄이 겸한다(h2). 상자 위에 따로 두면 옆 AI 카드보다 한 줄 내려가 윗선이 어긋나고,
+        낭독기용 제목을 따로 두면 같은 문구가 연달아 읽힌다(#328 리뷰).
+        CodeBlock은 React가 글자로 넣어 `<`·`&`가 해석되지 않는다(Raw와 같은 보장)
       */}
-      <h2 id="submitted-code-heading" className="sr-only">
-        제출한 코드
-      </h2>
-      {/* CodeBlock은 React가 글자로 넣어 `<`·`&`가 해석되지 않는다(Raw와 같은 보장) */}
       <CodeBlock
         code={result.sourceCode}
         title={`제출한 코드 · ${SOURCE_FILE_NAME[result.language]}`}
+        headingLevel={2}
         lineNumbers
         highlight={suspect}
       />
@@ -189,7 +187,7 @@ function SubmittedCode({ result, suspect }: { result: SubmissionResult; suspect:
           노란색으로 표시한 줄은 AI가 의심한 줄이에요.
         </p>
       ) : null}
-    </section>
+    </div>
   )
 }
 
