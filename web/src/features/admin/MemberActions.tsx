@@ -21,7 +21,7 @@ import { Modal } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { problemCode, problemMessage } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
-import { reportLength } from '@/features/solve/reportRules'
+import { hasNul, reportLength } from '@/features/solve/reportRules'
 import { cn } from '@/lib/utils'
 import { ADMIN_REPORTS_KEY } from './adminReportQuery'
 import { ADMIN_USERS_KEY, SUSPENSION_REASON_MAX, WITHDRAW_AFTER_MS } from './adminUserQuery'
@@ -111,6 +111,9 @@ export function MemberActions({
   const canWithdraw = suspendedAt !== null && waitMs <= 0
   const reasonLength = reportLength(reason)
   const tooLong = reasonLength > SUSPENSION_REASON_MAX
+  // 서버는 널 문자가 섞이면 code 없는 400을 준다. 무엇을 고칠지 알려 주려고 미리 막는다(신고 메모와 같다)
+  const nul = hasNul(reason)
+  const pending = act.isPending ? act.variables.kind : null
 
   const hint =
     suspendedAt === null
@@ -125,12 +128,14 @@ export function MemberActions({
       <div className="flex flex-wrap gap-2">
         {/*
           정지와 해제는 한 버튼이다. 둘을 따로 그리면 다시 받은 뒤 다른 요소로 갈아끼워져 포커스가 body로
-          떨어진다. 처리 중에도 disabled로 두지 않는다 — 브라우저가 포커스를 빼앗는다. 대신 누름을 무시한다
+          떨어진다. 처리 중에도 disabled로 두지 않는다 — 브라우저가 포커스를 빼앗는다. 대신 누름을 무시하고,
+          글자와 aria-busy(진행 커서)로 처리 중임을 보인다
         */}
         <Button
           type="button"
           variant={suspendedAt === null ? 'danger' : 'secondary'}
           aria-disabled={act.isPending || undefined}
+          aria-busy={pending === 'unsuspend' || undefined}
           onClick={() => {
             if (act.isPending) return
             if (suspendedAt === null) {
@@ -141,13 +146,30 @@ export function MemberActions({
             }
           }}
         >
-          {suspendedAt === null ? '계정 정지' : '정지 해제'}
+          {suspendedAt === null
+            ? '계정 정지'
+            : pending === 'unsuspend'
+              ? '해제하는 중…'
+              : '정지 해제'}
         </Button>
         {suspendedAt !== null ? (
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button type="button" variant="danger" disabled={!canWithdraw || act.isPending}>
-                강제 탈퇴
+              {/*
+                24시간 전에는 disabled(누를 수 없음)다. 처리 중에는 disabled로 두지 않는다 — 확인 창이 닫히며
+                돌아온 포커스를 받지 못해 body로 떨어진다. 처리 중 누름은 창을 열지 않게 막는다
+              */}
+              <Button
+                type="button"
+                variant="danger"
+                disabled={!canWithdraw}
+                aria-disabled={act.isPending || undefined}
+                aria-busy={pending === 'withdraw' || undefined}
+                onClick={(event) => {
+                  if (act.isPending) event.preventDefault()
+                }}
+              >
+                {pending === 'withdraw' ? '탈퇴시키는 중…' : '강제 탈퇴'}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -215,7 +237,7 @@ export function MemberActions({
             <Button
               type="button"
               variant="danger"
-              disabled={act.isPending || tooLong}
+              disabled={act.isPending || tooLong || nul}
               onClick={() => act.mutate({ kind: 'suspend', reason })}
             >
               {act.isPending ? '정지하는 중…' : '정지하기'}
@@ -234,9 +256,14 @@ export function MemberActions({
             value={reason}
             readOnly={act.isPending}
             onChange={(event) => setReason(event.target.value)}
-            aria-invalid={tooLong || undefined}
-            aria-describedby={`${reasonId}-count`}
+            aria-invalid={tooLong || nul || undefined}
+            aria-describedby={nul ? `${reasonId}-nul ${reasonId}-count` : `${reasonId}-count`}
           />
+          {nul ? (
+            <span id={`${reasonId}-nul`} className="text-destructive-text text-[13px]">
+              보낼 수 없는 글자(널 문자)가 들어 있어요. 지우고 다시 써 주세요.
+            </span>
+          ) : null}
           <span
             id={`${reasonId}-count`}
             className={cn(

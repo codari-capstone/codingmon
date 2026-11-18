@@ -946,6 +946,8 @@ export const handlers: RequestHandler[] = [
     const body = (await request.json().catch(() => ({}))) as { reason?: unknown } | null
     const reason = body?.reason ?? null
     if (reason !== null && typeof reason !== 'string') return badRequest('reason은 글자여야 한다')
+    // 서버는 널 문자를 길이보다 먼저 보고 code 없는 400을 준다(AdminAccountController.reason)
+    if (typeof reason === 'string' && hasNul(reason)) return badRequest('reason에 널 문자가 있다')
     if (typeof reason === 'string' && reportLength(reason) > SUSPENSION_REASON_MAX) {
       return problem(
         400,

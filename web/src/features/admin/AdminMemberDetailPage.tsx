@@ -86,11 +86,12 @@ export function Component() {
   // shortcut: 탭을 떠나지 않고 띄워 두기만 하면 남은 시간이 줄지 않는다. 탭에 돌아오거나 다시 열면 맞는다
   const now = dataUpdatedAt
 
-  // 보조 쿼리(푼 문제)의 401도 세션을 정리한다. 상세만 보면 로그인 화면으로 가지 않고 오류만 남는다
+  // 보조 쿼리(푼 문제, 제출 1페이지)의 401도 세션을 정리한다. 상세만 보면 로그인 화면으로 가지 않고 오류만 남는다.
+  // 제출 카드가 다른 페이지에 있으면 1페이지를 지켜보는 곳은 여기뿐이다
   const queryClient = useQueryClient()
   useEffect(() => {
-    forgetSessionIfUnauthorized(queryClient, error ?? solved.error)
-  }, [queryClient, error, solved.error])
+    forgetSessionIfUnauthorized(queryClient, error ?? solved.error ?? submissions.error)
+  }, [queryClient, error, solved.error, submissions.error])
 
   if (!valid || problemCode(error) === 'USER_NOT_FOUND') {
     return (

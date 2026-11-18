@@ -198,6 +198,107 @@ describe('AdminMemberDetailPage (ADM-15·16)', () => {
     expect(suspend).toHaveFocus()
   })
 
+  it('정지 사유에 널 문자가 있으면 알려 주고 정지하기를 막는다 — 목도 서버처럼 code 없는 400', async () => {
+    const user = userEvent.setup()
+    renderPage(1)
+    await user.click(await screen.findByRole('button', { name: '계정 정지' }))
+    const dialog = screen.getByRole('dialog')
+    const reason = within(dialog).getByLabelText(/정지 사유/)
+
+    await user.click(reason)
+    await user.paste('욕설\0반복')
+    expect(within(dialog).getByText(/널 문자/)).toBeInTheDocument()
+    expect(reason).toHaveAttribute('aria-invalid', 'true')
+    expect(within(dialog).getByRole('button', { name: '정지하기' })).toBeDisabled()
+
+    const response = await fetch('/api/admin/users/1/suspend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: '욕설\0반복' }),
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).not.toHaveProperty('code')
+  })
+
+  it('처리 중에는 버튼을 disabled로 두지 않고(포커스 유지) 글자와 aria-busy로 알린다', async () => {
+    const user = userEvent.setup()
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.post('*/api/admin/users/3/unsuspend', async () => {
+        await held
+        return undefined
+      }),
+    )
+    renderPage(3)
+    await user.click(await screen.findByRole('button', { name: '정지 해제' }))
+
+    const busy = await screen.findByRole('button', { name: '해제하는 중…' })
+    expect(busy).toHaveAttribute('aria-busy', 'true')
+    expect(busy).toHaveAttribute('aria-disabled', 'true')
+    expect(busy).toBeEnabled()
+    expect(busy).toHaveFocus()
+    // 강제 탈퇴도 처리 중 disabled가 아니다. 확인 창이 닫히며 돌아오는 포커스를 받아야 한다
+    const withdraw = screen.getByRole('button', { name: '강제 탈퇴' })
+    expect(withdraw).toBeEnabled()
+    expect(withdraw).toHaveAttribute('aria-disabled', 'true')
+
+    release()
+    expect(await screen.findByRole('button', { name: '계정 정지' })).toHaveFocus()
+  })
+
+  it('강제 탈퇴 처리 중에는 버튼이 포커스를 받고, 다시 눌러도 확인 창을 열지 않는다', async () => {
+    const user = userEvent.setup()
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.delete('*/api/admin/users/3', async () => {
+        await held
+        return HttpResponse.json(
+          { status: 409, title: 'Conflict', code: 'USER_NOT_SUSPENDED', detail: '거절' },
+          { status: 409 },
+        )
+      }),
+    )
+    renderPage(3)
+    await screen.findByText('총 92개')
+    await user.click(screen.getByRole('button', { name: '강제 탈퇴' }))
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: '강제 탈퇴' }),
+    )
+
+    // 창이 닫히며 포커스가 트리거로 돌아온다. disabled면 받지 못하고 body로 떨어진다
+    const busy = await screen.findByRole('button', { name: '탈퇴시키는 중…' })
+    expect(busy).toBeEnabled()
+    await waitFor(() => expect(busy).toHaveFocus())
+    await user.click(busy)
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+
+    release()
+    expect(await screen.findByRole('alert')).toHaveTextContent('거절')
+  })
+
+  it('제출 카드가 다른 페이지에 있어도, 다시 받은 제출 1페이지가 401이면 세션을 버린다', async () => {
+    const user = userEvent.setup()
+    let firstPageFails = false
+    server.use(
+      http.get('*/api/admin/users/1/submissions', ({ request }) =>
+        firstPageFails && new URL(request.url).searchParams.get('page') === '0'
+          ? unauthorized()
+          : undefined,
+      ),
+    )
+    const { client } = renderPage(1)
+    const submissions = await screen.findByRole('region', { name: '제출 목록' })
+    await user.click(await within(submissions).findByRole('button', { name: '2페이지' }))
+    await within(submissions).findByText('#1144')
+
+    firstPageFails = true
+    await user.click(screen.getByRole('button', { name: '계정 정지' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '정지하기' }))
+    await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull(), { timeout: 3000 })
+  })
+
   it('정지를 풀면 정상으로 돌아온다', async () => {
     const user = userEvent.setup()
     renderPage(8)
