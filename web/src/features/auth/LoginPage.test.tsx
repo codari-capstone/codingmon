@@ -251,6 +251,24 @@ describe('로그인 화면', () => {
     expect(alert.textContent).toBe(RATE_LIMIT_MESSAGE)
   })
 
+  it('정지된 계정(403 ACCOUNT_SUSPENDED)이면 정지 문구를 보여 준다 (ADM-16)', async () => {
+    server.use(
+      http.post('*/api/auth/login', () =>
+        HttpResponse.json(
+          { status: 403, title: 'Forbidden', code: 'ACCOUNT_SUSPENDED' },
+          { status: 403 },
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+    renderLogin()
+
+    await fillAndSubmit(user)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toBe('계정이 정지되었습니다')
+  })
+
   it('비밀번호 칸에서 Enter로 제출된다', async () => {
     const user = userEvent.setup()
     renderLogin({ from: '/submissions' })

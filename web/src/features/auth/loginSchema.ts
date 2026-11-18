@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { toUserMessage } from '@/constants/errors'
 import { EMAIL_PATTERN, INVALID_EMAIL_MESSAGE } from './accountRules'
+import { problemCode } from './problemCode'
 
 /**
  * 로그인 입력 검사. 형식만 본다.
@@ -33,10 +34,13 @@ export const loginSchema = z.object({
 
 export type LoginForm = z.infer<typeof loginSchema>
 
+/** 정지된 계정의 로그인 문구 (ADM-16). 이메일 로그인과 GitHub 로그인이 같이 쓴다. */
+export const ACCOUNT_SUSPENDED_MESSAGE = '계정이 정지되었습니다'
+
 /**
  * 로그인 실패 문구. 문구는 docs/feature-spec.md의 COM-07이 정했다.
  *
- * 401·429 문구는 여기서 직접 정한다. toUserMessage는 title·description·retryable 객체를
+ * 401·429·403(정지, ADM-16) 문구는 여기서 직접 정한다. toUserMessage는 title·description·retryable 객체를
  * 돌려주고 COM-07은 폼 아래 한 문장만 지정하므로, 이 파일은 그중 description만 쓴다.
  * 401·429 외의 오류는 toUserMessage로 넘겨 그 쪽 일반 문구를 쓴다.
  */
@@ -51,6 +55,10 @@ export function loginErrorMessage(error: unknown): string {
   }
   if (status === 429) {
     return '로그인 시도가 너무 많아요. 5분 후 다시 시도해 주세요'
+  }
+  // 비밀번호까지 맞아야 오는 응답이라(계약) COM-07의 단일 문구 규칙에 걸리지 않는다
+  if (status === 403 && problemCode(error) === 'ACCOUNT_SUSPENDED') {
+    return ACCOUNT_SUSPENDED_MESSAGE
   }
 
   return toUserMessage(error).description

@@ -5,6 +5,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Button } from '@/components/ui/button'
 import { gitHubSignUp, resumeGitHubSession, takeGitHubReturnPath } from './githubQuery'
+import { ACCOUNT_SUSPENDED_MESSAGE } from './loginSchema'
 import { NicknameField } from './NicknameField'
 import { problemCode, problemMessage } from './problemCode'
 import { safeRedirect } from './safeRedirect'
@@ -31,9 +32,10 @@ const GITHUB_SIGNED_UP = '가입이 완료됐어요. GitHub로 다시 로그인�
 /**
  * GitHub 로그인이 돌아오는 자리 (COM-02).
  *
- * 계약이 정한 주소가 `/login/github?result=...` 하나라서 세 갈래를 한 화면에서 가른다.
+ * 계약이 정한 주소가 `/login/github?result=...` 하나라서 네 갈래를 한 화면에서 가른다.
  * - `success`: 쿠키만 심겨 왔다. 갱신으로 토큰을 받아 세션을 들이고 원래 보던 화면으로
  * - `signup`: 처음이다. 닉네임만 받아 가입하고 로그인 화면으로(가입은 로그인시키지 않는다)
+ * - `suspended`: 정지된 계정이다(ADM-16). 로그인 화면에 정지 문구를 싣는다
  * - 그 밖: 전부 실패다. 계약이 `error`로 묶어 보내고, 주소를 직접 친 경우도 여기로 온다
  */
 export function Component() {
@@ -58,8 +60,7 @@ export function Component() {
   const from = useRef('/problems')
 
   const toLogin = useCallback(
-    (error?: unknown) => {
-      const message = error === undefined ? GITHUB_FAILED : problemMessage(error)
+    (message: string = GITHUB_FAILED) => {
       // 원래 가려던 화면을 그대로 싣는다. 안 실으면 /problems/42에서 시작한 사람이 로그인에
       // 성공해도 문제 목록으로 간다 (값 검사는 로그인 화면이 다시 한다).
       void navigate('/login', { replace: true, state: { error: message, from: from.current } })
@@ -92,7 +93,8 @@ export function Component() {
       if (failed === 'NICKNAME_TAKEN') nickname.release()
       // 증명서가 죽었거나(30분) 그 사이 같은 GitHub 계정으로 가입됐다. 둘 다 닉네임을 고쳐도
       // 풀리지 않고 GitHub 로그인부터 다시 해야 한다 — 서버 문구도 그렇게 적혀 있어 그대로 싣는다.
-      if (failed === 'VERIFICATION_EXPIRED' || failed === 'ALREADY_REGISTERED') toLogin(error)
+      if (failed === 'VERIFICATION_EXPIRED' || failed === 'ALREADY_REGISTERED')
+        toLogin(problemMessage(error))
     },
   })
 
@@ -109,6 +111,7 @@ export function Component() {
     started.current = true
     from.current = safeRedirect(takeGitHubReturnPath())
     if (result === 'success') resume.mutate()
+    else if (result === 'suspended') toLogin(ACCOUNT_SUSPENDED_MESSAGE)
     else if (result !== 'signup') toLogin()
   }, [result, resume, toLogin])
 
