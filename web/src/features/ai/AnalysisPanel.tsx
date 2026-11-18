@@ -16,16 +16,33 @@ import { analysisQuery, useRequestAnalysis } from './analysisQuery'
 import { suspectLines } from './countLines'
 import { HintSteps } from './HintSteps'
 
-/** [실행 결과]/[코드 분석] 근거 하나 (AI-03). 모델이 만든 문장이라 글자 그대로 보여 준다(계약). */
-function Item({ badge, text }: { badge: '실행 결과' | '코드 분석'; text: string }) {
+/**
+ * 근거 한 칸 (AI-03). [실행 결과]와 [코드 분석]이 각각 한 칸이고, 칸 안에 문장을 나열한다.
+ * 문장마다 칸을 나누면 몇 개 안 되는 근거가 화면을 길게 차지한다. 모델이 만든 문장이라 글자 그대로 보여 준다(계약).
+ */
+function Evidence({ kind, items }: { kind: '실행 결과' | '코드 분석'; items: string[] }) {
+  if (items.length === 0) return null
   return (
-    <li className="flex flex-wrap items-start gap-3 rounded-[14px] border px-4 py-3.5">
+    <section
+      aria-label={kind}
+      className="flex flex-col items-start gap-2.5 rounded-[14px] border px-4 py-3.5"
+    >
       {/* 사실(실행 결과)과 짐작(코드 분석)을 색으로도 가른다. 글자가 뜻을 전한다 */}
-      <Badge tone={badge === '실행 결과' ? 'info' : 'brand'}>{badge}</Badge>
-      <p className="text-body-foreground min-w-0 flex-1 text-[15px] leading-[1.6] whitespace-pre-wrap [overflow-wrap:anywhere]">
-        {text}
-      </p>
-    </li>
+      <Badge tone={kind === '실행 결과' ? 'info' : 'brand'}>{kind}</Badge>
+      <ul className="m-0 flex w-full list-none flex-col gap-2 p-0">
+        {items.map((text, index) => (
+          <li
+            key={index}
+            className="text-body-foreground flex gap-2 text-[15px] leading-[1.6] whitespace-pre-wrap [overflow-wrap:anywhere]"
+          >
+            <span aria-hidden="true" className="text-muted-foreground">
+              •
+            </span>
+            <span className="min-w-0 flex-1">{text}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -58,14 +75,8 @@ function Explanation({
       {analysis.facts.length + analysis.guesses.length > 0 ? (
         <div className="flex flex-col gap-2.5">
           <h3 className="text-muted-foreground text-sm font-semibold">근거</h3>
-          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-            {analysis.facts.map((text, index) => (
-              <Item key={`fact-${index}`} badge="실행 결과" text={text} />
-            ))}
-            {analysis.guesses.map((text, index) => (
-              <Item key={`guess-${index}`} badge="코드 분석" text={text} />
-            ))}
-          </ul>
+          <Evidence kind="실행 결과" items={analysis.facts} />
+          <Evidence kind="코드 분석" items={analysis.guesses} />
         </div>
       ) : null}
     </>

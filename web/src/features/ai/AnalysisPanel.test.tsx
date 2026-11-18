@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -514,15 +514,33 @@ describe('AnalysisPanel', () => {
   })
 
   describe('원인 설명 (AI-03)', () => {
-    it('항목을 [실행 결과]/[코드 분석] 배지로 나누고 의심되는 줄을 보여 준다', async () => {
-      stored(analysis({ facts: ['사실 하나'], guesses: ['짐작 하나'] }))
+    it('근거를 [실행 결과] 칸 하나, [코드 분석] 칸 하나에 모으고 의심되는 줄을 보여 준다', async () => {
+      stored(analysis({ facts: ['사실 하나', '사실 둘'], guesses: ['짐작 하나', '짐작 둘'] }))
       renderResult(WRONG)
 
-      const fact = (await screen.findByText('사실 하나')).closest('li')
-      const guess = screen.getByText('짐작 하나').closest('li')
-      expect(fact).toHaveTextContent('실행 결과')
-      expect(guess).toHaveTextContent('코드 분석')
+      await screen.findByText('사실 하나')
+      // 문장마다 칸을 나누지 않는다. 종류마다 한 칸이다
+      const facts = screen.getByRole('region', { name: '실행 결과' })
+      const guesses = screen.getByRole('region', { name: '코드 분석' })
+      expect(
+        within(facts)
+          .getAllByRole('listitem')
+          .map((li) => li.textContent),
+      ).toEqual(['•사실 하나', '•사실 둘'])
+      expect(
+        within(guesses)
+          .getAllByRole('listitem')
+          .map((li) => li.textContent),
+      ).toEqual(['•짐작 하나', '•짐작 둘'])
       expect(screen.getByText(/의심되는 줄/)).toHaveTextContent(/^의심되는 줄 · 2번$/)
+    })
+
+    it('한쪽 근거가 없으면 그 칸은 그리지 않는다', async () => {
+      stored(analysis({ facts: ['사실 하나'], guesses: [] }))
+      renderResult(WRONG)
+
+      await screen.findByText('사실 하나')
+      expect(screen.queryByRole('region', { name: '코드 분석' })).not.toBeInTheDocument()
     })
 
     /** 계약: 서버가 범위를 검사하기(#79) 전에 저장된 분석이 남아 있다. 제출 코드는 4줄이다. */

@@ -8,8 +8,11 @@ import { Stepper } from '@/components/ui/stepper'
 import { problemMessage } from '@/features/auth/problemCode'
 import { useRevealHint } from './analysisQuery'
 
-/** 단계 이름 (AI_FEATURES 4절). 순서가 곧 단계다. */
-const HINT_STEPS = ['관찰', '방향', '원리'] as const
+/**
+ * 단계 이름. 순서가 곧 단계다. 내용은 관찰 → 방향 → 원리지만(AI_FEATURES 4절), 처음 보는 사람이
+ * 순서를 바로 알도록 화면에는 번호로 적는다
+ */
+const HINT_STEPS = ['1단계', '2단계', '3단계'] as const
 
 /**
  * 단계별 힌트 (AI-04)와 다시 제출하러 가는 길.
@@ -63,7 +66,7 @@ export function HintSteps({
             const level = index + 1
             return (
               <li key={level}>
-                <HintBox step={`힌트 ${level} · ${HINT_STEPS[index]}`}>
+                <HintBox step={`${HINT_STEPS[index]} 힌트`}>
                   <p
                     ref={level === justOpened ? openedRef : undefined}
                     tabIndex={-1}
@@ -89,7 +92,7 @@ export function HintSteps({
           aria-describedby="hint-order"
           onClick={() => reveal.mutate(next, { onSuccess: () => setJustOpened(next) })}
         >
-          {`${next}단계 ${HINT_STEPS[next - 1]} 보기`}
+          {`${HINT_STEPS[next - 1]} 힌트 보기`}
         </Button>
       ) : null}
 
