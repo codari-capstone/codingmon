@@ -53,6 +53,7 @@ function renderCallback(result: string | null, from?: string) {
       { path: '/login', element: <h1>로그인 도착</h1> },
       { path: '/problems', element: <h1>문제 목록 도착</h1> },
       { path: '/submissions', element: <h1>제출 기록 도착</h1> },
+      { path: '/welcome', element: <h1>처음 안내 도착</h1> },
     ],
     { initialEntries: [path] },
   )
@@ -280,6 +281,22 @@ describe('GitHubCallbackPage (COM-02)', () => {
       expect(router.state.location.pathname).toBe('/submissions')
       // 헤더가 바로 사용자 메뉴로 바뀌어야 한다 — /api/users/me 왕복을 한 번 더 기다리지 않는다.
       await waitFor(() => expect(client.getQueryData(['me'])).toEqual(mockAccounts[0]!.user))
+    })
+
+    it('처음 안내를 보지 않았으면 기억해 둔 화면 대신 처음 안내로 간다 (WELCOME-01)', async () => {
+      await visitGitHub()
+      await gitHubSignUp('깃허브사람')
+      await visitGitHub()
+      server.use(
+        http.get('*/api/users/me', () =>
+          HttpResponse.json({ ...mockAccounts[0]!.user, welcomeSeen: false }),
+        ),
+      )
+
+      const { router } = renderCallback('success', '/submissions')
+
+      expect(await screen.findByRole('heading', { name: '처음 안내 도착' })).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe('/welcome')
     })
 
     it('진행 중에는 확인 중임을 알린다', async () => {

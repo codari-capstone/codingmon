@@ -1606,6 +1606,15 @@ export const handlers: RequestHandler[] = [
     return HttpResponse.json(account.user)
   }),
 
+  /** 처음 안내를 봤음 (WELCOME-01). 이미 봤어도 204다(계약) */
+  http.post('*/api/users/me/welcome-seen', ({ request }) => {
+    const id = userIdFromToken(bearer(request))
+    const account = mockAccounts.find((item) => item.user.id === id)
+    if (!account) return unauthorized()
+    account.user = { ...account.user, welcomeSeen: true }
+    return new HttpResponse(null, { status: 204 })
+  }),
+
   /**
    * 비밀번호 변경 (MY-03). 검사 순서는 계약과 같다:
    * PASSWORD_NOT_SET → (잠금은 목에 없음) → WRONG_PASSWORD → INVALID_PASSWORD → PASSWORD_MISMATCH → SAME_PASSWORD.
