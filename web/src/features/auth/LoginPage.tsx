@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, Input } from '@/components/ui/input'
 import { BLANK_PIXEL, cn } from '@/lib/utils'
+import { afterLoginPath } from './afterLoginPath'
 import { AUTH_FOOT, AUTH_LINK } from './authCard'
 import { loginRequest } from './authQuery'
 import { startGitHubLogin } from './githubQuery'
@@ -22,7 +23,7 @@ export function Component() {
   const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { isAuthenticated, isLoading } = useAuth()
+  const { user, isLoading } = useAuth()
 
   const state = location.state as { from?: unknown; notice?: unknown; error?: unknown } | null
   const target = safeRedirect(state?.from)
@@ -46,7 +47,7 @@ export function Component() {
       // 아래의 <Navigate> 분기도 setQueryData로 isAuthenticated가 바뀌면 같은 곳으로 보내므로
       // 이 호출이 없어도 도착한다. 그래도 두는 이유는 재렌더에 기대지 않고 바로 이동하기 위해서다.
       // replace를 빼면 /login이 기록에 남는다. LoginPage.test.tsx가 PUSH 여부로 이를 지킨다.
-      void navigate(target, { replace: true })
+      void navigate(afterLoginPath(user, target), { replace: true })
     },
   })
 
@@ -64,7 +65,7 @@ export function Component() {
 
   // 이미 로그인했으면 폼을 보여 주지 않는다. 로그인한 사람이 주소로 직접 들어오거나
   // 이 화면이 열려 있는 동안 세션이 생긴 경우다.
-  if (isAuthenticated) return <Navigate to={target} replace />
+  if (user) return <Navigate to={afterLoginPath(user, target)} replace />
 
   return (
     // 상단 바는 높이 64px에 아래 테두리 1px이 더해진다. 빼지 않으면 늘 1px 넘쳐 스크롤이 생긴다

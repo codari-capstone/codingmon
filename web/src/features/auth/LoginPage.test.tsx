@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseParams } from '@/features/problems/problemListParams'
 import { problemListQuery } from '@/features/problems/problemsQuery'
 import { problems } from '@/mocks/fixtures/problems'
-import { mockAccessToken } from '@/mocks/fixtures/users'
+import { mockAccessToken, mockAccounts } from '@/mocks/fixtures/users'
 import { server } from '@/mocks/server'
 import { logoutRequest, ME_QUERY_KEY } from './authQuery'
 import { startGitHubLogin } from './githubQuery'
@@ -50,6 +50,7 @@ function renderLogin(state?: unknown, seed?: (client: QueryClient) => void) {
       { path: '/login', Component: LoginPage },
       { path: '/problems', element: <h1>문제 목록 도착</h1> },
       { path: '/submissions', element: <h1>제출 기록 도착</h1> },
+      { path: '/welcome', element: <h1>처음 안내 도착</h1> },
       // 링크가 state를 싣고 가는지 보려면 도착지가 있어야 한다. 실제 화면은 다른 파일에서 본다.
       { path: '/signup', element: <h1>회원가입 도착</h1> },
       { path: '/password-reset', element: <h1>비밀번호 찾기 도착</h1> },
@@ -157,6 +158,35 @@ describe('로그인 화면', () => {
     await screen.findByRole('heading', { name: '제출 기록 도착' })
     expect(router.state.historyAction).toBe('REPLACE')
     expect(seen).not.toContain('PUSH:/submissions')
+  })
+
+  it('처음 안내를 보지 않았으면 from 대신 처음 안내로 간다 (WELCOME-01)', async () => {
+    const user = userEvent.setup()
+    const { router } = renderLogin({ from: '/submissions' })
+    // onSuccess의 이동과 <Navigate> 분기 중 어느 쪽이 from으로 가도 잡히게, 지나간 곳을 모두 적는다
+    const seen: string[] = []
+    router.subscribe((s) => seen.push(s.location.pathname))
+    // 폼이 뜬 뒤에 바꾼다. 먼저 바꾸면 첫 세션 조회가 이 사용자를 받아 폼 없이 이동한다
+    await waitForLoginForm()
+    server.use(
+      http.get('*/api/users/me', () =>
+        HttpResponse.json({ ...mockAccounts[0]!.user, welcomeSeen: false }),
+      ),
+    )
+
+    await fillAndSubmit(user)
+
+    expect(await screen.findByRole('heading', { name: '처음 안내 도착' })).toBeInTheDocument()
+    expect(router.state.historyAction).toBe('REPLACE')
+    expect(seen).not.toContain('/submissions')
+  })
+
+  it('이미 로그인했어도 처음 안내를 보지 않았으면 처음 안내로 간다 (WELCOME-01)', async () => {
+    renderLogin({ from: '/submissions' }, (c) =>
+      c.setQueryData(ME_QUERY_KEY, { ...mockAccounts[0]!.user, welcomeSeen: false }),
+    )
+
+    expect(await screen.findByRole('heading', { name: '처음 안내 도착' })).toBeInTheDocument()
   })
 
   it('from이 //로 시작하면 무시하고 문제 목록으로 간다', async () => {

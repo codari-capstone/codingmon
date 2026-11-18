@@ -53,6 +53,12 @@ export const router = createBrowserRouter([
             children: [
               { path: 'problems/:id', lazy: () => import('@/features/solve/SolvePage') },
               {
+                // 처음 안내 (WELCOME-01). 카드가 옅은 바탕 위에 놓인다(디자인 Onboarding의 `cmx-subtle`)
+                path: 'welcome',
+                lazy: () => import('@/features/welcome/WelcomePage'),
+                handle: { pageTone: 'subtle' } satisfies PageHandle,
+              },
+              {
                 path: 'submissions',
                 lazy: () => import('@/features/history/SubmissionHistoryPage'),
               },

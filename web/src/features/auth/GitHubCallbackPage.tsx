@@ -4,6 +4,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router'
 
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Button } from '@/components/ui/button'
+import { afterLoginPath } from './afterLoginPath'
 import { gitHubSignUp, resumeGitHubSession, takeGitHubReturnPath } from './githubQuery'
 import { ACCOUNT_SUSPENDED_MESSAGE } from './loginSchema'
 import { NicknameField } from './NicknameField'
@@ -72,7 +73,7 @@ export function Component() {
     mutationFn: resumeGitHubSession,
     onSuccess: async (user) => {
       await adoptSession(queryClient, user)
-      void navigate(from.current, { replace: true })
+      void navigate(afterLoginPath(user, from.current), { replace: true })
     },
     // 성공이라고 돌아왔는데 세션이 없다. 이유를 말할 수 없으니 일반 문구다.
     onError: () => toLogin(),
