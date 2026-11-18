@@ -33,6 +33,7 @@ test('공개 화면은 제목과 canonical, 로그인이 필요한 화면은 noi
   await expect(page.locator('meta[name="robots"]')).toHaveCount(0)
   // 설명 태그는 하나다. 화면이 새로 붙이지 않고 정적 태그를 고친다
   await expect(page.locator('meta[name="description"]')).toHaveCount(1)
+  await expect(page.locator('title')).toHaveCount(1)
 
   // 로그인 화면으로 돌려보내져도 noindex가 아니라 로그인 화면의 head다
   await page.goto('/me')

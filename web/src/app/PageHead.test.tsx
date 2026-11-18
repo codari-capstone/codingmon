@@ -53,12 +53,14 @@ const description = () =>
   document.head.querySelector('meta[name="description"]')?.getAttribute('content')
 
 beforeEach(() => {
-  // index.html의 정적 설명 태그를 흉내 낸다. PageHead는 새로 붙이지 않고 이 태그를 고친다
-  document.head.querySelectorAll('meta[name="description"]').forEach((el) => el.remove())
+  // index.html의 정적 제목·설명 태그를 흉내 낸다. PageHead는 새로 붙이지 않고 이 태그를 고친다
+  document.head.querySelectorAll('title, meta[name="description"]').forEach((el) => el.remove())
+  const title = document.createElement('title')
+  title.textContent = DEFAULT_TITLE
   const meta = document.createElement('meta')
   meta.name = 'description'
   meta.content = DEFAULT_DESCRIPTION
-  document.head.append(meta)
+  document.head.append(title, meta)
 })
 
 describe('PageHead (#309)', () => {
@@ -74,7 +76,16 @@ describe('PageHead (#309)', () => {
     renderAt('/problems?difficulty=EASY')
     await waitFor(() => expect(document.title).toBe('문제 목록 | Codingmon'))
     expect(description()).toBe('문제 목록 설명')
+    // 정적 태그를 고칠 뿐 하나 더 붙이지 않는다(#326 리뷰)
+    expect(document.head.querySelectorAll('title')).toHaveLength(1)
     expect(document.head.querySelectorAll('meta[name="description"]')).toHaveLength(1)
+    expect(canonical()).toBe(`${SITE_URL}/problems`)
+  })
+
+  it('대소문자·끝 슬래시가 다른 주소도 canonical은 하나다', async () => {
+    // 라우터는 /Problems/도 같은 화면으로 연다. 변형마다 스스로를 정식이라 하지 않는다(#326 리뷰)
+    renderAt('/Problems/')
+    await waitFor(() => expect(document.title).toBe('문제 목록 | Codingmon'))
     expect(canonical()).toBe(`${SITE_URL}/problems`)
   })
 
@@ -101,5 +112,7 @@ describe('PageHead (#309)', () => {
   it('index.html의 정적 제목·설명이 기본값과 같다 — 미리보기 봇은 JS를 돌리지 않는다', () => {
     expect(indexHtml).toContain(`<title>${DEFAULT_TITLE}</title>`)
     expect(indexHtml).toContain(`content="${DEFAULT_DESCRIPTION}"`)
+    // 모든 주소에 같은 HTML이 나가므로 og:url을 박지 않는다. 박으면 공유가 모두 홈으로 간다(#326 리뷰)
+    expect(indexHtml).not.toContain('property="og:url"')
   })
 })
