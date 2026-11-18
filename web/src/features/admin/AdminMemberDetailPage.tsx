@@ -9,6 +9,7 @@ import { Alert } from '@/components/ui/alert'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Breadcrumb } from '@/components/ui/breadcrumb'
+import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import {
   Table,
@@ -110,6 +111,21 @@ export function Component() {
   return (
     <section className="flex flex-col gap-6">
       <Breadcrumb items={[{ label: '회원', href: '/admin/members' }, { label: user.nickname }]} />
+
+      {error ? (
+        // 받아 둔 값이 있는데 다시 받기가 실패했다. 정지·해제 직후라면 버튼이 예전 상태일 수 있다(신고 상세와 같은 처리)
+        <Alert
+          tone="warning"
+          title="최신 정보를 받지 못했어요"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void refetch()}>
+              다시 받기
+            </Button>
+          }
+        >
+          지금 보이는 정지 상태와 버튼이 바뀌었을 수 있어요.
+        </Alert>
+      ) : null}
 
       {suspendedAt !== null ? (
         // 화면에 처음부터 있는 상태라 알리지 않는다. 정지한 순간은 MemberActions가 알린다

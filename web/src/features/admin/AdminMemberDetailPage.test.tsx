@@ -7,7 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
-import { reportsSent, resetAdminUsers, resetReports } from '@/mocks/handlers'
+import type { AdminReportDetail } from '@/api/types'
+import { resetAdminUsers, resetReports } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 import { Component as AdminMemberDetailPage } from './AdminMemberDetailPage'
 
@@ -114,6 +115,49 @@ describe('AdminMemberDetailPage (ADM-15·16)', () => {
     expect(within(dialog).getByRole('button', { name: '정지하기' })).toBeDisabled()
   })
 
+  it('정지 창에서 실패한 뒤 닫으면 같은 오류를 창 밖에 다시 띄우지 않는다', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.post('*/api/admin/users/1/suspend', () =>
+        HttpResponse.json({ status: 500, title: 'Server Error' }, { status: 500 }),
+      ),
+    )
+    renderPage(1)
+    await user.click(await screen.findByRole('button', { name: '계정 정지' }))
+    const dialog = screen.getByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: '정지하기' }))
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: '취소' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('정지는 됐는데 상세를 다시 받지 못하면, 화면이 낡았을 수 있다고 알리고 다시 받을 길을 준다', async () => {
+    const user = userEvent.setup()
+    let failing = false
+    server.use(
+      http.get('*/api/admin/users/1', () =>
+        failing
+          ? HttpResponse.json({ status: 500, title: 'Server Error' }, { status: 500 })
+          : undefined,
+      ),
+    )
+    renderPage(1)
+    await user.click(await screen.findByRole('button', { name: '계정 정지' }))
+    failing = true
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '정지하기' }))
+
+    // retry: 1이라 오류 상태가 1초 뒤에 온다
+    expect(
+      await screen.findByText('최신 정보를 받지 못했어요', {}, { timeout: 3000 }),
+    ).toBeInTheDocument()
+    failing = false
+    await user.click(screen.getByRole('button', { name: '다시 받기' }))
+    expect(await screen.findByText('정지된 계정이에요')).toBeInTheDocument()
+    expect(screen.queryByText('최신 정보를 받지 못했어요')).not.toBeInTheDocument()
+  })
+
   it('정지를 풀면 정상으로 돌아온다', async () => {
     const user = userEvent.setup()
     renderPage(8)
@@ -140,8 +184,12 @@ describe('AdminMemberDetailPage (ADM-15·16)', () => {
 
     expect(await screen.findByRole('heading', { name: '회원 목록 화면' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/admin/members')
-    // 보낸 신고는 남고 신고자 칸만 빈다(계약)
-    expect(reportsSent()).toHaveLength(0)
+    // 보낸 신고는 남고 신고자 칸만 빈다(계약). 21번은 코딩왕(3)이 보낸 신고다(fixtures/reports)
+    const report = (await (await fetch('/api/admin/reports/21')).json()) as AdminReportDetail
+    expect(report).toMatchObject({ id: 21, reporterId: null, reporterNickname: null })
+    expect(await (await fetch('/api/admin/users/3')).json()).toMatchObject({
+      code: 'USER_NOT_FOUND',
+    })
   })
 
   it('강제 탈퇴가 거절되면 서버 문구를 보이고 상세를 다시 받는다', async () => {

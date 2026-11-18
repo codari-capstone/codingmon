@@ -98,6 +98,12 @@ export function MemberActions({
     },
   })
 
+  // 창 안에서 본 오류를 창을 닫은 뒤 버튼 아래에 다시 띄우지 않는다. 낭독기가 같은 오류를 두 번 읽는다
+  const closeSuspend = () => {
+    setSuspendOpen(false)
+    if (act.isError) act.reset()
+  }
+
   if (user.role === 'ADMIN') return null
 
   const suspendedAt = user.suspendedAt === null ? null : new Date(user.suspendedAt).getTime()
@@ -186,14 +192,14 @@ export function MemberActions({
         </p>
       ) : null}
       {/* 결과를 알리는 자리는 늘 둔다. 내용이 바뀔 때 생기면 화면 낭독기가 놓친다 */}
-      <p role="status" className="text-success-text text-sm empty:hidden">
+      <p role="status" className="text-success-text text-sm">
         {act.isSuccess && act.variables.kind !== 'withdraw' ? DONE[act.variables.kind] : ''}
       </p>
 
       <Modal
         open={suspendOpen}
         onClose={() => {
-          if (!act.isPending) setSuspendOpen(false)
+          if (!act.isPending) closeSuspend()
         }}
         title={`'${user.nickname}' 계정을 정지할까요?`}
         description="바로 로그인할 수 없고, 로그인 중인 기기도 로그아웃돼요. 정지하고 24시간이 지나면 강제 탈퇴할 수 있어요."
@@ -203,7 +209,7 @@ export function MemberActions({
               type="button"
               variant="secondary"
               disabled={act.isPending}
-              onClick={() => setSuspendOpen(false)}
+              onClick={closeSuspend}
             >
               취소
             </Button>
