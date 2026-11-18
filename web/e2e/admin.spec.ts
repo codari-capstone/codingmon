@@ -141,3 +141,17 @@ test('나란한 칸은 한 칸에만 오류·도움말이 있어도 입력칸이
   await page.locator('#constraintsMarkdown').waitFor()
   await expect.poll(() => offset('inputDescription', 'constraintsMarkdown')).toBeLessThan(1)
 })
+
+/**
+ * 관리자 회원 상세의 정지 해제 (ADM-16). 처리 중에 버튼을 disabled로 두면 Chrome이 포커스를 body로
+ * 옮긴다(focus fixup). jsdom은 이를 흉내 내지 않아 단위 테스트로는 잡을 수 없어 여기서 본다(#319 리뷰).
+ */
+test('정지 해제를 키보드로 누르면 포커스가 같은 버튼([계정 정지])에 남는다', async ({ page }) => {
+  await login(page, ADMIN)
+  await page.goto('/admin/members/8')
+
+  await page.getByRole('button', { name: '정지 해제' }).focus()
+  await page.keyboard.press('Enter')
+
+  await expect(page.getByRole('button', { name: '계정 정지' })).toBeFocused()
+})

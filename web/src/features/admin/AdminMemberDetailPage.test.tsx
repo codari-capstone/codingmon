@@ -158,6 +158,46 @@ describe('AdminMemberDetailPage (ADM-15·16)', () => {
     expect(screen.queryByText('최신 정보를 받지 못했어요')).not.toBeInTheDocument()
   })
 
+  it('서버 시계가 브라우저보다 빨라도 남은 시간은 24시간을 넘지 않는다', async () => {
+    server.use(
+      http.get('*/api/admin/users/8', () =>
+        HttpResponse.json({
+          id: 8,
+          nickname: '밤샘코더',
+          email: 'nightowl@example.com',
+          role: 'USER',
+          createdAt: null,
+          // 서버가 5초 앞서 정지 시각을 찍었다
+          suspendedAt: new Date(Date.now() + 5_000).toISOString(),
+          loginMethod: 'EMAIL',
+          suspensionReason: null,
+          aiQuota: { limit: 20, used: 0, remaining: 20, resetsAt: '2026-11-18T00:00:00Z' },
+        }),
+      ),
+    )
+    renderPage(8)
+    expect(
+      await screen.findByText(/정지 24시간 뒤에 할 수 있어요 · 24시간 남음/),
+    ).toBeInTheDocument()
+  })
+
+  // 버튼이 다른 요소로 갈아끼워지지 않는지 본다. 처리 중 disabled로 포커스를 잃는 것은 jsdom이 흉내 내지
+  // 않아 e2e(admin.spec.ts)가 본다
+  it('정지·해제 뒤에도 키보드 포커스가 같은 자리의 버튼에 남는다', async () => {
+    const user = userEvent.setup()
+    renderPage(1)
+    await user.click(await screen.findByRole('button', { name: '계정 정지' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '정지하기' }))
+
+    // 창이 닫히며 [계정 정지]로 돌아온 포커스가, 다시 받은 뒤 [정지 해제]가 된 같은 버튼에 남는다
+    const unsuspend = await screen.findByRole('button', { name: '정지 해제' })
+    expect(unsuspend).toHaveFocus()
+
+    await user.keyboard('{Enter}')
+    const suspend = await screen.findByRole('button', { name: '계정 정지' })
+    expect(suspend).toHaveFocus()
+  })
+
   it('정지를 풀면 정상으로 돌아온다', async () => {
     const user = userEvent.setup()
     renderPage(8)

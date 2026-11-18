@@ -117,72 +117,71 @@ export function MemberActions({
       ? '정지하면 바로 로그인할 수 없고, 로그인 중인 기기도 로그아웃돼요.'
       : canWithdraw
         ? '강제 탈퇴는 되돌릴 수 없어요.'
-        : `강제 탈퇴는 정지 24시간 뒤에 할 수 있어요 · ${Math.ceil(waitMs / 3_600_000)}시간 남음`
+        : // 서버 시계(suspendedAt)가 브라우저보다 빠르면 waitMs가 24시간을 조금 넘는다. 올림해도 24를 넘기지 않는다
+          `강제 탈퇴는 정지 24시간 뒤에 할 수 있어요 · ${Math.min(24, Math.ceil(waitMs / 3_600_000))}시간 남음`
 
   return (
     <div className="flex flex-col items-start gap-2 sm:items-end">
       <div className="flex flex-wrap gap-2">
-        {suspendedAt === null ? (
-          <Button
-            type="button"
-            variant="danger"
-            disabled={act.isPending}
-            onClick={() => {
+        {/*
+          정지와 해제는 한 버튼이다. 둘을 따로 그리면 다시 받은 뒤 다른 요소로 갈아끼워져 포커스가 body로
+          떨어진다. 처리 중에도 disabled로 두지 않는다 — 브라우저가 포커스를 빼앗는다. 대신 누름을 무시한다
+        */}
+        <Button
+          type="button"
+          variant={suspendedAt === null ? 'danger' : 'secondary'}
+          aria-disabled={act.isPending || undefined}
+          onClick={() => {
+            if (act.isPending) return
+            if (suspendedAt === null) {
               act.reset()
               setSuspendOpen(true)
-            }}
-          >
-            계정 정지
-          </Button>
-        ) : (
-          <>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={act.isPending}
-              onClick={() => act.mutate({ kind: 'unsuspend' })}
-            >
-              정지 해제
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button type="button" variant="danger" disabled={!canWithdraw || act.isPending}>
+            } else {
+              act.mutate({ kind: 'unsuspend' })
+            }
+          }}
+        >
+          {suspendedAt === null ? '계정 정지' : '정지 해제'}
+        </Button>
+        {suspendedAt !== null ? (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button type="button" variant="danger" disabled={!canWithdraw || act.isPending}>
+                강제 탈퇴
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  &apos;{user.nickname}&apos; 계정을 강제 탈퇴할까요?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  해당 회원의 모든 정보가 지워집니다. 회원 탈퇴와 똑같이 계정과 기록이 모두 지워지고
+                  되돌릴 수 없어요.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <dl className="bg-muted m-0 grid grid-cols-[1fr_auto] gap-y-1 rounded-md px-4 py-3 text-sm">
+                <dt className="text-muted-foreground">지워질 제출</dt>
+                <dd className="m-0 font-semibold tabular-nums">{submissionCount ?? '–'}개</dd>
+                <dt className="text-muted-foreground">지워질 푼 문제</dt>
+                <dd className="m-0 font-semibold tabular-nums">{solvedCount ?? '–'}개</dd>
+              </dl>
+              {/* 회원별 신고 수를 주는 API가 없어 수는 적지 않는다 */}
+              <p className="text-muted-foreground text-sm">
+                이 회원이 보낸 신고는 남고, 신고자는 &apos;탈퇴한 회원&apos;으로 바뀌어요.
+              </p>
+              <AlertDialogFooter>
+                <AlertDialogCancel>취소</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="danger"
+                  onClick={() => act.mutate({ kind: 'withdraw' })}
+                >
                   강제 탈퇴
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    &apos;{user.nickname}&apos; 계정을 강제 탈퇴할까요?
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    해당 회원의 모든 정보가 지워집니다. 회원 탈퇴와 똑같이 계정과 기록이 모두
-                    지워지고 되돌릴 수 없어요.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <dl className="bg-muted m-0 grid grid-cols-[1fr_auto] gap-y-1 rounded-md px-4 py-3 text-sm">
-                  <dt className="text-muted-foreground">지워질 제출</dt>
-                  <dd className="m-0 font-semibold tabular-nums">{submissionCount ?? '–'}개</dd>
-                  <dt className="text-muted-foreground">지워질 푼 문제</dt>
-                  <dd className="m-0 font-semibold tabular-nums">{solvedCount ?? '–'}개</dd>
-                </dl>
-                {/* 회원별 신고 수를 주는 API가 없어 수는 적지 않는다 */}
-                <p className="text-muted-foreground text-sm">
-                  이 회원이 보낸 신고는 남고, 신고자는 &apos;탈퇴한 회원&apos;으로 바뀌어요.
-                </p>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>취소</AlertDialogCancel>
-                  <AlertDialogAction
-                    variant="danger"
-                    onClick={() => act.mutate({ kind: 'withdraw' })}
-                  >
-                    강제 탈퇴
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </>
-        )}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        ) : null}
       </div>
       <span className="text-muted-foreground text-[13px]">{hint}</span>
 
