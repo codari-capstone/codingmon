@@ -94,6 +94,16 @@ describe('loginErrorMessage', () => {
     )
   })
 
+  it('403 ACCOUNT_SUSPENDED면 정지 문구를 준다', () => {
+    expect(loginErrorMessage({ status: 403, code: 'ACCOUNT_SUSPENDED' })).toBe(
+      '계정이 정지되었습니다',
+    )
+  })
+
+  it('code 없는 403은 정지 문구로 보지 않는다', () => {
+    expect(loginErrorMessage({ status: 403 })).not.toBe('계정이 정지되었습니다')
+  })
+
   it('그 밖의 오류는 일반 문구로 떨어진다', () => {
     const message = loginErrorMessage({ status: 500 })
 
