@@ -8,6 +8,12 @@ export interface PageHandle {
   pageTone?: 'subtle'
   /** 본문을 페이지 폭에 가두지 않는다. 남색 무대가 좌우 끝까지 가는 화면(로그인·랜딩)이 쓴다 */
   bleed?: true
+  /** 탭 제목. `문제 목록`이면 `문제 목록 | Codingmon`이 된다(PageHead) */
+  title?: string
+  /** 검색 결과에 보일 설명. 없으면 사이트 공통 설명 */
+  description?: string
+  /** 검색에 내보내지 않는다. 아래 화면 모두에 걸린다 */
+  noindex?: true
 }
 
 /**

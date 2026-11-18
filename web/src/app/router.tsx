@@ -20,84 +20,117 @@ export const router = createBrowserRouter([
         Component: RootLayout,
         children: [
           // 히어로 남색 무대가 좌우 끝까지 간다 (#244)
+          // 제목이 없으면 사이트 기본 제목이다(PageHead)
           {
             index: true,
             lazy: () => import('@/features/landing/LandingPage'),
             handle: { bleed: true } satisfies PageHandle,
           },
           // 필터는 화면 안에 둔다. 제목·검색칸이 필터와 표 위 전체 폭에 걸친다 (#235)
-          { path: 'problems', lazy: () => import('@/features/problems/ProblemListPage') },
+          {
+            path: 'problems',
+            lazy: () => import('@/features/problems/ProblemListPage'),
+            handle: {
+              title: '문제 목록',
+              description:
+                'Python·C++로 풀 수 있는 코딩 문제 목록이에요. 난이도와 개념으로 골라 풀고, 틀리면 AI가 이유를 짚어 줘요.',
+            } satisfies PageHandle,
+          },
           // 왼쪽 남색 패널이 좌우 끝까지 간다 (#241)
           {
             path: 'login',
             lazy: () => import('@/features/auth/LoginPage'),
-            handle: { bleed: true } satisfies PageHandle,
+            handle: { bleed: true, title: '로그인' } satisfies PageHandle,
           },
           // GitHub 로그인이 돌아오는 자리 (COM-02). 주소는 계약이 정했다.
-          { path: 'login/github', lazy: () => import('@/features/auth/GitHubCallbackPage') },
+          {
+            path: 'login/github',
+            lazy: () => import('@/features/auth/GitHubCallbackPage'),
+            handle: { title: 'GitHub 로그인', noindex: true } satisfies PageHandle,
+          },
           {
             path: 'signup',
             lazy: () => import('@/features/auth/SignupPage'),
-            handle: { pageTone: 'subtle' } satisfies PageHandle,
+            handle: { pageTone: 'subtle', title: '회원가입' } satisfies PageHandle,
           },
           {
             path: 'password-reset',
             lazy: () => import('@/features/auth/PasswordResetPage'),
-            handle: { pageTone: 'subtle' } satisfies PageHandle,
+            handle: { pageTone: 'subtle', title: '비밀번호 찾기' } satisfies PageHandle,
           },
-          { path: 'forbidden', lazy: () => import('@/app/ForbiddenPage') },
+          {
+            path: 'forbidden',
+            lazy: () => import('@/app/ForbiddenPage'),
+            handle: { title: '권한이 없어요', noindex: true } satisfies PageHandle,
+          },
           {
             // 로그인이 필요한 화면들 (COM-05). 가드는 막거나 통과시킬 뿐 AppShell을 만들지 않으므로,
             // RootLayout 밖의 형제로 두면 헤더가 없어진다. 그래서 RootLayout의 자식으로 둔다.
+            // 검색에는 내보내지 않는다. 아래 화면이 모두 받는다(#309)
             Component: RequireAuth,
+            handle: { noindex: true } satisfies PageHandle,
             children: [
-              { path: 'problems/:id', lazy: () => import('@/features/solve/SolvePage') },
+              {
+                path: 'problems/:id',
+                lazy: () => import('@/features/solve/SolvePage'),
+                handle: { title: '문제 풀이' } satisfies PageHandle,
+              },
               {
                 // 처음 안내 (WELCOME-01). 카드가 옅은 바탕 위에 놓인다(디자인 Onboarding의 `cmx-subtle`)
                 path: 'welcome',
                 lazy: () => import('@/features/welcome/WelcomePage'),
-                handle: { pageTone: 'subtle' } satisfies PageHandle,
+                handle: { pageTone: 'subtle', title: '처음 안내' } satisfies PageHandle,
               },
               {
                 path: 'submissions',
                 lazy: () => import('@/features/history/SubmissionHistoryPage'),
+                handle: { title: '제출 기록' } satisfies PageHandle,
               },
               {
                 // 'submissions/:id'와 겹치지 않는다 — 구간 수가 다르다.
                 path: 'submissions/problems/:problemId',
                 lazy: () => import('@/features/history/ProblemSubmissionsPage'),
+                handle: { title: '문제별 제출 기록' } satisfies PageHandle,
               },
               {
                 path: 'submissions/:id',
                 lazy: () => import('@/features/result/SubmissionResultPage'),
                 // 시안 ResultWrong·ResultAccepted도 옅은 바탕 위의 카드다(#275)
-                handle: { pageTone: 'subtle' } satisfies PageHandle,
+                handle: { pageTone: 'subtle', title: '채점 결과' } satisfies PageHandle,
               },
               {
                 path: 'me',
                 lazy: () => import('@/features/mypage/MyPage'),
                 // 카드가 옅은 바탕 위에 놓인다(디자인 MyPage의 `cmx-subtle`). AppShell이 읽는다
-                handle: { pageTone: 'subtle' } satisfies PageHandle,
+                handle: { pageTone: 'subtle', title: '마이페이지' } satisfies PageHandle,
               },
               // 마이페이지 메뉴의 나머지 화면들(MyNav). 같은 옅은 바탕이다
               {
                 path: 'me/account',
                 lazy: () => import('@/features/mypage/MyAccountPage'),
-                handle: { pageTone: 'subtle' } satisfies PageHandle,
+                handle: { pageTone: 'subtle', title: '계정 설정' } satisfies PageHandle,
               },
               {
                 path: 'me/display',
                 lazy: () => import('@/features/mypage/MyDisplayPage'),
-                handle: { pageTone: 'subtle' } satisfies PageHandle,
+                handle: { pageTone: 'subtle', title: '화면 설정' } satisfies PageHandle,
               },
               {
                 path: 'me/withdraw',
                 lazy: () => import('@/features/mypage/MyWithdrawPage'),
-                handle: { pageTone: 'subtle' } satisfies PageHandle,
+                handle: { pageTone: 'subtle', title: '회원 탈퇴' } satisfies PageHandle,
               },
-              { path: 'me/report', lazy: () => import('@/features/report/ReportPage') },
+              {
+                path: 'me/report',
+                lazy: () => import('@/features/report/ReportPage'),
+                handle: { title: '학습 리포트' } satisfies PageHandle,
+              },
               // 리포트와 내 학습 탭(LearnNav)을 같이 쓰는 화면이라 바탕도 같게 둔다
-              { path: 'me/badges', lazy: () => import('@/features/badges/MyBadgesPage') },
+              {
+                path: 'me/badges',
+                lazy: () => import('@/features/badges/MyBadgesPage'),
+                handle: { title: '배지' } satisfies PageHandle,
+              },
               {
                 // RequireAdmin은 역할만 본다. 비로그인이 403을 보지 않도록 RequireAuth 안에 둔다.
                 Component: RequireAdmin,
@@ -107,45 +140,62 @@ export const router = createBrowserRouter([
                     // 둘 이유가 없고, AppHeader의 /admin 링크도 그대로 쓴다.
                     path: 'admin',
                     children: [
-                      { index: true, lazy: () => import('@/features/admin/AdminProblemListPage') },
+                      {
+                        index: true,
+                        lazy: () => import('@/features/admin/AdminProblemListPage'),
+                        handle: { title: '문제 관리' } satisfies PageHandle,
+                      },
                       // 대시보드·회원 목록 (ADM-12·14, #228). 대시보드를 index로 올리지 않는다 —
                       // /admin 링크·e2e가 문제 목록을 가리킨다
                       {
                         path: 'dashboard',
                         lazy: () => import('@/features/admin/AdminDashboardPage'),
+                        handle: { title: '대시보드' } satisfies PageHandle,
                       },
-                      { path: 'members', lazy: () => import('@/features/admin/AdminMembersPage') },
+                      {
+                        path: 'members',
+                        lazy: () => import('@/features/admin/AdminMembersPage'),
+                        handle: { title: '회원' } satisfies PageHandle,
+                      },
                       // 회원 상세·정지·강제 탈퇴 (ADM-15·16)
                       {
                         path: 'members/:id',
                         lazy: () => import('@/features/admin/AdminMemberDetailPage'),
-                        handle: { pageTone: 'subtle' } satisfies PageHandle,
+                        handle: { pageTone: 'subtle', title: '회원 상세' } satisfies PageHandle,
                       },
                       // 개념 태그 목록·등록 (ADM-11, #221)
-                      { path: 'tags', lazy: () => import('@/features/admin/AdminTagsPage') },
+                      {
+                        path: 'tags',
+                        lazy: () => import('@/features/admin/AdminTagsPage'),
+                        handle: { title: '개념 태그' } satisfies PageHandle,
+                      },
                       // 신고 목록·상세 (ADM-13, #226)
-                      { path: 'reports', lazy: () => import('@/features/admin/AdminReportsPage') },
+                      {
+                        path: 'reports',
+                        lazy: () => import('@/features/admin/AdminReportsPage'),
+                        handle: { title: '신고' } satisfies PageHandle,
+                      },
                       {
                         path: 'reports/:id',
                         lazy: () => import('@/features/admin/AdminReportDetailPage'),
-                        handle: { pageTone: 'subtle' } satisfies PageHandle,
+                        handle: { pageTone: 'subtle', title: '신고 상세' } satisfies PageHandle,
                       },
                       // 등록·수정·버전 보기가 한 컴포넌트다. 폼이 같고 어디서 값을 읽는지만
                       // 다르다 (AdminProblemFormPage 주석).
                       {
                         path: 'problems/new',
                         lazy: () => import('@/features/admin/AdminProblemFormPage'),
-                        handle: { pageTone: 'subtle' } satisfies PageHandle,
+                        handle: { pageTone: 'subtle', title: '문제 등록' } satisfies PageHandle,
                       },
                       {
                         path: 'problems/:id',
                         lazy: () => import('@/features/admin/AdminProblemFormPage'),
-                        handle: { pageTone: 'subtle' } satisfies PageHandle,
+                        handle: { pageTone: 'subtle', title: '문제 수정' } satisfies PageHandle,
                       },
                       {
                         path: 'problems/:id/versions/:versionNo',
                         lazy: () => import('@/features/admin/AdminProblemFormPage'),
-                        handle: { pageTone: 'subtle' } satisfies PageHandle,
+                        handle: { pageTone: 'subtle', title: '문제 버전' } satisfies PageHandle,
                       },
                     ],
                   },
@@ -153,7 +203,11 @@ export const router = createBrowserRouter([
               },
             ],
           },
-          { path: '*', lazy: () => import('@/app/NotFoundPage') },
+          {
+            path: '*',
+            lazy: () => import('@/app/NotFoundPage'),
+            handle: { title: '페이지를 찾을 수 없어요', noindex: true } satisfies PageHandle,
+          },
         ],
       },
     ],
