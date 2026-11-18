@@ -23,6 +23,7 @@ import type {
 import { DIFFICULTY_RANK, type Difficulty, type SolveStatus } from '@/api/types'
 import { EMAIL_PATTERN, isValidNickname, isValidPassword } from '@/features/auth/accountRules'
 import { TAG_NAME_MAX, TAG_SLUG_MAX, TAG_SLUG_PATTERN } from '@/features/admin/tagRules'
+import { SUSPENSION_REASON_MAX, WITHDRAW_AFTER_MS } from '@/features/admin/adminUserQuery'
 import { FIRST_ACTIVITY_YEAR } from '@/features/mypage/myPageQuery'
 import { REPORT_STATUS_LABEL } from '@/features/admin/labels'
 import { REPORT_TYPE_LABEL } from '@/features/problems/labels'
@@ -470,6 +471,9 @@ function findAdminUser(raw: string | readonly string[] | undefined) {
   if (!user) return { error: problem(404, 'USER_NOT_FOUND', '회원을 찾을 수 없어요') }
   return { user }
 }
+
+const ADMIN_PROTECTED = () =>
+  problem(403, 'ADMIN_CANNOT_BE_SUSPENDED', '관리자 계정은 정지하거나 탈퇴시킬 수 없어요')
 
 /** 관리자가 목에서 등록한 개념 태그(ADM-11). fixture 배열은 다른 목도 읽으니 따로 쌓는다. */
 let createdConceptTags: ConceptTag[] = []
@@ -932,6 +936,63 @@ export const handlers: RequestHandler[] = [
     const result = pastSubmission(id)
     if (!result) return problem(404, 'SUBMISSION_NOT_FOUND', '제출을 찾을 수 없어요')
     return HttpResponse.json(result)
+  }),
+
+  /**
+   * 계정 정지 (ADM-16). 이미 정지됐으면 아무것도 바꾸지 않는다 — 24시간을 다시 세지 않는다(계약).
+   * 사유는 받은 그대로 1,000자를 넘으면 400, 앞뒤 공백을 떼고 비면 null이다.
+   */
+  http.post('*/api/admin/users/:id/suspend', async ({ params, request }) => {
+    const body = (await request.json().catch(() => ({}))) as { reason?: unknown } | null
+    const reason = body?.reason ?? null
+    if (reason !== null && typeof reason !== 'string') return badRequest('reason은 글자여야 한다')
+    // 서버는 널 문자를 길이보다 먼저 보고 code 없는 400을 준다(AdminAccountController.reason)
+    if (typeof reason === 'string' && hasNul(reason)) return badRequest('reason에 널 문자가 있다')
+    if (typeof reason === 'string' && reportLength(reason) > SUSPENSION_REASON_MAX) {
+      return problem(
+        400,
+        'INVALID_SUSPENSION_REASON',
+        '정지 사유가 1,000자를 넘어요. 1,000자 이하로 줄여 주세요',
+      )
+    }
+    const found = findAdminUser(params.id)
+    if (found.error) return found.error
+    if (found.user.role === 'ADMIN') return ADMIN_PROTECTED()
+    if (found.user.suspendedAt === null) {
+      const stripped = typeof reason === 'string' ? stripLikeServer(reason) : ''
+      Object.assign(found.user, {
+        suspendedAt: new Date().toISOString(),
+        suspensionReason: stripped === '' ? null : stripped,
+      })
+    }
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  /** 정지 해제 (ADM-16). 정지되지 않은 회원이면 아무것도 바꾸지 않는다 */
+  http.post('*/api/admin/users/:id/unsuspend', ({ params }) => {
+    const found = findAdminUser(params.id)
+    if (found.error) return found.error
+    Object.assign(found.user, { suspendedAt: null, suspensionReason: null })
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  /** 강제 탈퇴 (ADM-16). 정지하고 24시간이 지난 회원만. 보낸 신고는 남고 신고자 칸만 빈다(계약) */
+  http.delete('*/api/admin/users/:id', ({ params }) => {
+    const found = findAdminUser(params.id)
+    if (found.error) return found.error
+    const { user } = found
+    if (user.role === 'ADMIN') return ADMIN_PROTECTED()
+    if (user.suspendedAt === null) {
+      return problem(409, 'USER_NOT_SUSPENDED', '정지된 회원만 강제 탈퇴할 수 있어요')
+    }
+    if (Date.now() - new Date(user.suspendedAt).getTime() < WITHDRAW_AFTER_MS) {
+      return problem(409, 'SUSPENSION_TOO_RECENT', '정지하고 24시간이 지나야 강제 탈퇴할 수 있어요')
+    }
+    mockAdminUsers = mockAdminUsers.filter((item) => item.id !== user.id)
+    mockReports = mockReports.map((item) =>
+      item.reporterId === user.id ? { ...item, reporterId: null, reporterNickname: null } : item,
+    )
+    return new HttpResponse(null, { status: 204 })
   }),
 
   http.get('*/api/problems', ({ request }) => {

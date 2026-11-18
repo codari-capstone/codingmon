@@ -7,6 +7,9 @@ import { ADMIN_PAGE_SIZE } from './adminProblemQuery'
 /** 회원 목록·상세가 모두 이 키 아래다. 정지·해제·탈퇴 뒤 이것 하나만 무효로 하면 탭 개수까지 새로 받는다 */
 export const ADMIN_USERS_KEY = 'admin-users'
 
+/** 정지 사유 최대 길이(계약 `SuspendInput`). 받은 그대로 센다 */
+export const SUSPENSION_REASON_MAX = 1000
+
 /** 강제 탈퇴는 정지하고 이만큼 지난 뒤에 할 수 있다(ADM-16) */
 export const WITHDRAW_AFTER_MS = 24 * 3_600_000
 

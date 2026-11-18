@@ -9,6 +9,7 @@ import { Alert } from '@/components/ui/alert'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Breadcrumb } from '@/components/ui/breadcrumb'
+import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import {
   Table,
@@ -20,8 +21,14 @@ import {
 } from '@/components/ui/table'
 import { problemCode } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
-import { adminUserQuery, adminUserSolvedQuery, WITHDRAW_AFTER_MS } from './adminUserQuery'
+import {
+  adminUserQuery,
+  adminUserSolvedQuery,
+  adminUserSubmissionsQuery,
+  WITHDRAW_AFTER_MS,
+} from './adminUserQuery'
 import { formatJoinedOn } from './labels'
+import { MemberActions } from './MemberActions'
 import { MemberSubmissions } from './MemberSubmissions'
 
 /** 올해 것과 지난해 것(연도를 붙임) 한 쌍. 해가 다른 날을 가른다(formatSubmittedAt과 같은 선택) */
@@ -72,16 +79,19 @@ export function Component() {
     refetchOnWindowFocus: true,
   })
   const solved = useQuery({ ...adminUserSolvedQuery(id), enabled: valid })
+  // 첫 페이지의 totalElements가 강제 탈퇴 창의 '지워질 제출' 수다. 목록 카드와 같은 키라 한 번만 받는다
+  const submissions = useQuery({ ...adminUserSubmissionsQuery(id, 1), enabled: valid })
   // 24시간 계산의 '지금'은 상세를 받은 시각이다. 정지하고 다시 받으면 함께 바뀐다(화면을 연 시각이면
   // 방금 정지한 회원이 '25시간 남음'이 된다).
   // shortcut: 탭을 떠나지 않고 띄워 두기만 하면 남은 시간이 줄지 않는다. 탭에 돌아오거나 다시 열면 맞는다
   const now = dataUpdatedAt
 
-  // 보조 쿼리(푼 문제)의 401도 세션을 정리한다. 상세만 보면 로그인 화면으로 가지 않고 오류만 남는다
+  // 보조 쿼리(푼 문제, 제출 1페이지)의 401도 세션을 정리한다. 상세만 보면 로그인 화면으로 가지 않고 오류만 남는다.
+  // 제출 카드가 다른 페이지에 있으면 1페이지를 지켜보는 곳은 여기뿐이다
   const queryClient = useQueryClient()
   useEffect(() => {
-    forgetSessionIfUnauthorized(queryClient, error ?? solved.error)
-  }, [queryClient, error, solved.error])
+    forgetSessionIfUnauthorized(queryClient, error ?? solved.error ?? submissions.error)
+  }, [queryClient, error, solved.error, submissions.error])
 
   if (!valid || problemCode(error) === 'USER_NOT_FOUND') {
     return (
@@ -103,8 +113,23 @@ export function Component() {
     <section className="flex flex-col gap-6">
       <Breadcrumb items={[{ label: '회원', href: '/admin/members' }, { label: user.nickname }]} />
 
+      {error ? (
+        // 받아 둔 값이 있는데 다시 받기가 실패했다. 정지·해제 직후라면 버튼이 예전 상태일 수 있다(신고 상세와 같은 처리)
+        <Alert
+          tone="warning"
+          title="최신 정보를 받지 못했어요"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void refetch()}>
+              다시 받기
+            </Button>
+          }
+        >
+          지금 보이는 정지 상태와 버튼이 바뀌었을 수 있어요.
+        </Alert>
+      ) : null}
+
       {suspendedAt !== null ? (
-        // 화면에 처음부터 있는 상태라 알리지 않는다
+        // 화면에 처음부터 있는 상태라 알리지 않는다. 정지한 순간은 MemberActions가 알린다
         <Alert tone="danger" title="정지된 계정이에요" live={false}>
           {format(AT, suspendedAt)}에 정지했어요.{' '}
           {withdrawable ? '24시간이 지나 강제 탈퇴할 수 있어요. ' : ''}
@@ -147,6 +172,12 @@ export function Component() {
             </dd>
           </dl>
         </div>
+        <MemberActions
+          user={user}
+          now={now}
+          submissionCount={submissions.data?.totalElements}
+          solvedCount={solved.data?.length}
+        />
       </section>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
