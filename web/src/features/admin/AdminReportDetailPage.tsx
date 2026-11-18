@@ -25,6 +25,7 @@ import {
 import { cn } from '@/lib/utils'
 import { ADMIN_REPORTS_KEY, adminReportQuery } from './adminReportQuery'
 import { REPORT_STATUS_HINT, REPORT_STATUS_LABEL, REPORT_STATUS_TONE } from './labels'
+import { Reporter } from './ReportTable'
 
 const REPORTED_AT = new Intl.DateTimeFormat('ko-KR', {
   year: 'numeric',
@@ -130,9 +131,8 @@ export function Component() {
             <dt className="text-muted-foreground text-sm font-semibold">유형</dt>
             <dd className="m-0">{REPORT_TYPE_LABEL[data.type]}</dd>
             <dt className="text-muted-foreground text-sm font-semibold">신고자</dt>
-            {/* 회원 상세로 가는 링크는 회원 화면(#228)에서 붙인다 */}
             <dd className={cn('m-0', data.reporterNickname === null && 'text-muted-foreground')}>
-              {data.reporterNickname ?? '탈퇴한 회원'}
+              <Reporter id={data.reporterId} nickname={data.reporterNickname} />
             </dd>
             <dt className="text-muted-foreground text-sm font-semibold">신고일</dt>
             <dd className="m-0 tabular-nums">{formatReportedAt(data.createdAt)}</dd>

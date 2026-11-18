@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { Link, useParams } from 'react-router'
 
-import type { Language, SubmissionResult } from '@/api/types'
+import type { SubmissionResult } from '@/api/types'
 import errorScene from '@/assets/scenes/error.png'
 import successScene from '@/assets/scenes/success.png'
 import { ErrorState } from '@/components/ErrorState'
@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { CodeBlock } from '@/components/ui/code-block'
 import { Button } from '@/components/ui/button'
 import { RUNTIME_ERROR_INFO, STATUS_LABEL, VERDICT_INFO } from '@/constants/verdicts'
-import { LANGUAGE_LABEL } from '@/features/solve/labels'
+import { LANGUAGE_LABEL, SOURCE_FILE_NAME } from '@/features/solve/labels'
 import { solvePath } from '@/features/solve/solvePath'
 import { AnalysisPanel } from '@/features/ai/AnalysisPanel'
 import { analysisQuery } from '@/features/ai/analysisQuery'
@@ -173,7 +173,7 @@ function SubmittedCode({ result, suspect }: { result: SubmissionResult; suspect:
       {/* CodeBlock은 React가 글자로 넣어 `<`·`&`가 해석되지 않는다(Raw와 같은 보장) */}
       <CodeBlock
         code={result.sourceCode}
-        title={FILE_NAME[result.language]}
+        title={SOURCE_FILE_NAME[result.language]}
         lineNumbers
         highlight={suspect}
       />
@@ -203,9 +203,6 @@ function canAnalyze(result: SubmissionResult | undefined): boolean {
 function canReview(result: SubmissionResult | undefined): boolean {
   return result?.status === 'COMPLETED' && result.verdict === 'ACCEPTED'
 }
-
-// Judge0가 실행하는 파일 이름이다. 에러 원문의 `File "script.py", line N`과 맞아야 줄을 맞춰 본다(#268 리뷰)
-const FILE_NAME = { PYTHON: 'script.py', CPP: 'main.cpp' } satisfies Record<Language, string>
 
 /** 판정 옆 펭귄 장면. 장식이라 alt를 비운다. 채점 중에는 두지 않는다 */
 function Scene({ result }: { result: SubmissionResult }) {

@@ -5,6 +5,7 @@ import type {
   AdminReportSummary,
   AdminSolution,
   AdminTestCase,
+  AdminUserSummary,
   AiQuota,
   ConceptTag,
   ConceptTagInput,
@@ -63,7 +64,12 @@ import { BADGE_CODES, badgesFor, celebrate } from './fixtures/badges'
 import { problemDetails } from './fixtures/problemDetails'
 import { conceptTags, problems } from './fixtures/problems'
 import { seedReports } from './fixtures/reports'
-import { seedAdminUsers } from './fixtures/adminUsers'
+import {
+  seedAdminUsers,
+  userSolvedProblems,
+  userSubmissions,
+  type MockAdminUser,
+} from './fixtures/adminUsers'
 import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from './fixtures/users'
 
 /** 인증번호 오류의 문구. 실제 서버(EmailCodeService.java)의 문구와 같게 맞춘다. */
@@ -439,8 +445,31 @@ function reportStatusAllowed(report: AdminReportDetail, next: ReportStatus): boo
   return report.problemId !== null || next === 'RESOLVED' || next === 'REJECTED'
 }
 
-/** 관리자 회원 화면(ADM-14~16)의 회원. 정지·탈퇴 목이 오면 let과 reset으로 바꾼다 */
-const mockAdminUsers = seedAdminUsers()
+/** 관리자 회원 화면(ADM-14~16)의 회원. 정지·해제·강제 탈퇴가 고친다 */
+let mockAdminUsers = seedAdminUsers()
+
+/** 테스트 사이에 정지·탈퇴가 새지 않게 시드로 되돌린다. */
+export function resetAdminUsers(): void {
+  mockAdminUsers = seedAdminUsers()
+}
+
+/** 목록 칸. 상세에만 있는 칸을 뺀다 — 목록 화면이 없는 칸을 읽으면 테스트가 잡는다 */
+function userSummary({
+  loginMethod: _loginMethod,
+  suspensionReason: _suspensionReason,
+  ...summary
+}: MockAdminUser): AdminUserSummary {
+  return summary
+}
+
+/** 정지·해제·탈퇴가 받을 회원. 없거나 id가 이상하면 서버와 같은 오류 응답이다 */
+function findAdminUser(raw: string | readonly string[] | undefined) {
+  const id = Number(raw)
+  if (!Number.isSafeInteger(id)) return { error: badRequest('id는 정수여야 한다') }
+  const user = mockAdminUsers.find((item) => item.id === id)
+  if (!user) return { error: problem(404, 'USER_NOT_FOUND', '회원을 찾을 수 없어요') }
+  return { user }
+}
 
 /** 관리자가 목에서 등록한 개념 태그(ADM-11). fixture 배열은 다른 목도 읽으니 따로 쌓는다. */
 let createdConceptTags: ConceptTag[] = []
@@ -859,7 +888,7 @@ export const handlers: RequestHandler[] = [
           ? suspended
           : found.filter((user) => user.suspendedAt === null)
     return HttpResponse.json({
-      content: matched.slice(range.from, range.to),
+      content: matched.slice(range.from, range.to).map(userSummary),
       totalElements: matched.length,
       counts: {
         all: found.length,
@@ -867,6 +896,42 @@ export const handlers: RequestHandler[] = [
         suspended: suspended.length,
       },
     })
+  }),
+
+  /** 회원 상세 (ADM-15). 오늘 AI 사용량은 목 하나를 모두가 같이 쓴다(목은 회원마다 세지 않는다) */
+  http.get('*/api/admin/users/:id', ({ params }) => {
+    const found = findAdminUser(params.id)
+    if (found.error) return found.error
+    return HttpResponse.json({ ...found.user, aiQuota: mockQuota() })
+  }),
+
+  /** 회원의 제출 목록 (ADM-15). 최신순 */
+  http.get('*/api/admin/users/:id/submissions', ({ params, request }) => {
+    const found = findAdminUser(params.id)
+    if (found.error) return found.error
+    const range = pageRange(new URL(request.url).searchParams)
+    if (range === null) return badRequest(`page는 0 이상, size는 1~${MAX_PAGE_SIZE}이다`)
+    const all = userSubmissions(found.user.id)
+    return HttpResponse.json({
+      content: all.slice(range.from, range.to),
+      totalElements: all.length,
+    })
+  }),
+
+  /** 회원이 맞힌 문제 (ADM-15). 페이지 없이 모두 */
+  http.get('*/api/admin/users/:id/solved-problems', ({ params }) => {
+    const found = findAdminUser(params.id)
+    if (found.error) return found.error
+    return HttpResponse.json(userSolvedProblems(found.user.id))
+  }),
+
+  /** 회원 제출의 코드와 결과 (ADM-15). 학습자 제출 기록 목과 같은 번호다(fixtures/adminUsers) */
+  http.get('*/api/admin/submissions/:id', ({ params }) => {
+    const id = Number(params.id)
+    if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
+    const result = pastSubmission(id)
+    if (!result) return problem(404, 'SUBMISSION_NOT_FOUND', '제출을 찾을 수 없어요')
+    return HttpResponse.json(result)
   }),
 
   http.get('*/api/problems', ({ request }) => {

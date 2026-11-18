@@ -92,6 +92,13 @@ describe('AdminReportsPage (ADM-13)', () => {
     )
     const withdrawn = screen.getByRole('link', { name: '신고 8번 · 구간 합치기' }).closest('tr')!
     expect(within(withdrawn).getByText('탈퇴한 회원')).toHaveClass('text-muted-foreground')
+    expect(within(withdrawn).queryByRole('link', { name: '탈퇴한 회원' })).not.toBeInTheDocument()
+    // 신고자는 회원 상세로 간다 (ADM-15)
+    const latest = screen.getByRole('link', { name: '신고 21번 · 문자열 뒤집기' }).closest('tr')!
+    expect(within(latest).getByRole('link', { name: '코딩왕' })).toHaveAttribute(
+      'href',
+      '/admin/members/3',
+    )
   })
 
   it('신고가 하나도 없으면 전체 탭에는 상태를 말하지 않는 안내를 보인다', async () => {

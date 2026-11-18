@@ -161,3 +161,13 @@ export const REPORT_STATUS_HINT: Record<Exclude<ReportStatus, 'PROBLEM_DELETED'>
 
 /** 처리 안 한 신고. 메뉴 숫자와 목록 머리가 센다(계약 listAdminReports) */
 export const UNRESOLVED_REPORT_STATUSES: ReportStatus[] = ['RECEIVED', 'IN_PROGRESS']
+
+// en-CA는 2026-11-03 모양이다(시안). 받은 시각은 UTC라 한국 날짜로 바꾼다
+const KST_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' })
+
+/** 회원 가입일 (ADM-14·15). 기록하기 전에 가입한 회원은 null이고 '—'로 보인다(계약) */
+export function formatJoinedOn(iso: string | null) {
+  if (iso === null) return '—'
+  const at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? '—' : KST_DATE.format(at)
+}
