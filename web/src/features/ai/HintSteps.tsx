@@ -8,8 +8,14 @@ import { Stepper } from '@/components/ui/stepper'
 import { problemMessage } from '@/features/auth/problemCode'
 import { useRevealHint } from './analysisQuery'
 
-/** 단계 이름 (AI_FEATURES 4절). 순서가 곧 단계다. */
+/** 단계 이름 (AI_FEATURES 4절). 순서가 곧 단계다. 힌트 상자와 버튼에 쓴다 */
 const HINT_STEPS = ['관찰', '방향', '원리'] as const
+
+/**
+ * 단계 표시(Stepper) 아래 글자. 처음 보는 사람이 순서를 바로 알도록 이름 대신 번호로 적는다(#327).
+ * 원 안 번호와 겹쳐 보이지만 의도한 모양이다 — 뜻(관찰·방향·원리)은 아래 힌트 상자가 알려 준다
+ */
+const STEPPER_LABELS = HINT_STEPS.map((_, index) => ({ label: `${index + 1}단계` }))
 
 /**
  * 단계별 힌트 (AI-04)와 다시 제출하러 가는 길.
@@ -49,11 +55,7 @@ export function HintSteps({
           단계별 힌트
         </h3>
         {/* 다 열면 current가 3이라 세 단계 모두 완료로 보인다 */}
-        <Stepper
-          steps={HINT_STEPS.map((label) => ({ label }))}
-          current={revealed}
-          className="w-[300px] max-w-full"
-        />
+        <Stepper steps={STEPPER_LABELS} current={revealed} className="w-[300px] max-w-full" />
       </div>
 
       {/* 연 단계만 글로 보인다. 서버가 연 단계까지만 힌트를 준다(계약) */}

@@ -146,4 +146,38 @@ test.describe('제출 결과 화면', () => {
       expect(sizes!.panelRight).toBeLessThanOrEqual(sizes!.viewportWidth + 1)
     })
   }
+
+  /**
+   * 넓은 화면에서 제출한 코드와 AI 패널은 같은 폭, 같은 윗선이고, 패널을 따라 내려가도 코드가
+   * 화면에 남는다. 배치는 브라우저만 잴 수 있다.
+   */
+  for (const [label, id, headingId, ready] of [
+    ['AI 분석', 23, 'analysis-heading', /별 120개로 나옵니다/],
+    ['AI 리뷰', 11, 'review-heading', /구간 쿼리 처리 패턴/],
+  ] as const) {
+    test(`1280px에서 제출한 코드와 ${label} 패널의 윗선·폭이 같고, 스크롤해도 코드가 보인다`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1280, height: 600 })
+      await login(page)
+      await page.goto(`/submissions/${id}`)
+      await page.getByRole('button', { name: label }).click()
+      await expect(page.getByText(ready)).toBeVisible({ timeout: 10_000 })
+
+      const code = page.locator('figure').filter({
+        has: page.getByRole('heading', { level: 2, name: /제출한 코드/ }),
+      })
+      // 패널은 제목 id로 집는다. 글자로 거르면 안쪽 힌트 구역까지 걸릴 수 있다(#328 리뷰)
+      const panel = page.locator(`section[aria-labelledby="${headingId}"]`)
+      const [codeBox, panelBox] = [await code.boundingBox(), await panel.boundingBox()]
+      expect(Math.abs(codeBox!.y - panelBox!.y)).toBeLessThanOrEqual(1)
+      expect(Math.abs(codeBox!.width - panelBox!.width)).toBeLessThanOrEqual(1)
+
+      // 패널 끝까지 내려가도 코드 상자의 윗부분이 화면 안에 있다
+      await panel.evaluate((el) => el.scrollIntoView({ block: 'end' }))
+      const after = await code.boundingBox()
+      expect(after!.y).toBeGreaterThanOrEqual(0)
+      expect(after!.y).toBeLessThan(600)
+    })
+  }
 })

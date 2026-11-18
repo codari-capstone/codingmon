@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -62,6 +62,16 @@ describe('HintSteps', () => {
     await waitFor(() => expect(hint).toHaveFocus())
     expect(screen.getByRole('button', { name: '2단계 방향 보기' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: '3단계 원리 보기' })).not.toBeInTheDocument()
+    // 단계 표시 아래는 순서가 바로 보이게 번호로, 힌트 상자는 그 단계의 뜻까지 적는다(#327)
+    const [stepper] = within(screen.getByRole('region', { name: '단계별 힌트' })).getAllByRole(
+      'list',
+    )
+    expect(
+      within(stepper!)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['1단계', '22단계', '33단계'])
+    expect(screen.getByText('힌트 1 · 관찰')).toBeInTheDocument()
   })
 
   it('세 단계를 다 열면 마지막 안내를 띄운다', async () => {
