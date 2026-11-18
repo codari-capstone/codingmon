@@ -64,6 +64,8 @@ export function Component() {
     return (
       <EmptyState
         title="신고를 찾을 수 없어요"
+        // 이 화면을 대신하므로 페이지 제목이다(#315 리뷰)
+        headingLevel={1}
         description="주소가 맞는지 확인하거나 신고 목록에서 다시 골라 주세요."
         action={{ label: '신고 목록으로', to: '/admin/reports' }}
       />
@@ -71,7 +73,9 @@ export function Component() {
   }
   // 받은 값이 없을 때만 화면을 오류로 바꾼다. 있는데 다시 받기가 실패했으면 화면을 두고 알린다 —
   // 바꾸면 처리 칸이 사라져 저장하지 못한 메모를 잃는다(#315 리뷰)
-  if (error && !data) return <ErrorState problem={error} onRetry={() => void refetch()} />
+  if (error && !data) {
+    return <ErrorState problem={error} onRetry={() => void refetch()} headingLevel={1} />
+  }
   if (!data) return <ListSkeleton rows={6} />
 
   const deleted = data.problemId === null

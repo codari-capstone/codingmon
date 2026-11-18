@@ -195,9 +195,14 @@ export function Component() {
           ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-muted-foreground text-sm">
-              가입일이 &apos;—&apos;인 회원은 가입일 기록을 시작하기 전에 가입한 회원이에요.
-            </p>
+            {/* 표가 있을 때만 단다. 오류·로딩·빈 결과에서는 가리킬 '—'가 없다(#316 리뷰) */}
+            {data && !error && !isPending && data.content.length > 0 ? (
+              <p className="text-muted-foreground text-sm">
+                가입일이 &apos;—&apos;인 회원은 가입일 기록을 시작하기 전에 가입한 회원이에요.
+              </p>
+            ) : (
+              <span />
+            )}
             {/* 결과 범위 밖 페이지(빈 표)에서도 '이전'으로 돌아갈 길이라 표 밖에 둔다 */}
             {data && !error && !isPending && (pages > 1 || page > 1) ? (
               <Pagination page={page} total={pages} onChange={handlePageChange} />

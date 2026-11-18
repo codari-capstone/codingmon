@@ -70,14 +70,13 @@ export function Component() {
     seen.mutate()
   }, [seen])
 
-  // 단계가 바뀌면 낭독기와 키보드가 새 질문부터 시작하게 제목으로 옮긴다. 첫 렌더는 건드리지 않는다
+  // 단계가 바뀌면 낭독기와 키보드가 새 질문부터 시작하게 제목으로 옮긴다. 열 때는 건드리지 않는다.
+  // '첫 렌더' 표시로 막으면 StrictMode가 효과를 두 번 돌려 열자마자 옮긴다. 지난 단계와 비교한다(#324 리뷰)
   const heading = useRef<HTMLHeadingElement>(null)
-  const firstRender = useRef(true)
+  const shownStep = useRef(step)
   useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false
-      return
-    }
+    if (shownStep.current === step) return
+    shownStep.current = step
     heading.current?.focus()
   }, [step])
 

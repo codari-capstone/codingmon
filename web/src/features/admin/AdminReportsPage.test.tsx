@@ -36,12 +36,19 @@ describe('AdminReportsPage (ADM-13)', () => {
     expect(screen.getByRole('heading', { level: 1, name: '신고' })).toBeInTheDocument()
     expect(await screen.findByText('7', { selector: 'b' })).toBeInTheDocument()
     const tabs = screen.getByRole('tablist', { name: '신고 상태' })
-    expect(await within(tabs).findByRole('tab', { name: '문제 삭제됨1' })).toBeInTheDocument()
+    expect(await within(tabs).findByRole('tab', { name: '문제 삭제됨, 1건' })).toBeInTheDocument()
     expect(
       within(tabs)
         .getAllByRole('tab')
-        .map((tab) => tab.textContent),
-    ).toEqual(['전체21', '접수4', '확인 중3', '처리 완료8', '반려5', '문제 삭제됨1'])
+        .map((tab) => tab.getAttribute('aria-label')),
+    ).toEqual([
+      '전체, 21건',
+      '접수, 4건',
+      '확인 중, 3건',
+      '처리 완료, 8건',
+      '반려, 5건',
+      '문제 삭제됨, 1건',
+    ])
 
     const rows = await bodyRows()
     expect(rows).toHaveLength(20)
@@ -66,7 +73,7 @@ describe('AdminReportsPage (ADM-13)', () => {
     await user.click(screen.getByRole('button', { name: '2페이지' }))
     await screen.findByText(/^1$/, { selector: 'td' })
 
-    await user.click(screen.getByRole('tab', { name: '접수4' }))
+    await user.click(screen.getByRole('tab', { name: '접수, 4건' }))
     const rows = (await screen.findAllByRole('row')).slice(1)
     expect(rows.map((row) => (row as HTMLTableRowElement).cells[0]?.textContent)).toEqual([
       '21',
@@ -122,7 +129,7 @@ describe('AdminReportsPage (ADM-13)', () => {
     renderPage()
     await bodyRows()
 
-    await user.click(await screen.findByRole('tab', { name: '반려0' }))
+    await user.click(await screen.findByRole('tab', { name: '반려, 0건' }))
     expect(await screen.findByText('이 상태의 신고가 없어요')).toBeInTheDocument()
   })
 })

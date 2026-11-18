@@ -41,13 +41,14 @@ export function Component() {
 
   const login = useMutation({
     mutationFn: loginRequest,
-    onSuccess: async (user) => {
+    // 바깥의 useAuth().user와 이름을 달리한다. 이 값은 방금 받은 응답이다
+    onSuccess: async (signedIn) => {
       // 캐시에 세션을 들이는 네 걸음은 GitHub 로그인과 똑같아 session.ts가 들고 있다.
-      await adoptSession(queryClient, user)
-      // 아래의 <Navigate> 분기도 setQueryData로 isAuthenticated가 바뀌면 같은 곳으로 보내므로
+      await adoptSession(queryClient, signedIn)
+      // 아래의 <Navigate> 분기도 setQueryData로 user가 생기면 같은 곳으로 보내므로
       // 이 호출이 없어도 도착한다. 그래도 두는 이유는 재렌더에 기대지 않고 바로 이동하기 위해서다.
       // replace를 빼면 /login이 기록에 남는다. LoginPage.test.tsx가 PUSH 여부로 이를 지킨다.
-      void navigate(afterLoginPath(user, target), { replace: true })
+      void navigate(afterLoginPath(signedIn, target), { replace: true })
     },
   })
 

@@ -42,7 +42,7 @@ export const ACCOUNT_SUSPENDED_MESSAGE = '계정이 정지되었습니다'
  *
  * 401·429·403(정지, ADM-16) 문구는 여기서 직접 정한다. toUserMessage는 title·description·retryable 객체를
  * 돌려주고 COM-07은 폼 아래 한 문장만 지정하므로, 이 파일은 그중 description만 쓴다.
- * 401·429 외의 오류는 toUserMessage로 넘겨 그 쪽 일반 문구를 쓴다.
+ * 그 밖의 오류는 toUserMessage로 넘겨 그 쪽 일반 문구를 쓴다.
  */
 export function loginErrorMessage(error: unknown): string {
   const status =

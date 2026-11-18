@@ -109,6 +109,8 @@ describe('처음 안내 (WELCOME-01~03)', () => {
   it('단계가 바뀌면 제목으로 포커스를 옮긴다', async () => {
     const user = userEvent.setup()
     renderWelcome()
+    // 열 때는 옮기지 않는다. StrictMode에서 효과가 두 번 돌아도 같다(#324 리뷰)
+    expect(screen.getByRole('heading', { level: 1 })).not.toHaveFocus()
 
     await user.click(screen.getByRole('radio', { name: /Python/ }))
     await user.click(screen.getByRole('button', { name: '다음' }))
