@@ -34,6 +34,8 @@ export const PLANS: Plan[] = [
       // 실제 힌트 1단계 이름이다(HintSteps: 관찰 → 방향 → 원리). 시안의 '방향'이 아니다
       '힌트 1단계(관찰)까지',
       '최근 30일 학습 기록',
+      // 리포트는 요금제와 상관없이 지금처럼 쓴다(#321 댓글)
+      '학습 리포트',
     ],
   },
   {
@@ -48,7 +50,7 @@ export const PLANS: Plan[] = [
       'AI 오답 분석·풀이 제안 하루 30회',
       '힌트 3단계 모두 열기',
       '맞힌 문제의 더 나은 풀이 제안',
-      '오답 노트와 전체 학습 리포트',
+      '오답 노트',
       '전체 기간 학습 기록',
     ],
   },
@@ -77,7 +79,8 @@ export const COMPARE: { group: string; rows: { label: string; cells: [Cell, Cell
     group: '내 학습',
     rows: [
       { label: '학습 기록', cells: ['최근 30일', '전체 기간'] },
-      { label: '오답 노트 · 학습 리포트', cells: [false, true] },
+      { label: '학습 리포트', cells: [true, true] },
+      { label: '오답 노트', cells: [false, true] },
     ],
   },
 ]
