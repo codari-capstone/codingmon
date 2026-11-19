@@ -83,12 +83,13 @@ describe('PricingPage (PRICE-01~03)', () => {
   it('비교표는 포함·미포함을 말로 읽어 주고, 테스트 결제임을 알린다 (PRICE-01)', () => {
     renderPricing()
     const table = screen.getByRole('table')
-    const row = within(table).getByRole('row', { name: /더 나은 풀이 제안/ })
-    expect(within(row).getByRole('img', { name: '미포함' })).toBeInTheDocument()
-    expect(within(row).getByRole('img', { name: '포함' })).toBeInTheDocument()
-    // 리포트는 무료도 쓴다(#321 댓글)
-    const report = within(table).getByRole('row', { name: /학습 리포트/ })
-    expect(within(report).getAllByRole('img', { name: '포함' })).toHaveLength(2)
+    // 풀이 제안(리뷰)과 리포트는 무료도 쓴다(#333 리뷰, #321 댓글)
+    for (const name of [/더 나은 풀이 제안/, /학습 리포트/]) {
+      const row = within(table).getByRole('row', { name })
+      expect(within(row).getAllByRole('img', { name: '포함' })).toHaveLength(2)
+    }
+    // 만들지 않기로 한 기능은 팔지 않는다(#248)
+    expect(screen.queryByText(/오답 노트/)).not.toBeInTheDocument()
     expect(screen.getAllByText(/실제로 돈이 나가지 않아요/).length).toBeGreaterThan(0)
     expect(screen.queryByText(/7일/)).not.toBeInTheDocument()
   })

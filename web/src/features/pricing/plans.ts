@@ -22,7 +22,7 @@ export const YEARLY_FREE_MONTHS = Math.floor(
 /** 하루 AI 분석·리뷰 횟수(합산). 문구는 모두 이 값에서 만든다(#333 리뷰) */
 const AI_DAILY = { free: 3, pro: 30 }
 
-export const COMPARE_NOTE = `프로의 하루 ${AI_DAILY.pro}회는 AI 오답 분석과 더 나은 풀이 제안을 합친 횟수예요.`
+export const COMPARE_NOTE = `하루 ${AI_DAILY.free}회·${AI_DAILY.pro}회는 AI 오답 분석과 더 나은 풀이 제안을 합친 횟수예요.`
 
 export interface Plan {
   id: 'free' | 'pro'
@@ -49,7 +49,8 @@ export const PLANS: Plan[] = [
     features: [
       '모든 문제 풀이와 채점',
       '제출 횟수 제한 없음',
-      `AI 오답 분석 하루 ${AI_DAILY.free}회`,
+      // 리뷰(더 나은 풀이 제안)도 무료다. 한도는 분석과 합산(랜딩 FAQ, #333 리뷰)
+      `AI 오답 분석·풀이 제안 하루 ${AI_DAILY.free}회`,
       // 실제 힌트 1단계 이름이다(HintSteps: 관찰 → 방향 → 원리). 시안의 '방향'이 아니다
       '힌트 1단계(관찰)까지',
       '최근 30일 학습 기록',
@@ -71,15 +72,14 @@ export const PLANS: Plan[] = [
     features: [
       `AI 오답 분석·풀이 제안 하루 ${AI_DAILY.pro}회`,
       '힌트 3단계 모두 열기',
-      '맞힌 문제의 더 나은 풀이 제안',
-      '오답 노트',
+      // 오답 노트는 넣지 않는다. 만들지 않기로 한 기능이다(LearnNav, #248)
       '전체 기간 학습 기록',
     ],
   },
 ]
 
-/** 비교표 칸. true는 포함, false는 미포함, 글자는 그대로 보여 준다. 순서는 PLANS와 같다 */
-type Cell = boolean | string
+/** 비교표 칸. true는 포함(체크), 글자는 그대로 보여 준다. 순서는 PLANS와 같다 */
+type Cell = true | string
 
 export const COMPARE: { group: string; rows: { label: string; cells: [Cell, Cell] }[] }[] = [
   {
@@ -94,7 +94,7 @@ export const COMPARE: { group: string; rows: { label: string; cells: [Cell, Cell
     rows: [
       { label: 'AI 오답 분석', cells: [`하루 ${AI_DAILY.free}회`, `하루 ${AI_DAILY.pro}회`] },
       { label: '단계별 힌트', cells: ['1단계', '3단계'] },
-      { label: '더 나은 풀이 제안', cells: [false, true] },
+      { label: '더 나은 풀이 제안', cells: [true, true] },
     ],
   },
   {
@@ -102,7 +102,6 @@ export const COMPARE: { group: string; rows: { label: string; cells: [Cell, Cell
     rows: [
       { label: '학습 기록', cells: ['최근 30일', '전체 기간'] },
       { label: '학습 리포트', cells: [true, true] },
-      { label: '오답 노트', cells: [false, true] },
     ],
   },
 ]
@@ -111,7 +110,7 @@ export const FAQ = [
   {
     value: 'free',
     title: '무료 플랜도 계속 쓸 수 있나요?',
-    content: `네. 문제 풀이와 채점은 기간 제한 없이 무료예요. AI 오답 분석은 하루 ${AI_DAILY.free}회까지 쓸 수 있어요.`,
+    content: `네. 문제 풀이와 채점은 기간 제한 없이 무료예요. AI 오답 분석과 풀이 제안은 합쳐서 하루 ${AI_DAILY.free}회까지 쓸 수 있어요.`,
   },
   {
     value: 'test',

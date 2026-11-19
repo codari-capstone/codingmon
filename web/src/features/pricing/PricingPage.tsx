@@ -6,6 +6,7 @@ import { Accordion } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { useAuth } from '@/features/auth/useAuth'
+import { StartButton } from '@/features/landing/StartButton'
 import { cn } from '@/lib/utils'
 import {
   COMPARE,
@@ -98,7 +99,7 @@ export function Component() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <FreeStart signedIn={signedIn} size="lg" variant="accent" />
+            <StartButton signedIn={signedIn} />
             {signedIn !== false ? null : (
               <Button asChild size="lg" variant="glass">
                 <Link to="/problems">문제 둘러보기</Link>
@@ -201,7 +202,7 @@ function PlanCard({
         {pro ? (
           <ProStart signedIn={signedIn} />
         ) : (
-          <FreeStart signedIn={signedIn} variant="secondary" fullWidth />
+          <StartButton signedIn={signedIn} variant="secondary" fullWidth />
         )}
       </div>
 
@@ -222,61 +223,28 @@ function PlanCard({
   )
 }
 
-type StartProps = { signedIn: boolean | undefined }
-
 /** 비로그인은 가입, 로그인한 사용자는 문제 목록 (PRICE-03, 랜딩 LAND-02와 같다). */
-function FreeStart({
-  signedIn,
-  size = 'lg',
-  variant,
-  fullWidth = false,
-}: StartProps & { size?: 'lg'; variant: 'secondary' | 'accent'; fullWidth?: boolean }) {
-  const width = fullWidth ? 'w-full' : undefined
-  if (signedIn === undefined) {
-    return (
-      <Button
-        size={size}
-        variant={variant}
-        aria-hidden
-        tabIndex={-1}
-        className={cn('invisible', width)}
-      >
-        무료로 시작하기
-      </Button>
-    )
-  }
-  return (
-    <Button asChild size={size} variant={variant} className={width}>
-      {signedIn ? (
-        <Link to="/problems">문제 풀러 가기</Link>
-      ) : (
-        <Link to="/signup">무료로 시작하기</Link>
-      )}
-    </Button>
-  )
-}
-
 /**
  * 비로그인은 로그인 화면(돌아올 곳은 이 화면), 로그인한 사용자는 아직 누를 수 없다 (PRICE-03).
  * 결제 화면(#332)이 생기면 로그인한 사용자를 그리로 보낸다.
  */
-function ProStart({ signedIn }: StartProps) {
+function ProStart({ signedIn }: { signedIn: boolean | undefined }) {
   if (signedIn === undefined) {
     return (
-      <Button size="lg" aria-hidden tabIndex={-1} className="invisible w-full">
+      <Button size="lg" fullWidth aria-hidden tabIndex={-1} className="invisible">
         프로 시작하기
       </Button>
     )
   }
   if (signedIn) {
     return (
-      <Button size="lg" disabled className="w-full">
+      <Button size="lg" fullWidth disabled>
         결제 준비 중
       </Button>
     )
   }
   return (
-    <Button asChild size="lg" className="w-full">
+    <Button asChild size="lg" fullWidth>
       <Link to="/login" state={{ from: '/pricing' }}>
         프로 시작하기
       </Link>
@@ -333,10 +301,6 @@ function CompareTable() {
                         label="포함"
                         className="text-primary-text inline-block"
                       />
-                    ) : c === false ? (
-                      <span role="img" aria-label="미포함" className="text-muted-foreground">
-                        —
-                      </span>
                     ) : (
                       c
                     )}

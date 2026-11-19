@@ -18,6 +18,7 @@ import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { DEFAULT_PARAMS } from '@/features/problems/problemListParams'
 import { problemListQuery } from '@/features/problems/problemsQuery'
 import { cn } from '@/lib/utils'
+import { StartButton } from './StartButton'
 
 const PAINS: { icon: IconName; q: string; a: string }[] = [
   {
@@ -317,26 +318,6 @@ export function Component() {
 
       <SiteFooter />
     </div>
-  )
-}
-
-/** 비로그인은 가입, 로그인한 사용자는 문제 목록 (LAND-02). 세션을 모르는 동안은 자리만 잡는다. */
-function StartButton({ signedIn }: { signedIn: boolean | undefined }) {
-  if (signedIn === undefined) {
-    return (
-      <Button size="lg" variant="accent" aria-hidden tabIndex={-1} className="invisible">
-        무료로 시작하기
-      </Button>
-    )
-  }
-  return (
-    <Button asChild size="lg" variant="accent">
-      {signedIn ? (
-        <Link to="/problems">문제 풀러 가기</Link>
-      ) : (
-        <Link to="/signup">무료로 시작하기</Link>
-      )}
-    </Button>
   )
 }
 
