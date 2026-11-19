@@ -17,6 +17,8 @@ const pool = new SharedArray('pool', () => JSON.parse(open('./pool.json')).filte
 const correctPool = pool.filter((e) => e.expect === 'ACCEPTED');
 const wrongPool = pool.filter((e) => e.expect !== 'ACCEPTED');
 const POLL_SEC = 1; // 웹과 같은 폴링 간격(web/src/app/queryClient.ts)
+// AI는 웹처럼 10초 뒤 3초, 60초 뒤 10초 간격으로 늦춘다(web/src/features/ai/analysisQuery.ts)
+const aiInterval = (sec) => (sec >= 60 ? POLL_SEC * 10 : sec >= 10 ? POLL_SEC * 3 : POLL_SEC);
 
 const sampleWait = new Trend('wait_sample_run', true);
 const judgeWait = new Trend('wait_judge', true);
@@ -53,14 +55,15 @@ export function setup() {
   return { tokens };
 }
 
-// done(body)가 참이 될 때까지 1초마다 GET. 끝난 응답 본문을 돌려준다.
-function poll(url, auth, done, limitSec) {
-  const end = Date.now() + limitSec * 1000;
+// done(body)가 참이 될 때까지 interval(지난 초) 간격으로 GET(기본 1초). 끝난 응답 본문을 돌려준다.
+function poll(url, auth, done, limitSec, interval = () => POLL_SEC) {
+  const start = Date.now();
+  const end = start + limitSec * 1000;
   while (Date.now() < end) {
     const res = http.get(url, { headers: auth, tags: { name: url.replace(/\/\d+/g, '/{id}') } });
     if (res.status === 401) { auth.Authorization = `Bearer ${login(exec.vu.idInTest)}`; continue; }
     if (res.status === 200 && done(res.json())) return res.json();
-    sleep(POLL_SEC);
+    sleep(interval((Date.now() - start) / 1000));
   }
   return null;
 }
@@ -112,7 +115,7 @@ export default function (data) {
   res = http.post(path, null, { headers: auth, tags: { name: correct ? 'code-review' : 'analysis' } });
   if (res.status !== 200 && res.status !== 202) { unexpected.add(1, { step: 'ai', status: String(res.status) }); return; }
   let ai = res.json();
-  if (ai.status === 'PENDING') ai = poll(path, auth, (b) => b.status !== 'PENDING', 3600);
+  if (ai.status === 'PENDING') ai = poll(path, auth, (b) => b.status !== 'PENDING', 3600, aiInterval);
   if (!ai) { unexpected.add(1, { step: 'ai-timeout' }); return; }
   if (ai.status === 'FAILED') { (ai.failureReason === 'BUSY' ? aiBusy : aiFailed).add(1, { reason: String(ai.failureReason) }); return; }
   (correct ? reviewWait : analysisWait).add(Date.now() - t, tags);
