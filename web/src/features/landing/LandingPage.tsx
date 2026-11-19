@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router'
 
-import wordmark from '@/assets/brand/codingmon_wordmark.png'
 import hero from '@/assets/mascot/Mascot/codingmon_hero_large.png'
 import errorScene from '@/assets/scenes/error.png'
 import loadingScene from '@/assets/scenes/loading.png'
@@ -9,7 +8,7 @@ import studyingScene from '@/assets/scenes/studying.png'
 import successScene from '@/assets/scenes/success.png'
 import thinkingScene from '@/assets/scenes/thinking.png'
 import { Accordion } from '@/components/ui/accordion'
-import { MENU } from '@/app/menu'
+import { SiteFooter } from '@/app/SiteFooter'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Icon, type IconName } from '@/components/ui/icon'
@@ -316,29 +315,7 @@ export function Component() {
         </div>
       </section>
 
-      <footer className="border-t">
-        <div
-          className={cn(
-            SECTION,
-            'text-muted-foreground flex flex-wrap items-center justify-between gap-4 pt-8 pb-10 text-sm',
-          )}
-        >
-          <img src={wordmark} alt="Codingmon" width={117} height={32} className="block" />
-          {/* 이용약관·개인정보처리방침은 문서가 생기면 더한다 (#244) */}
-          <nav aria-label="바닥글" className="flex gap-6">
-            {MENU.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                className="text-muted-foreground hover:text-foreground no-underline"
-              >
-                {l.label}
-              </Link>
-            ))}
-          </nav>
-          <span>© 2026 Codari</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

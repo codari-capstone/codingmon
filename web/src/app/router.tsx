@@ -36,6 +36,17 @@ export const router = createBrowserRouter([
                 'Python·C++로 풀 수 있는 코딩 문제 목록이에요. 난이도와 개념으로 골라 풀고, 틀리면 AI가 이유를 짚어 줘요.',
             } satisfies PageHandle,
           },
+          // 요금제 (PRICE-01~03, #331). 로그인 없이 본다. 바닥글이 좌우 끝까지 가서 랜딩처럼 bleed다
+          {
+            path: 'pricing',
+            lazy: () => import('@/features/pricing/PricingPage'),
+            handle: {
+              bleed: true,
+              title: '요금제',
+              description:
+                '코딩몬의 무료·프로 요금제예요. 문제 풀이와 채점은 언제나 무료이고, 프로는 AI 오답 분석과 힌트를 더 많이 쓸 수 있어요.',
+            } satisfies PageHandle,
+          },
           // 왼쪽 남색 패널이 좌우 끝까지 간다 (#241)
           {
             path: 'login',
