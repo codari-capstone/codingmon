@@ -304,8 +304,10 @@ describe('GitHubCallbackPage (COM-02)', () => {
       await gitHubSignUp('깃허브사람')
       await visitGitHub()
       renderCallback('success')
-      // ListSkeleton도 role="status"다. 역할로 집으면 둘이 걸려 애매해진다.
-      expect(screen.getByText(/GitHub 계정을 확인하고 있어요/)).toHaveAttribute('role', 'status')
+      // 문구는 펭귄 로딩(LoadingState)의 status 영역 안에 있다
+      expect(
+        screen.getByText(/GitHub 계정을 확인하고 있어요/).closest('[role="status"]'),
+      ).not.toBeNull()
     })
 
     it('갱신이 401이면(세션이 없으면) 로그인 화면에 실패를 알린다', async () => {

@@ -160,6 +160,28 @@
   }
 }
 
+/* LoadingState의 달리는 펭귄. 뛰는 것처럼 위아래로 통통 튄다 */
+@keyframes loading-bob {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8px;
+  }
+}
+
+/* LoadingState가 나타나는 모양. 처음 0.2초쯤은 보이지 않아, 곧 끝나는 로딩에서 펭귄이 번쩍이지 않는다 */
+@keyframes loading-appear {
+  0%,
+  35% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 /* 괄호 안은 디자인 시스템의 토큰 이름이다.
  * 대비(글자 4.5:1, 입력칸 테두리 3:1)는 index.css.test.ts가 라이트·다크 모두 계산해 지킨다.
  * 색을 바꾸거나 글자를 새 면 위에 올리면 그 테스트의 쌍 목록에 더한다. */

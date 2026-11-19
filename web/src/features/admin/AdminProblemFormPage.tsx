@@ -7,7 +7,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import type { ProblemInput, ProblemVersionStatus } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
-import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -211,7 +211,7 @@ function AdminProblemForm() {
   // 등록을 마친 직후에는 상세를 다시 받는 동안에도 폼을 그대로 둔다. 스켈레톤으로 덮으면
   // 방금 띄운 저장 안내까지 사라져, 저장이 됐는지 알 수 없게 된다.
   const loading = !save.isSuccess && (readOnly ? version.isPending : !isNew && detail.isPending)
-  if (loading) return <ListSkeleton rows={6} />
+  if (loading) return <LoadingState />
 
   // 검증 중에는 저장이 409 `PROBLEM_VALIDATING`이다(계약). 눌러 보고 알게 하지 않는다.
   const validating = detail.data?.status === 'VALIDATING'

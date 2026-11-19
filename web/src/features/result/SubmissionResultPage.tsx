@@ -7,7 +7,7 @@ import errorScene from '@/assets/scenes/error.png'
 import successScene from '@/assets/scenes/success.png'
 import { ErrorState } from '@/components/ErrorState'
 import { Raw } from '@/components/Raw'
-import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Verdict } from '@/components/Verdict'
 import { Badge } from '@/components/ui/badge'
 import { CodeBlock } from '@/components/ui/code-block'
@@ -304,7 +304,7 @@ export function Component() {
     return (
       <section className="flex flex-col gap-4">
         <h1 className="page-title">제출 결과</h1>
-        <ListSkeleton rows={3} />
+        <LoadingState />
       </section>
     )
   }

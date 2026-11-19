@@ -5,6 +5,7 @@ import { useParams } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Alert } from '@/components/ui/alert'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -106,7 +107,7 @@ export function Component() {
     )
   }
   if (error && !user) return <ErrorState problem={error} onRetry={() => void refetch()} />
-  if (!user) return <ListSkeleton rows={6} />
+  if (!user) return <LoadingState />
 
   const suspendedAt = user.suspendedAt
   const withdrawable =
