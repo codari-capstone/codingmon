@@ -16,6 +16,7 @@ import {
 import { unresolvedReportCountQuery } from '@/features/admin/adminReportQuery'
 import { useAuth } from '@/features/auth/useAuth'
 import { useLogout } from '@/features/auth/useLogout'
+import { cn } from '@/lib/utils'
 import { StreakChip } from '@/features/streak/StreakChip'
 import { MENU, type MenuItem } from './menu'
 
@@ -36,7 +37,7 @@ const ADMIN_MENU: MenuItem[] = [
 ]
 
 /** COM-01 상단 바. 로그인 상태는 useAuth만 본다. */
-export function AppHeader() {
+export function AppHeader({ wide = false }: { wide?: boolean }) {
   const { user, isAuthenticated, isLoading } = useAuth()
   const location = useLocation()
   const inAdmin = useMatch('/admin/*') !== null
@@ -62,8 +63,14 @@ export function AppHeader() {
         줄이 넘어가는 좁은 폭(sm 미만)에서만 py-2를 둔다. h-topbar로 높이를 고정하면 flex-wrap으로
         내려간 줄이 박스 밖으로 넘친다 (e2e layout.spec).
         box-content: 내용 폭 1200px에 좌우 24px을 더한다 (페이지 폭 규칙).
+        본문이 넓은 화면(wide)이면 상단 바도 같은 폭이다. 다르면 로고와 본문 왼쪽 끝이 어긋난다(#327).
       */}
-      <div className="max-w-content min-h-topbar mx-auto box-content flex flex-wrap items-center gap-x-7 gap-y-2 px-6 py-2 sm:py-0">
+      <div
+        className={cn(
+          wide ? 'max-w-wide' : 'max-w-content',
+          'min-h-topbar mx-auto box-content flex flex-wrap items-center gap-x-7 gap-y-2 px-6 py-2 sm:py-0',
+        )}
+      >
         <Link to="/" className="flex shrink-0 items-center">
           {/* 로고는 그림 그대로 쓴다. 글자로 다시 쓰지 않는다 */}
           <img

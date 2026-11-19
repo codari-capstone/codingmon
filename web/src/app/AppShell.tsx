@@ -8,6 +8,8 @@ export interface PageHandle {
   pageTone?: 'subtle'
   /** 본문을 페이지 폭에 가두지 않는다. 남색 무대가 좌우 끝까지 가는 화면(로그인·랜딩)이 쓴다 */
   bleed?: true
+  /** 본문 폭을 1200px 대신 1600px까지 쓴다. 코드를 나란히 보는 화면(문제 풀이·제출 결과)이 쓴다(#327) */
+  wide?: true
   /** 탭 제목. `문제 목록`이면 `문제 목록 | Codingmon`이 된다(PageHead) */
   title?: string
   /** 검색 결과에 보일 설명. 없으면 사이트 공통 설명 */
@@ -33,11 +35,18 @@ export function AppShell({
   const handles = useMatches().map((m) => m.handle as PageHandle | undefined)
   const subtle = handles.some((h) => h?.pageTone === 'subtle')
   const bleed = !contained && handles.some((h) => h?.bleed)
+  const wide = !contained && handles.some((h) => h?.wide)
   return (
     <div className={cn('text-foreground min-h-dvh', subtle ? 'bg-muted' : 'bg-background')}>
-      <AppHeader />
-      {/* 페이지 폭: 내용 1200px + 좌우 24px (box-content로 padding을 폭 밖에 둔다) */}
-      <main className={cn('min-w-0', !bleed && 'max-w-content mx-auto box-content px-6 py-6')}>
+      <AppHeader wide={wide} />
+      {/* 페이지 폭: 내용 1200px(wide는 1600px) + 좌우 24px (box-content로 padding을 폭 밖에 둔다) */}
+      <main
+        className={cn(
+          'min-w-0',
+          !bleed && 'mx-auto box-content px-6 py-6',
+          !bleed && (wide ? 'max-w-wide' : 'max-w-content'),
+        )}
+      >
         {children}
       </main>
     </div>

@@ -73,7 +73,8 @@ export const router = createBrowserRouter([
               {
                 path: 'problems/:id',
                 lazy: () => import('@/features/solve/SolvePage'),
-                handle: { title: '문제 풀이' } satisfies PageHandle,
+                // 코드를 넓게 쓰도록 본문 폭을 넓힌다(#327)
+                handle: { wide: true, title: '문제 풀이' } satisfies PageHandle,
               },
               {
                 // 처음 안내 (WELCOME-01). 카드가 옅은 바탕 위에 놓인다(디자인 Onboarding의 `cmx-subtle`)
@@ -96,7 +97,7 @@ export const router = createBrowserRouter([
                 path: 'submissions/:id',
                 lazy: () => import('@/features/result/SubmissionResultPage'),
                 // 시안 ResultWrong·ResultAccepted도 옅은 바탕 위의 카드다(#275)
-                handle: { pageTone: 'subtle', title: '채점 결과' } satisfies PageHandle,
+                handle: { pageTone: 'subtle', wide: true, title: '채점 결과' } satisfies PageHandle,
               },
               {
                 path: 'me',

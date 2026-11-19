@@ -44,6 +44,29 @@ test.describe('문제 풀이 화면', () => {
     )
   })
 
+  /** 에디터가 좁다는 의견(#327). 지문:에디터 2:3, 큰 모니터에서는 본문을 1600px까지 쓴다. 폭은 브라우저만 잰다 */
+  for (const [width, atLeast] of [
+    [1280, 700],
+    [1920, 900],
+  ] as const) {
+    test(`${width}px에서 에디터가 지문보다 넓고 ${atLeast}px 이상이다`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await login(page)
+      await page.goto('/problems/1')
+      const editor = page.getByRole('textbox', { name: '코드 편집기' })
+      await expect(editor).toBeVisible()
+
+      const statement = await page.locator('article').first().boundingBox()
+      const column = await page.locator('div.sticky').filter({ has: editor }).boundingBox()
+      expect(column!.width).toBeGreaterThanOrEqual(atLeast)
+      expect(column!.width).toBeGreaterThan(statement!.width * 1.4)
+      // 넓혀도 문서가 가로로 넘치지 않는다
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        width,
+      )
+    })
+  }
+
   test('좁은 화면은 탭으로 나누고 문서가 가로로 넘치지 않는다', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 })
     await login(page)
