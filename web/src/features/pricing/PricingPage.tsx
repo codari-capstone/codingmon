@@ -9,6 +9,7 @@ import { useAuth } from '@/features/auth/useAuth'
 import { cn } from '@/lib/utils'
 import {
   COMPARE,
+  COMPARE_NOTE,
   FAQ,
   PLANS,
   TEST_PAYMENT_NOTICE,
@@ -134,12 +135,15 @@ function CycleToggle({ cycle, onChange }: { cycle: Cycle; onChange: (c: Cycle) =
             )}
           >
             {o.label}
-            {/* 공백이 없으면 이름이 '연간 결제2개월 무료'로 붙어 읽힌다. 간격은 gap이 맡는다 */}
-            {o.value === 'yearly' ? ' ' : null}
-            {o.value === 'yearly' ? (
-              <span className="bg-success-soft text-success-text rounded-full px-2 py-0.5 text-xs font-bold">
-                {YEARLY_FREE_MONTHS}개월 무료
-              </span>
+            {/* 공백이 없으면 이름이 '연간 결제2개월 무료'로 붙어 읽힌다. 간격은 gap이 맡는다.
+                한 달도 안 아끼면 배지를 숨긴다 */}
+            {o.value === 'yearly' && YEARLY_FREE_MONTHS > 0 ? (
+              <>
+                {' '}
+                <span className="bg-success-soft text-success-text rounded-full px-2 py-0.5 text-xs font-bold">
+                  {YEARLY_FREE_MONTHS}개월 무료
+                </span>
+              </>
             ) : null}
           </button>
         )
@@ -343,9 +347,7 @@ function CompareTable() {
           </tbody>
         ))}
       </table>
-      <p className="text-muted-foreground m-0 border-t py-4 text-[13px]">
-        프로의 하루 30회는 AI 오답 분석과 더 나은 풀이 제안을 합친 횟수예요.
-      </p>
+      <p className="text-muted-foreground m-0 border-t py-4 text-[13px]">{COMPARE_NOTE}</p>
     </div>
   )
 }

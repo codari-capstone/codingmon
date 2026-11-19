@@ -10,8 +10,19 @@ export const won = (n: number) => n.toLocaleString('ko-KR')
 // 프로 가격(원). 연간은 한 달로 나눈 값이다. 연 총액과 할인 배지는 여기서 계산한다(#333 리뷰)
 const PRO_PRICE: Record<Cycle, number> = { monthly: 9900, yearly: 8250 }
 
-/** 연간 결제로 아끼는 달 수. 토글의 'N개월 무료' 배지다 */
-export const YEARLY_FREE_MONTHS = Math.round(12 - (PRO_PRICE.yearly * 12) / PRO_PRICE.monthly)
+/**
+ * 연간 결제로 아끼는 달 수. 토글의 'N개월 무료' 배지다. 내림이라 할인을 부풀리지 않고,
+ * 한 달도 안 되면 0이라 배지를 숨긴다(#333 리뷰)
+ */
+export const YEARLY_FREE_MONTHS = Math.floor(
+  // 아낀 금액 ÷ 월 가격. 정수끼리 나눠야 나눠떨어질 때 1.999…로 내려가지 않는다
+  ((PRO_PRICE.monthly - PRO_PRICE.yearly) * 12) / PRO_PRICE.monthly,
+)
+
+/** 하루 AI 분석·리뷰 횟수(합산). 문구는 모두 이 값에서 만든다(#333 리뷰) */
+const AI_DAILY = { free: 3, pro: 30 }
+
+export const COMPARE_NOTE = `프로의 하루 ${AI_DAILY.pro}회는 AI 오답 분석과 더 나은 풀이 제안을 합친 횟수예요.`
 
 export interface Plan {
   id: 'free' | 'pro'
@@ -38,7 +49,7 @@ export const PLANS: Plan[] = [
     features: [
       '모든 문제 풀이와 채점',
       '제출 횟수 제한 없음',
-      'AI 오답 분석 하루 3회',
+      `AI 오답 분석 하루 ${AI_DAILY.free}회`,
       // 실제 힌트 1단계 이름이다(HintSteps: 관찰 → 방향 → 원리). 시안의 '방향'이 아니다
       '힌트 1단계(관찰)까지',
       '최근 30일 학습 기록',
@@ -58,7 +69,7 @@ export const PLANS: Plan[] = [
     },
     lead: '무료 플랜의 모든 기능, 그리고',
     features: [
-      'AI 오답 분석·풀이 제안 하루 30회',
+      `AI 오답 분석·풀이 제안 하루 ${AI_DAILY.pro}회`,
       '힌트 3단계 모두 열기',
       '맞힌 문제의 더 나은 풀이 제안',
       '오답 노트',
@@ -81,7 +92,7 @@ export const COMPARE: { group: string; rows: { label: string; cells: [Cell, Cell
   {
     group: 'AI 학습 도우미',
     rows: [
-      { label: 'AI 오답 분석', cells: ['하루 3회', '하루 30회'] },
+      { label: 'AI 오답 분석', cells: [`하루 ${AI_DAILY.free}회`, `하루 ${AI_DAILY.pro}회`] },
       { label: '단계별 힌트', cells: ['1단계', '3단계'] },
       { label: '더 나은 풀이 제안', cells: [false, true] },
     ],
@@ -100,8 +111,7 @@ export const FAQ = [
   {
     value: 'free',
     title: '무료 플랜도 계속 쓸 수 있나요?',
-    content:
-      '네. 문제 풀이와 채점은 기간 제한 없이 무료예요. AI 오답 분석은 하루 3회까지 쓸 수 있어요.',
+    content: `네. 문제 풀이와 채점은 기간 제한 없이 무료예요. AI 오답 분석은 하루 ${AI_DAILY.free}회까지 쓸 수 있어요.`,
   },
   {
     value: 'test',
