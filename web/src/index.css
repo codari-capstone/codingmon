@@ -138,6 +138,8 @@
   --spacing-topbar: 64px;
   --spacing-sidebar: 256px;
   --container-content: 1200px;
+  /* 코드를 나란히 보는 화면(문제 풀이·제출 결과)의 폭. 큰 모니터에서 에디터를 넓게 쓴다(#327) */
+  --container-wide: 1600px;
   --container-form: 420px;
 }
 

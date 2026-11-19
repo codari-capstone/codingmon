@@ -222,6 +222,16 @@ describe('LoadingState', () => {
 })
 
 describe('EmptyState (디자인 props)', () => {
+  it('기본 상자 속 펭귄은 큰 원본을 써서 2배 화면에서도 흐리지 않다 (#327)', () => {
+    const { container } = render(<EmptyState title="비었어요" />)
+    const img = container.querySelector('img')!
+    // Mascot의 작은 원본(States/empty_data.png, 194px)이 아니라 scenes/empty.png(612px)
+    expect(img.getAttribute('src')).toMatch(/empty\.png$/)
+    expect(img.getAttribute('src')).not.toContain('empty_data')
+    expect(img).toHaveAttribute('width', '136')
+    expect(img).toHaveAttribute('alt', '')
+  })
+
   it('verdict 줄·펭귄 자세·노드 action을 받는다', () => {
     render(
       <MemoryRouter>
