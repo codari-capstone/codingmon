@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 
+import emptyScene from '@/assets/scenes/empty.png'
 import { Verdict } from '@/components/Verdict'
 import { Button } from '@/components/ui/button'
 import { Mascot, type MascotPose } from '@/components/ui/mascot'
@@ -50,7 +51,20 @@ export function EmptyState({
 
   return (
     <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
-      {mascot ? <Mascot pose={pose} size={mascotSize} /> : null}
+      {!mascot ? null : pose === 'empty' ? (
+        // 상자 속 펭귄은 같은 그림의 큰 원본(612px)을 쓴다. Mascot의 empty(194px)는 136px로 그리면
+        // 2배 화면에 필요한 크기의 70%라 흐려진다(#327)
+        <img
+          src={emptyScene}
+          alt=""
+          draggable={false}
+          width={mascotSize}
+          height={Math.round((mascotSize * 478) / 612)}
+          className="block h-auto shrink-0 object-contain select-none"
+        />
+      ) : (
+        <Mascot pose={pose} size={mascotSize} />
+      )}
       {verdict ? <Verdict verdict={verdict} className="mt-2" /> : null}
       <Heading
         className={
