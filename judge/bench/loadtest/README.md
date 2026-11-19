@@ -90,7 +90,7 @@ docker run --rm -u "$(id -u):$(id -g)" --network codingmon_default -v "$PWD":/lt
 | `VUS` | 10 | 동시 사용자 수. `lt001`부터 차례로 쓴다 |
 | `SKIP` | 없음 | 뺄 `pool.json`의 `key` 목록(쉼표 구분) |
 | `BASE_URL` | `http://api:8080` | API 주소 |
-| `MAX_DURATION` | `60m` | 측정 최대 시간 |
+| `MAX_DURATION` | `90m` | 측정 최대 시간. AI 대기 상한(60분)에 앞 단계(최대 약 21분)를 더한 것보다 길게 둔다 |
 
 - 결과 지표: `wait_sample_run`, `wait_judge`, `wait_ai_code_review`, `wait_ai_analysis`(대기 시간), `ai_busy`, `ai_failed`, `judge_queue_full`, `judge_error`, `unexpected`(예상과 다른 응답).
 - AI는 결과를 최대 60분 기다린다. 100명이면 30분 넘게 걸린다. 로그인 토큰(30분)이 만료되면 다시 로그인한다.

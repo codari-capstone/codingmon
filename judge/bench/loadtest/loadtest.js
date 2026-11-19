@@ -30,7 +30,7 @@ const unexpected = new Counter('unexpected');
 
 export const options = {
   scenarios: {
-    flow: { executor: 'per-vu-iterations', vus: VUS, iterations: 1, maxDuration: __ENV.MAX_DURATION || '60m' },
+    flow: { executor: 'per-vu-iterations', vus: VUS, iterations: 1, maxDuration: __ENV.MAX_DURATION || '90m' },
   },
   setupTimeout: '5m',
   summaryTrendStats: ['min', 'med', 'avg', 'p(90)', 'p(95)', 'max'],
