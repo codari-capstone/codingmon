@@ -86,7 +86,10 @@ export default function (data) {
   let res = http.post(`${BASE}/api/sample-runs`, body, { headers: auth });
   if (res.status === 429) { judgeFull.add(1); return; }
   if (res.status !== 202) { unexpected.add(1, { step: 'sample-run', status: String(res.status) }); return; }
-  if (poll(`${BASE}/api/sample-runs/${res.json('id')}`, auth, finished, 600)) sampleWait.add(Date.now() - t, tags);
+  const sample = poll(`${BASE}/api/sample-runs/${res.json('id')}`, auth, finished, 600);
+  if (!sample) { unexpected.add(1, { step: 'sample-timeout' }); return; }
+  if (sample.status === 'JUDGE_ERROR') { judgeError.add(1, { step: 'sample-run' }); return; }
+  sampleWait.add(Date.now() - t, tags);
   sleep(rand(3, 10));
 
   // 제출
