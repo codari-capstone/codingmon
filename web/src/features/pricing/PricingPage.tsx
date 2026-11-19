@@ -7,15 +7,22 @@ import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { useAuth } from '@/features/auth/useAuth'
 import { cn } from '@/lib/utils'
-import { COMPARE, FAQ, PLANS, TEST_PAYMENT_NOTICE, type Cycle, type Plan } from './plans'
+import {
+  COMPARE,
+  FAQ,
+  PLANS,
+  TEST_PAYMENT_NOTICE,
+  won,
+  YEARLY_FREE_MONTHS,
+  type Cycle,
+  type Plan,
+} from './plans'
 
 // 랜딩과 같은 구역 폭·제목 크기다(LandingPage)
 const SECTION = 'max-w-content mx-auto box-content px-6'
 const H2 =
   'm-0 text-[28px] leading-[1.25] font-bold tracking-[-0.025em] text-foreground lg:text-[40px]'
 const EYEBROW = 'text-primary-text m-0 text-sm font-semibold tracking-[.02em]'
-
-const won = (n: number) => n.toLocaleString('ko-KR')
 
 /** 요금제 (PRICE-01~03). 로그인 여부와 관계없이 보여 주고, 시작 버튼만 바뀐다. */
 export function Component() {
@@ -127,9 +134,11 @@ function CycleToggle({ cycle, onChange }: { cycle: Cycle; onChange: (c: Cycle) =
             )}
           >
             {o.label}
+            {/* 공백이 없으면 이름이 '연간 결제2개월 무료'로 붙어 읽힌다. 간격은 gap이 맡는다 */}
+            {o.value === 'yearly' ? ' ' : null}
             {o.value === 'yearly' ? (
               <span className="bg-success-soft text-success-text rounded-full px-2 py-0.5 text-xs font-bold">
-                2개월 무료
+                {YEARLY_FREE_MONTHS}개월 무료
               </span>
             ) : null}
           </button>
@@ -299,7 +308,7 @@ function CompareTable() {
           <tbody key={g.group}>
             <tr className="border-b">
               <th
-                scope="colgroup"
+                scope="rowgroup"
                 colSpan={PLANS.length + 1}
                 className="text-muted-foreground pt-6 pb-3 text-left text-[13px] font-semibold"
               >

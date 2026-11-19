@@ -5,6 +5,14 @@ import type { IconName } from '@/components/ui/icon'
 
 export type Cycle = 'monthly' | 'yearly'
 
+export const won = (n: number) => n.toLocaleString('ko-KR')
+
+// 프로 가격(원). 연간은 한 달로 나눈 값이다. 연 총액과 할인 배지는 여기서 계산한다(#333 리뷰)
+const PRO_PRICE: Record<Cycle, number> = { monthly: 9900, yearly: 8250 }
+
+/** 연간 결제로 아끼는 달 수. 토글의 'N개월 무료' 배지다 */
+export const YEARLY_FREE_MONTHS = Math.round(12 - (PRO_PRICE.yearly * 12) / PRO_PRICE.monthly)
+
 export interface Plan {
   id: 'free' | 'pro'
   name: string
@@ -43,8 +51,11 @@ export const PLANS: Plan[] = [
     name: '프로',
     icon: 'bot',
     audience: '코딩 테스트를 꾸준히 준비할 때',
-    price: { monthly: 9900, yearly: 8250 },
-    note: { monthly: '매달 자동 결제 · 언제든 해지', yearly: '연 99,000원 한 번에 결제' },
+    price: PRO_PRICE,
+    note: {
+      monthly: '매달 자동 결제 · 언제든 해지',
+      yearly: `연 ${won(PRO_PRICE.yearly * 12)}원 한 번에 결제`,
+    },
     lead: '무료 플랜의 모든 기능, 그리고',
     features: [
       'AI 오답 분석·풀이 제안 하루 30회',

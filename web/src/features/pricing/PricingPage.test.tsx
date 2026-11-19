@@ -31,7 +31,8 @@ describe('PricingPage (PRICE-01~03)', () => {
   it('처음은 월간이고, 연간으로 바꾸면 프로 가격과 문구만 바뀐다 (PRICE-02)', async () => {
     renderPricing()
     const monthly = screen.getByRole('button', { name: '월간 결제' })
-    const yearly = screen.getByRole('button', { name: /연간 결제/ })
+    // 배지는 가격에서 계산한다: 8,250 × 12 = 99,000 = 9,900 × 10 → 2개월 무료(#333 리뷰)
+    const yearly = screen.getByRole('button', { name: '연간 결제 2개월 무료' })
     expect(monthly).toHaveAttribute('aria-pressed', 'true')
     expect(yearly).toHaveAttribute('aria-pressed', 'false')
     expect(within(card('프로')).getByText('9,900')).toBeInTheDocument()
