@@ -209,6 +209,16 @@ describe('LoadingState', () => {
     render(<LoadingState />)
     expect(screen.getByRole('status')).toHaveTextContent('불러오는 중…')
   })
+
+  it('달리는 펭귄은 장식이라 낭독기가 읽지 않고, 문구를 바꿀 수 있다 (#327)', () => {
+    const { container } = render(<LoadingState label="GitHub 계정을 확인하고 있어요…" />)
+    expect(screen.getByRole('status')).toHaveTextContent('GitHub 계정을 확인하고 있어요…')
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('loading'),
+    )
+  })
 })
 
 describe('EmptyState (디자인 props)', () => {

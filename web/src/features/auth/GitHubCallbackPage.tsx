@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router'
 
-import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Button } from '@/components/ui/button'
 import { afterLoginPath } from './afterLoginPath'
 import { gitHubSignUp, resumeGitHubSession, takeGitHubReturnPath } from './githubQuery'
@@ -119,11 +119,8 @@ export function Component() {
   if (result !== 'signup') {
     // 이동하는 동안의 한 화면이다. 비워 두면 흰 화면이 번쩍인다.
     return (
-      <section className="bg-card mx-auto my-10 flex w-full max-w-md flex-col gap-6 rounded-lg border p-6 sm:p-8">
-        <p role="status" className="text-sm">
-          GitHub 계정을 확인하고 있어요…
-        </p>
-        <ListSkeleton rows={2} />
+      <section className="bg-card mx-auto my-10 flex w-full max-w-md flex-col rounded-lg border p-2 sm:p-4">
+        <LoadingState label="GitHub 계정을 확인하고 있어요…" />
       </section>
     )
   }

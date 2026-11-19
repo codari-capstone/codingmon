@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'react-router'
 import type { Language, ProblemDetailView } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
-import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/features/auth/useAuth'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
@@ -306,7 +306,7 @@ export function Component() {
     return (
       <section className="flex flex-col gap-4">
         <h1 className="page-title">문제 풀이</h1>
-        <ListSkeleton rows={8} />
+        <LoadingState />
       </section>
     )
   }

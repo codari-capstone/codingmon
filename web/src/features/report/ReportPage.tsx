@@ -7,6 +7,7 @@ import scene from '@/assets/scenes/streak_chart.png'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -279,7 +280,7 @@ export function Component() {
       {shown ? <Hero stats={shown} /> : <h1 className="page-title">학습 리포트</h1>}
 
       {deadEnd ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
-      {isPending && !deadEnd ? <ListSkeleton rows={4} /> : null}
+      {isPending && !deadEnd ? <LoadingState /> : null}
       {shown === null ? <NoReport request={request} /> : null}
 
       {shown ? (

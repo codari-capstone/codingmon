@@ -7,7 +7,7 @@ import { fail } from '@/api/fail'
 import type { AdminReportDetail, AdminReportUpdate, ReportStatus } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
-import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -76,7 +76,7 @@ export function Component() {
   if (error && !data) {
     return <ErrorState problem={error} onRetry={() => void refetch()} headingLevel={1} />
   }
-  if (!data) return <ListSkeleton rows={6} />
+  if (!data) return <LoadingState />
 
   const deleted = data.problemId === null
   return (

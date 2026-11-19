@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 
 import hero from '@/assets/mascot/Mascot/codingmon_hero_large.png'
-import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, Input } from '@/components/ui/input'
@@ -59,7 +59,7 @@ export function Component() {
   if (isLoading) {
     return (
       <div className="mx-auto max-w-[400px] px-6 py-12">
-        <ListSkeleton rows={3} />
+        <LoadingState />
       </div>
     )
   }
