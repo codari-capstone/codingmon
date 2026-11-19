@@ -11,7 +11,7 @@ info:
 
     권한 (COM-05): 비로그인은 `GET /api/problems`(목록), `GET /api/concept-tags`만 쓸 수 있다.
     문제 상세(지문)는 로그인해야 본다.
-    `/api/admin/**`는 ADMIN만 쓸 수 있다. 나머지는 로그인이 필요하다.
+    `/api/admin/**`는 ADMIN만 쓸 수 있다. `POST /api/portone/webhook`은 포트원이 부르므로 로그인 없이 서명으로 확인한다. 나머지는 로그인이 필요하다.
 
     오류 응답은 RFC 9457 `application/problem+json`이다.
 
@@ -465,6 +465,9 @@ paths:
         응답에서 refresh 쿠키를 지운다. 발급된 access token도 사용자가 없어져 무효가 된다.
         확인 문구(`닉네임/탈퇴하겠습니다`)는 화면이 검사한다. 실수를 막는 장치라 서버로 보내지 않는다.
         관리자는 탈퇴할 수 없다. 403 `ADMIN_CANNOT_WITHDRAW`.
+        프로 구독 중(`ACTIVE`·`CANCEL_SCHEDULED`)이면 구독을 바로 끝내고 포트원에서 빌링키를 지운다. 남은 기간은 환불하지 않는다(MY-04).
+        구독과 결제 기록도 함께 지운다. 포트원 빌링키 삭제가 실패해도 탈퇴는 그대로 진행한다(서버가 결제를 요청하지 않으면 결제되지 않는다).
+        구독 행을 잠그고 처리해 탈퇴하는 동안 갱신 결제가 일어나지 않는다.
       tags: [users]
       responses:
         '204':
@@ -740,6 +743,130 @@ paths:
                 $ref: '#/components/schemas/AiQuota'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /api/users/me/subscription:
+    get:
+      operationId: getMySubscription
+      summary: 내 구독 (MY-06, PAY-01, PRICE-03)
+      description: |
+        구독한 적이 없어도 404가 아니라 `plan: FREE`, `status: NONE`으로 답한다.
+        결제 화면(PAY-01)은 `plan`이 `PRO`면 마이페이지 구독(MY-06)으로 보낸다. 요금제 화면(PRICE-03)은 `plan`으로 프로 버튼을 고른다.
+      tags: [subscription]
+      responses:
+        '200':
+          description: 내 구독
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: startSubscription
+      summary: 프로 구독 시작 (PAY-01, PAY-02)
+      description: |
+        결제 화면이 `PortOne.requestIssueBillingKey()`로 받은 빌링키와 결제 주기를 보낸다. 카드 등록 때 포트원에 사용자 ID(`customer.customerId`)를 넘긴다.
+        시연용 테스트 결제다(토스페이먼츠 테스트 채널). 실제로 돈이 나가지 않는다.
+        서버는 다음 순서로 처리한다.
+        1. 이미 프로(`ACTIVE`·`CANCEL_SCHEDULED`)면 409 `SUBSCRIPTION_ALREADY_ACTIVE`.
+        2. 포트원에서 빌링키를 조회해, 없거나 지워졌거나 고객 ID가 이 사용자가 아니면 400 `BILLING_KEY_INVALID`.
+        3. 금액을 `cycle`로 서버가 정해(월간 9,900원, 연간 99,000원) 빌링키로 바로 결제한다. 결제 ID는 `sub-{구독 ID}-{회차}`이고 첫 결제는 1회차다.
+        4. 성공하면 구독을 시작한다. 기간은 결제 시각부터 한 달(연간은 1년)이고, 끝나는 시각에 서버 스케줄러가 다음 회차를 결제한다.
+        카드 결제가 실패하면 402 `PAYMENT_FAILED`이고 `detail`에 포트원이 준 실패 이유를 적는다. 구독은 만들지 않고 그 빌링키는 포트원에서 지운다.
+        포트원이 응답하지 않으면 결제 ID로 결제를 다시 조회해 그 결과대로 처리한다. 조회도 실패하면 503 `PAYMENT_UNAVAILABLE`이다.
+        이때 결제가 실제로 됐으면 웹훅(`Transaction.Paid`)이 오면서 구독이 시작된다.
+        사용자 행을 잠그고 처리하므로 [결제]를 두 번 눌러도 두 번째는 409다.
+        기간이 끝났거나(`NONE`) 갱신 결제가 실패한(`PAYMENT_FAILED`) 사용자도 이 API로 카드를 다시 등록해 구독한다.
+      tags: [subscription]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [billingKey, cycle]
+              properties:
+                billingKey:
+                  type: string
+                  description: 포트원이 발급한 빌링키
+                cycle:
+                  $ref: '#/components/schemas/BillingCycle'
+      responses:
+        '201':
+          description: 구독 시작. `status`는 `ACTIVE`다
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          description: '오류 `code`: `BILLING_KEY_INVALID`. `cycle`이 `BillingCycle` 값이 아니면 `code` 없는 400이다'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          description: '오류 `code`: `PAYMENT_FAILED`(카드 결제 실패). `detail`에 실패 이유를 적는다. 화면은 결제 결과 실패(PAY-02)를 띄운다'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: '오류 `code`: `SUBSCRIPTION_ALREADY_ACTIVE`(이미 프로)'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '503':
+          description: '오류 `code`: `PAYMENT_UNAVAILABLE`(포트원이 응답하지 않아 결제 결과를 모름)'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /api/users/me/subscription/cancel:
+    post:
+      operationId: cancelSubscription
+      summary: 구독 해지 (MY-06)
+      description: |
+        `ACTIVE`를 `CANCEL_SCHEDULED`로 바꾼다. 결제는 없고 `currentPeriodEnd`까지 프로로 쓴다. 그 시각이 지나면 `NONE`이 된다.
+        이미 `CANCEL_SCHEDULED`면 그대로 200이다. 탭 두 개에서 눌러도 오류가 나지 않는다.
+        `NONE`·`PAYMENT_FAILED`면 409 `SUBSCRIPTION_NOT_ACTIVE`.
+        갱신 결제와 겹치면 구독 행을 먼저 잠근 쪽이 끝난 뒤 다른 쪽이 돈다. 결제가 먼저면 다음 기간으로 넘어간 뒤 해지 예정이 된다.
+      tags: [subscription]
+      responses:
+        '200':
+          description: 해지 예정
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/SubscriptionNotActive'
+
+  /api/users/me/subscription/resume:
+    post:
+      operationId: resumeSubscription
+      summary: 구독 해지 취소 (MY-06)
+      description: |
+        `CANCEL_SCHEDULED`를 `ACTIVE`로 되돌린다. 결제는 없고 `currentPeriodEnd`에 갱신 결제를 한다.
+        이미 `ACTIVE`면 그대로 200이다.
+        `NONE`·`PAYMENT_FAILED`면 409 `SUBSCRIPTION_NOT_ACTIVE`. 기간이 끝났으면 다시 결제해야 한다(PAY-01).
+      tags: [subscription]
+      responses:
+        '200':
+          description: 진행 중
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/SubscriptionNotActive'
 
   /api/users/me/problem-history:
     get:
@@ -1489,6 +1616,69 @@ paths:
                   $ref: '#/components/schemas/ConceptTag'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /api/portone/webhook:
+    post:
+      operationId: receivePortoneWebhook
+      summary: 포트원 결제 알림 받기
+      description: |
+        포트원 V2 웹훅(본문 버전 2024-04-25)을 받는다. 갱신은 스케줄러가 결제 응답으로 바로 알기 때문에, 서버가 직접 하지 않은 변화만 반영한다.
+        서명은 Standard Webhooks 규격으로 확인한다(헤더 `webhook-id`·`webhook-timestamp`·`webhook-signature`, 웹훅 Secret). 시각이 5분 넘게 차이 나면 거절한다.
+        본문의 상태는 믿지 않는다. `data.paymentId`로 포트원 결제를 조회해 그 결과를 결제 기록에 덮어쓴다. 그래서 같은 알림이 여러 번 와도 결과가 같다.
+        - `Transaction.Paid`: 결제 기록에 이미 있으면 무시한다. 없으면(구독 시작이 503이었던 경우) 반영하고 구독을 시작한다.
+        - `Transaction.Cancelled`: 포트원 콘솔에서 결제를 취소한 경우다. 결제 기록을 취소로 바꾸고 구독을 바로 끝낸다(`NONE`).
+        - 그 밖의 `type`과 모르는 필드는 무시하고 200을 준다.
+        서버 오류(DB 등)면 500을 준다. 포트원이 최대 5번 다시 보낸다.
+      tags: [subscription]
+      security: []
+      parameters:
+        - in: header
+          name: webhook-id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: webhook-timestamp
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: webhook-signature
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, timestamp, data]
+              properties:
+                type:
+                  type: string
+                  description: 예) `Transaction.Paid`, `Transaction.Cancelled`
+                timestamp:
+                  type: string
+                  format: date-time
+                data:
+                  type: object
+                  properties:
+                    paymentId:
+                      type: string
+                    storeId:
+                      type: string
+                    transactionId:
+                      type: string
+      responses:
+        '200':
+          description: 처리했거나 무시함
+        '400':
+          description: '오류 `code`: `WEBHOOK_SIGNATURE_INVALID`(서명이 틀리거나 시각이 5분 넘게 차이 남)'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
 
   /api/admin/problems:
     get:
@@ -3359,6 +3549,37 @@ components:
           format: date-time
           description: 다음에 횟수가 초기화되는 시각(다음 UTC 자정, 한국 시각 오전 9시)
 
+    BillingCycle:
+      type: string
+      enum: [MONTHLY, YEARLY]
+      description: 결제 주기. 월간 9,900원, 연간 99,000원
+
+    Subscription:
+      type: object
+      required: [plan, status, cycle, currentPeriodEnd]
+      properties:
+        plan:
+          type: string
+          enum: [FREE, PRO]
+          description: '`ACTIVE`·`CANCEL_SCHEDULED`면 `PRO`, 그 밖에는 `FREE`. AI 한도(#321)는 이 값으로 나눈다'
+        status:
+          type: string
+          enum: [NONE, ACTIVE, CANCEL_SCHEDULED, PAYMENT_FAILED]
+          description: |
+            - `NONE`: 구독한 적 없음, 또는 기간이 끝남
+            - `ACTIVE`: 진행 중. `currentPeriodEnd`에 다음 회차를 결제한다
+            - `CANCEL_SCHEDULED`: 해지 예정. `currentPeriodEnd`까지 프로이고 그 뒤 `NONE`
+            - `PAYMENT_FAILED`: 갱신 결제가 실패해 무료로 바뀜. 다시 결제하지 않는다. 다시 구독할 때까지 이 상태로 남는다
+        cycle:
+          oneOf:
+            - $ref: '#/components/schemas/BillingCycle'
+            - type: 'null'
+          description: '`NONE`이면 null'
+        currentPeriodEnd:
+          type: [string, 'null']
+          format: date-time
+          description: 이번 기간이 끝나는 시각. `ACTIVE`면 다음 결제일, `CANCEL_SCHEDULED`면 프로가 끝나는 날로 보여 준다. `NONE`·`PAYMENT_FAILED`면 null
+
     SubmissionCodeReview:
       type: object
       required: [submissionId, status, failureReason, blocked, summary, complexity, improvements, nextConcepts, quota, createdAt,
@@ -4018,6 +4239,13 @@ components:
                   quota:
                     $ref: '#/components/schemas/AiQuota'
                     description: 거절한 시점의 한도. `remaining`은 0이다
+
+    SubscriptionNotActive:
+      description: '오류 `code`: `SUBSCRIPTION_NOT_ACTIVE`(프로 구독이 없음. `NONE`·`PAYMENT_FAILED`)'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
 
     Unauthorized:
       description: 토큰이 없거나 유효하지 않음
