@@ -226,19 +226,26 @@ export function MemberActions({
         description="바로 로그인할 수 없고, 로그인 중인 기기도 로그아웃돼요. 정지하고 24시간이 지나면 강제 탈퇴할 수 있어요."
         footer={
           <>
+            {/* 처리 중에도 disabled로 두지 않는다. 브라우저가 포커스를 창 밖으로 옮긴다(위 정지·해제 버튼과 같다, #319 리뷰) */}
             <Button
               type="button"
               variant="secondary"
-              disabled={act.isPending}
-              onClick={closeSuspend}
+              aria-disabled={act.isPending || undefined}
+              onClick={() => {
+                if (!act.isPending) closeSuspend()
+              }}
             >
               취소
             </Button>
             <Button
               type="button"
               variant="danger"
-              disabled={act.isPending || tooLong || nul}
-              onClick={() => act.mutate({ kind: 'suspend', reason })}
+              disabled={tooLong || nul}
+              aria-disabled={act.isPending || undefined}
+              aria-busy={act.isPending || undefined}
+              onClick={() => {
+                if (!act.isPending) act.mutate({ kind: 'suspend', reason })
+              }}
             >
               {act.isPending ? '정지하는 중…' : '정지하기'}
             </Button>

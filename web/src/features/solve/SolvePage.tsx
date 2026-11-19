@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'react-router'
 import type { Language, ProblemDetailView } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
-import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/features/auth/useAuth'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
@@ -233,7 +233,8 @@ function Workspace({ problem }: { problem: ProblemDetailView }) {
 
       {/* 넓은 화면은 좌우 분할, 좁은 화면은 탭 전환 (SOLVE-10). 가르는 이유는 useWideLayout 주석 */}
       {wide ? (
-        <div className="grid grid-cols-2 items-start gap-5">
+        // 지문:에디터 = 2:3. 코드는 가로로 길어지고 지문은 글이라 좁아도 읽힌다(#327)
+        <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start gap-5">
           {statement}
           {/*
             에디터 칸을 화면에 붙여 둔다. 지문은 에디터보다 훨씬 길어서(측정: 1280px
@@ -306,7 +307,7 @@ export function Component() {
     return (
       <section className="flex flex-col gap-4">
         <h1 className="page-title">문제 풀이</h1>
-        <ListSkeleton rows={8} />
+        <LoadingState />
       </section>
     )
   }

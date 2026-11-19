@@ -62,7 +62,7 @@ Ollama 서비스에 넣는 값(`systemctl edit ollama`):
 | `OLLAMA_HOST` | `<서버 사설 IP>:11434` | Ollama에는 인증이 없어 공개 주소에 띄우지 않는다 |
 | `OLLAMA_CONTEXT_LENGTH` | `16384` | OpenAI 호환 경로로는 요청마다 컨텍스트 길이를 줄 수 없다 |
 | `OLLAMA_KEEP_ALIVE` | `-1` | 내려간 모델을 다시 올리면 첫 호출이 1분쯤 걸린다 |
-| `OLLAMA_NUM_PARALLEL` | `5` | API 서버의 `LLM_WORKERS`와 맞춘다 |
+| `OLLAMA_NUM_PARALLEL` | `5` | 한 번에 생성하는 요청 수. API 서버의 `LLM_WORKERS`와 같은 값으로 둔다. 1개당 KV 캐시가 약 1GB라 RTX A4000(16GB)에서 5개면 VRAM 약 12.9GB |
 
 11434 포트는 방화벽으로 API 서버에서 오는 연결만 받는다.
 

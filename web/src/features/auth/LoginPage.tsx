@@ -4,11 +4,12 @@ import { useForm } from 'react-hook-form'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 
 import hero from '@/assets/mascot/Mascot/codingmon_hero_large.png'
-import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, Input } from '@/components/ui/input'
 import { BLANK_PIXEL, cn } from '@/lib/utils'
+import { afterLoginPath } from './afterLoginPath'
 import { AUTH_FOOT, AUTH_LINK } from './authCard'
 import { loginRequest } from './authQuery'
 import { startGitHubLogin } from './githubQuery'
@@ -22,7 +23,7 @@ export function Component() {
   const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { isAuthenticated, isLoading } = useAuth()
+  const { user, isLoading } = useAuth()
 
   const state = location.state as { from?: unknown; notice?: unknown; error?: unknown } | null
   const target = safeRedirect(state?.from)
@@ -40,13 +41,14 @@ export function Component() {
 
   const login = useMutation({
     mutationFn: loginRequest,
-    onSuccess: async (user) => {
+    // 바깥의 useAuth().user와 이름을 달리한다. 이 값은 방금 받은 응답이다
+    onSuccess: async (signedIn) => {
       // 캐시에 세션을 들이는 네 걸음은 GitHub 로그인과 똑같아 session.ts가 들고 있다.
-      await adoptSession(queryClient, user)
-      // 아래의 <Navigate> 분기도 setQueryData로 isAuthenticated가 바뀌면 같은 곳으로 보내므로
+      await adoptSession(queryClient, signedIn)
+      // 아래의 <Navigate> 분기도 setQueryData로 user가 생기면 같은 곳으로 보내므로
       // 이 호출이 없어도 도착한다. 그래도 두는 이유는 재렌더에 기대지 않고 바로 이동하기 위해서다.
       // replace를 빼면 /login이 기록에 남는다. LoginPage.test.tsx가 PUSH 여부로 이를 지킨다.
-      void navigate(target, { replace: true })
+      void navigate(afterLoginPath(signedIn, target), { replace: true })
     },
   })
 
@@ -57,14 +59,14 @@ export function Component() {
   if (isLoading) {
     return (
       <div className="mx-auto max-w-[400px] px-6 py-12">
-        <ListSkeleton rows={3} />
+        <LoadingState />
       </div>
     )
   }
 
   // 이미 로그인했으면 폼을 보여 주지 않는다. 로그인한 사람이 주소로 직접 들어오거나
   // 이 화면이 열려 있는 동안 세션이 생긴 경우다.
-  if (isAuthenticated) return <Navigate to={target} replace />
+  if (user) return <Navigate to={afterLoginPath(user, target)} replace />
 
   return (
     // 상단 바는 높이 64px에 아래 테두리 1px이 더해진다. 빼지 않으면 늘 1px 넘쳐 스크롤이 생긴다

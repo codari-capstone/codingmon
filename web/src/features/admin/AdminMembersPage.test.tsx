@@ -100,5 +100,14 @@ describe('AdminMembersPage (ADM-14)', () => {
       '없는사람',
     )
     expect(await screen.findByText('조건에 맞는 회원이 없어요')).toBeInTheDocument()
+    // 가리킬 '—'가 없으니 가입일 안내도 달지 않는다(#316 리뷰)
+    expect(screen.queryByText(/가입일이 '—'인 회원은/)).not.toBeInTheDocument()
+  })
+
+  it('가입일 안내는 표가 있을 때만 단다', async () => {
+    renderPage()
+    expect(screen.queryByText(/가입일이 '—'인 회원은/)).not.toBeInTheDocument()
+    await firstCells()
+    expect(screen.getByText(/가입일이 '—'인 회원은/)).toBeInTheDocument()
   })
 })

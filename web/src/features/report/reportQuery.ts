@@ -77,6 +77,8 @@ export function learningReportQuery() {
         state.data && { status: state.data.status, createdAt: state.data.generatedAt },
       ),
     retry: false,
+    // 추천 카드의 풀이 상태는 '지금 기준'이다. 채점 뒤 돌아오면 다시 받는다(learningStatsQuery와 같다, #312 리뷰)
+    staleTime: 0,
   })
 }
 

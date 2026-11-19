@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -388,6 +388,34 @@ describe('ReportPage — 저장된 리포트 (REP-02·03·05)', () => {
     }
   })
 
+  it('오늘 만든 리포트를 켜 둔 채 UTC 자정을 넘겨도, 누르지 않았으면 서버 시각 안내를 띄우지 않는다', async () => {
+    // 지난번 [리포트 보기]의 성공 결과를 날짜와 상관없이 보면, 새날에 그 리포트가 '같은 날짜'로 읽힌다(#311 리뷰)
+    vi.useFakeTimers({
+      shouldAdvanceTime: true,
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    })
+    try {
+      vi.setSystemTime(new Date('2026-11-16T23:59:50.000Z'))
+      storedReport(learningReportOf('COMPLETED', '2026-11-15T01:00:00.000Z'))
+      const made = learningReportOf('COMPLETED', '2026-11-16T23:59:51.000Z')
+      server.use(http.post('*/api/users/me/learning-report', () => HttpResponse.json(made)))
+      renderReport()
+
+      fireEvent.click(await screen.findByRole('button', { name: '리포트 보기' }))
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: '리포트 보기' })).not.toBeInTheDocument(),
+      )
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(await screen.findByText('오늘 리포트를 새로 만들 수 있어요')).toBeInTheDocument()
+      expect(
+        screen.queryByText(/서버 시각으로는 아직 하루가 지나지 않았어요/),
+      ).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('내 학습 탭: 학습 리포트가 지금 화면이고 배지 화면으로 갈 수 있다 (BADGE-02)', async () => {
     renderReport()
     const nav = await screen.findByRole('navigation', { name: '내 학습 메뉴' })
@@ -460,5 +488,27 @@ describe('ReportPage — 다음에 풀 문제 (REP-04)', () => {
     const region = await nextRegion()
     expect(within(region).getByText(/추천할 문제가 없어요/)).toBeInTheDocument()
     expect(within(region).queryByRole('link')).not.toBeInTheDocument()
+    // 고른 것이 없는데 '약한 개념에서 골랐어요'라고 하지 않는다(#312 리뷰)
+    expect(within(region).queryByText(/약한 개념에서 골랐어요/)).not.toBeInTheDocument()
+  })
+
+  it('다른 화면에 다녀오면 추천 카드의 풀이 상태를 다시 받는다', async () => {
+    // 전역 staleTime(30초) 안에 채점하고 돌아와도 '지금 기준'이어야 한다(#312 리뷰)
+    let calls = 0
+    server.use(
+      http.get('*/api/users/me/learning-report', () => {
+        calls += 1
+        return HttpResponse.json(learningReportOf('COMPLETED', now()))
+      }),
+    )
+    const { router } = renderReport()
+    await nextRegion()
+    expect(calls).toBe(1)
+
+    await router.navigate('/problems')
+    await screen.findByRole('heading', { name: '문제 목록 도착' })
+    await router.navigate('/me/report')
+    await nextRegion()
+    await waitFor(() => expect(calls).toBe(2))
   })
 })

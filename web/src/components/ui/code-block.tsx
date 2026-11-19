@@ -19,6 +19,8 @@ interface CodeBlockProps {
   highlight?: number[]
   /** 복사 버튼을 뺄 때 false */
   copyable?: boolean
+  /** 머리줄 글자를 이 단계의 제목으로 그린다. 블록이 한 구역의 제목을 겸할 때 쓴다(결과 화면의 제출한 코드) */
+  headingLevel?: 2 | 3
   className?: string
 }
 
@@ -33,8 +35,10 @@ export function CodeBlock({
   lineNumbers,
   highlight,
   copyable = true,
+  headingLevel,
   className,
 }: CodeBlockProps) {
+  const Heading = headingLevel ? (`h${headingLevel}` as const) : 'span'
   const { copied, copy } = useCopy(code)
   const copyText = copied ? '복사됨' : '복사'
 
@@ -49,7 +53,7 @@ export function CodeBlock({
     >
       {bar ? (
         <figcaption className="text-inverse-muted border-inverse-line flex h-11 items-center justify-between border-b pr-2 pl-[18px] text-[13px] font-semibold">
-          <span>{heading ?? ''}</span>
+          <Heading className="m-0 text-[13px] font-semibold">{heading ?? ''}</Heading>
           {copyable ? (
             <button
               type="button"

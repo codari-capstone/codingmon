@@ -5,6 +5,7 @@ import { useParams } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Alert } from '@/components/ui/alert'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -89,8 +90,11 @@ export function Component() {
   // 보조 쿼리(푼 문제, 제출 1페이지)의 401도 세션을 정리한다. 상세만 보면 로그인 화면으로 가지 않고 오류만 남는다.
   // 제출 카드가 다른 페이지에 있으면 1페이지를 지켜보는 곳은 여기뿐이다
   const queryClient = useQueryClient()
+  // 셋을 따로 본다. ??로 이으면 상세가 500일 때 뒤의 401을 보지 못한다(#318 리뷰)
   useEffect(() => {
-    forgetSessionIfUnauthorized(queryClient, error ?? solved.error ?? submissions.error)
+    for (const each of [error, solved.error, submissions.error]) {
+      forgetSessionIfUnauthorized(queryClient, each)
+    }
   }, [queryClient, error, solved.error, submissions.error])
 
   if (!valid || problemCode(error) === 'USER_NOT_FOUND') {
@@ -103,7 +107,7 @@ export function Component() {
     )
   }
   if (error && !user) return <ErrorState problem={error} onRetry={() => void refetch()} />
-  if (!user) return <ListSkeleton rows={6} />
+  if (!user) return <LoadingState />
 
   const suspendedAt = user.suspendedAt
   const withdrawable =

@@ -24,9 +24,11 @@ export function ReportRecommendations({
         <h2 id="report-next" className="text-foreground text-xl font-semibold">
           다음에 풀 문제
         </h2>
-        <p className="text-muted-foreground text-sm">
-          리포트를 만들 때 약한 개념에서 골랐어요. 풀이 상태는 지금 기준이에요.
-        </p>
+        {recommendations.length > 0 ? (
+          <p className="text-muted-foreground text-sm">
+            리포트를 만들 때 약한 개념에서 골랐어요. 풀이 상태는 지금 기준이에요.
+          </p>
+        ) : null}
       </div>
       {recommendations.length === 0 ? (
         // 공개 문제를 거의 다 맞혔을 때만 비거나 3개보다 적다(계약)

@@ -53,6 +53,7 @@ function renderCallback(result: string | null, from?: string) {
       { path: '/login', element: <h1>로그인 도착</h1> },
       { path: '/problems', element: <h1>문제 목록 도착</h1> },
       { path: '/submissions', element: <h1>제출 기록 도착</h1> },
+      { path: '/welcome', element: <h1>처음 안내 도착</h1> },
     ],
     { initialEntries: [path] },
   )
@@ -87,7 +88,7 @@ describe('GitHubCallbackPage (COM-02)', () => {
   })
 
   it('result가 없으면(주소를 직접 친 경우) 실패로 본다', async () => {
-    // 계약은 세 값만 보낸다. 그 밖은 전부 실패다 — 모르는 값을 가입 화면으로 보내면
+    // 계약은 네 값(success·signup·suspended·error)만 보낸다. 그 밖은 전부 실패다 — 모르는 값을 가입 화면으로 보내면
     // 증명서 없이 가입을 누르게 된다.
     const { router } = renderCallback(null)
     await expectFailure(router, GITHUB_FAILED)
@@ -282,13 +283,31 @@ describe('GitHubCallbackPage (COM-02)', () => {
       await waitFor(() => expect(client.getQueryData(['me'])).toEqual(mockAccounts[0]!.user))
     })
 
+    it('처음 안내를 보지 않았으면 기억해 둔 화면 대신 처음 안내로 간다 (WELCOME-01)', async () => {
+      await visitGitHub()
+      await gitHubSignUp('깃허브사람')
+      await visitGitHub()
+      server.use(
+        http.get('*/api/users/me', () =>
+          HttpResponse.json({ ...mockAccounts[0]!.user, welcomeSeen: false }),
+        ),
+      )
+
+      const { router } = renderCallback('success', '/submissions')
+
+      expect(await screen.findByRole('heading', { name: '처음 안내 도착' })).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe('/welcome')
+    })
+
     it('진행 중에는 확인 중임을 알린다', async () => {
       await visitGitHub()
       await gitHubSignUp('깃허브사람')
       await visitGitHub()
       renderCallback('success')
-      // ListSkeleton도 role="status"다. 역할로 집으면 둘이 걸려 애매해진다.
-      expect(screen.getByText(/GitHub 계정을 확인하고 있어요/)).toHaveAttribute('role', 'status')
+      // 문구는 펭귄 로딩(LoadingState)의 status 영역 안에 있다
+      expect(
+        screen.getByText(/GitHub 계정을 확인하고 있어요/).closest('[role="status"]'),
+      ).not.toBeNull()
     })
 
     it('갱신이 401이면(세션이 없으면) 로그인 화면에 실패를 알린다', async () => {

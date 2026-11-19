@@ -305,11 +305,12 @@ export function Component() {
               )}
             </div>
           </div>
+          {/* 원본이 558px이라 2배 화면에서 선명하려면 279px까지다(#327) */}
           <img
             src={loadingScene}
             alt=""
-            width={300}
-            height={225}
+            width={276}
+            height={207}
             className="block h-auto max-w-full self-center"
           />
         </div>

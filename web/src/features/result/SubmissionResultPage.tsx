@@ -7,7 +7,7 @@ import errorScene from '@/assets/scenes/error.png'
 import successScene from '@/assets/scenes/success.png'
 import { ErrorState } from '@/components/ErrorState'
 import { Raw } from '@/components/Raw'
-import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Verdict } from '@/components/Verdict'
 import { Badge } from '@/components/ui/badge'
 import { CodeBlock } from '@/components/ui/code-block'
@@ -21,7 +21,7 @@ import { CodeReviewPanel } from '@/features/ai/CodeReviewPanel'
 import { suspectLines } from '@/features/ai/countLines'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { parsePathId } from '@/lib/pathId'
-import { BLANK_PIXEL } from '@/lib/utils'
+import { BLANK_PIXEL, cn } from '@/lib/utils'
 import { nextActions } from './nextActions'
 import { problemSubmissionsPath } from '@/features/history/historyPath'
 import { isDeadEnd, isFinished, submissionResultQuery } from './resultQuery'
@@ -168,12 +168,16 @@ function SubmittedCode({ result, suspect }: { result: SubmissionResult; suspect:
   if (result.sourceCode === null || result.sourceCode === undefined) return null
 
   return (
-    <section className="flex min-w-0 flex-[1_1_480px] flex-col gap-3">
-      <h2 className="text-foreground text-lg font-semibold">제출한 코드</h2>
-      {/* CodeBlock은 React가 글자로 넣어 `<`·`&`가 해석되지 않는다(Raw와 같은 보장) */}
+    <div className="flex min-w-0 flex-col gap-3">
+      {/*
+        제목은 코드 상자의 머리줄이 겸한다(h2). 상자 위에 따로 두면 옆 AI 카드보다 한 줄 내려가 윗선이 어긋나고,
+        낭독기용 제목을 따로 두면 같은 문구가 연달아 읽힌다(#328 리뷰).
+        CodeBlock은 React가 글자로 넣어 `<`·`&`가 해석되지 않는다(Raw와 같은 보장)
+      */}
       <CodeBlock
         code={result.sourceCode}
-        title={SOURCE_FILE_NAME[result.language]}
+        title={`제출한 코드 · ${SOURCE_FILE_NAME[result.language]}`}
+        headingLevel={2}
         lineNumbers
         highlight={suspect}
       />
@@ -183,7 +187,7 @@ function SubmittedCode({ result, suspect }: { result: SubmissionResult; suspect:
           노란색으로 표시한 줄은 AI가 의심한 줄이에요.
         </p>
       ) : null}
-    </section>
+    </div>
   )
 }
 
@@ -263,6 +267,10 @@ export function Component() {
     enabled: submissionId !== null,
   })
   const analyzable = canAnalyze(data)
+  const reviewable = canReview(data)
+  // 코드와 AI 패널이 둘 다 있을 때만 2열이다. 하나뿐이면 반쪽 폭에 갇히지 않게 한 열로 둔다
+  const hasCode = typeof data?.sourceCode === 'string'
+  const twoColumns = hasCode && (analyzable || reviewable)
   // 제출한 코드에 의심 줄을 칠하려고 AI 패널과 같은 쿼리를 읽는다. 같은 키라 요청은 한 번이다
   const { data: analysis } = useQuery({
     ...analysisQuery(submissionId ?? 0),
@@ -296,7 +304,7 @@ export function Component() {
     return (
       <section className="flex flex-col gap-4">
         <h1 className="page-title">제출 결과</h1>
-        <ListSkeleton rows={3} />
+        <LoadingState />
       </section>
     )
   }
@@ -330,11 +338,24 @@ export function Component() {
         <Scene result={data} />
       </section>
 
-      {/* 넓으면 왼쪽 코드, 오른쪽 AI 패널. 좁으면 아래로 쌓는다(UX-05). */}
-      <div className="flex flex-wrap items-start gap-5">
-        <SubmittedCode result={data} suspect={suspect} />
+      {/*
+        넓으면 왼쪽 코드, 오른쪽 AI 패널을 같은 폭으로 둔다. 좁으면 아래로 쌓는다(UX-05).
+        AI 패널이 길어도 코드를 보며 읽도록 코드 열은 화면에 붙어 따라온다. 풀이 화면의 에디터 열과 같은 방식이다
+        (SolvePage). 상단 바는 sticky가 아니라 함께 올라가므로 top은 여백만 띄운다. 코드가 화면보다 길면 열 안에서 스크롤한다
+      */}
+      <div className={cn('grid items-start gap-5', twoColumns && 'lg:grid-cols-2')}>
+        {hasCode ? (
+          <div
+            className={cn(
+              'min-w-0',
+              twoColumns && 'lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto',
+            )}
+          >
+            <SubmittedCode result={data} suspect={suspect} />
+          </div>
+        ) : null}
         {analyzable ? (
-          <div className="min-w-0 flex-[1_1_560px]">
+          <div className="min-w-0">
             {/*
               key: 제출이 바뀌면 다른 패널이다. 이어 쓰면 진행 중인 요청의 응답이 새 제출의
               캐시에 들어간다(mutation이 마지막 렌더의 onSuccess로 끝나서).
@@ -347,8 +368,8 @@ export function Component() {
             />
           </div>
         ) : null}
-        {canReview(data) ? (
-          <div className="min-w-0 flex-[1_1_560px]">
+        {reviewable ? (
+          <div className="min-w-0">
             {/* key는 AnalysisPanel과 같은 이유 */}
             <CodeReviewPanel key={data.id} submissionId={data.id} />
           </div>

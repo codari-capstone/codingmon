@@ -39,6 +39,25 @@ const stored = async (id: number) =>
 const handle = () => screen.getByRole('region', { name: '처리' })
 
 describe('AdminReportDetailPage (ADM-13)', () => {
+  it('없는 신고와 첫 조회 실패도 페이지 제목(h1)을 갖는다', async () => {
+    // 화면을 대신하는 안내라 h2로 두면 페이지에 h1이 없다(#315 리뷰)
+    renderPage(99_999)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: '신고를 찾을 수 없어요' }),
+    ).toBeInTheDocument()
+  })
+
+  it('첫 조회가 실패하면 오류 안내가 페이지 제목(h1)이다', async () => {
+    server.use(
+      http.get('*/api/admin/reports/:id', () =>
+        HttpResponse.json({ status: 500, title: 'Server Error' }, { status: 500 }),
+      ),
+    )
+    renderPage(10)
+    expect(await screen.findByRole('heading', { level: 1 }, { timeout: 4000 })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
+  })
+
   it('신고 내용을 읽기만 하게 보이고, 문제는 관리자 문제 화면으로 간다', async () => {
     renderPage(10)
 

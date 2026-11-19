@@ -254,6 +254,32 @@ describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
     expect(asked.filter((year) => year === '2028')).toEqual([])
   })
 
+  it('해를 받는 동안에는 통계 카드도 흐리게 두고 기다림을 알린다', async () => {
+    // 잔디만 흐리면 위 카드의 '2028년 활동한 날'이 드롭다운의 2026년과 함께 확정값처럼 보인다(#307 리뷰)
+    let release = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    server.use(
+      http.get('*/api/users/me/activity', async ({ request }) => {
+        const year = new URL(request.url).searchParams.get('year')
+        if (year !== null) await held
+        return HttpResponse.json(activityFor(1, NOW, Number(year ?? SERVER_YEAR)))
+      }),
+    )
+    const user = userEvent.setup()
+    mountMyPage(EMAIL_USER)
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: '잔디 연도' }), '2026')
+    const stats = screen.getByText(`${SERVER_YEAR}년 활동한 날`).closest('[aria-busy]')
+    expect(stats).toHaveAttribute('aria-busy', 'true')
+    expect(stats).toHaveClass('opacity-60')
+
+    release()
+    await screen.findByText('2026년 활동한 날')
+    expect(screen.getByText('2026년 활동한 날').closest('[aria-busy]')).toBeNull()
+  })
+
   it('지난 해를 보다 올해 조회만 실패해도 다시 시도로 둘 다 다시 받아 풀린다', async () => {
     // 오류 화면은 두 질의의 오류를 합쳐 보이는데 다시 시도가 고른 해만 받으면 풀리지 않았다(#307 리뷰)
     let failCurrent = false

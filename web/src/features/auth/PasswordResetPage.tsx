@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 
-import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Button } from '@/components/ui/button'
 import { isValidPassword, PASSWORD_CHANGED_NOTICE } from './accountRules'
 import { AUTH_CARD, AUTH_FOOT, AUTH_LINK } from './authCard'
@@ -60,7 +60,7 @@ export function Component() {
 
   // 세션을 모르는 동안 폼을 보여 주면, 이미 로그인한 사람이 입력을 시작한 뒤 아래
   // <Navigate>가 실행돼 입력이 사라진 채 이동한다 (LoginPage와 같은 선택).
-  if (isLoading) return <ListSkeleton rows={4} />
+  if (isLoading) return <LoadingState />
   if (isAuthenticated) return <Navigate to="/problems" replace />
 
   const ready = resetToken !== null && isValidPassword(password) && password === passwordConfirm

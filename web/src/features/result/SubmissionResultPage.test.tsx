@@ -181,7 +181,11 @@ describe('SubmissionResultPage', () => {
       completed({ sourceCode: 'if a < b & c:\n  print("<script>x</script>")' })
       renderResult()
 
-      expect(await screen.findByRole('heading', { name: '제출한 코드' })).toBeInTheDocument()
+      // 코드 상자 머리줄이 구역 제목(h2)을 겸한다. 같은 문구의 제목을 따로 두지 않는다(#328 리뷰)
+      expect(
+        await screen.findByRole('heading', { level: 2, name: '제출한 코드 · script.py' }),
+      ).toBeInTheDocument()
+      expect(screen.getAllByText(/제출한 코드/)).toHaveLength(1)
       // 해석되지 않고 문자열로 남는다. HTML로 그렸다면 <script>는 사라지고 텍스트만 남는다.
       expect(screen.getByText(/print\("<script>x<\/script>"\)/)).toBeInTheDocument()
       expect(document.querySelector('script')).toBeNull()
@@ -192,7 +196,7 @@ describe('SubmissionResultPage', () => {
       renderResult()
 
       expect(await screen.findByText('채점 중 60%')).toBeInTheDocument()
-      expect(screen.queryByRole('heading', { name: '제출한 코드' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: /제출한 코드/ })).not.toBeInTheDocument()
       expect(screen.queryByRole('link', { name: '이 문제의 제출 기록' })).not.toBeInTheDocument()
     })
 

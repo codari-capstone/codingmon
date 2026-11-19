@@ -209,9 +209,29 @@ describe('LoadingState', () => {
     render(<LoadingState />)
     expect(screen.getByRole('status')).toHaveTextContent('불러오는 중…')
   })
+
+  it('달리는 펭귄은 장식이라 낭독기가 읽지 않고, 문구를 바꿀 수 있다 (#327)', () => {
+    const { container } = render(<LoadingState label="GitHub 계정을 확인하고 있어요…" />)
+    expect(screen.getByRole('status')).toHaveTextContent('GitHub 계정을 확인하고 있어요…')
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('loading'),
+    )
+  })
 })
 
 describe('EmptyState (디자인 props)', () => {
+  it('기본 상자 속 펭귄은 큰 원본을 써서 2배 화면에서도 흐리지 않다 (#327)', () => {
+    const { container } = render(<EmptyState title="비었어요" />)
+    const img = container.querySelector('img')!
+    // Mascot의 작은 원본(States/empty_data.png, 194px)이 아니라 scenes/empty.png(612px)
+    expect(img.getAttribute('src')).toMatch(/empty\.png$/)
+    expect(img.getAttribute('src')).not.toContain('empty_data')
+    expect(img).toHaveAttribute('width', '136')
+    expect(img).toHaveAttribute('alt', '')
+  })
+
   it('verdict 줄·펭귄 자세·노드 action을 받는다', () => {
     render(
       <MemoryRouter>
