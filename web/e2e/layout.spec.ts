@@ -151,23 +151,23 @@ async function expectHeaderFits(page: Page, linkCount: number) {
 }
 
 for (const width of [320, 390, 430, 768]) {
-  test(`${width}px에서 메뉴 세 개가 모두 보인다`, async ({ page }) => {
+  test(`${width}px에서 메뉴 네 개가 모두 보인다`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 })
     await page.goto('/problems')
 
-    await expectHeaderFits(page, 3)
+    await expectHeaderFits(page, 4)
   })
 }
 
-// ADMIN은 학습자 화면에서 '관리자'까지 4개라 가장 넓다 (#264 리뷰)
+// ADMIN은 학습자 화면에서 '관리자'까지 5개라 가장 넓다 (#264 리뷰, #331에서 요금제 추가)
 for (const width of [320, 390]) {
-  test(`${width}px에서 ADMIN의 메뉴 네 개가 모두 보인다`, async ({ page }) => {
+  test(`${width}px에서 ADMIN의 메뉴 다섯 개가 모두 보인다`, async ({ page }) => {
     await login(page, ADMIN)
     await page.setViewportSize({ width, height: 844 })
     await page.goto('/problems')
     // 새로고침 직후에는 세션을 몰라 '관리자'가 없다. 붙은 뒤에 잰다
     await expect(page.getByRole('banner').getByRole('link', { name: '관리자' })).toBeVisible()
 
-    await expectHeaderFits(page, 4)
+    await expectHeaderFits(page, 5)
   })
 }

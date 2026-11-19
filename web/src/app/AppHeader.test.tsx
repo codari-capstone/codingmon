@@ -55,13 +55,23 @@ function renderHeaderAt(url: string | { pathname: string; state: unknown }) {
 }
 
 describe('AppHeader', () => {
-  it('로고와 메뉴 3개를 보여 준다', () => {
+  it('로고와 메뉴 4개를 보여 준다', () => {
     renderHeader()
 
     expect(screen.getByRole('link', { name: 'Codingmon' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: '문제' })).toHaveAttribute('href', '/problems')
     expect(screen.getByRole('link', { name: '제출 기록' })).toHaveAttribute('href', '/submissions')
     expect(screen.getByRole('link', { name: '내 학습' })).toHaveAttribute('href', '/me/report')
+    expect(screen.getByRole('link', { name: '요금제' })).toHaveAttribute('href', '/pricing')
+  })
+
+  it('요금제 화면에서 요금제 메뉴가 켜져 있다 (PRICE-01)', () => {
+    renderHeaderAt('/pricing')
+    const nav = screen.getByRole('navigation', { name: '주요 메뉴' })
+    expect(within(nav).getByRole('link', { name: '요금제' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
   })
 
   it('배지 화면에서도 내 학습 메뉴가 켜져 있다 (BADGE-02)', () => {
@@ -179,7 +189,7 @@ describe('AppHeader', () => {
   })
 
   it('관리자 화면에서 세션을 모르는 동안에도 관리자 메뉴를 둔다', () => {
-    // 학습자 메뉴를 먼저 보였다가 바꾸면 새로고침마다 메뉴가 3개 -> 1개로 흔들린다
+    // 학습자 메뉴를 먼저 보였다가 바꾸면 새로고침마다 메뉴가 4개 -> 1개로 흔들린다
     mockAuth({ isLoading: true })
     renderHeaderAt('/admin')
 

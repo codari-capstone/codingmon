@@ -57,7 +57,8 @@ describe('라우터 보호 구조', () => {
     expect(guardsOf('tags')).toContain('RequireAdmin')
   })
 
-  it.each(['problems', 'login', 'signup', 'password-reset', 'forbidden', '*'])(
+  // pricing: 요금제는 로그인 없이 본다 (PRICE-01, #333 리뷰)
+  it.each(['problems', 'pricing', 'login', 'signup', 'password-reset', 'forbidden', '*'])(
     '%s는 보호하지 않는다',
     (path) => {
       expect(guardsOf(path)).not.toContain('RequireAuth')

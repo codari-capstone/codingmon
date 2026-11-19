@@ -44,7 +44,7 @@ export function AppHeader({ wide = false }: { wide?: boolean }) {
   const { logout } = useLogout()
   const isAdmin = user?.role === 'ADMIN'
   // /admin 아래에 남는 사람은 ADMIN뿐이다(아니면 /forbidden으로 간다). 세션을 모르는 동안에도
-  // 관리자 메뉴를 두어야 새로고침 때 학습자 메뉴 3개 -> 1개로 흔들리지 않는다.
+  // 관리자 메뉴를 두어야 새로고침 때 학습자 메뉴 4개 -> 1개로 흔들리지 않는다.
   const menu: MenuItem[] =
     inAdmin && (isAdmin || isLoading) ? ADMIN_MENU : isAdmin ? [...MENU, ADMIN_ENTRY] : MENU
   // 관리자 메뉴가 보일 때만 센다. 학습자가 부르면 403이다
@@ -86,7 +86,7 @@ export function AppHeader({ wide = false }: { wide?: boolean }) {
           flex-auto(= flex: 1 1 auto)여야 한다. flex-1은 basis가 0%라 줄바꿈 계산에서
           폭이 0으로 취급돼 줄을 넘기지 않고, min-w-0이나 overflow-x-auto가 붙으면
           좁은 화면에서 메뉴가 조용히 잘린다. basis가 auto면 들어갈 자리가 없을 때
-          nav 전체가 둘째 줄로 내려간다 (UX-05). 그 줄에도 다 들어가지 않으면(320px의 ADMIN 4개)
+          nav 전체가 둘째 줄로 내려간다 (UX-05). 그 줄에도 다 들어가지 않으면(320px의 ADMIN 5개)
           nav 안에서 링크 단위로 한 번 더 줄을 바꾼다. 링크 글자는 끊지 않는다.
         */}
         <nav aria-label="주요 메뉴" className="flex flex-auto flex-wrap gap-1">

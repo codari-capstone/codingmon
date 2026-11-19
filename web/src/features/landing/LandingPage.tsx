@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router'
 
-import wordmark from '@/assets/brand/codingmon_wordmark.png'
 import hero from '@/assets/mascot/Mascot/codingmon_hero_large.png'
 import errorScene from '@/assets/scenes/error.png'
 import loadingScene from '@/assets/scenes/loading.png'
@@ -9,7 +8,7 @@ import studyingScene from '@/assets/scenes/studying.png'
 import successScene from '@/assets/scenes/success.png'
 import thinkingScene from '@/assets/scenes/thinking.png'
 import { Accordion } from '@/components/ui/accordion'
-import { MENU } from '@/app/menu'
+import { SiteFooter } from '@/app/SiteFooter'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Icon, type IconName } from '@/components/ui/icon'
@@ -19,6 +18,7 @@ import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { DEFAULT_PARAMS } from '@/features/problems/problemListParams'
 import { problemListQuery } from '@/features/problems/problemsQuery'
 import { cn } from '@/lib/utils'
+import { StartButton } from './StartButton'
 
 const PAINS: { icon: IconName; q: string; a: string }[] = [
   {
@@ -316,50 +316,8 @@ export function Component() {
         </div>
       </section>
 
-      <footer className="border-t">
-        <div
-          className={cn(
-            SECTION,
-            'text-muted-foreground flex flex-wrap items-center justify-between gap-4 pt-8 pb-10 text-sm',
-          )}
-        >
-          <img src={wordmark} alt="Codingmon" width={117} height={32} className="block" />
-          {/* 이용약관·개인정보처리방침은 문서가 생기면 더한다 (#244) */}
-          <nav aria-label="바닥글" className="flex gap-6">
-            {MENU.map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                className="text-muted-foreground hover:text-foreground no-underline"
-              >
-                {l.label}
-              </Link>
-            ))}
-          </nav>
-          <span>© 2026 Codari</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
-  )
-}
-
-/** 비로그인은 가입, 로그인한 사용자는 문제 목록 (LAND-02). 세션을 모르는 동안은 자리만 잡는다. */
-function StartButton({ signedIn }: { signedIn: boolean | undefined }) {
-  if (signedIn === undefined) {
-    return (
-      <Button size="lg" variant="accent" aria-hidden tabIndex={-1} className="invisible">
-        무료로 시작하기
-      </Button>
-    )
-  }
-  return (
-    <Button asChild size="lg" variant="accent">
-      {signedIn ? (
-        <Link to="/problems">문제 풀러 가기</Link>
-      ) : (
-        <Link to="/signup">무료로 시작하기</Link>
-      )}
-    </Button>
   )
 }
 
