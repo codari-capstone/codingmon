@@ -85,21 +85,28 @@ export const router = createBrowserRouter([
             // 남색 패널이 화면 높이를 채운다. 바닥글을 두면 화면이 한 번 더 내려간다
             handle: { bleed: true, title: '로그인', noFooter: true } satisfies PageHandle,
           },
+          // 아래 세 화면은 가입·인증 흐름이라 바닥글을 두지 않는다. 받아 둔 인증번호와 입력값이 화면에만
+          // 있어서, 바닥글 링크(약관 포함)를 누르면 같은 탭에서 넘어가며 모두 잃는다(#336 리뷰).
+          // 약관은 가입 버튼 위 안내(SignupConsent)가 새 탭으로 연다
           // GitHub 로그인이 돌아오는 자리 (COM-02). 주소는 계약이 정했다.
           {
             path: 'login/github',
             lazy: () => import('@/features/auth/GitHubCallbackPage'),
-            handle: { title: 'GitHub 로그인', noindex: true } satisfies PageHandle,
+            handle: { title: 'GitHub 로그인', noindex: true, noFooter: true } satisfies PageHandle,
           },
           {
             path: 'signup',
             lazy: () => import('@/features/auth/SignupPage'),
-            handle: { pageTone: 'subtle', title: '회원가입' } satisfies PageHandle,
+            handle: { pageTone: 'subtle', title: '회원가입', noFooter: true } satisfies PageHandle,
           },
           {
             path: 'password-reset',
             lazy: () => import('@/features/auth/PasswordResetPage'),
-            handle: { pageTone: 'subtle', title: '비밀번호 찾기' } satisfies PageHandle,
+            handle: {
+              pageTone: 'subtle',
+              title: '비밀번호 찾기',
+              noFooter: true,
+            } satisfies PageHandle,
           },
           {
             path: 'forbidden',

@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 import { MENU } from './menu'
 
 /**
- * 모든 화면의 바닥글(AppShell이 그린다. 로그인·문제 풀이는 handle의 noFooter로 뺀다). PokeClip 바닥글과 같은 구성이다:
+ * 모든 화면의 바닥글(AppShell이 그린다. 로그인·가입 흐름과 문제 풀이는 handle의 noFooter로 뺀다). PokeClip 바닥글과 같은 구성이다:
  * 왼쪽에 로고와 한 줄 소개, 오른쪽에 메뉴와 약관 링크, 아래에 운영·문의 한 줄.
  * 메뉴는 상단 바와 같은 MENU이고, 약관·문의·사업자 정보는 legalInfo 한 곳에서 온다(#335).
  */
