@@ -118,7 +118,8 @@ function ByDifficulty({ activity }: { activity: UserActivity }) {
             key={level}
             label={DIFFICULTY_LABEL[level]}
             value={activity.solvedByDifficulty[level]}
-            max={activity.problemCountByDifficulty[level]}
+            // 계약상 늘 오지만 웹이 API보다 먼저 배포되면 빠질 수 있다. 영역이 깨지지 않게 0으로 본다(#185와 같은 이유)
+            max={activity.problemCountByDifficulty?.[level] ?? 0}
             showValue
           />
         ))}
