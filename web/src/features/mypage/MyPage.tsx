@@ -91,7 +91,7 @@ function Stats({ activity, busy }: { activity: UserActivity; busy: boolean }) {
   )
 }
 
-/** 난이도별 맞힌 수 (MY-05). 막대의 기준은 맞힌 문제 전체다. */
+/** 난이도별 맞힌 수 (MY-05). 막대의 기준은 그 난이도의 공개 중인 문제 수다(#339). */
 function ByDifficulty({ activity }: { activity: UserActivity }) {
   return (
     <section aria-labelledby="difficulty-heading" className={cn(CARD, 'gap-5')}>
@@ -118,7 +118,8 @@ function ByDifficulty({ activity }: { activity: UserActivity }) {
             key={level}
             label={DIFFICULTY_LABEL[level]}
             value={activity.solvedByDifficulty[level]}
-            max={activity.solvedCount}
+            // 계약상 늘 오지만 웹이 API보다 먼저 배포되면 빠질 수 있다. 영역이 깨지지 않게 0으로 본다(#185와 같은 이유)
+            max={activity.problemCountByDifficulty?.[level] ?? 0}
             showValue
           />
         ))}

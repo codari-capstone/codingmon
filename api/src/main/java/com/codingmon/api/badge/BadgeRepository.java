@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.codingmon.api.learning.UserActivityRepository;
-import com.codingmon.api.learning.UserActivityRepository.SolvedByDifficulty;
+import com.codingmon.api.learning.UserActivityRepository.CountByDifficulty;
 import com.codingmon.api.submission.UserProblemStatsRepository.Judged;
 
 // 배지(BADGE-01~03, #248). 받는 조건과 주는 때는 기능명세 12절이 기준이다.
@@ -106,7 +106,7 @@ public class BadgeRepository {
         addIf(add, have, BadgeCode.NO_HINT, mediumOrHard && attempts >= 2 && first.maxRevealedHintLevel() == 0);
         addIf(add, have, BadgeCode.RETRY, attempts >= RETRY_MIN_ATTEMPTS);
         if (!have.contains(BadgeCode.MEDIUM_SOLVER) || !have.contains(BadgeCode.INTERMEDIATE)) {
-            SolvedByDifficulty solved = activity.solvedByDifficulty(userId);
+            CountByDifficulty solved = activity.solvedByDifficulty(userId);
             addIf(add, have, BadgeCode.MEDIUM_SOLVER, medium && solved.MEDIUM() >= MEDIUM_SOLVER_COUNT);
             addIf(add, have, BadgeCode.INTERMEDIATE, solved.EASY() >= 10 && solved.MEDIUM() >= 10 && solved.HARD() >= 1);
         }
@@ -119,7 +119,8 @@ public class BadgeRepository {
         }
     }
 
-    // MY-05와 같이 공개 중인 버전의 난이도. 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다.
+    // 난이도는 MY-05와 같이 공개 중인 버전의 난이도다. 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다.
+    // 맞힌 수는 MY-05와 달리 내린 문제도 센다(#339).
     private String difficulty(long problemId) {
         return jdbc.sql("""
                 select difficulty from problem_versions

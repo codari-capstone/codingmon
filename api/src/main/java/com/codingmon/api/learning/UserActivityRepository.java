@@ -21,12 +21,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserActivityRepository {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    // 난이도별 맞힌 수는 공개 중인 버전의 난이도로 센다. 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다.
-    // 배지(#248)도 같은 기준으로 센다.
+    // 난이도는 공개 중인 버전의 난이도로 본다. 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다.
+    // 마이페이지(MY-05)는 v.status = 'PUBLISHED'로 공개 중인 문제만 센다. 공개 중인 문제 수 대비로 보여 주므로
+    // 내린 문제를 넣으면 맞힌 수가 전체보다 커질 수 있다(#339). 배지(#248)는 내린 문제도 센다.
     private static final String SOLVED_FROM = """
             from user_problem_stats s
             left join lateral (
-              select difficulty from problem_versions
+              select difficulty, status from problem_versions
               where problem_id = s.problem_id and published_at is not null
               order by published_at desc limit 1
             ) v on true
@@ -39,12 +40,13 @@ public class UserActivityRepository {
         this.jdbc = jdbc;
     }
 
-    record UserActivity(int solvedCount, int wrongCount, SolvedByDifficulty solvedByDifficulty, LocalDate from,
-            LocalDate to, List<ActivityDay> days, int totalActiveDays) {
+    record UserActivity(int solvedCount, int wrongCount, CountByDifficulty solvedByDifficulty,
+            CountByDifficulty problemCountByDifficulty, LocalDate from, LocalDate to, List<ActivityDay> days,
+            int totalActiveDays) {
     }
 
     // 필드 이름이 그대로 응답의 키가 된다(openapi.yaml의 Difficulty).
-    public record SolvedByDifficulty(int EASY, int MEDIUM, int HARD) {
+    public record CountByDifficulty(int EASY, int MEDIUM, int HARD) {
     }
 
     record ActivityDay(LocalDate date, int count) {
@@ -56,7 +58,7 @@ public class UserActivityRepository {
     record StreakDay(LocalDate date, boolean active) {
     }
 
-    private record Summary(int solved, int wrong, SolvedByDifficulty byDifficulty) {
+    private record Summary(int solved, int wrong, CountByDifficulty byDifficulty) {
     }
 
     // 잔디는 year의 1월 1일 ~ 12월 31일이다. year 범위는 컨트롤러가 검사한다.
@@ -68,13 +70,21 @@ public class UserActivityRepository {
         Summary summary = jdbc.sql("""
                 select count(*) filter (where s.solved) as solved,
                        count(*) filter (where not s.solved) as wrong,
-                       count(*) filter (where s.solved and v.difficulty = 'EASY') as easy,
-                       count(*) filter (where s.solved and v.difficulty = 'MEDIUM') as medium,
-                       count(*) filter (where s.solved and v.difficulty = 'HARD') as hard
+                       count(*) filter (where s.solved and v.status = 'PUBLISHED' and v.difficulty = 'EASY') as easy,
+                       count(*) filter (where s.solved and v.status = 'PUBLISHED' and v.difficulty = 'MEDIUM') as medium,
+                       count(*) filter (where s.solved and v.status = 'PUBLISHED' and v.difficulty = 'HARD') as hard
                 """ + SOLVED_FROM)
                 .param("userId", userId)
                 .query((rs, n) -> new Summary(rs.getInt("solved"), rs.getInt("wrong"),
-                        new SolvedByDifficulty(rs.getInt("easy"), rs.getInt("medium"), rs.getInt("hard"))))
+                        new CountByDifficulty(rs.getInt("easy"), rs.getInt("medium"), rs.getInt("hard"))))
+                .single();
+        CountByDifficulty problemCount = jdbc.sql("""
+                select count(*) filter (where difficulty = 'EASY') as easy,
+                       count(*) filter (where difficulty = 'MEDIUM') as medium,
+                       count(*) filter (where difficulty = 'HARD') as hard
+                from problem_versions where status = 'PUBLISHED'
+                """)
+                .query((rs, n) -> new CountByDifficulty(rs.getInt("easy"), rs.getInt("medium"), rs.getInt("hard")))
                 .single();
         List<ActivityDay> days = jdbc.sql("""
                 select (submitted_at at time zone 'Asia/Seoul')::date as day, count(*) as count
@@ -89,19 +99,20 @@ public class UserActivityRepository {
                 .param("end", startOf(to.plusDays(1)))
                 .query((rs, n) -> new ActivityDay(rs.getObject("day", LocalDate.class), rs.getInt("count")))
                 .list();
-        return new UserActivity(summary.solved(), summary.wrong(), summary.byDifficulty(), from, to, days, days.size());
+        return new UserActivity(summary.solved(), summary.wrong(), summary.byDifficulty(), problemCount, from, to, days,
+                days.size());
     }
 
-    // MY-05와 같은 기준의 난이도별 맞힌 수. 배지(#248)가 쓴다.
+    // 배지(#248)가 쓰는 난이도별 맞힌 수. MY-05와 달리 공개가 내려간 문제도 센다.
     @Transactional(propagation = Propagation.MANDATORY)
-    public SolvedByDifficulty solvedByDifficulty(long userId) {
+    public CountByDifficulty solvedByDifficulty(long userId) {
         return jdbc.sql("""
                 select count(*) filter (where s.solved and v.difficulty = 'EASY') as easy,
                        count(*) filter (where s.solved and v.difficulty = 'MEDIUM') as medium,
                        count(*) filter (where s.solved and v.difficulty = 'HARD') as hard
                 """ + SOLVED_FROM)
                 .param("userId", userId)
-                .query((rs, n) -> new SolvedByDifficulty(rs.getInt("easy"), rs.getInt("medium"), rs.getInt("hard")))
+                .query((rs, n) -> new CountByDifficulty(rs.getInt("easy"), rs.getInt("medium"), rs.getInt("hard")))
                 .single();
     }
 
