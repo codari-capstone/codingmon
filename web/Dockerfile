@@ -8,6 +8,8 @@ RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 
-FROM nginx:1.29-alpine
+# 패치 버전까지 적는다. 1.29-alpine처럼 브랜치 태그만 적으면 그 브랜치 지원이 끝난 뒤
+# 보안 수정이 나와도 이미지가 그대로다(1.29는 2026-04 이후 갱신 없음, CVE-2026-123007 등 미수정)
+FROM nginx:1.30.7-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /src/dist /usr/share/nginx/html
