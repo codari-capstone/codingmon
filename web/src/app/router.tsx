@@ -47,6 +47,37 @@ export const router = createBrowserRouter([
                 '코딩몬의 무료·프로 요금제예요. 문제 풀이와 채점은 언제나 무료이고, 프로는 AI 오답 분석과 힌트를 더 많이 쓸 수 있어요.',
             } satisfies PageHandle,
           },
+          // 이용약관·개인정보 처리방침·환불 정책 (LEGAL-01~03, #335). 로그인 없이 본다.
+          // 문서가 760px 폭과 위아래 여백을 직접 잡아 bleed다(페이지 여백이 겹치지 않게)
+          {
+            path: 'terms',
+            lazy: () => import('@/features/legal/TermsPage'),
+            handle: {
+              bleed: true,
+              title: '이용약관',
+              description:
+                '코딩몬 서비스의 이용 조건과 유료 서비스(프로 플랜)의 결제·해지 조건이에요.',
+            } satisfies PageHandle,
+          },
+          {
+            path: 'privacy',
+            lazy: () => import('@/features/legal/PrivacyPage'),
+            handle: {
+              bleed: true,
+              title: '개인정보 처리방침',
+              description:
+                '코딩몬이 처리하는 개인정보의 항목, 보유 기간, 위탁과 국외 이전을 알려 드려요.',
+            } satisfies PageHandle,
+          },
+          {
+            path: 'refund',
+            lazy: () => import('@/features/legal/RefundPage'),
+            handle: {
+              bleed: true,
+              title: '환불 정책',
+              description: '코딩몬 프로 플랜의 청약철회, 해지, 환불 기준이에요.',
+            } satisfies PageHandle,
+          },
           // 왼쪽 남색 패널이 좌우 끝까지 간다 (#241)
           {
             path: 'login',
