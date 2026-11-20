@@ -1,15 +1,19 @@
 import { Link } from 'react-router'
 
-import { LegalDocument, SupportEmail, type LegalSection } from './LegalDocument'
+import { LegalDocument, type LegalSection } from './LegalDocument'
 import { BUSINESS, effectiveDate, LEGAL_VERSIONS } from './legalInfo'
+import { SupportEmail } from './SupportEmail'
 
 /** 이용약관 (LEGAL-01, #335). 구성은 PokeClip 이용약관과 같고, 유료 서비스 조항(제8·9조)을 더했다 */
+/** 이 화면이 보여 주는 판의 주소. 지난 판으로 옮길 때 이 값만 바꾸면 드롭다운과 부칙의 시행일이 함께 따라간다 */
+const PATH = '/terms'
+
 export function Component() {
   return (
     <LegalDocument
       title="코딩몬 이용약관"
       versions={LEGAL_VERSIONS.terms}
-      current="/terms"
+      current={PATH}
       sections={SECTIONS}
     />
   )
@@ -388,6 +392,6 @@ const SECTIONS: LegalSection[] = [
   {
     id: 'addendum',
     title: '부칙',
-    body: <p>이 약관은 {effectiveDate('terms')}부터 시행합니다.</p>,
+    body: <p>이 약관은 {effectiveDate(LEGAL_VERSIONS.terms, PATH)}부터 시행합니다.</p>,
   },
 ]

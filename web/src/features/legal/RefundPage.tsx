@@ -1,7 +1,8 @@
 import { Link } from 'react-router'
 
-import { LegalDocument, LegalTable, SupportEmail, type LegalSection } from './LegalDocument'
+import { LegalDocument, LegalTable, type LegalSection } from './LegalDocument'
 import { BUSINESS, effectiveDate, LEGAL_VERSIONS } from './legalInfo'
+import { SupportEmail } from './SupportEmail'
 
 /**
  * 환불 정책 (LEGAL-03, #335). 이용약관 제9조가 이 문서를 가리킨다.
@@ -9,12 +10,15 @@ import { BUSINESS, effectiveDate, LEGAL_VERSIONS } from './legalInfo'
  * 전자상거래법의 청약철회(제17조)·환급(제18조)과 소비자분쟁해결기준의 중도 해지 기준을 따른다.
  * 해지·결제 실패·탈퇴의 동작은 결제 명세(#332, MY-04·MY-06)와 같아야 한다.
  */
+/** 이 화면이 보여 주는 판의 주소. 지난 판으로 옮길 때 이 값만 바꾸면 드롭다운과 부칙의 시행일이 함께 따라간다 */
+const PATH = '/refund'
+
 export function Component() {
   return (
     <LegalDocument
       title="환불 정책"
       versions={LEGAL_VERSIONS.refund}
-      current="/refund"
+      current={PATH}
       intro={
         <>
           이 정책은 코딩몬 유료 서비스(프로 플랜)의 청약철회, 해지, 환불 기준을 「전자상거래
@@ -204,9 +208,9 @@ const SECTIONS: LegalSection[] = [
     title: '9. 환불 정책의 변경',
     body: (
       <p>
-        이 정책은 {effectiveDate('refund')}부터 적용합니다. 바꾸면 이용약관 제3조처럼 시행 7일
-        전에(회원에게 불리한 변경은 30일 전에) 서비스 안에 공지합니다. 지난 판은 제목 아래 시행일
-        목록에서 볼 수 있습니다.
+        이 정책은 {effectiveDate(LEGAL_VERSIONS.refund, PATH)}부터 적용합니다. 바꾸면 이용약관
+        제3조처럼 시행 7일 전에(회원에게 불리한 변경은 30일 전에) 서비스 안에 공지합니다. 지난 판은
+        제목 아래 시행일 목록에서 볼 수 있습니다.
       </p>
     ),
   },

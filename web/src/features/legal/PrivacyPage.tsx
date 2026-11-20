@@ -1,7 +1,8 @@
 import { Link } from 'react-router'
 
-import { LegalDocument, LegalTable, SupportEmail, type LegalSection } from './LegalDocument'
+import { LegalDocument, LegalTable, type LegalSection } from './LegalDocument'
 import { BUSINESS, effectiveDate, LEGAL_VERSIONS } from './legalInfo'
+import { SupportEmail } from './SupportEmail'
 
 /**
  * 개인정보 처리방침 (LEGAL-02, #335). 구성은 PokeClip 처리방침과 같다.
@@ -15,12 +16,15 @@ import { BUSINESS, effectiveDate, LEGAL_VERSIONS } from './legalInfo'
  * - AI: 팀 서버의 오픈 웨이트 모델(LLM_URL). 닉네임·이메일은 보내지 않는다(AnalysisInput·LearningReportInput)
  * - 결제(#332): 아직 열지 않았다. 열면 '결제 기능을 연 뒤' 단서를 뗀다. 카드 번호는 받지 않는다
  */
+/** 이 화면이 보여 주는 판의 주소. 지난 판으로 옮길 때 이 값만 바꾸면 드롭다운과 부칙의 시행일이 함께 따라간다 */
+const PATH = '/privacy'
+
 export function Component() {
   return (
     <LegalDocument
       title="개인정보 처리방침"
       versions={LEGAL_VERSIONS.privacy}
-      current="/privacy"
+      current={PATH}
       intro={
         <>
           {BUSINESS.name}(대표 {BUSINESS.ceo})(이하 「운영자」)은 「개인정보 보호법」에 따라
@@ -470,9 +474,10 @@ const SECTIONS: LegalSection[] = [
     title: '15. 개인정보 처리방침의 변경',
     body: (
       <p>
-        이 방침은 {effectiveDate('privacy')}부터 적용합니다. 내용을 바꾸면 시행 7일 전에(회원에게
-        불리하거나 중요한 변경은 30일 전에) 서비스 안에 공지합니다. 지난 판은 제목 아래 시행일
-        목록에서 볼 수 있습니다. 서비스 이용 조건은 <Link to="/terms">이용약관</Link>을 따릅니다.
+        이 방침은 {effectiveDate(LEGAL_VERSIONS.privacy, PATH)}부터 적용합니다. 내용을 바꾸면 시행
+        7일 전에(회원에게 불리하거나 중요한 변경은 30일 전에) 서비스 안에 공지합니다. 지난 판은 제목
+        아래 시행일 목록에서 볼 수 있습니다. 서비스 이용 조건은 <Link to="/terms">이용약관</Link>을
+        따릅니다.
       </p>
     ),
   },

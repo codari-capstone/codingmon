@@ -27,11 +27,17 @@ export const BUSINESS = {
  */
 export const BUSINESS_REGISTERED = !isPending(BUSINESS.registrationNo)
 
-/** 문의·환불 요청·권리 행사를 받는 주소. 정하기 전에는 null이고 화면에 자리표시가 보인다 */
-export const SUPPORT_EMAIL: string | null = 'contact@codingmon.tech'
-export const SUPPORT_EMAIL_PENDING = pending('문의 이메일')
+/** 문의·환불 요청·권리 행사를 받는 주소. 화면에서는 SupportEmail 하나로 그린다 */
+export const SUPPORT_EMAIL = 'contact@codingmon.tech'
 
 export type LegalDocId = 'terms' | 'privacy' | 'refund'
+
+/** 문서 주소와 이름. 바닥글과 가입 안내가 모두 여기서 읽는다(라우트는 router.tsx의 같은 주소) */
+export const LEGAL_DOCS: Record<LegalDocId, { to: string; label: string }> = {
+  terms: { to: '/terms', label: '이용약관' },
+  privacy: { to: '/privacy', label: '개인정보 처리방침' },
+  refund: { to: '/refund', label: '환불 정책' },
+}
 
 export interface LegalVersion {
   /** 시행일. 드롭다운에 보이는 이름이다 */
@@ -50,15 +56,19 @@ export const LEGAL_VERSIONS: Record<LegalDocId, LegalVersion[]> = {
   refund: [{ label: '2026.11.21', path: '/refund' }],
 }
 
-/** 현재 판의 시행일을 본문 문장용으로. `2026.11.21` → `2026년 11월 21일`. 부칙이 드롭다운과 어긋나지 않게 한다 */
-export function effectiveDate(doc: LegalDocId): string {
-  const [y, m, d] = LEGAL_VERSIONS[doc][0].label.split('.').map(Number)
+/**
+ * 화면이 보여 주는 판의 시행일을 본문 문장용으로. `2026.11.21` → `2026년 11월 21일`.
+ * 부칙이 드롭다운과 어긋나지 않게 한다. 지난 판으로 옮긴 문서도 자기 주소를 넘기면 자기 날짜를 받는다.
+ */
+export function effectiveDate(versions: LegalVersion[], path: string): string {
+  const version = versions.find((v) => v.path === path) ?? versions[0]
+  const [y, m, d] = version.label.split('.').map(Number)
   return `${y}년 ${m}월 ${d}일`
 }
 
-/** 바닥글·가입 안내가 거는 링크. 처리방침은 다른 링크와 구분되게 굵게 보인다(개인정보위 작성지침) */
+/** 바닥글의 약관 링크. 처리방침은 다른 링크와 구분되게 굵게 보인다(개인정보위 작성지침) */
 export const LEGAL_LINKS: { to: string; label: string; strong?: true }[] = [
-  { to: '/terms', label: '이용약관' },
-  { to: '/privacy', label: '개인정보 처리방침', strong: true },
-  { to: '/refund', label: '환불 정책' },
+  LEGAL_DOCS.terms,
+  { ...LEGAL_DOCS.privacy, strong: true },
+  LEGAL_DOCS.refund,
 ]

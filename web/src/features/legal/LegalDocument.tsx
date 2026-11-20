@@ -1,16 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Link } from 'react-router'
 
-import { SUPPORT_EMAIL, SUPPORT_EMAIL_PENDING, type LegalVersion } from './legalInfo'
-
-/** 문의 주소. 정하기 전에는 자리표시 글자만 보인다(누를 곳이 없는 mailto를 만들지 않는다) */
-export function SupportEmail() {
-  return SUPPORT_EMAIL ? (
-    <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
-  ) : (
-    <>{SUPPORT_EMAIL_PENDING}</>
-  )
-}
+import type { LegalVersion } from './legalInfo'
 
 export interface LegalSection {
   /** 목차가 가리키는 주소 조각(#id). 다른 문서가 이 값으로 링크하므로 바꾸지 않는다 */

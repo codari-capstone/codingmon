@@ -54,7 +54,18 @@ describe('약관 문서 (LEGAL-01~03)', () => {
 
   it.each(DOCS)('$path: 본문의 시행일 문장이 드롭다운의 시행일과 같다', ({ path, id }) => {
     renderAt(path)
-    expect(screen.getByText(new RegExp(`${effectiveDate(id)}부터`))).toBeInTheDocument()
+    expect(
+      screen.getByText(new RegExp(`${effectiveDate(LEGAL_VERSIONS[id], path)}부터`)),
+    ).toBeInTheDocument()
+  })
+
+  it('지난 판으로 옮긴 문서는 새 판이 아니라 자기 시행일을 받는다 (#336 리뷰)', () => {
+    const versions = [
+      { label: '2027.01.01', path: '/terms' },
+      { label: '2026.11.21', path: '/terms/2026-11-21' },
+    ]
+    expect(effectiveDate(versions, '/terms')).toBe('2027년 1월 1일')
+    expect(effectiveDate(versions, '/terms/2026-11-21')).toBe('2026년 11월 21일')
   })
 
   it('목차를 누르면 그 절로 키보드 초점이 옮겨 간다 (#336 리뷰)', async () => {

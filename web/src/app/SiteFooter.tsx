@@ -1,13 +1,8 @@
 import { Link } from 'react-router'
 
 import wordmark from '@/assets/brand/codingmon_wordmark.png'
-import {
-  BUSINESS,
-  BUSINESS_REGISTERED,
-  LEGAL_LINKS,
-  SUPPORT_EMAIL,
-  SUPPORT_EMAIL_PENDING,
-} from '@/features/legal/legalInfo'
+import { BUSINESS, BUSINESS_REGISTERED, LEGAL_LINKS } from '@/features/legal/legalInfo'
+import { SupportEmail } from '@/features/legal/SupportEmail'
 import { cn } from '@/lib/utils'
 import { MENU } from './menu'
 
@@ -75,16 +70,7 @@ export function SiteFooter() {
                 '운영 Codari 팀',
                 <>
                   문의&nbsp;
-                  {SUPPORT_EMAIL ? (
-                    <a
-                      href={`mailto:${SUPPORT_EMAIL}`}
-                      className="text-muted-foreground hover:text-foreground no-underline hover:underline"
-                    >
-                      {SUPPORT_EMAIL}
-                    </a>
-                  ) : (
-                    SUPPORT_EMAIL_PENDING
-                  )}
+                  <SupportEmail className="text-muted-foreground hover:text-foreground no-underline hover:underline" />
                 </>,
                 '© 2026 Codari',
               ]}
