@@ -165,8 +165,9 @@ function PlanCard({
     <article
       aria-labelledby={`plan-${plan.id}`}
       className={cn(
-        'bg-card relative flex w-full flex-col gap-6 rounded-[20px] p-8',
-        pro ? 'border-primary shadow-card border-2' : 'border',
+        // 테두리는 두 카드 모두 1px. 프로의 굵은 선은 자리를 차지하지 않는 ring으로 더한다 — border-2면 안쪽이 1px 밀려 두 카드가 어긋난다
+        'bg-card relative flex w-full flex-col gap-6 rounded-[20px] border p-8',
+        pro && 'border-primary ring-primary shadow-card ring-1',
       )}
     >
       {pro ? (

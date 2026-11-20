@@ -107,19 +107,22 @@ export function Component() {
           // 결과보다 뒤인 페이지다. 디바운스를 기다리는 동안 '다음'을 눌렀거나, 다른
           // 관리자가 문제를 지운 뒤 다시 조회된 경우다. 아래 페이지 이동을 그대로 띄워
           // 두므로 여기 갇히지 않는다 — page는 주소에 없어 새로고침으로는 못 나간다.
-          page > 1 ? (
-            <EmptyState
-              title="이 페이지에는 문제가 없습니다"
-              description="결과가 줄어 이 페이지는 비었어요. 앞 페이지로 돌아가세요."
-            />
-          ) : keyword ? (
-            <EmptyState title="조건에 맞는 문제가 없습니다" description="검색어를 바꿔 보세요." />
-          ) : (
-            <EmptyState
-              title="아직 만든 문제가 없습니다"
-              description="새 문제를 등록하면 여기에 보입니다."
-            />
-          )
+          // 비어도 표와 같은 상자에 둔다. 상자 없이 펭귄만 뜨면 표 자리가 사라진 것처럼 보인다
+          <div className="bg-card rounded-lg border">
+            {page > 1 ? (
+              <EmptyState
+                title="이 페이지에는 문제가 없습니다"
+                description="결과가 줄어 이 페이지는 비었어요. 앞 페이지로 돌아가세요."
+              />
+            ) : keyword ? (
+              <EmptyState title="조건에 맞는 문제가 없습니다" description="검색어를 바꿔 보세요." />
+            ) : (
+              <EmptyState
+                title="아직 만든 문제가 없습니다"
+                description="새 문제를 등록하면 여기에 보입니다."
+              />
+            )}
+          </div>
         ) : (
           <>
             <p className="text-muted-foreground text-sm" aria-live="polite">
