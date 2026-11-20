@@ -1,6 +1,7 @@
 import { isValidElement } from 'react'
 import { describe, expect, it } from 'vitest'
 
+import type { PageHandle } from './AppShell'
 import { router } from './router'
 
 /** 라우트 트리를 (경로, 조상 Component 이름들) 쌍으로 펼친다. */
@@ -58,12 +59,21 @@ describe('라우터 보호 구조', () => {
   })
 
   // pricing: 요금제는 로그인 없이 본다 (PRICE-01, #333 리뷰)
-  it.each(['problems', 'pricing', 'login', 'signup', 'password-reset', 'forbidden', '*'])(
-    '%s는 보호하지 않는다',
-    (path) => {
-      expect(guardsOf(path)).not.toContain('RequireAuth')
-    },
-  )
+  // terms·privacy·refund: 가입 전에 읽는 문서다 (LEGAL-01~03, #335)
+  it.each([
+    'problems',
+    'pricing',
+    'terms',
+    'privacy',
+    'refund',
+    'login',
+    'signup',
+    'password-reset',
+    'forbidden',
+    '*',
+  ])('%s는 보호하지 않는다', (path) => {
+    expect(guardsOf(path)).not.toContain('RequireAuth')
+  })
 
   it('가입·재설정은 로그인 없이 열리는 공개 주소다', () => {
     // RequireAuth 아래에 두면 가입하려는 사람이 로그인 화면으로 밀려난다.
@@ -81,4 +91,30 @@ describe('라우터 보호 구조', () => {
     expect(guardsOf('problems/:id')).toContain('RootLayout')
     expect(guardsOf('admin')).toContain('RootLayout')
   })
+})
+
+describe('바닥글을 빼는 화면 (#335, #336 리뷰)', () => {
+  /** 경로의 handle. 관리자 화면에도 'problems/:id'가 있어 학습자 쪽(먼저 나오는 것)을 고른다 */
+  function handleOf(path: string, routes = router.routes): PageHandle | undefined {
+    for (const route of routes) {
+      if (route.path === path) return route.handle as PageHandle | undefined
+      const found = route.children ? handleOf(path, route.children) : undefined
+      if (found) return found
+    }
+  }
+
+  // 가입·인증 흐름은 입력값이 화면에만 있어 바닥글 링크로 넘어가면 잃는다. 로그인·문제 풀이는 화면 높이에 맞춘 화면이다
+  it.each(['login', 'login/github', 'signup', 'password-reset', 'problems/:id'])(
+    '%s에는 바닥글이 없다',
+    (path) => {
+      expect(handleOf(path)?.noFooter).toBe(true)
+    },
+  )
+
+  it.each(['problems', 'submissions', 'me/report', 'pricing', 'terms'])(
+    '%s에는 바닥글이 있다',
+    (path) => {
+      expect(handleOf(path)?.noFooter).toBeUndefined()
+    },
+  )
 })

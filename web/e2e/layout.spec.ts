@@ -6,7 +6,7 @@ test('상단 내비게이션이 보이고 공개 메뉴로 이동한다', async 
   // 문제 목록이 아닌 곳에서 출발해야 클릭이 아무 일도 안 해도 통과하는 일이 없다.
   await page.goto('/login')
   await expect(page.getByRole('form', { name: '로그인' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Codingmon' })).toBeVisible()
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Codingmon' })).toBeVisible()
 
   await page
     .getByRole('navigation', { name: '주요 메뉴' })
@@ -23,7 +23,8 @@ test('비로그인이 보호된 메뉴를 누르면 로그인 화면에 닿는�
   await page.goto('/problems')
   await expect(page.getByRole('heading', { name: '문제 목록' })).toBeVisible()
 
-  await page.getByRole('link', { name: '제출 기록' }).click()
+  // 바닥글에도 같은 메뉴가 있어(#335) 상단 바의 것을 누른다
+  await page.getByRole('banner').getByRole('link', { name: '제출 기록' }).click()
 
   await expect(page.getByRole('form', { name: '로그인' })).toBeVisible()
   await expect(page).toHaveURL(/\/login$/)
@@ -112,7 +113,8 @@ test('권한 없음 화면이 뜬다', async ({ page }) => {
  * 보이는 영역과 비교한다.
  */
 async function expectHeaderFits(page: Page, linkCount: number) {
-  await expect(page.getByRole('link', { name: 'Codingmon' })).toBeVisible()
+  // 바닥글의 contact@codingmon.tech도 이름에 'codingmon'이 들어가 상단 바 안에서 찾는다(#335)
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Codingmon' })).toBeVisible()
 
   const measured = await page.evaluate(() => {
     const nav = document.querySelector('header nav')

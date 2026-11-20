@@ -36,7 +36,7 @@ export const router = createBrowserRouter([
                 'Python·C++로 풀 수 있는 코딩 문제 목록이에요. 난이도와 개념으로 골라 풀고, 틀리면 AI가 이유를 짚어 줘요.',
             } satisfies PageHandle,
           },
-          // 요금제 (PRICE-01~03, #331). 로그인 없이 본다. 바닥글이 좌우 끝까지 가서 랜딩처럼 bleed다
+          // 요금제 (PRICE-01~03, #331). 로그인 없이 본다. 구역마다 폭과 여백을 직접 잡아 랜딩처럼 bleed다
           {
             path: 'pricing',
             lazy: () => import('@/features/pricing/PricingPage'),
@@ -47,27 +47,66 @@ export const router = createBrowserRouter([
                 '코딩몬의 무료·프로 요금제예요. 문제 풀이와 채점은 언제나 무료이고, 프로는 AI 오답 분석과 힌트를 더 많이 쓸 수 있어요.',
             } satisfies PageHandle,
           },
+          // 이용약관·개인정보 처리방침·환불 정책 (LEGAL-01~03, #335). 로그인 없이 본다.
+          // 문서가 760px 폭과 위아래 여백을 직접 잡아 bleed다(페이지 여백이 겹치지 않게)
+          {
+            path: 'terms',
+            lazy: () => import('@/features/legal/TermsPage'),
+            handle: {
+              bleed: true,
+              title: '이용약관',
+              description:
+                '코딩몬 서비스의 이용 조건과 유료 서비스(프로 플랜)의 결제·해지 조건이에요.',
+            } satisfies PageHandle,
+          },
+          {
+            path: 'privacy',
+            lazy: () => import('@/features/legal/PrivacyPage'),
+            handle: {
+              bleed: true,
+              title: '개인정보 처리방침',
+              description:
+                '코딩몬이 처리하는 개인정보의 항목, 보유 기간, 위탁과 국외 이전을 알려 드려요.',
+            } satisfies PageHandle,
+          },
+          {
+            path: 'refund',
+            lazy: () => import('@/features/legal/RefundPage'),
+            handle: {
+              bleed: true,
+              title: '환불 정책',
+              description: '코딩몬 프로 플랜의 청약철회, 해지, 환불 기준이에요.',
+            } satisfies PageHandle,
+          },
           // 왼쪽 남색 패널이 좌우 끝까지 간다 (#241)
           {
             path: 'login',
             lazy: () => import('@/features/auth/LoginPage'),
-            handle: { bleed: true, title: '로그인' } satisfies PageHandle,
+            // 남색 패널이 화면 높이를 채운다. 바닥글을 두면 화면이 한 번 더 내려간다
+            handle: { bleed: true, title: '로그인', noFooter: true } satisfies PageHandle,
           },
+          // 아래 세 화면은 가입·인증 흐름이라 바닥글을 두지 않는다. 받아 둔 인증번호와 입력값이 화면에만
+          // 있어서, 바닥글 링크(약관 포함)를 누르면 같은 탭에서 넘어가며 모두 잃는다(#336 리뷰).
+          // 약관은 가입 버튼 위 안내(SignupConsent)가 새 탭으로 연다
           // GitHub 로그인이 돌아오는 자리 (COM-02). 주소는 계약이 정했다.
           {
             path: 'login/github',
             lazy: () => import('@/features/auth/GitHubCallbackPage'),
-            handle: { title: 'GitHub 로그인', noindex: true } satisfies PageHandle,
+            handle: { title: 'GitHub 로그인', noindex: true, noFooter: true } satisfies PageHandle,
           },
           {
             path: 'signup',
             lazy: () => import('@/features/auth/SignupPage'),
-            handle: { pageTone: 'subtle', title: '회원가입' } satisfies PageHandle,
+            handle: { pageTone: 'subtle', title: '회원가입', noFooter: true } satisfies PageHandle,
           },
           {
             path: 'password-reset',
             lazy: () => import('@/features/auth/PasswordResetPage'),
-            handle: { pageTone: 'subtle', title: '비밀번호 찾기' } satisfies PageHandle,
+            handle: {
+              pageTone: 'subtle',
+              title: '비밀번호 찾기',
+              noFooter: true,
+            } satisfies PageHandle,
           },
           {
             path: 'forbidden',
@@ -84,8 +123,8 @@ export const router = createBrowserRouter([
               {
                 path: 'problems/:id',
                 lazy: () => import('@/features/solve/SolvePage'),
-                // 코드를 넓게 쓰도록 본문 폭을 넓힌다(#327)
-                handle: { wide: true, title: '문제 풀이' } satisfies PageHandle,
+                // 코드를 넓게 쓰도록 본문 폭을 넓힌다(#327). 에디터가 화면에 붙어 따라오는 작업 화면이라 바닥글은 두지 않는다
+                handle: { wide: true, title: '문제 풀이', noFooter: true } satisfies PageHandle,
               },
               {
                 // 처음 안내 (WELCOME-01). 카드가 옅은 바탕 위에 놓인다(디자인 Onboarding의 `cmx-subtle`)

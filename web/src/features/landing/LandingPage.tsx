@@ -8,7 +8,6 @@ import studyingScene from '@/assets/scenes/studying.png'
 import successScene from '@/assets/scenes/success.png'
 import thinkingScene from '@/assets/scenes/thinking.png'
 import { Accordion } from '@/components/ui/accordion'
-import { SiteFooter } from '@/app/SiteFooter'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Icon, type IconName } from '@/components/ui/icon'
@@ -315,8 +314,6 @@ export function Component() {
           />
         </div>
       </section>
-
-      <SiteFooter />
     </div>
   )
 }
