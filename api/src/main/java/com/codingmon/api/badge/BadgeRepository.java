@@ -119,7 +119,8 @@ public class BadgeRepository {
         }
     }
 
-    // MY-05와 같이 공개 중인 버전의 난이도. 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다.
+    // 난이도는 MY-05와 같이 공개 중인 버전의 난이도다. 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다.
+    // 맞힌 수는 MY-05와 달리 내린 문제도 센다(#339).
     private String difficulty(long problemId) {
         return jdbc.sql("""
                 select difficulty from problem_versions
