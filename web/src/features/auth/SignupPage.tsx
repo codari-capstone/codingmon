@@ -5,6 +5,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { LoadingState } from '@/components/LoadingState'
 import { Button } from '@/components/ui/button'
 import { Stepper } from '@/components/ui/stepper'
+import { SignupConsent } from '@/features/legal/SignupConsent'
 import { isValidPassword } from './accountRules'
 import { AUTH_CARD, AUTH_FOOT, AUTH_LINK } from './authCard'
 import { EmailCodeStep } from './EmailCodeStep'
@@ -157,6 +158,8 @@ export function Component() {
           ) : null}
         </p>
       ) : null}
+
+      <SignupConsent />
 
       {/* isPending 동안 끈다. 두 번 누르면 두 번째는 409 EMAIL_TAKEN을 받아, 가입된 사람에게 실패 문구가 뜬다. */}
       <Button

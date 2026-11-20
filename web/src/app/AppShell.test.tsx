@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { createMemoryRouter, Outlet, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
 
@@ -22,6 +22,7 @@ function renderAt(path: string) {
           { path: '/subtle', element: <h1>옅은 바탕</h1>, handle: { pageTone: 'subtle' } },
           { path: '/bleed', element: <h1>끝까지</h1>, handle: { bleed: true } },
           { path: '/wide', element: <h1>넓게</h1>, handle: { wide: true } },
+          { path: '/no-footer', element: <h1>바닥글 없음</h1>, handle: { noFooter: true } },
         ],
       },
       // 청크 로드 실패처럼 라우트가 던지면 RouteErrorBoundary가 AppShell로 감싼다(router.tsx와 같은 구조)
@@ -46,22 +47,43 @@ function renderAt(path: string) {
   )
 }
 
+/** 바탕을 칠하는 맨 바깥 틀. 상단 바·본문·바닥글을 세로로 쌓는다 */
+const shellOf = (el: HTMLElement) => el.closest('main')!.closest<HTMLElement>('.min-h-dvh')!
+
 describe('AppShell 바탕', () => {
   it('화면이 handle로 subtle을 고르면 옅은 바탕이다', async () => {
     renderAt('/subtle')
-    const shell = (await screen.findByRole('heading', { name: '옅은 바탕' })).closest(
-      'main',
-    )!.parentElement!
+    const shell = shellOf(await screen.findByRole('heading', { name: '옅은 바탕' }))
     expect(shell).toHaveClass('bg-muted')
     expect(shell).not.toHaveClass('bg-background')
   })
 
   it('고르지 않으면 기본 바탕이다', async () => {
     renderAt('/plain')
-    const shell = (await screen.findByRole('heading', { name: '보통' })).closest(
-      'main',
-    )!.parentElement!
+    const shell = shellOf(await screen.findByRole('heading', { name: '보통' }))
     expect(shell).toHaveClass('bg-background')
+  })
+})
+
+describe('AppShell 바닥글 (#335)', () => {
+  it('모든 화면 맨 아래에 바닥글을 둔다', async () => {
+    renderAt('/plain')
+    const heading = await screen.findByRole('heading', { name: '보통' })
+    const footer = screen.getByRole('contentinfo')
+    expect(footer).toBe(shellOf(heading).lastElementChild)
+    expect(within(footer).getByRole('link', { name: '개인정보 처리방침' })).toBeInTheDocument()
+  })
+
+  it('handle noFooter면 바닥글을 두지 않는다 (로그인·문제 풀이)', async () => {
+    renderAt('/no-footer')
+    await screen.findByRole('heading', { name: '바닥글 없음' })
+    expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()
+  })
+
+  it('오류 화면에는 바닥글을 둔다', async () => {
+    renderAt('/bleed-broken')
+    await screen.findByRole('heading', { level: 1 })
+    expect(screen.getByRole('contentinfo')).toBeInTheDocument()
   })
 })
 

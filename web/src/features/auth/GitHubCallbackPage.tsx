@@ -4,6 +4,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router'
 
 import { LoadingState } from '@/components/LoadingState'
 import { Button } from '@/components/ui/button'
+import { SignupConsent } from '@/features/legal/SignupConsent'
 import { afterLoginPath } from './afterLoginPath'
 import { gitHubSignUp, resumeGitHubSession, takeGitHubReturnPath } from './githubQuery'
 import { ACCOUNT_SUSPENDED_MESSAGE } from './loginSchema'
@@ -162,6 +163,8 @@ export function Component() {
             {problemMessage(signUp.error)}
           </p>
         ) : null}
+
+        <SignupConsent />
 
         {/* isPending 동안 끈다. 두 번 누르면 두 번째는 409 ALREADY_REGISTERED를 받아, 가입된 사람에게 실패 문구가 뜬다. */}
         <Button
