@@ -161,6 +161,18 @@ describe('AnalysisPanel', () => {
       expect(await screen.findByText('오늘 남은 AI 분석·리뷰 19 / 20회')).toBeInTheDocument()
     })
 
+    it('관리자는 한도가 없어 남은 횟수 대신 한도 없음을 알리고 버튼을 켜 둔다 (#343)', async () => {
+      server.use(
+        http.get('*/api/users/me/ai-quota', () =>
+          HttpResponse.json({ ...QUOTA, limit: null, used: 25, remaining: null }),
+        ),
+      )
+      renderResult(WRONG)
+
+      expect(await screen.findByText('관리자는 AI 분석·리뷰를 한도 없이 써요')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled()
+    })
+
     it('오늘 한도를 다 썼으면 버튼을 끄고 언제 다시 쓸 수 있는지 알린다', async () => {
       quotaLeft(0)
       renderResult(WRONG)

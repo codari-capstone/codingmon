@@ -112,7 +112,11 @@ export function AiRequest({
       {canRequest && quota && !limitHit ? (
         <p className={invite ? 'text-inverse-muted text-sm' : 'text-muted-foreground text-sm'}>
           {/* 분석과 리뷰가 함께 쓰는 한도라 어느 패널이든 같은 이름으로 부른다(#273 리뷰) */}
-          {outOfQuota ? exhausted : `오늘 남은 AI 분석·리뷰 ${quota.remaining} / ${quota.limit}회`}
+          {outOfQuota
+            ? exhausted
+            : quota.limit === null
+              ? '관리자는 AI 분석·리뷰를 한도 없이 써요' // #343. remaining도 null이라 outOfQuota가 되지 않는다
+              : `오늘 남은 AI 분석·리뷰 ${quota.remaining} / ${quota.limit}회`}
         </p>
       ) : null}
     </>
