@@ -26,6 +26,9 @@ import {
 import { markWelcomeSeen } from './welcomeQuery'
 
 const STEPS = [{ label: '언어' }, { label: '경험' }, { label: '목표' }]
+
+// 선택지는 폭과 상관없이 한 줄에 하나씩 쌓는다. 옆으로 셋을 놓으면 '알고리즘 실력 키우기'가 두 줄로 꺾인다
+const STACKED = '[&>div]:grid-cols-1'
 const TITLES = [
   '어떤 언어로 풀어 볼까요?',
   '코딩 문제를 풀어 본 적 있나요?',
@@ -123,6 +126,7 @@ export function Component() {
           {step === 0 ? (
             <RadioGroup
               variant="card"
+              className={STACKED}
               name="language"
               label={<span className="sr-only">{TITLES[0]}</span>}
               options={[...LANGUAGES]}
@@ -133,6 +137,7 @@ export function Component() {
           {step === 1 ? (
             <RadioGroup
               variant="card"
+              className={STACKED}
               name="experience"
               label={<span className="sr-only">{TITLES[1]}</span>}
               options={[...EXPERIENCES]}
@@ -143,6 +148,7 @@ export function Component() {
           {step === 2 ? (
             <RadioGroup
               variant="card"
+              className={STACKED}
               name="goal"
               label={<span className="sr-only">{TITLES[2]}</span>}
               options={[...GOALS]}

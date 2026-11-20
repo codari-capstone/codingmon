@@ -38,7 +38,8 @@ export function ChoiceText({
   description?: React.ReactNode
 }) {
   return (
-    <span className="flex flex-col">
+    // 좁은 카드에서 '키우 / 기'처럼 낱글자로 끊기지 않게 띄어쓰기에서 줄을 바꾼다
+    <span className="flex flex-col break-keep">
       <span id={`${id}-label`}>{label}</span>
       {description ? (
         <span
