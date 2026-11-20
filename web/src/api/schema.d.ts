@@ -1539,8 +1539,17 @@ export interface components {
             solvedCount: number;
             /** @description 틀린 문제 수. 제출했지만 맞은 적이 없는 문제다(`LIST-01`의 `WRONG`). 공개가 내려간 문제도 센다 */
             wrongCount: number;
-            /** @description 난이도별 맞힌 문제 수. 공개 중인 버전의 난이도로 세고, 공개가 내려간 문제는 마지막으로 공개됐던 버전을 따른다. 합은 `solvedCount`다 */
+            /**
+             * @description 난이도별 맞힌 문제 수. 공개 중인 문제만 세고, 공개 중인 버전의 난이도를 따른다.
+             *     공개가 내려간 문제는 세지 않으므로 합이 `solvedCount`보다 작을 수 있다. 값은 `problemCountByDifficulty`를 넘지 않는다
+             */
             solvedByDifficulty: {
+                EASY: number;
+                MEDIUM: number;
+                HARD: number;
+            };
+            /** @description 난이도별 공개 중인 문제 수. 화면은 `solvedByDifficulty`를 이 수 대비로 보여 준다 */
+            problemCountByDifficulty: {
                 EASY: number;
                 MEDIUM: number;
                 HARD: number;

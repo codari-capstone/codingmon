@@ -190,12 +190,12 @@ describe('MyPage 풀이 요약·활동 기록 (MY-05)', () => {
     expect(select).toHaveValue(String(YEAR))
     expect(within(select).getAllByRole('option').at(-1)).toHaveTextContent('2026년')
 
-    // 난이도 막대의 기준은 맞힌 문제 전체(7)다
+    // 난이도 막대의 기준은 그 난이도의 공개 중인 문제 수다(#339)
     const byDifficulty = screen.getByRole('region', { name: '난이도별 맞힌 문제' })
     const bars = within(byDifficulty).getAllByRole('progressbar')
     expect(bars.map((bar) => bar.getAttribute('aria-label'))).toEqual(['쉬움', '보통', '어려움'])
     expect(bars.map((bar) => bar.getAttribute('aria-valuenow'))).toEqual(['4', '2', '1'])
-    expect(bars.every((bar) => bar.getAttribute('aria-valuemax') === '7')).toBe(true)
+    expect(bars.map((bar) => bar.getAttribute('aria-valuemax'))).toEqual(['24', '18', '9'])
     // 명세 MY-05: 내 학습·제출 기록으로 가는 길
     expect(within(byDifficulty).getByRole('link', { name: /학습 리포트 보기/ })).toHaveAttribute(
       'href',
