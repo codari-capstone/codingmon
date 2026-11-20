@@ -36,7 +36,7 @@ export const router = createBrowserRouter([
                 'Python·C++로 풀 수 있는 코딩 문제 목록이에요. 난이도와 개념으로 골라 풀고, 틀리면 AI가 이유를 짚어 줘요.',
             } satisfies PageHandle,
           },
-          // 요금제 (PRICE-01~03, #331). 로그인 없이 본다. 바닥글이 좌우 끝까지 가서 랜딩처럼 bleed다
+          // 요금제 (PRICE-01~03, #331). 로그인 없이 본다. 구역마다 폭과 여백을 직접 잡아 랜딩처럼 bleed다
           {
             path: 'pricing',
             lazy: () => import('@/features/pricing/PricingPage'),
@@ -82,7 +82,8 @@ export const router = createBrowserRouter([
           {
             path: 'login',
             lazy: () => import('@/features/auth/LoginPage'),
-            handle: { bleed: true, title: '로그인' } satisfies PageHandle,
+            // 남색 패널이 화면 높이를 채운다. 바닥글을 두면 화면이 한 번 더 내려간다
+            handle: { bleed: true, title: '로그인', noFooter: true } satisfies PageHandle,
           },
           // GitHub 로그인이 돌아오는 자리 (COM-02). 주소는 계약이 정했다.
           {
@@ -115,8 +116,8 @@ export const router = createBrowserRouter([
               {
                 path: 'problems/:id',
                 lazy: () => import('@/features/solve/SolvePage'),
-                // 코드를 넓게 쓰도록 본문 폭을 넓힌다(#327)
-                handle: { wide: true, title: '문제 풀이' } satisfies PageHandle,
+                // 코드를 넓게 쓰도록 본문 폭을 넓힌다(#327). 에디터가 화면에 붙어 따라오는 작업 화면이라 바닥글은 두지 않는다
+                handle: { wide: true, title: '문제 풀이', noFooter: true } satisfies PageHandle,
               },
               {
                 // 처음 안내 (WELCOME-01). 카드가 옅은 바탕 위에 놓인다(디자인 Onboarding의 `cmx-subtle`)

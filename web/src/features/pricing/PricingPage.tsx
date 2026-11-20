@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 
-import { SiteFooter } from '@/app/SiteFooter'
 import { Accordion } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
@@ -108,8 +107,6 @@ export function Component() {
           </div>
         </div>
       </section>
-
-      <SiteFooter />
     </div>
   )
 }
