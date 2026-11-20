@@ -59,9 +59,12 @@ export function LegalDocument({
         <ol className="m-0 grid list-none gap-1.5 p-0 text-sm">
           {sections.map((s) => (
             <li key={s.id}>
-              {/* Link로 옮겨야 ScrollRestoration이 그 절로 내려 준다. 평범한 a는 라우터를 건너뛴다 */}
+              {/* Link로 옮겨야 ScrollRestoration이 그 절로 내려 준다. 평범한 a는 라우터를 건너뛴다.
+                  스크롤만으로는 키보드 초점이 목차에 남아, Tab이 다음 목차로 간다. 그래서 그 절로
+                  초점을 옮긴다(스크롤은 라우터가 하니 초점은 화면을 움직이지 않게) */}
               <Link
                 to={{ hash: s.id }}
+                onClick={() => document.getElementById(s.id)?.focus({ preventScroll: true })}
                 className="text-muted-foreground hover:text-foreground no-underline hover:underline"
               >
                 {s.title}
@@ -73,7 +76,14 @@ export function LegalDocument({
 
       {sections.map((s) => (
         // 목차로 점프했을 때 제목이 화면 맨 위에 붙지 않게 숨 쉴 틈을 둔다
-        <section key={s.id} id={s.id} aria-labelledby={`${s.id}-title`} className="scroll-mt-6">
+        // tabIndex -1: 목차가 초점을 옮길 수 있게 한다(Tab 순서에는 넣지 않는다)
+        <section
+          key={s.id}
+          id={s.id}
+          aria-labelledby={`${s.id}-title`}
+          tabIndex={-1}
+          className="scroll-mt-6 focus:outline-none"
+        >
           <h2
             id={`${s.id}-title`}
             className="text-foreground mt-11 mb-0 text-[clamp(19px,18px+0.3vw,22px)] leading-[1.4] font-bold"

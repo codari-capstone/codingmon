@@ -57,6 +57,13 @@ describe('약관 문서 (LEGAL-01~03)', () => {
     expect(screen.getByText(new RegExp(`${effectiveDate(id)}부터`))).toBeInTheDocument()
   })
 
+  it('목차를 누르면 그 절로 키보드 초점이 옮겨 간다 (#336 리뷰)', async () => {
+    renderAt('/refund')
+    const toc = screen.getByRole('navigation', { name: '목차' })
+    await userEvent.click(within(toc).getByRole('link', { name: '6. 환불 신청과 처리' }))
+    expect(screen.getByRole('region', { name: '6. 환불 신청과 처리' })).toHaveFocus()
+  })
+
   it('문서끼리 거는 절 링크(/refund#outage 등)는 그 문서에 있는 절을 가리킨다', () => {
     const ids = Object.fromEntries(
       DOCS.map(({ path }) => {
