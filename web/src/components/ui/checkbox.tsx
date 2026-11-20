@@ -38,7 +38,9 @@ export function ChoiceText({
   description?: React.ReactNode
 }) {
   return (
-    <span className="flex flex-col">
+    // 좁은 카드에서 '키우 / 기'처럼 낱글자로 끊기지 않게 띄어쓰기에서 줄을 바꾼다.
+    // 공백 없는 긴 라벨(관리자가 만든 개념 태그 이름 등)은 넘치지 않게 어디서든 끊는다(#345 리뷰)
+    <span className="flex flex-col break-keep [overflow-wrap:anywhere]">
       <span id={`${id}-label`}>{label}</span>
       {description ? (
         <span
