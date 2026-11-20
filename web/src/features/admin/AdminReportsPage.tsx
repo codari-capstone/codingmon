@@ -109,17 +109,22 @@ export function Component() {
 
           {data && !error && !isPending ? (
             data.content.length === 0 ? (
-              page > 1 ? (
-                // 다른 관리자가 처리해 이 탭의 신고가 줄었다. 아래 페이지 이동으로 돌아간다
-                <EmptyState
-                  title="이 페이지에는 신고가 없어요"
-                  description="신고가 줄어 이 페이지는 비었어요. 앞 페이지로 돌아가세요."
-                />
-              ) : (
-                <EmptyState
-                  title={filter === 'ALL' ? '아직 들어온 신고가 없어요' : '이 상태의 신고가 없어요'}
-                />
-              )
+              // 비어도 표와 같은 상자에 둔다. 상자 없이 펭귄만 뜨면 표 자리가 사라진 것처럼 보인다
+              <div className="bg-card rounded-lg border">
+                {page > 1 ? (
+                  // 다른 관리자가 처리해 이 탭의 신고가 줄었다. 아래 페이지 이동으로 돌아간다
+                  <EmptyState
+                    title="이 페이지에는 신고가 없어요"
+                    description="신고가 줄어 이 페이지는 비었어요. 앞 페이지로 돌아가세요."
+                  />
+                ) : (
+                  <EmptyState
+                    title={
+                      filter === 'ALL' ? '아직 들어온 신고가 없어요' : '이 상태의 신고가 없어요'
+                    }
+                  />
+                )}
+              </div>
             ) : (
               <div
                 aria-busy={isFetching}

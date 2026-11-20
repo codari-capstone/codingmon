@@ -96,7 +96,9 @@ export function Component() {
 
         {recent.data && !recent.error ? (
           recent.data.content.length === 0 ? (
-            <EmptyState title="아직 들어온 신고가 없어요" />
+            <div className="bg-card rounded-lg border">
+              <EmptyState title="아직 들어온 신고가 없어요" />
+            </div>
           ) : (
             <div className="bg-card rounded-lg border px-3 py-2">
               <ReportTable reports={recent.data.content} />

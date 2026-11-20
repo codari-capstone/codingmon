@@ -28,8 +28,8 @@ function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
   return (
     <tr
       data-slot="table-row"
-      // 줄 사이는 선 대신 여백으로 나누고, 올리면 옅은 면으로 어느 줄인지 보여 준다
-      className={cn('hover:bg-muted transition-colors', className)}
+      // 줄 사이는 칸 아래 선으로 나눈다(학습자 문제 목록의 data-table과 같다). 올리면 옅은 면으로 어느 줄인지 보여 준다
+      className={cn('group hover:bg-muted transition-colors', className)}
       {...props}
     />
   )
@@ -40,7 +40,7 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
     <th
       data-slot="table-head"
       className={cn(
-        'text-muted-foreground h-10 px-3 text-left align-middle text-xs font-medium whitespace-nowrap',
+        'text-muted-foreground h-10 border-b px-3 text-left align-middle text-xs font-medium whitespace-nowrap',
         className,
       )}
       {...props}
@@ -50,7 +50,11 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
 
 function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
   return (
-    <td data-slot="table-cell" className={cn('px-3 py-3 align-middle', className)} {...props} />
+    <td
+      data-slot="table-cell"
+      className={cn('border-b px-3 py-3 align-middle group-last:border-b-0', className)}
+      {...props}
+    />
   )
 }
 
