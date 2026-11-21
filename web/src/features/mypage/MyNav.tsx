@@ -73,10 +73,19 @@ export function MyNav({ user }: { user: CurrentUser }) {
   useLayoutEffect(() => {
     const nav = navRef.current
     const active = nav?.querySelector('[aria-current="page"]')
-    if (!nav || !active || nav.scrollWidth <= nav.clientWidth) return
-    const navBox = nav.getBoundingClientRect()
-    const box = active.getBoundingClientRect()
-    nav.scrollLeft += box.left - navBox.left - (navBox.width - box.width) / 2
+    if (!nav || !active) return
+    const center = () => {
+      if (nav.scrollWidth <= nav.clientWidth) return
+      const navBox = nav.getBoundingClientRect()
+      const box = active.getBoundingClientRect()
+      nav.scrollLeft += box.left - navBox.left - (navBox.width - box.width) / 2
+    }
+    center()
+    // 같은 주소에서 탭 줄이 좁아지거나(회전·창 크기) 웹 글꼴이 와서 탭 폭이 바뀌어도 다시 민다(#351 리뷰)
+    const observer = new ResizeObserver(center)
+    observer.observe(nav)
+    observer.observe(active)
+    return () => observer.disconnect()
   }, [pathname])
 
   return (

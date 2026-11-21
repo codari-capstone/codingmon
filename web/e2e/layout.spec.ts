@@ -291,19 +291,38 @@ test(`${NARROW}px 관리자 화면에 가로 스크롤이 없다`, async ({ page
 
 // 오른쪽 탭으로 바로 들어와도 탭 줄이 그 탭까지 밀려 탭이 잘리지 않는다(MyNav).
 // 링크를 누르면 Playwright가 먼저 그 링크로 밀어 주므로 주소로 바로 연다
+async function expectActiveTabInside(page: Page, label: string) {
+  const nav = page.getByRole('navigation', { name: '마이페이지 메뉴' })
+  const active = nav.locator('[aria-current="page"]')
+  await expect(active).toBeVisible()
+  // 웹 글꼴이 와서 탭 폭이 바뀐 뒤에 잰다(#351 리뷰)
+  await page.evaluate(() => document.fonts.ready.then(() => undefined))
+  // 탭 줄 다시 밀기는 ResizeObserver 콜백이라 한 박자 늦을 수 있어 맞을 때까지 다시 잰다
+  await expect(async () => {
+    const navBox = (await nav.boundingBox())!
+    const box = (await active.boundingBox())!
+    expect(box.x, `${label} 탭 왼쪽이 잘렸다`).toBeGreaterThanOrEqual(navBox.x)
+    expect(box.x + box.width, `${label} 탭 오른쪽이 잘렸다`).toBeLessThanOrEqual(
+      navBox.x + navBox.width,
+    )
+  }).toPass({ timeout: 3000 })
+}
+
 test(`${NARROW}px 마이페이지 가로 탭에서 지금 탭이 다 보인다`, async ({ page }) => {
   await page.setViewportSize({ width: NARROW, height: 800 })
   await login(page)
-  const nav = page.getByRole('navigation', { name: '마이페이지 메뉴' })
   for (const path of ['/me/display', '/me/withdraw']) {
     await page.goto(path)
-    const active = nav.locator('[aria-current="page"]')
-    await expect(active).toBeVisible()
-    const navBox = (await nav.boundingBox())!
-    const box = (await active.boundingBox())!
-    expect(box.x, `${path} 탭 왼쪽이 잘렸다`).toBeGreaterThanOrEqual(navBox.x)
-    expect(box.x + box.width, `${path} 탭 오른쪽이 잘렸다`).toBeLessThanOrEqual(
-      navBox.x + navBox.width,
-    )
+    await expectActiveTabInside(page, path)
   }
+})
+
+// 넓은 화면(세로 메뉴)에서 열고 같은 주소에서 좁혀도 탭 줄이 지금 탭까지 밀린다(#351 리뷰)
+test('마이페이지에서 창을 좁히면 가로 탭이 지금 탭까지 밀린다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await login(page)
+  await page.goto('/me/withdraw')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await page.setViewportSize({ width: NARROW, height: 800 })
+  await expectActiveTabInside(page, '좁힌 뒤 /me/withdraw')
 })

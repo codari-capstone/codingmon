@@ -63,3 +63,10 @@ if (!window.matchMedia) {
       dispatchEvent: () => false,
     }) as MediaQueryList
 }
+
+// jsdom에는 ResizeObserver가 없다. 마이페이지 탭 줄(MyNav)이 크기 변화를 보느라 부른다. 레이아웃이 없어 알릴 일도 없다.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
