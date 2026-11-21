@@ -788,7 +788,7 @@ paths:
            실패였거나 취소됐으면(운영자가 콘솔에서 취소) 그 결제를 실패로 반영하고(취소면 결제 기록은 취소로 둔다) 그 빌링키를 지운 뒤(이번 요청의 빌링키와 같으면 지우지 않는다) 2단계로 돌아가 이번 요청(`billingKey`·`cycle`)으로 새로 결제한다.
            포트원에 그 결제 ID가 없으면(결제 요청이 아직 포트원에 닿지 않음) 실패로 보지 않고, 그 결제 기록의 금액·빌링키로 같은 결제 ID를 다시 보낸다. 포트원은 같은 결제 ID로 두 번 결제하지 않으므로, 멈췄던 요청이 나중에 같은 ID로 보내도 두 번 결제되지 않는다. 그 결과(결제됨·실패)를 위와 같이 반영한다.
            단, 이미 끝난(`NONE`) 구독의 갱신 결제면 다시 보내지 않고 실패로 닫는다(끝난 구독에 결제를 새로 만들지 않는다). 멈췄던 요청이 나중에 결제되면 '취소 필요'로 표시된다.
-           다시 보낸 결제에 포트원이 '이미 결제됐거나 진행 중인 결제 ID'라고 답하면 실패로 보지 않는다. 같은 결제 ID로 다시 조회해 그 결과를 따르고, 실패가 확인되기 전에는 새 결제 ID로 결제하지 않는다.
+           같은 결제 ID로 보낸 모든 결제(4단계에서 처음 보낸 결제, 다시 보낸 결제, 갱신 결제)에 포트원이 '이미 결제됐거나 진행 중인 결제 ID'라고 답하면 실패로 보지 않는다(탭 두 개에서 다른 요청이 같은 ID를 먼저 보낸 경우). 같은 결제 ID로 다시 조회해 그 결과를 따르고, 실패가 확인되기 전에는 새 결제 ID로 결제하지 않는다.
            다시 보낸 결제나 조회가 응답하지 않으면 아직 모르는 것으로 보고 503 `PAYMENT_UNAVAILABLE`.
         4. 빌링키로 바로 결제한다.
         5. 결과가 오면 사용자 행을 잠그고 결제 기록을 다시 확인한 뒤 반영한다. 웹훅이 먼저 반영했으면 그 결과를 그대로 쓴다.
@@ -3695,7 +3695,7 @@ components:
           oneOf:
             - $ref: '#/components/schemas/BillingCycle'
             - type: 'null'
-          description: 지금 결제 주기. 결과를 모르는 갱신 결제(`PENDING`)가 있으면 그 결제 기록의 주기를 보여 준다(확정되면 그 주기가 되고, 주기 바꾸기도 이 값과 비교한다). `NONE`이면 null
+          description: 지금 결제 주기. 진행 중 구독에 결과를 모르는 갱신 결제(`PENDING`)가 있으면 그 결제 기록의 주기를 보여 준다(확정되면 그 주기가 되고, 주기 바꾸기도 이 값과 비교한다). `NONE`이면 null
         nextCycle:
           oneOf:
             - $ref: '#/components/schemas/BillingCycle'
@@ -3704,12 +3704,14 @@ components:
         currentPeriodEnd:
           type: [string, 'null']
           format: date-time
-          description: 이번 기간이 끝나는 시각. `ACTIVE`면 다음 결제일, `CANCEL_SCHEDULED`면 프로가 끝나는 날로 보여 준다. `NONE`·`PAYMENT_FAILED`면 null. 결과를 모르는 갱신 결제(`PENDING`)가 있으면 그 결제가 됐을 때 끝나는 시각을 보여 준다(`cycle`과 같은 기준. MY-06 주기 바꾸기 팝업 날짜). 보여 주기만 하고, 저장된 기간은 결제가 확인될 때 늘린다
+          description: 이번 기간이 끝나는 시각. `ACTIVE`면 다음 결제일, `CANCEL_SCHEDULED`면 프로가 끝나는 날로 보여 준다. `NONE`·`PAYMENT_FAILED`면 null. 진행 중 구독에 결과를 모르는 갱신 결제(`PENDING`)가 있으면 그 결제가 됐을 때 끝나는 시각을 보여 준다(`cycle`과 같은 기준. MY-06 주기 바꾸기 팝업 날짜). 보여 주기만 하고, 저장된 기간은 결제가 확인될 때 늘린다
         paymentPending:
           type: boolean
           description: |
-            결과를 모르는 결제(`PENDING`)가 있음. 첫 결제면 `status`는 아직 `NONE`이고, 갱신 결제면 `cycle`·`currentPeriodEnd`는 그 결제가 됐을 때의 값이다.
-            MY-06은 첫 결제면 '결제 결과를 확인하고 있어요'를 보여 주고 [프로 시작하기]를 숨긴다. 갱신 결제면 해지 팝업에 결제되지 않으면 바로 무료로 바뀐다고 안내한다
+            확정되면 프로가 되는 결과 모름 결제(`PENDING`)가 있음. 두 가지뿐이다:
+            - 구독 시작 결제(`POST /api/users/me/subscription`): `status`는 아직 `NONE` 또는 `PAYMENT_FAILED`(실패 뒤 다시 결제)다. MY-06은 두 경우 모두 '결제 결과를 확인하고 있어요'를 보여 주고 [프로 시작하기]·[카드 다시 등록]을 숨긴다.
+            - 진행 중(`ACTIVE`·`CANCEL_SCHEDULED`) 구독의 갱신 결제: `cycle`·`currentPeriodEnd`는 그 결제가 됐을 때의 값이다. MY-06 해지 팝업에 결제되지 않으면 바로 무료로 바뀐다고 안내한다.
+            환불로 끝난(`NONE`) 구독의 갱신 결제는 확정돼도 프로를 주지 않으므로 `false`로 센다
         customerId:
           type: [string, 'null']
           description: |
@@ -4194,6 +4196,7 @@ components:
               type: [integer, 'null']
               description: |
                 연간 구독(`ACTIVE`·`CANCEL_SCHEDULED`)을 오늘 중도 해지 환불하면 돌려줄 금액(원). 환불 정책 2절 3항: 남은 기간의 금액(결제 금액 × 남은 일수 ÷ 전체 일수)에서 10%를 빼고 10원 미만은 버린다.
+                결제 금액과 기간은 지금 기간의 확정된(`PAID`) 결제와 저장된 기간을 쓴다(응답의 `cycle`·`currentPeriodEnd`가 아니다). 결과를 모르는 갱신 결제가 있으면 null(확정된 뒤 계산).
                 운영자가 포트원 콘솔에서 부분 취소할 금액이다. 월간이거나 구독이 없으면 null(7일 안 청약철회는 운영자가 판단한다)
             payments:
               type: array
