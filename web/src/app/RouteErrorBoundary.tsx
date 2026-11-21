@@ -4,6 +4,7 @@ import { useRouteError } from 'react-router'
 import { ErrorState } from '@/components/ErrorState'
 
 import { AppShell } from './AppShell'
+import { applyHead } from './applyHead'
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE } from './PageHead'
 
 /**
@@ -22,10 +23,7 @@ export function RouteErrorBoundary() {
 
   // 이 화면은 RootLayout의 PageHead까지 대체한다. 이전 화면의 제목·설명이 남지 않게 기본값으로 되돌린다(#326 리뷰).
   // noindex는 달지 않는다. 대개 배포 중 청크 실패라 다시 받으면 풀리는데, noindex는 그 공개 주소 전체를 색인에서 뺀다(#352 리뷰)
-  useEffect(() => {
-    document.title = DEFAULT_TITLE
-    document.querySelector('meta[name="description"]')?.setAttribute('content', DEFAULT_DESCRIPTION)
-  }, [])
+  useEffect(() => applyHead(DEFAULT_TITLE, DEFAULT_DESCRIPTION), [])
 
   return (
     <AppShell contained>

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useLocation, useMatches } from 'react-router'
 
+import { applyHead } from './applyHead'
 import type { PageHandle } from './AppShell'
 
 export const SITE_URL = 'https://codingmon.tech'
@@ -34,12 +35,7 @@ export function PageHead() {
   // 제목·설명은 React의 <title>·<meta>로 그리지 않는다. React는 index.html의 정적 태그를 지우지 않아
   // 같은 태그가 둘이 된다(#326 리뷰). 정적 태그의 내용을 바꾼다
   const fullTitle = title ? `${title} | Codingmon` : DEFAULT_TITLE
-  useEffect(() => {
-    document.title = fullTitle
-  }, [fullTitle])
-  useEffect(() => {
-    document.querySelector('meta[name="description"]')?.setAttribute('content', description)
-  }, [description])
+  useEffect(() => applyHead(fullTitle, description), [fullTitle, description])
 
   // 이 둘은 정적 태그가 없어 React 19가 head로 올려 그린다
   return noindex ? (
