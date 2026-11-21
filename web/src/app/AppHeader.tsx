@@ -140,8 +140,10 @@ export function AppHeader({ wide = false }: { wide?: boolean }) {
               로그인 버튼 -> 사용자 메뉴로 바뀌며 헤더 폭이 크게 흔들린다. 높이는 버튼 높이,
               폭은 사용자 메뉴(아바타 + 짧은 닉네임)에 가깝게 잡은 값이다. 무엇으로 바뀔지
               모르므로 정확히 맞출 수는 없다.
+              sm 미만에서는 닉네임이 숨고 가입 버튼도 빠져 로그인 버튼(약 80px)이 가장 넓다. w-24(96px)면
+              320px에서 로고 줄을 넘쳐 불러오는 동안만 세 줄이 됐다가 두 줄로 줄어든다(#348 리뷰)
             */
-            <div aria-hidden="true" className="h-control-sm w-24 shrink-0" />
+            <div aria-hidden="true" className="h-control-sm w-24 shrink-0 max-sm:w-20" />
           ) : isAuthenticated && user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
