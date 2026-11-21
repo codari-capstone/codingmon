@@ -313,13 +313,21 @@ function mockQuota(now = new Date(), admin = false): AiQuota {
   return { limit: AI_DAILY_LIMIT, used, remaining: Math.max(0, AI_DAILY_LIMIT - used), resetsAt }
 }
 
+/** 요청한 사용자의 오늘 횟수. 관리자면 한도가 없다(#343). 응답의 quota가 화면의 횟수 캐시를 덮으므로 모든 응답이 이것을 쓴다 */
+function requestQuota(request: Request): AiQuota {
+  const id = userIdFromToken(bearer(request))
+  const account = mockAccounts.find((item) => item.user.id === id)
+  return mockQuota(new Date(), account?.user.role === 'ADMIN')
+}
+
 /** 분석 응답. 내용은 AI_FEATURES 5절의 역방향 피라미드 예시다. 힌트는 연 단계까지만 준다(계약). */
 function analysisView(
   submissionId: number,
   { createdAt, revealed }: MockAnalysis,
+  quota: AiQuota,
   pending = false,
 ): SubmissionAnalysis {
-  const base = { submissionId, failureReason: null, blocked: false, createdAt, quota: mockQuota() }
+  const base = { submissionId, failureReason: null, blocked: false, createdAt, quota }
   if (pending) {
     return {
       ...base,
@@ -355,9 +363,10 @@ function analysisView(
 function reviewView(
   submissionId: number,
   createdAt: string,
+  quota: AiQuota,
   pending = false,
 ): SubmissionCodeReview {
-  const base = { submissionId, failureReason: null, blocked: false, createdAt, quota: mockQuota() }
+  const base = { submissionId, failureReason: null, blocked: false, createdAt, quota }
   if (pending) {
     return {
       ...base,
@@ -1752,12 +1761,11 @@ export const handlers: RequestHandler[] = [
   }),
 
   /** 오늘 남은 AI 분석·리뷰 횟수 (AI-01). 세는 방법은 mockQuota에 있다. */
-  http.get('*/api/users/me/ai-quota', ({ request }) => {
-    const id = userIdFromToken(bearer(request))
-    if (id === null) return unauthorized()
-    const account = mockAccounts.find((item) => item.user.id === id)
-    return HttpResponse.json(mockQuota(new Date(), account?.user.role === 'ADMIN'))
-  }),
+  http.get('*/api/users/me/ai-quota', ({ request }) =>
+    userIdFromToken(bearer(request)) === null
+      ? unauthorized()
+      : HttpResponse.json(requestQuota(request)),
+  ),
 
   /**
    * 제출 기록 (HIST-01·02). 읽기뿐이라 상태가 없다 — 세션은 보지 않는다(RequireAuth 뒤의 화면).
@@ -1887,7 +1895,7 @@ export const handlers: RequestHandler[] = [
    * AI 오답 분석 요청 (AI-01·02). 검사 순서는 계약과 같다: 없는 제출 404 → 오답이 아니면 409.
    * 이미 있으면 그대로 200, 새로 만들면 202 `PENDING`. 세션은 보지 않는다(제출 핸들러와 같은 선택).
    */
-  http.post('*/api/submissions/:id/analysis', ({ params }) => {
+  http.post('*/api/submissions/:id/analysis', ({ params, request }) => {
     const id = Number(params.id)
     if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
 
@@ -1900,14 +1908,16 @@ export const handlers: RequestHandler[] = [
     }
 
     const existing = mockAnalyses.get(id)
-    if (existing) return HttpResponse.json(analysisView(id, existing))
+    if (existing) return HttpResponse.json(analysisView(id, existing, requestQuota(request)))
     const created = { createdAt: new Date().toISOString(), revealed: 0 }
     mockAnalyses.set(id, created)
-    return HttpResponse.json(analysisView(id, created, true), { status: 202 })
+    return HttpResponse.json(analysisView(id, created, requestQuota(request), true), {
+      status: 202,
+    })
   }),
 
   /** AI 코드 리뷰 요청 (AI-05). 분석 요청과 같은 순서로 검사한다: 없는 제출 404 → 정답이 아니면 409. */
-  http.post('*/api/submissions/:id/code-review', ({ params }) => {
+  http.post('*/api/submissions/:id/code-review', ({ params, request }) => {
     const id = Number(params.id)
     if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
 
@@ -1919,28 +1929,30 @@ export const handlers: RequestHandler[] = [
     }
 
     const existing = mockReviews.get(id)
-    if (existing) return HttpResponse.json(reviewView(id, existing))
+    if (existing) return HttpResponse.json(reviewView(id, existing, requestQuota(request)))
     const createdAt = new Date().toISOString()
     mockReviews.set(id, createdAt)
-    return HttpResponse.json(reviewView(id, createdAt, true), { status: 202 })
+    return HttpResponse.json(reviewView(id, createdAt, requestQuota(request), true), {
+      status: 202,
+    })
   }),
 
   /** 저장된 AI 코드 리뷰 (AI-05). 요청한 적이 없으면 계약대로 404 `CODE_REVIEW_NOT_FOUND`다. */
-  http.get('*/api/submissions/:id/code-review', ({ params }) => {
+  http.get('*/api/submissions/:id/code-review', ({ params, request }) => {
     const id = Number(params.id)
     if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
     const createdAt = mockReviews.get(id)
     if (!createdAt) return problem(404, 'CODE_REVIEW_NOT_FOUND', 'AI 리뷰를 찾을 수 없어요')
-    return HttpResponse.json(reviewView(id, createdAt))
+    return HttpResponse.json(reviewView(id, createdAt, requestQuota(request)))
   }),
 
   /** 저장된 AI 오답 분석 (AI-02·03). 요청한 적이 없으면 계약대로 404 `ANALYSIS_NOT_FOUND`다. */
-  http.get('*/api/submissions/:id/analysis', ({ params }) => {
+  http.get('*/api/submissions/:id/analysis', ({ params, request }) => {
     const id = Number(params.id)
     if (!Number.isSafeInteger(id)) return badRequest('id는 정수여야 한다')
     const found = mockAnalyses.get(id)
     if (!found) return problem(404, 'ANALYSIS_NOT_FOUND', 'AI 분석을 찾을 수 없어요')
-    return HttpResponse.json(analysisView(id, found))
+    return HttpResponse.json(analysisView(id, found, requestQuota(request)))
   }),
 
   /**
@@ -1960,7 +1972,7 @@ export const handlers: RequestHandler[] = [
       return problem(409, 'HINT_LEVEL_SKIPPED', '앞 단계 힌트를 먼저 열어 주세요')
     }
     found.revealed = Math.max(found.revealed, level)
-    return HttpResponse.json(analysisView(id, found))
+    return HttpResponse.json(analysisView(id, found, requestQuota(request)))
   }),
 
   /**
