@@ -46,6 +46,7 @@ function RadioGroup<T extends string>({
   value,
   onChange,
   variant = 'list',
+  stacked,
   className,
 }: {
   label: React.ReactNode
@@ -54,6 +55,8 @@ function RadioGroup<T extends string>({
   value: T | undefined
   onChange: (value: T) => void
   variant?: 'list' | 'card'
+  /** card를 폭과 상관없이 한 줄에 하나씩 쌓는다. 라벨이 길어 옆으로 놓으면 꺾일 때(처음 안내 #345) */
+  stacked?: boolean
   className?: string
 }) {
   return (
@@ -64,7 +67,10 @@ function RadioGroup<T extends string>({
       <div
         className={
           variant === 'card'
-            ? 'grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3'
+            ? cn(
+                'grid gap-3',
+                stacked ? 'grid-cols-1' : 'grid-cols-[repeat(auto-fit,minmax(160px,1fr))]',
+              )
             : 'flex flex-col'
         }
       >

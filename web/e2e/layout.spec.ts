@@ -196,6 +196,8 @@ test('320px 로그인 학습자에서 버튼 묶음이 로고 줄에 남는다',
   await page.setViewportSize({ width: 320, height: 844 })
   await page.goto('/problems')
   await expect(page.getByRole('button', { name: /사용자 메뉴/ })).toBeVisible()
+  // 칩은 세션 뒤에 따로 받는다. 62px 자리표시가 아니라 실제 칩 폭으로 재야 한다(#348 리뷰)
+  await expect(page.getByRole('banner').getByRole('link', { name: /연속 학습 중/ })).toBeVisible()
 
   await expectActionsOnLogoRow(page)
 })
@@ -250,11 +252,18 @@ const ADMIN_PAGES = [
   '/admin/tags',
 ]
 
+// 표식 없이 늦게 그려지는 구역이 있는 화면은 그 구역이 보일 때까지 기다린다(#349 리뷰)
+const READY: Record<string, string> = {
+  // 랜딩의 문제 미리보기는 응답 전에는 아무것도 그리지 않는다(LandingPage ProblemPreview)
+  '/': '#landing-problems',
+}
+
 async function expectNoPageScroll(page: Page, paths: string[]) {
   for (const path of paths) {
     await page.goto(path)
     // 불러오기가 끝난 뒤에 잰다. 풀이·제출 결과는 불러오는 동안에도 h1을 그려 h1만 기다리면 로딩 화면을 잰다(#349 리뷰)
     await expect(page.locator('h1').first()).toBeVisible()
+    if (READY[path]) await expect(page.locator(READY[path])).toBeVisible()
     await expect(page.locator('[data-slot="loading-state"], [data-slot="skeleton"]')).toHaveCount(0)
     // 404·403·오류 화면과 로그인으로 튕긴 화면을 재지 않게 한다. 모두 h1을 그려 위 대기를 통과한다(#349 리뷰)
     await expect(

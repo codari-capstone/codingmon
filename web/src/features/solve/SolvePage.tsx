@@ -233,8 +233,9 @@ function Workspace({ problem }: { problem: ProblemDetailView }) {
 
       {/* 넓은 화면은 좌우 분할, 좁은 화면은 탭 전환 (SOLVE-10). 가르는 이유는 useWideLayout 주석 */}
       {wide ? (
-        // 지문:에디터 = 2:3. 코드는 가로로 길어지고 지문은 글이라 좁아도 읽힌다(#327)
-        <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start gap-5">
+        // 지문:에디터 = 2:3. 코드는 가로로 길어지고 지문은 글이라 좁아도 읽힌다(#327).
+        // 분할이 막 켜지는 1024px 부근은 2:3이면 지문 속 예제 칸이 너무 좁아 xl부터만 쓴다(#330 리뷰)
+        <div className="grid grid-cols-2 items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           {statement}
           {/*
             에디터 칸을 화면에 붙여 둔다. 지문은 에디터보다 훨씬 길어서(측정: 1280px

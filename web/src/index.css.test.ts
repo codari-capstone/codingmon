@@ -130,12 +130,13 @@ const PAIRS: Pair[] = [
 ]
 
 // 테마마다 다른 쌍
-// Progress·LoadingState 막대는 바탕과 3:1이어야 한다(비텍스트). 바탕은 밝은 모드 muted, 다크 background다.
+// Progress·LoadingState 막대는 바탕과 3:1이어야 한다(비텍스트). 바탕은 밝은 모드 Progress는 muted, LoadingState는 border, 다크는 둘 다 background다(#329 리뷰).
 // 디자인 시스템의 success 막대(--success)는 밝은 모드에서, 다크의 막대·바탕(border)은 3:1에 못 미쳐
 // 막대는 success-text, 다크 바탕은 background로 쓴다 (#233).
 const THEME_PAIRS: Record<keyof typeof THEMES, Pair[]> = {
   light: [
     ['primary', 'muted', 1, 3, 'card'],
+    ['primary', 'border', 1, 3, 'card'],
     ['success-text', 'muted', 1, 3, 'card'],
   ],
   dark: [

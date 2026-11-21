@@ -76,8 +76,11 @@ export function MyNav({ user }: { user: CurrentUser }) {
     if (!nav || !active) return
     const center = () => {
       if (nav.scrollWidth <= nav.clientWidth) return
+      // 키보드로 다른 탭에 가 있으면 그 탭을 기준으로 민다. 지금 탭으로 되돌리면 포커스 탭이 가려진다(#351 리뷰)
+      // 탭 줄 자체가 포커스를 받는 브라우저도 있어 링크만 본다(#352 리뷰)
+      const target = nav.querySelector('a:focus') ?? active
       const navBox = nav.getBoundingClientRect()
-      const box = active.getBoundingClientRect()
+      const box = target.getBoundingClientRect()
       nav.scrollLeft += box.left - navBox.left - (navBox.width - box.width) / 2
     }
     center()

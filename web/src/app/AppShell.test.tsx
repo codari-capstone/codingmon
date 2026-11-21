@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createQueryClient } from './queryClient'
 import { AppShell } from './AppShell'
+import { DEFAULT_TITLE } from './PageHead'
 import { RouteErrorBoundary } from './RouteErrorBoundary'
 import { ThemeProvider } from './ThemeProvider'
 
@@ -84,6 +85,15 @@ describe('AppShell 바닥글 (#335)', () => {
     renderAt('/bleed-broken')
     await screen.findByRole('heading', { level: 1 })
     expect(screen.getByRole('contentinfo')).toBeInTheDocument()
+  })
+
+  // PageHead까지 대체되므로 이전 화면의 제목이 남지 않는다(#326 리뷰). 일시적 실패에 공개 주소가 색인에서 빠지지 않게 noindex는 없다(#352 리뷰)
+  it('라우트 오류 화면은 기본 제목으로 돌린다', async () => {
+    document.title = '마이페이지 | Codingmon'
+    renderAt('/bleed-broken')
+    await screen.findByRole('heading', { level: 1 })
+    expect(document.title).toBe(DEFAULT_TITLE)
+    expect(document.head.querySelector('meta[name="robots"]')).toBeNull()
   })
 })
 
