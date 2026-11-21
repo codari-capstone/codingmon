@@ -195,15 +195,29 @@ export function Component() {
             <h2 id="member-ai" className="text-lg font-bold">
               오늘 AI 사용
             </h2>
-            <Progress
-              label="AI 분석·리뷰"
-              value={user.aiQuota.used}
-              max={user.aiQuota.limit}
-              showValue
-            />
-            <span className="text-muted-foreground text-[13px]">
-              하루 한도 {user.aiQuota.limit}회 · {kstHour(user.aiQuota.resetsAt)}에 다시 채워져요
-            </span>
+            {user.aiQuota.limit === null ? (
+              // 관리자는 하루 한도가 없다(#343). 막대 대신 쓴 횟수만 보인다
+              <p className="m-0 text-[15px]">
+                AI 분석·리뷰{' '}
+                <span className="font-semibold tabular-nums">{user.aiQuota.used}회</span>
+                <span className="text-muted-foreground block text-[13px]">
+                  관리자라 하루 한도가 없어요
+                </span>
+              </p>
+            ) : (
+              <>
+                <Progress
+                  label="AI 분석·리뷰"
+                  value={user.aiQuota.used}
+                  max={user.aiQuota.limit}
+                  showValue
+                />
+                <span className="text-muted-foreground text-[13px]">
+                  하루 한도 {user.aiQuota.limit}회 · {kstHour(user.aiQuota.resetsAt)}에 다시
+                  채워져요
+                </span>
+              </>
+            )}
           </section>
 
           <section

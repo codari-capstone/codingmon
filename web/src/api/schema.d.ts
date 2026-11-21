@@ -1967,14 +1967,16 @@ export interface components {
          *     - 서버가 처리 중에 내려가 시간이 지나 `FAILED`로 보이는 결과(`SubmissionAnalysis`·`SubmissionCodeReview`의 `status`)는 예외로, 다시 요청하기 전까지 1회로 남는다.
          *       다시 요청해도 같은 결과라 1회 그대로다(한도를 다 썼어도 다시 요청할 수 있다).
          *     - 실패한 호출을 세지 않으므로 실제 AI 호출 수는 한도보다 많을 수 있다.
+         *     - 관리자(`role = ADMIN`)는 하루 한도가 없다(#343). `limit`·`remaining`이 null이고, 쓴 횟수(`used`)는 센다.
+         *       한 사용자가 동시에 만들 수 있는 결과 수 제한(`BUSY`)은 관리자에게도 그대로다.
          */
         AiQuota: {
-            /** @description 하루 한도. 지금은 20(서버 설정 `LLM_DAILY_LIMIT`) */
-            limit: number;
+            /** @description 하루 한도. 지금은 20(서버 설정 `LLM_DAILY_LIMIT`). 관리자는 한도가 없어 null */
+            limit: number | null;
             /** @description 오늘 쓴 횟수. 서버가 한도를 낮추면 `limit`보다 클 수 있다 */
             used: number;
-            /** @description 오늘 남은 횟수. `limit - used`이고 0보다 작아지지 않는다 */
-            remaining: number;
+            /** @description 오늘 남은 횟수. `limit - used`이고 0보다 작아지지 않는다. 관리자는 null */
+            remaining: number | null;
             /**
              * Format: date-time
              * @description 다음에 횟수가 초기화되는 시각(다음 UTC 자정, 한국 시각 오전 9시)

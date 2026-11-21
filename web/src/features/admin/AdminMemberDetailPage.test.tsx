@@ -40,6 +40,13 @@ function renderPage(id: number | string) {
 }
 
 describe('AdminMemberDetailPage (ADM-15·16)', () => {
+  it('관리자 회원은 막대 대신 쓴 횟수와 한도 없음을 보인다 (#343)', async () => {
+    renderPage(2)
+
+    expect(await screen.findByText('관리자라 하루 한도가 없어요')).toBeInTheDocument()
+    expect(screen.queryByRole('progressbar', { name: 'AI 분석·리뷰' })).not.toBeInTheDocument()
+  })
+
   it('기본 정보, 오늘 AI 사용, 푼 문제, 제출 목록을 보인다', async () => {
     renderPage(1)
 
