@@ -56,7 +56,10 @@ export function Table<Row extends { id: string | number }>({
   className,
 }: TableProps<Row>) {
   return (
-    <div data-slot="table-container" className={cn('w-full overflow-x-auto', className)}>
+    <div
+      data-slot="table-container"
+      className={cn('scroll-fade-x w-full overflow-x-auto', className)}
+    >
       {/* 본문 15px(디자인 표: History·ProblemSubmissions·Report, #275). 머리글은 아래 th의 12px */}
       <table className="text-body-foreground w-full border-separate border-spacing-0 text-[15px]">
         {caption ? <caption className="sr-only">{caption}</caption> : null}

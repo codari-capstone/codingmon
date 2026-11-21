@@ -152,6 +152,20 @@
   letter-spacing: var(--text-title-2--letter-spacing);
 }
 
+/* 가로로 밀리는 상자에서 숨은 내용이 있는 쪽에만 그라데이션을 띄운다(#341). 표 열이 글자 중간에서
+ * 잘려 보여도 밀 수 있다는 표시가 없었다. JS 없이 배경 두 겹으로 한다: 상자와 함께 고정된(scroll) 그림자를
+ * 내용과 함께 움직이는(local) 바탕색 덮개가 끝에 닿았을 때만 가린다. 바탕이 카드가 아니면 --fade-bg를 바꾼다 */
+@utility scroll-fade-x {
+  --fade-shadow: color-mix(in srgb, var(--foreground) 14%, transparent);
+  background:
+    linear-gradient(to right, var(--fade-bg, var(--card)) 40%, transparent) left / 40px 100%
+      no-repeat local,
+    linear-gradient(to left, var(--fade-bg, var(--card)) 40%, transparent) right / 40px 100%
+      no-repeat local,
+    linear-gradient(to right, var(--fade-shadow), transparent) left / 20px 100% no-repeat scroll,
+    linear-gradient(to left, var(--fade-shadow), transparent) right / 20px 100% no-repeat scroll;
+}
+
 /* LoadingState의 흐르는 막대 (디자인 시스템의 cm-indeterminate) */
 @keyframes indeterminate {
   0% {

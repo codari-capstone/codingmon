@@ -212,3 +212,66 @@ for (const width of [320, 390]) {
     await expectHeaderFits(page, 5)
   })
 }
+
+/**
+ * 360px에서 화면마다 문서에 가로 스크롤이 생기지 않는지 (#341).
+ * 표·탭처럼 일부러 가로로 미는 상자는 그 안에서만 밀리므로 문서 폭에는 잡히지 않는다.
+ * #341 점검에서 31개 화면을 잰 방식이다. 마이페이지 가로 탭이 격자 열을 넓혀 본문이 넘친 회귀를 여기서 잡는다.
+ */
+const NARROW = 360
+const PUBLIC_PAGES = [
+  '/',
+  '/problems',
+  '/pricing',
+  '/terms',
+  '/login',
+  '/signup',
+  '/password-reset',
+]
+const USER_PAGES = [
+  '/problems/1',
+  '/welcome',
+  '/submissions',
+  '/submissions/23',
+  '/me',
+  '/me/account',
+  '/me/display',
+  '/me/report',
+  '/me/badges',
+]
+const ADMIN_PAGES = [
+  '/admin/dashboard',
+  '/admin/problems',
+  '/admin/problems/1',
+  '/admin/members',
+  '/admin/members/1',
+  '/admin/reports',
+  '/admin/tags',
+]
+
+async function expectNoPageScroll(page: Page, paths: string[]) {
+  for (const path of paths) {
+    await page.goto(path)
+    // 화면 제목이 그려진 뒤에 잰다. 불러오는 중 화면은 좁아 넘침을 놓친다
+    await expect(page.locator('h1').first()).toBeVisible()
+    const width = await page.evaluate(() => document.documentElement.scrollWidth)
+    expect.soft(width, `${path}에 가로 스크롤이 생겼다`).toBeLessThanOrEqual(NARROW)
+  }
+}
+
+test(`${NARROW}px 공개 화면에 가로 스크롤이 없다`, async ({ page }) => {
+  await page.setViewportSize({ width: NARROW, height: 800 })
+  await expectNoPageScroll(page, PUBLIC_PAGES)
+})
+
+test(`${NARROW}px 학습자 화면에 가로 스크롤이 없다`, async ({ page }) => {
+  await page.setViewportSize({ width: NARROW, height: 800 })
+  await login(page)
+  await expectNoPageScroll(page, USER_PAGES)
+})
+
+test(`${NARROW}px 관리자 화면에 가로 스크롤이 없다`, async ({ page }) => {
+  await page.setViewportSize({ width: NARROW, height: 800 })
+  await login(page, ADMIN)
+  await expectNoPageScroll(page, ADMIN_PAGES)
+})
