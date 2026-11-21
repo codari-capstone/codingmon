@@ -20,8 +20,8 @@ import { DEFAULT_DESCRIPTION, DEFAULT_TITLE } from './PageHead'
 export function RouteErrorBoundary() {
   const error = useRouteError()
 
-  // 이 화면은 RootLayout의 PageHead까지 대체한다. 이전 화면의 제목·설명이 남지 않게 기본값으로 되돌리고,
-  // 오류 화면이 색인되지 않게 noindex를 단다(#326 리뷰)
+  // 이 화면은 RootLayout의 PageHead까지 대체한다. 이전 화면의 제목·설명이 남지 않게 기본값으로 되돌린다(#326 리뷰).
+  // noindex는 달지 않는다. 대개 배포 중 청크 실패라 다시 받으면 풀리는데, noindex는 그 공개 주소 전체를 색인에서 뺀다(#352 리뷰)
   useEffect(() => {
     document.title = DEFAULT_TITLE
     document.querySelector('meta[name="description"]')?.setAttribute('content', DEFAULT_DESCRIPTION)
@@ -29,7 +29,6 @@ export function RouteErrorBoundary() {
 
   return (
     <AppShell contained>
-      <meta name="robots" content="noindex" />
       <ErrorState problem={error} headingLevel={1} onRetry={() => window.location.reload()} />
     </AppShell>
   )
