@@ -81,10 +81,11 @@ export function MyNav({ user }: { user: CurrentUser }) {
       nav.scrollLeft += box.left - navBox.left - (navBox.width - box.width) / 2
     }
     center()
-    // 같은 주소에서 탭 줄이 좁아지거나(회전·창 크기) 웹 글꼴이 와서 탭 폭이 바뀌어도 다시 민다(#351 리뷰)
+    // 같은 주소에서 탭 줄이 좁아지거나(회전·창 크기) 웹 글꼴이 와서 탭 폭이 바뀌어도 다시 민다(#351 리뷰).
+    // 앞쪽 탭만 넓어져도 지금 탭이 밀리므로 탭 전부를 본다
     const observer = new ResizeObserver(center)
     observer.observe(nav)
-    observer.observe(active)
+    nav.querySelectorAll('a').forEach((tab) => observer.observe(tab))
     return () => observer.disconnect()
   }, [pathname])
 

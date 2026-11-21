@@ -291,9 +291,11 @@ test(`${NARROW}px 관리자 화면에 가로 스크롤이 없다`, async ({ page
 
 // 오른쪽 탭으로 바로 들어와도 탭 줄이 그 탭까지 밀려 탭이 잘리지 않는다(MyNav).
 // 링크를 누르면 Playwright가 먼저 그 링크로 밀어 주므로 주소로 바로 연다
-async function expectActiveTabInside(page: Page, label: string) {
+async function expectActiveTabInside(page: Page, path: string, label = path) {
   const nav = page.getByRole('navigation', { name: '마이페이지 메뉴' })
   const active = nav.locator('[aria-current="page"]')
+  // 다른 화면으로 옮겨지면 처음부터 보이는 첫 탭을 재고 통과한다. 그 경로의 탭인지 먼저 본다(#351 리뷰)
+  await expect(active).toHaveAttribute('href', path)
   await expect(active).toBeVisible()
   // 웹 글꼴이 와서 탭 폭이 바뀐 뒤에 잰다(#351 리뷰)
   await page.evaluate(() => document.fonts.ready.then(() => undefined))
@@ -324,5 +326,5 @@ test('마이페이지에서 창을 좁히면 가로 탭이 지금 탭까지 밀�
   await page.goto('/me/withdraw')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await page.setViewportSize({ width: NARROW, height: 800 })
-  await expectActiveTabInside(page, '좁힌 뒤 /me/withdraw')
+  await expectActiveTabInside(page, '/me/withdraw', '좁힌 뒤 /me/withdraw')
 })
