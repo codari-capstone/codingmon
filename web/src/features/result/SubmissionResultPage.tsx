@@ -231,24 +231,11 @@ function NextActions({ result }: { result: SubmissionResult }) {
 
   return (
     <div className="mt-1.5 flex flex-wrap gap-2.5">
-      {actions.map((action) =>
-        action.to ? (
-          <Button key={action.label} asChild className="min-h-11">
-            <Link to={action.to}>{action.label}</Link>
-          </Button>
-        ) : (
-          // 못 누르는 이유를 글자로 적는다. 비활성 버튼만 두면 왜 안 되는지 알 길이 없고,
-          // 스크린 리더도 "흐리다"는 것까지만 읽는다.
-          <Button
-            key={action.label}
-            variant="secondary"
-            className="min-h-11 disabled:text-muted-foreground"
-            disabled
-          >
-            {`${action.label} (준비 중)`}
-          </Button>
-        ),
-      )}
+      {actions.map((action) => (
+        <Button key={action.label} asChild className="min-h-11">
+          <Link to={action.to}>{action.label}</Link>
+        </Button>
+      ))}
       {history ? (
         <Button asChild variant="secondary" className="min-h-11">
           <Link to={problemSubmissionsPath(result.problemId)}>이 문제의 제출 기록</Link>

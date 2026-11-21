@@ -28,8 +28,8 @@ test.describe('제출 결과 화면', () => {
     await expect(page.getByText(/^제출 #\d+$/)).toBeVisible()
     await expect(page.getByText('Python')).toBeVisible()
 
-    // 정답이면 다음 문제(아직 열 곳이 없어 비활성)와 AI 리뷰 패널이다 (RES-07, AI-05).
-    await expect(page.getByRole('button', { name: '다음 문제 (준비 중)' })).toBeDisabled()
+    // 정답이면 다음 문제(문제 목록)와 AI 리뷰 패널이다 (RES-07, AI-05).
+    await expect(page.getByRole('link', { name: '다음 문제' })).toHaveAttribute('href', '/problems')
     await expect(page.getByRole('button', { name: 'AI 리뷰' })).toBeEnabled()
   })
 
