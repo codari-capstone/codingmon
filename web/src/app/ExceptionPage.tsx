@@ -21,7 +21,11 @@ export function ExceptionPage({
   actions,
 }: ExceptionPageProps) {
   return (
-    <section className="flex flex-col items-center gap-4 px-6 py-20 text-center">
+    // e2e가 404·403 화면을 재지 않게 이 표식으로 거른다(layout.spec)
+    <section
+      data-slot="exception-page"
+      className="flex flex-col items-center gap-4 px-6 py-20 text-center"
+    >
       <img
         src={scene}
         alt=""
