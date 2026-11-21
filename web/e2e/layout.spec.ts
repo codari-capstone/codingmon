@@ -241,7 +241,8 @@ const USER_PAGES = [
 ]
 const ADMIN_PAGES = [
   '/admin/dashboard',
-  '/admin/problems',
+  // 관리자 문제 목록은 /admin 자체다(router.tsx). /admin/problems는 404 화면이다(#349 리뷰)
+  '/admin',
   '/admin/problems/1',
   '/admin/members',
   '/admin/members/1',
@@ -252,8 +253,11 @@ const ADMIN_PAGES = [
 async function expectNoPageScroll(page: Page, paths: string[]) {
   for (const path of paths) {
     await page.goto(path)
-    // 화면 제목이 그려진 뒤에 잰다. 불러오는 중 화면은 좁아 넘침을 놓친다
+    // 불러오기가 끝난 뒤에 잰다. 풀이·제출 결과는 불러오는 동안에도 h1을 그려 h1만 기다리면 로딩 화면을 잰다(#349 리뷰)
     await expect(page.locator('h1').first()).toBeVisible()
+    await expect(page.locator('[data-slot="loading-state"], [data-slot="skeleton"]')).toHaveCount(0)
+    // 404 화면을 재지 않게 한다. 경로가 틀리면 ExceptionPage도 h1을 그려 위 대기를 통과한다
+    await expect(page.getByText('404')).toHaveCount(0)
     const width = await page.evaluate(() => document.documentElement.scrollWidth)
     expect.soft(width, `${path}에 가로 스크롤이 생겼다`).toBeLessThanOrEqual(NARROW)
   }

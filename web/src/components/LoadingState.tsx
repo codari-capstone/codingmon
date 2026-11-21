@@ -16,6 +16,8 @@ interface LoadingStateProps {
 export function LoadingState({ label = '불러오는 중…' }: LoadingStateProps) {
   return (
     <div
+      // e2e가 불러오기가 끝났는지 이 표식으로 본다(layout.spec)
+      data-slot="loading-state"
       role="status"
       aria-live="polite"
       className="flex animate-[loading-appear_0.6s_ease-out_both] flex-col items-center gap-4 px-6 py-12"
