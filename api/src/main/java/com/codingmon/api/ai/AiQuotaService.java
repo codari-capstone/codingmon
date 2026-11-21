@@ -53,6 +53,7 @@ public class AiQuotaService {
 
     // 본인 제출 행과 사용자 행을 이 순서로 잠근 한 트랜잭션에서 시도를 잡고, 잡기 전후로 센다. 이 시도로 횟수가 늘어 한도를 넘으면 429를 던져
     // 잡은 것(새 행, 또는 FAILED·버려진 PENDING을 되돌린 것)을 롤백한다. 잡지 못했으면(재사용·진행 중) 세지 않는다.
+    // 관리자는 하루 한도를 검사하지 않는다(AI-01). 아래 동시 처리 수 검사는 요금제와 상관없는 대기열 보호라 관리자도 받는다.
     // 오늘 시작한 버려진 PENDING은 이미 센 행이라 다시 잡아도 횟수가 늘지 않으므로, 한도를 낮춰 넘어 있어도 막지 않는다.
     // 제출 행을 먼저 잠그는 것은 탈퇴·채점 완료와 같은 순서라 교착을 막는다. 사용자 행 잠금에서 같은 사용자의 요청이 줄을 서므로,
     // 동시에 눌러도 뒤 요청이 앞 요청의 커밋된 행을 보고 센다.
@@ -72,7 +73,7 @@ public class AiQuotaService {
             Optional<AiReviewRepository.Claim> claimed = claim.get();
             if (claimed.isPresent()) {
                 int after = reviews.usedToday(userId).used();
-                if (after > before.used() && after > limit) {
+                if (!before.admin() && after > before.used() && after > limit) {
                     throw exceeded(before);
                 }
                 if (reviews.inProgress(userId, startedAt, abandoned.get()) > userConcurrency) {

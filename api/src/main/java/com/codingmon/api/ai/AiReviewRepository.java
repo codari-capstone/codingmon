@@ -57,8 +57,8 @@ class AiReviewRepository {
     record Target(String jobStatus, String verdict) {
     }
 
-    // 오늘 쓴 AI 분석·리뷰 횟수와 다음에 초기화되는 시각(usedToday).
-    record Usage(int used, Instant resetsAt) {
+    // 오늘 쓴 AI 분석·리뷰 횟수와 다음에 초기화되는 시각(usedToday). 관리자는 하루 한도를 받지 않는다(AI-01).
+    record Usage(int used, Instant resetsAt, boolean admin) {
     }
 
     // 끝나지 않은 PENDING 중 버려진 것을 가리는 기준. 이 서버의 처리기에 남아 있는(active) 시도는 오래 걸려도 버려진 것이 아니다.
@@ -138,10 +138,13 @@ class AiReviewRepository {
         return jdbc.sql("select (select count(*) from ai_reviews r join submissions s on s.id = r.submission_id"
                 + "   where s.user_id = :userId and s.submission_kind = 'SUBMIT' and r.status <> 'FAILED'"
                 + "     and r.created_at >= t.day and r.created_at < t.day + interval '24 hours') as used,"
-                + " t.day + interval '24 hours' as resets_at"
+                + " t.day + interval '24 hours' as resets_at,"
+                // 역할은 토큰이 아니라 DB에서 읽는다. 관리자 회원 상세는 요청한 사람이 아닌 다른 회원을 묻는다.
+                + " coalesce((select u.role = 'ADMIN' from users u where u.id = :userId), false) as admin"
                 + " from (select date_trunc('day', now(), 'UTC') as day) t")
                 .param("userId", userId)
-                .query((rs, n) -> new Usage(rs.getInt("used"), rs.getObject("resets_at", OffsetDateTime.class).toInstant()))
+                .query((rs, n) -> new Usage(rs.getInt("used"), rs.getObject("resets_at", OffsetDateTime.class).toInstant(),
+                        rs.getBoolean("admin")))
                 .single();
     }
 
