@@ -1,8 +1,10 @@
+import { useEffect } from 'react'
 import { useRouteError } from 'react-router'
 
 import { ErrorState } from '@/components/ErrorState'
 
 import { AppShell } from './AppShell'
+import { DEFAULT_DESCRIPTION, DEFAULT_TITLE } from './PageHead'
 
 /**
  * 라우트에서 발생한 오류를 받는다 (UX-02).
@@ -18,8 +20,16 @@ import { AppShell } from './AppShell'
 export function RouteErrorBoundary() {
   const error = useRouteError()
 
+  // 이 화면은 RootLayout의 PageHead까지 대체한다. 이전 화면의 제목·설명이 남지 않게 기본값으로 되돌리고,
+  // 오류 화면이 색인되지 않게 noindex를 단다(#326 리뷰)
+  useEffect(() => {
+    document.title = DEFAULT_TITLE
+    document.querySelector('meta[name="description"]')?.setAttribute('content', DEFAULT_DESCRIPTION)
+  }, [])
+
   return (
     <AppShell contained>
+      <meta name="robots" content="noindex" />
       <ErrorState problem={error} headingLevel={1} onRetry={() => window.location.reload()} />
     </AppShell>
   )

@@ -38,7 +38,8 @@ export function CodeBlock({
   headingLevel,
   className,
 }: CodeBlockProps) {
-  const Heading = headingLevel ? (`h${headingLevel}` as const) : 'span'
+  // 제목 글자가 없으면 h 태그를 쓰지 않는다. 빈 제목이 낭독기 제목 목록에 나온다(#328 리뷰)
+  const Heading = headingLevel && (title ?? language) ? (`h${headingLevel}` as const) : 'span'
   const { copied, copy } = useCopy(code)
   const copyText = copied ? '복사됨' : '복사'
 

@@ -169,6 +169,8 @@ test.describe('제출 결과 화면', () => {
       })
       // 패널은 제목 id로 집는다. 글자로 거르면 안쪽 힌트 구역까지 걸릴 수 있다(#328 리뷰)
       const panel = page.locator(`section[aria-labelledby="${headingId}"]`)
+      // 버튼을 누르려 페이지가 밀렸으면 코드 열만 sticky로 붙어 윗선이 어긋난다. 맨 위에서 잰다(#328 리뷰)
+      await page.evaluate(() => window.scrollTo(0, 0))
       const [codeBox, panelBox] = [await code.boundingBox(), await panel.boundingBox()]
       expect(Math.abs(codeBox!.y - panelBox!.y)).toBeLessThanOrEqual(1)
       expect(Math.abs(codeBox!.width - panelBox!.width)).toBeLessThanOrEqual(1)

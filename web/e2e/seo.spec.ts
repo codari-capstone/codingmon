@@ -38,6 +38,12 @@ test('공개 화면은 제목과 canonical, 로그인이 필요한 화면은 noi
   // 로그인 화면으로 돌려보내져도 noindex가 아니라 로그인 화면의 head다
   await page.goto('/me')
   await expect(page).toHaveTitle('로그인 | Codingmon')
+  // 주석대로 로그인 화면의 head인지 noindex·canonical까지 본다(#326 리뷰)
+  await expect(page.locator('meta[name="robots"]')).toHaveCount(0)
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    'href',
+    'https://codingmon.tech/login',
+  )
 
   await page.goto('/없는-주소')
   await expect(page).toHaveTitle('페이지를 찾을 수 없어요 | Codingmon')
