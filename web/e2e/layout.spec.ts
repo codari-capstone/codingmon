@@ -256,8 +256,13 @@ async function expectNoPageScroll(page: Page, paths: string[]) {
     // 불러오기가 끝난 뒤에 잰다. 풀이·제출 결과는 불러오는 동안에도 h1을 그려 h1만 기다리면 로딩 화면을 잰다(#349 리뷰)
     await expect(page.locator('h1').first()).toBeVisible()
     await expect(page.locator('[data-slot="loading-state"], [data-slot="skeleton"]')).toHaveCount(0)
-    // 404·403 화면을 재지 않게 한다. 경로가 틀리면 ExceptionPage도 h1을 그려 위 대기를 통과한다
-    await expect(page.locator('[data-slot="exception-page"]')).toHaveCount(0)
+    // 404·403·오류 화면과 로그인으로 튕긴 화면을 재지 않게 한다. 모두 h1을 그려 위 대기를 통과한다(#349 리뷰)
+    await expect(
+      page.locator('[data-slot="exception-page"], [data-slot="error-state"]'),
+    ).toHaveCount(0)
+    expect(new URL(page.url()).pathname, `${path}에서 다른 화면으로 옮겨졌다`).toBe(path)
+    // Pretendard는 화면에 쓰인 글자 조각을 나중에 받는다. 바뀐 글꼴 폭으로 재야 한다(#349 리뷰)
+    await page.evaluate(() => document.fonts.ready.then(() => undefined))
     // 고정값 360이 아니라 clientWidth와 잰다. 세로 스크롤바가 보이는 환경(--headed)에서도 같은 기준이 된다(#349 리뷰)
     const { scrollWidth, clientWidth } = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
