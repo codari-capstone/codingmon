@@ -532,13 +532,16 @@ describe('AnalysisPanel', () => {
 
       // 문장마다 칸을 나누지 않는다. 종류마다 한 칸(배지 하나 + 목록 하나)이다
       const items = (kind: string) =>
-        within(screen.getByText(kind, { selector: 'span' }).parentElement!)
+        within(screen.getByRole('list', { name: kind }))
           .getAllByRole('listitem')
           .map((li) => li.textContent)
       await screen.findByText('사실 하나')
       expect(items('실행 결과')).toEqual(['사실 하나', '사실 둘'])
       expect(items('코드 분석')).toEqual(['짐작 하나', '짐작 둘'])
-      expect(screen.getAllByText(/^(실행 결과|코드 분석)$/)).toHaveLength(2)
+      const badges = screen.getAllByText(/^(실행 결과|코드 분석)$/)
+      expect(badges).toHaveLength(2)
+      // 종류는 목록 이름으로 읽히므로 배지는 낭독기에서 숨겨 두 번 읽히지 않게 한다(#352 리뷰)
+      for (const badge of badges) expect(badge.closest('[aria-hidden="true"]')).not.toBeNull()
       expect(screen.getByText(/의심되는 줄/)).toHaveTextContent(/^의심되는 줄 · 2번$/)
     })
 

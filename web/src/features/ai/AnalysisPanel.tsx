@@ -26,9 +26,12 @@ function Evidence({ kind, items }: { kind: '실행 결과' | '코드 분석'; it
     // 이름 붙은 section(영역)으로 두지 않는다. 바로 아래 배지와 같은 이름이 두 번 읽힌다(#328 리뷰)
     <div className="flex flex-col items-start gap-2.5 rounded-[14px] border px-4 py-3.5">
       {/* 사실(실행 결과)과 짐작(코드 분석)을 색으로도 가른다. 글자가 뜻을 전한다 */}
-      <Badge tone={kind === '실행 결과' ? 'info' : 'brand'}>{kind}</Badge>
+      {/* 낭독기에는 아래 목록 이름으로 한 번만 읽힌다(#352 리뷰) */}
+      <span aria-hidden className="contents">
+        <Badge tone={kind === '실행 결과' ? 'info' : 'brand'}>{kind}</Badge>
+      </span>
       {/* 글머리표는 CSS 표식이다. 글자로 넣으면 문장 앞에 섞인다.
-          목록 단위로 건너뛰어도 사실·짐작을 알게 배지 글자를 목록 이름으로 준다(#328 리뷰) */}
+          목록 단위로 건너뛰어도 사실·짐작을 알게 종류를 목록 이름으로 준다(#328 리뷰) */}
       <ul
         aria-label={kind}
         className="marker:text-muted-foreground m-0 flex w-full list-disc flex-col gap-2 pl-5"
