@@ -284,7 +284,7 @@ describe('SubmissionResultPage', () => {
 
       // 채점 중에 '다시 풀기'를 누르면 방금 보낸 제출의 결과를 못 보게 된다.
       expect(screen.queryByRole('link', { name: '다시 풀기' })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /준비 중/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: '다음 문제' })).not.toBeInTheDocument()
     })
   })
 
