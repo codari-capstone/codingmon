@@ -179,12 +179,11 @@ export function Component() {
       {/*
         필터와 표는 flex-wrap으로 나란히 둔다. 표에 flex-[999]를 줘서 좁아지면 필터가
         먼저 밀려 위로 쌓인다 (UX-05). 그래서 필터를 sticky나 100vh로 두지 않는다.
+        필터 폭은 묶지 않는다. 나란히 있을 때는 표가 남는 폭을 거의 다 가져가고, 위로 쌓이면
+        다른 카드처럼 한 줄을 채운다. 최대 폭을 두면 모바일에서 혼자 좁았다(#341)
       */}
       <div className="flex flex-wrap items-start gap-6">
-        <aside
-          aria-label="필터"
-          className="bg-card max-w-[280px] min-w-0 flex-[1_1_232px] rounded-lg border p-6"
-        >
+        <aside aria-label="필터" className="bg-card min-w-0 flex-[1_1_232px] rounded-lg border p-6">
           <ProblemFilters />
         </aside>
 
