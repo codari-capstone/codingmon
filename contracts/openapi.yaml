@@ -755,7 +755,7 @@ paths:
       summary: 내 구독 (MY-06, PAY-01, PRICE-03)
       description: |
         구독한 적이 없어도 404가 아니라 `plan: FREE`, `status: NONE`으로 답한다. 끝난 구독(`Subscription.status`의 `CANCEL_SCHEDULED` 설명)도 `NONE`으로 답한다.
-        결제 화면(PAY-01)은 `plan`이 `PRO`면 마이페이지 구독(MY-06)으로 보낸다. 요금제 화면(PRICE-03)은 `plan`으로 프로 버튼을 고른다.
+        결제 화면(PAY-01)은 `plan`이 `PRO`이거나 `paymentPending`이면 마이페이지 구독(MY-06)으로 보낸다. 요금제 화면(PRICE-03)도 같은 기준으로 [프로 시작하기]와 [내 구독 보기]를 고른다.
       tags: [subscription]
       responses:
         '200':
@@ -810,6 +810,7 @@ paths:
         하나라도 다르면 결제 실패와 똑같이 처리하고(첫 결제면 402 `PAYMENT_FAILED`, 갱신이면 `PAYMENT_FAILED` 상태) 돈이 나갔으므로 '취소 필요'로 표시한다.
         취소 필요 표시: 돈은 나갔는데 구독에 반영하지 않는 결제(대조가 다른 결제, 끝난 구독의 갱신 결제, 실패·취소로 반영한 뒤 결제됨으로 나온 결제)는 결제 기록에 `needsCancel`을 표시하고 오류 로그를 남긴다.
         표시하기 전에 포트원에 그 결제를 한 번 더 조회해 지금도 결제됨일 때만 표시한다. 잠금을 기다리는 사이 운영자가 취소했을 수 있어서다.
+        이 조회도 잠금 밖에서 하고, 다시 잠가 그 결제가 아직 같은 상태인지 확인한 뒤 표시한다. 조회가 실패하면 표시한다(운영자가 콘솔에서 확인).
         관리자 회원 상세(ADM-15)와 대시보드(ADM-12)에 보인다. 운영자가 포트원 콘솔에서 취소하면 취소 웹훅으로 결제 기록이 취소가 되고 표시가 풀린다.
         [결제]를 두 번 눌러도 결제는 한 번만 된다. 두 번째 요청은 2단계에서 첫 요청이 커밋할 때까지 기다린 뒤,
         첫 결제가 진행 중이면 3단계에서 503 `PAYMENT_UNAVAILABLE`, 끝났으면 2단계에서 409 `SUBSCRIPTION_ALREADY_ACTIVE` 또는 3단계에서 그 결제로 201을 받는다.
@@ -822,7 +823,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [billingKey, cycle, agreed]
+              required: [billingKey, cycle]
               properties:
                 billingKey:
                   type: string
@@ -831,7 +832,7 @@ paths:
                   $ref: '#/components/schemas/BillingCycle'
                 agreed:
                   type: boolean
-                  description: 이용약관·환불 정책(청약철회 제한 포함)과 정기 자동결제에 모두 동의함. `true`가 아니면 400 `AGREEMENT_REQUIRED`(형식 검사가 아니라 1단계 뒤에 확인한다)
+                  description: 이용약관·환불 정책(청약철회 제한 포함)과 정기 자동결제에 모두 동의함. `true`가 아니거나 빠졌으면 400 `AGREEMENT_REQUIRED`(형식 검사가 아니라 1단계 뒤에 확인한다. 그래야 그 빌링키를 지운다)
       responses:
         '201':
           description: 구독 시작. `status`는 `ACTIVE`다
@@ -4196,7 +4197,7 @@ components:
               type: [integer, 'null']
               description: |
                 연간 구독(`ACTIVE`·`CANCEL_SCHEDULED`)을 오늘 중도 해지 환불하면 돌려줄 금액(원). 환불 정책 2절 3항: 남은 기간의 금액(결제 금액 × 남은 일수 ÷ 전체 일수)에서 10%를 빼고 10원 미만은 버린다.
-                결제 금액과 기간은 지금 기간의 확정된(`PAID`) 결제와 저장된 기간을 쓴다(응답의 `cycle`·`currentPeriodEnd`가 아니다). 결과를 모르는 갱신 결제가 있으면 null(확정된 뒤 계산).
+                결제 금액과 기간은 지금 기간의 확정된(`PAID`) 결제와 저장된 기간을 쓴다(응답의 `cycle`·`currentPeriodEnd`가 아니다). 결과를 모르는 갱신 결제가 있거나 저장된 기간이 이미 지났으면(갱신 결제 전) null(확정된 뒤 계산). 남은 일수는 한국 시간 날짜로 센다(오늘을 빼고 기간이 끝나는 날까지).
                 운영자가 포트원 콘솔에서 부분 취소할 금액이다. 월간이거나 구독이 없으면 null(7일 안 청약철회는 운영자가 판단한다)
             payments:
               type: array
