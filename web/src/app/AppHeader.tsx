@@ -134,8 +134,10 @@ export function AppHeader({ wide = false }: { wide?: boolean }) {
             sm 미만의 로그인 사용자는 테마 버튼을 뺀다. 320px에서 칩·아바타까지 로고 줄에 넣으면 넘쳐 세 줄이 되고,
             세션을 확인하는 동안(두 줄)과 높이가 달라 본문이 흔들린다(#348 리뷰). 테마는 마이페이지 화면 설정에서 바꾼다.
             비로그인은 화면 설정이 없어 그대로 둔다.
+            세션을 확인하는 동안에도 뺀다. 보였다가 로그인으로 확인되며 빠지면 그 자리에 칩이 들어와, 그 순간 누른
+            사람은 테마 대신 /problems로 간다(#348 리뷰). 불러오는 동안 이 자리에는 누를 수 없는 자리표시만 있다.
           */}
-          <span className={cn('contents', isAuthenticated && 'max-sm:hidden')}>
+          <span className={cn('contents', (isAuthenticated || isLoading) && 'max-sm:hidden')}>
             <ThemeToggle />
           </span>
           {/* 관리자 화면 시안의 상단 바에는 칩이 없다 */}
