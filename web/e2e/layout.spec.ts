@@ -288,3 +288,22 @@ test(`${NARROW}px 관리자 화면에 가로 스크롤이 없다`, async ({ page
   await login(page, ADMIN)
   await expectNoPageScroll(page, ADMIN_PAGES)
 })
+
+// 오른쪽 탭으로 바로 들어와도 탭 줄이 그 탭까지 밀려 탭이 잘리지 않는다(MyNav).
+// 링크를 누르면 Playwright가 먼저 그 링크로 밀어 주므로 주소로 바로 연다
+test(`${NARROW}px 마이페이지 가로 탭에서 지금 탭이 다 보인다`, async ({ page }) => {
+  await page.setViewportSize({ width: NARROW, height: 800 })
+  await login(page)
+  const nav = page.getByRole('navigation', { name: '마이페이지 메뉴' })
+  for (const path of ['/me/display', '/me/withdraw']) {
+    await page.goto(path)
+    const active = nav.locator('[aria-current="page"]')
+    await expect(active).toBeVisible()
+    const navBox = (await nav.boundingBox())!
+    const box = (await active.boundingBox())!
+    expect(box.x, `${path} 탭 왼쪽이 잘렸다`).toBeGreaterThanOrEqual(navBox.x)
+    expect(box.x + box.width, `${path} 탭 오른쪽이 잘렸다`).toBeLessThanOrEqual(
+      navBox.x + navBox.width,
+    )
+  }
+})
