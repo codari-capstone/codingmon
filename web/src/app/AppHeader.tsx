@@ -68,7 +68,7 @@ export function AppHeader({ wide = false }: { wide?: boolean }) {
       <div
         className={cn(
           wide ? 'max-w-wide' : 'max-w-content',
-          'min-h-topbar mx-auto box-content flex flex-wrap items-center gap-x-7 gap-y-2 px-6 py-2 sm:py-0',
+          'min-h-topbar mx-auto box-content flex flex-wrap items-center gap-x-3 gap-y-2 px-6 py-2 sm:gap-x-7 sm:py-0',
         )}
       >
         <Link to="/" className="flex shrink-0 items-center">
@@ -78,7 +78,7 @@ export function AppHeader({ wide = false }: { wide?: boolean }) {
             alt="Codingmon"
             width={146}
             height={40}
-            className="block h-10 w-auto"
+            className="block h-8 w-auto sm:h-10"
           />
         </Link>
 
@@ -88,8 +88,13 @@ export function AppHeader({ wide = false }: { wide?: boolean }) {
           좁은 화면에서 메뉴가 조용히 잘린다. basis가 auto면 들어갈 자리가 없을 때
           nav 전체가 둘째 줄로 내려간다 (UX-05). 그 줄에도 다 들어가지 않으면(320px의 ADMIN 5개)
           nav 안에서 링크 단위로 한 번 더 줄을 바꾼다. 링크 글자는 끊지 않는다.
+          sm 미만에서는 nav를 맨 뒤 한 줄(basis-full)로 보내 오른쪽 버튼들이 로고 줄에 남는다. 그러지 않으면
+          로고 / 메뉴 / 버튼이 세 줄로 쌓인다(#341). 메뉴를 가로 스크롤로 숨기지는 않는다(위 UX-05).
         */}
-        <nav aria-label="주요 메뉴" className="flex flex-auto flex-wrap gap-1">
+        <nav
+          aria-label="주요 메뉴"
+          className="flex flex-auto flex-wrap gap-1 max-sm:order-last max-sm:basis-full"
+        >
           {menu.map((item) => {
             // NavLink는 aria-current를 자기 주소에만 붙인다. `also`까지 같은 규칙(구간 단위 앞부분 일치)으로
             // 직접 가려 색과 화면 낭독기의 '현재 페이지'가 함께 가게 한다(#248 리뷰)
@@ -102,7 +107,7 @@ export function AppHeader({ wide = false }: { wide?: boolean }) {
                 key={item.to}
                 to={item.to}
                 aria-current={active ? 'page' : undefined}
-                className={`text-label whitespace-nowrap hover:bg-muted hover:text-foreground focus-visible:outline-ring inline-flex h-10 items-center rounded-full px-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 ${
+                className={`text-label whitespace-nowrap hover:bg-muted hover:text-foreground focus-visible:outline-ring inline-flex h-10 sm:px-3.5 items-center rounded-full px-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 ${
                   active ? 'bg-muted text-foreground' : 'text-muted-foreground'
                 }`}
               >
@@ -124,8 +129,17 @@ export function AppHeader({ wide = false }: { wide?: boolean }) {
           })}
         </nav>
 
-        <div className="flex items-center gap-2.5">
-          <ThemeToggle />
+        <div className="ml-auto flex items-center gap-2.5">
+          {/*
+            sm 미만의 로그인 사용자는 테마 버튼을 뺀다. 320px에서 칩·아바타까지 로고 줄에 넣으면 넘쳐 세 줄이 되고,
+            세션을 확인하는 동안(두 줄)과 높이가 달라 본문이 흔들린다(#348 리뷰). 테마는 마이페이지 화면 설정에서 바꾼다.
+            비로그인은 화면 설정이 없어 그대로 둔다.
+            세션을 확인하는 동안에도 뺀다. 보였다가 로그인으로 확인되며 빠지면 그 자리에 칩이 들어와, 그 순간 누른
+            사람은 테마 대신 /problems로 간다(#348 리뷰). 불러오는 동안 이 자리에는 누를 수 없는 자리표시만 있다.
+          */}
+          <span className={cn('contents', (isAuthenticated || isLoading) && 'max-sm:hidden')}>
+            <ThemeToggle />
+          </span>
           {/* 관리자 화면 시안의 상단 바에는 칩이 없다 */}
           {inAdmin ? null : <StreakChip />}
 
@@ -135,8 +149,10 @@ export function AppHeader({ wide = false }: { wide?: boolean }) {
               로그인 버튼 -> 사용자 메뉴로 바뀌며 헤더 폭이 크게 흔들린다. 높이는 버튼 높이,
               폭은 사용자 메뉴(아바타 + 짧은 닉네임)에 가깝게 잡은 값이다. 무엇으로 바뀔지
               모르므로 정확히 맞출 수는 없다.
+              sm 미만에서는 닉네임이 숨고 가입 버튼도 빠져 로그인 버튼(약 80px)이 가장 넓다. w-24(96px)면
+              320px에서 로고 줄을 넘쳐 불러오는 동안만 세 줄이 됐다가 두 줄로 줄어든다(#348 리뷰)
             */
-            <div aria-hidden="true" className="h-control-sm w-24 shrink-0" />
+            <div aria-hidden="true" className="h-control-sm w-24 shrink-0 max-sm:w-20" />
           ) : isAuthenticated && user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -179,7 +195,8 @@ export function AppHeader({ wide = false }: { wide?: boolean }) {
                   로그인
                 </Link>
               </Button>
-              <Button asChild size="sm">
+              {/* sm 미만에서는 로고 줄에 들어가지 않아 뺀다. 가입은 로그인 화면과 첫 화면에서 갈 수 있다(#341) */}
+              <Button asChild size="sm" className="max-sm:hidden">
                 <Link to="/signup" state={{ from }}>
                   무료로 시작하기
                 </Link>

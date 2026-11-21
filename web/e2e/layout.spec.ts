@@ -161,6 +161,45 @@ for (const width of [320, 390, 430, 768]) {
   })
 }
 
+/**
+ * 좁은 화면에서 버튼 묶음이 로고 줄에 남는지 (#341, #348 리뷰).
+ *
+ * 로고 줄이 넘치면 버튼 묶음이 따로 한 줄로 내려가 상단 바가 세 줄이 된다. 그러면 세션을 확인하는 동안과
+ * 확인한 뒤의 줄 수가 달라 본문이 흔들린다. 불러오는 동안 로고 줄에는 w-20(80px) 자리표시만 있어
+ * 확인한 뒤의 묶음(비로그인: 테마·로그인, 학습자: 칩·아바타)보다 좁다. 그래서 확인한 뒤가 한 줄이면 불러오는 동안도 한 줄이다.
+ * 로고·칩·버튼 폭이 몇 px만 늘어도 320px에서 넘치므로 여기서 지킨다.
+ */
+async function expectActionsOnLogoRow(page: Page) {
+  const rows = await page.evaluate(() => {
+    const row = document.querySelector('header > div')
+    const logo = row?.querySelector(':scope > a')
+    const actions = row?.querySelector(':scope > div')
+    if (!logo || !actions) return null
+    return { logo: logo.getBoundingClientRect().top, actions: actions.getBoundingClientRect().top }
+  })
+  expect(rows, 'header의 로고나 버튼 묶음을 찾지 못했다 — 셀렉터가 깨졌다').not.toBeNull()
+  expect(Math.abs(rows!.actions - rows!.logo), '버튼 묶음이 로고 줄 밖으로 내려갔다').toBeLessThan(
+    20,
+  )
+}
+
+test('320px 비로그인에서 버튼 묶음이 로고 줄에 남는다', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto('/problems')
+  await expect(page.getByRole('banner').getByRole('link', { name: '로그인' })).toBeVisible()
+
+  await expectActionsOnLogoRow(page)
+})
+
+test('320px 로그인 학습자에서 버튼 묶음이 로고 줄에 남는다', async ({ page }) => {
+  await login(page)
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto('/problems')
+  await expect(page.getByRole('button', { name: /사용자 메뉴/ })).toBeVisible()
+
+  await expectActionsOnLogoRow(page)
+})
+
 // ADMIN은 학습자 화면에서 '관리자'까지 5개라 가장 넓다 (#264 리뷰, #331에서 요금제 추가)
 for (const width of [320, 390]) {
   test(`${width}px에서 ADMIN의 메뉴 다섯 개가 모두 보인다`, async ({ page }) => {
