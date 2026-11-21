@@ -212,3 +212,79 @@ for (const width of [320, 390]) {
     await expectHeaderFits(page, 5)
   })
 }
+
+/**
+ * 360px에서 화면마다 문서에 가로 스크롤이 생기지 않는지 (#341).
+ * 표·탭처럼 일부러 가로로 미는 상자는 그 안에서만 밀리므로 문서 폭에는 잡히지 않는다.
+ * #341 점검에서 31개 화면을 잰 방식이다. 마이페이지 가로 탭이 격자 열을 넓혀 본문이 넘친 회귀를 여기서 잡는다.
+ */
+const NARROW = 360
+const PUBLIC_PAGES = [
+  '/',
+  '/problems',
+  '/pricing',
+  '/terms',
+  '/login',
+  '/signup',
+  '/password-reset',
+]
+const USER_PAGES = [
+  '/problems/1',
+  '/welcome',
+  '/submissions',
+  '/submissions/23',
+  '/me',
+  '/me/account',
+  '/me/display',
+  '/me/report',
+  '/me/badges',
+]
+const ADMIN_PAGES = [
+  '/admin/dashboard',
+  // 관리자 문제 목록은 /admin 자체다(router.tsx). /admin/problems는 404 화면이다(#349 리뷰)
+  '/admin',
+  '/admin/problems/1',
+  '/admin/members',
+  '/admin/members/1',
+  '/admin/reports',
+  '/admin/tags',
+]
+
+async function expectNoPageScroll(page: Page, paths: string[]) {
+  for (const path of paths) {
+    await page.goto(path)
+    // 불러오기가 끝난 뒤에 잰다. 풀이·제출 결과는 불러오는 동안에도 h1을 그려 h1만 기다리면 로딩 화면을 잰다(#349 리뷰)
+    await expect(page.locator('h1').first()).toBeVisible()
+    await expect(page.locator('[data-slot="loading-state"], [data-slot="skeleton"]')).toHaveCount(0)
+    // 404·403·오류 화면과 로그인으로 튕긴 화면을 재지 않게 한다. 모두 h1을 그려 위 대기를 통과한다(#349 리뷰)
+    await expect(
+      page.locator('[data-slot="exception-page"], [data-slot="error-state"]'),
+    ).toHaveCount(0)
+    expect(new URL(page.url()).pathname, `${path}에서 다른 화면으로 옮겨졌다`).toBe(path)
+    // Pretendard는 화면에 쓰인 글자 조각을 나중에 받는다. 바뀐 글꼴 폭으로 재야 한다(#349 리뷰)
+    await page.evaluate(() => document.fonts.ready.then(() => undefined))
+    // 고정값 360이 아니라 clientWidth와 잰다. 세로 스크롤바가 보이는 환경(--headed)에서도 같은 기준이 된다(#349 리뷰)
+    const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }))
+    expect.soft(scrollWidth, `${path}에 가로 스크롤이 생겼다`).toBeLessThanOrEqual(clientWidth)
+  }
+}
+
+test(`${NARROW}px 공개 화면에 가로 스크롤이 없다`, async ({ page }) => {
+  await page.setViewportSize({ width: NARROW, height: 800 })
+  await expectNoPageScroll(page, PUBLIC_PAGES)
+})
+
+test(`${NARROW}px 학습자 화면에 가로 스크롤이 없다`, async ({ page }) => {
+  await page.setViewportSize({ width: NARROW, height: 800 })
+  await login(page)
+  await expectNoPageScroll(page, USER_PAGES)
+})
+
+test(`${NARROW}px 관리자 화면에 가로 스크롤이 없다`, async ({ page }) => {
+  await page.setViewportSize({ width: NARROW, height: 800 })
+  await login(page, ADMIN)
+  await expectNoPageScroll(page, ADMIN_PAGES)
+})

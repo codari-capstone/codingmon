@@ -7,15 +7,18 @@ import { useLogout } from '@/features/auth/useLogout'
 import { cn } from '@/lib/utils'
 
 const ITEM =
-  'flex h-11 items-center gap-3 rounded-[12px] px-3.5 text-[15px] font-semibold transition-colors focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2'
+  'flex h-11 shrink-0 items-center gap-3 rounded-[12px] px-3.5 text-[15px] font-semibold whitespace-nowrap transition-colors focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2'
 // 마이페이지 바탕이 옅은 면(bg-muted, AppShell의 subtle)이라 hover는 카드 면으로 띄운다(#274 리뷰)
 const HOVER = 'hover:bg-card'
 const IDLE = cn('text-body-foreground hover:text-foreground', HOVER)
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-muted-foreground px-3.5 pb-1.5 text-xs font-semibold">{title}</span>
+    // lg 미만에서는 묶음을 풀어 메뉴만 가로 한 줄에 놓는다
+    <div className="flex flex-col gap-1 max-lg:contents">
+      <span className="text-muted-foreground px-3.5 pb-1.5 text-xs font-semibold max-lg:hidden">
+        {title}
+      </span>
       {children}
     </div>
   )
@@ -48,18 +51,26 @@ function Item({
         )
       }
     >
-      <Icon name={icon} />
+      <Icon name={icon} className="max-lg:hidden" />
       {label}
     </NavLink>
   )
 }
 
-/** 마이페이지 왼쪽 메뉴 (디자인 MyNav): 내 정보 · 설정 · 계정 관리 · 로그아웃. */
+/**
+ * 마이페이지 왼쪽 메뉴 (디자인 MyNav): 내 정보 · 설정 · 계정 관리 · 로그아웃.
+ * lg 미만에서는 본문 위에 통째로 펼쳐지면 본문이 한 화면 넘게 밀려(#341) 메뉴만 가로 한 줄 탭으로 둔다.
+ * 프로필·묶음 제목·아이콘은 빼고, 로그아웃은 상단 바 사용자 메뉴에도 있어 뺀다. 넘치면 가로로 민다.
+ */
 export function MyNav({ user }: { user: CurrentUser }) {
   const { logout, isPending } = useLogout()
   return (
-    <nav aria-label="마이페이지 메뉴" className="flex flex-col gap-5">
-      <div className="flex items-center gap-3 px-1.5 py-1">
+    <nav
+      aria-label="마이페이지 메뉴"
+      // 바탕이 옅은 면(bg-muted)이라 그라데이션 덮개도 그 색이다. p-1은 포커스 테두리가 잘리지 않게 둔다
+      className="flex flex-col gap-5 max-lg:scroll-fade-x max-lg:flex-row max-lg:gap-1 max-lg:overflow-x-auto max-lg:p-1 max-lg:[--fade-bg:var(--muted)]"
+    >
+      <div className="flex items-center gap-3 px-1.5 py-1 max-lg:hidden">
         <Avatar src={user.avatarUrl ?? undefined} name={user.nickname} size={44} />
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-foreground truncate font-bold">{user.nickname}</span>
@@ -88,12 +99,16 @@ export function MyNav({ user }: { user: CurrentUser }) {
         </Group>
       ) : null}
 
-      <div className="bg-border mx-1.5 h-px" />
+      <div className="bg-border mx-1.5 h-px max-lg:hidden" />
       <button
         type="button"
         onClick={logout}
         disabled={isPending}
-        className={cn(ITEM, 'text-muted-foreground hover:text-foreground text-left', HOVER)}
+        className={cn(
+          ITEM,
+          'text-muted-foreground hover:text-foreground text-left max-lg:hidden',
+          HOVER,
+        )}
       >
         <Icon name="logout" />
         로그아웃

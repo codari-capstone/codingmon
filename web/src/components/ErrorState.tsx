@@ -40,7 +40,8 @@ export function ErrorState({ problem, onRetry, headingLevel = 2 }: ErrorStatePro
   const Heading = headingLevel === 1 ? 'h1' : 'h2'
 
   return (
-    <div>
+    // e2e가 오류 화면을 재지 않게 이 표식으로 거른다(layout.spec)
+    <div data-slot="error-state">
       {/*
         디자인의 Alert tone="danger"다. role="alert"이 있어야 스켈레톤이 오류로 바뀌는 순간
         스크린 리더가 알린다. 제목과 설명이 이 영역 안에 있어 삽입될 때 함께 읽힌다.

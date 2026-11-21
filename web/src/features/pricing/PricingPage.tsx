@@ -253,7 +253,7 @@ function ProStart({ signedIn }: { signedIn: boolean | undefined }) {
 function CompareTable() {
   return (
     // 좁은 화면에서는 표 상자 안에서만 가로로 민다(#331)
-    <div className="bg-card overflow-x-auto rounded-[20px] border px-6 py-2">
+    <div className="bg-card scroll-fade-x overflow-x-auto rounded-[20px] border px-6 py-2">
       <table className="w-full min-w-[520px] border-collapse text-[15px]">
         <thead>
           <tr className="border-b">
