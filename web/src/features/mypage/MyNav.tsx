@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router'
+import { useLayoutEffect, useRef } from 'react'
+import { NavLink, useLocation } from 'react-router'
 
 import type { CurrentUser } from '@/api/types'
 import { Avatar } from '@/components/ui/avatar'
@@ -64,8 +65,33 @@ function Item({
  */
 export function MyNav({ user }: { user: CurrentUser }) {
   const { logout, isPending } = useLogout()
+  const navRef = useRef<HTMLElement>(null)
+  const { pathname } = useLocation()
+
+  // 가로 탭이 넘칠 때 지금 탭을 가운데로 민다. 오른쪽 탭(화면 설정 등)에 들어가면 절반쯤 잘려 보였다.
+  // scrollIntoView는 문서까지 세로로 밀 수 있어 탭 줄의 scrollLeft만 바꾼다. 세로 메뉴(lg 이상)는 넘치지 않아 그대로다
+  useLayoutEffect(() => {
+    const nav = navRef.current
+    const active = nav?.querySelector('[aria-current="page"]')
+    if (!nav || !active) return
+    const center = () => {
+      if (nav.scrollWidth <= nav.clientWidth) return
+      const navBox = nav.getBoundingClientRect()
+      const box = active.getBoundingClientRect()
+      nav.scrollLeft += box.left - navBox.left - (navBox.width - box.width) / 2
+    }
+    center()
+    // 같은 주소에서 탭 줄이 좁아지거나(회전·창 크기) 웹 글꼴이 와서 탭 폭이 바뀌어도 다시 민다(#351 리뷰).
+    // 앞쪽 탭만 넓어져도 지금 탭이 밀리므로 탭 전부를 본다
+    const observer = new ResizeObserver(center)
+    observer.observe(nav)
+    nav.querySelectorAll('a').forEach((tab) => observer.observe(tab))
+    return () => observer.disconnect()
+  }, [pathname])
+
   return (
     <nav
+      ref={navRef}
       aria-label="마이페이지 메뉴"
       // 바탕이 옅은 면(bg-muted)이라 그라데이션 덮개도 그 색이다. p-1은 포커스 테두리가 잘리지 않게 둔다
       className="flex flex-col gap-5 max-lg:scroll-fade-x max-lg:flex-row max-lg:gap-1 max-lg:overflow-x-auto max-lg:p-1 max-lg:[--fade-bg:var(--muted)]"
