@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { isDeadEnd } from '@/features/result/resultQuery'
+import type { RetryState } from '@/features/solve/solvePath'
 import { AiRequest } from './AiRequest'
 import { failureText } from './failureText'
 import { analysisQuery, useRequestAnalysis } from './analysisQuery'
@@ -113,11 +114,14 @@ export function AnalysisPanel({
   submissionId,
   sourceCode,
   retryPath,
+  retryState,
 }: {
   submissionId: number
   sourceCode: string
   /** [코드 고치러 가기]의 주소. 결과 화면의 [다시 풀기]와 같다 (solvePath). */
   retryPath: string
+  /** [코드 고치러 가기]가 들고 갈 제출 코드 */
+  retryState?: RetryState
 }) {
   const queryClient = useQueryClient()
   const { data, isPending, error, refetch } = useQuery(analysisQuery(submissionId))
@@ -202,7 +206,12 @@ export function AnalysisPanel({
       {done ? (
         <>
           <Explanation analysis={data} sourceCode={sourceCode} />
-          <HintSteps submissionId={submissionId} analysis={data} retryPath={retryPath} />
+          <HintSteps
+            submissionId={submissionId}
+            analysis={data}
+            retryPath={retryPath}
+            retryState={retryState}
+          />
         </>
       ) : null}
       <AiRequest

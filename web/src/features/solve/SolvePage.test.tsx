@@ -11,7 +11,9 @@ import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { problemDetails } from '@/mocks/fixtures/problemDetails'
 import { server } from '@/mocks/server'
 import { EDITOR_DEFAULTS, updateEditorSettings } from './editorSettings'
+import { readSavedCode, storeSavedCode } from './savedCode'
 import { Component as SolvePage } from './SolvePage'
+import { retryState } from './solvePath'
 
 /**
  * 이 화면은 RequireAuth 뒤에 있다. 임시 저장 키에 사용자가 들어가므로(savedCode)
@@ -23,7 +25,7 @@ const USER = { id: 1, nickname: '코다리', role: 'USER' } as const
 let lastClient: QueryClient
 let lastRouter: ReturnType<typeof createMemoryRouter>
 
-function renderSolve(url = '/problems/1') {
+function renderSolve(url: string | { pathname: string; state?: unknown } = '/problems/1') {
   // 제출이 도착할 자리. 실제 결과 화면은 #31이 채운다 (SOLVE-09는 '이동'까지다).
   const router = createMemoryRouter(
     [
@@ -255,6 +257,57 @@ describe('SolvePage', () => {
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
 
       await editorHas('# 쓰다 만 코드')
+    })
+
+    it('제출이 접수되면 그 코드의 저장본을 지운다', async () => {
+      const user = userEvent.setup()
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await user.click(screen.getByRole('textbox', { name: '코드 편집기' }))
+      await user.keyboard('# 제출할 코드')
+      await editorHas('# 제출할 코드')
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).not.toBeNull()
+
+      await user.click(screen.getByRole('button', { name: '제출하기' }))
+      await screen.findByRole('heading', { name: '제출 결과 도착' })
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBeNull()
+    })
+
+    it('제출이 실패하면 저장본을 남긴다', async () => {
+      const user = userEvent.setup()
+      server.use(
+        http.post('*/api/submissions', () =>
+          HttpResponse.json({ status: 500, title: 'Error' }, { status: 500 }),
+        ),
+      )
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await user.click(screen.getByRole('textbox', { name: '코드 편집기' }))
+      await user.keyboard('# 못 보낸 코드')
+      await editorHas('# 못 보낸 코드')
+      await user.click(screen.getByRole('button', { name: '제출하기' }))
+      await screen.findByRole('alert')
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toContain('# 못 보낸 코드')
+    })
+
+    it('다시 풀기로 오면 제출한 코드로 열리고 저장소에는 쓰지 않는다', async () => {
+      renderSolve({ pathname: '/problems/1', state: retryState('PYTHON', '# 제출한 코드') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await editorHas('# 제출한 코드')
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBeNull()
+    })
+
+    it('다시 풀기로 와도 더 고친 저장본이 있으면 그것을 연다', async () => {
+      storeSavedCode(USER.id, 1, 'PYTHON', '# 더 고친 코드')
+      renderSolve({ pathname: '/problems/1', state: retryState('PYTHON', '# 제출한 코드') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await editorHas('# 더 고친 코드')
     })
 
     it('언어별로 따로 저장한다', async () => {

@@ -1,10 +1,12 @@
 import type { SubmissionResult } from '@/api/types'
-import { solvePath } from '@/features/solve/solvePath'
+import { type RetryState, retryState, solvePath } from '@/features/solve/solvePath'
 
 export interface NextAction {
   label: string
   /** 눌렀을 때 갈 곳 */
   to: string
+  /** 풀이 화면에 들고 갈 제출 코드 */
+  state?: RetryState
 }
 
 /**
@@ -20,17 +22,21 @@ export interface NextAction {
  *
  * 채점 불가는 서버 문제라 판정이 없다(계약: `verdict`가 null이고 시도 횟수에 넣지
  * 않는다). 다시 제출할 길만 준다 — 안내 문구는 `VERDICT_INFO.JUDGE_ERROR`가 가진다.
- * 결과 응답에는 제출한 코드가 없어서 이 자리에서 바로 다시 보낼 수는 없다. 풀이 화면으로
- * 돌려보내면 저장해 둔 코드가 그대로 열린다(SOLVE-11).
+ *
+ * 제출하면 브라우저 저장본이 지워지므로(SOLVE-11) 두 버튼은 제출한 코드를 들고 간다.
  *
  * 채점이 끝나지 않았으면 빈 배열이다 — 채점 중에 [다시 풀기]를 누르면 방금 보낸 제출의
  * 결과를 못 보게 된다.
  */
 export function nextActions(result: SubmissionResult): NextAction[] {
+  const retry = {
+    to: solvePath(result.problemId, result.language),
+    state: retryState(result.language, result.sourceCode),
+  }
   if (result.status === 'JUDGE_ERROR') {
     // [다시 풀기]와 같은 주소를 쓴다. 직접 조립했더니 언어가 빠져, C++로 제출했다가
     // 채점 불가를 받은 사람이 Python 자리로 돌아갔다 — solvePath를 둔 이유가 이것이다.
-    return [{ label: '다시 제출하기', to: solvePath(result.problemId, result.language) }]
+    return [{ label: '다시 제출하기', ...retry }]
   }
   if (result.verdict === null) return []
 
@@ -39,5 +45,5 @@ export function nextActions(result: SubmissionResult): NextAction[] {
   }
 
   // 결과 화면의 제목 링크와 같은 주소를 쓴다 (solvePath).
-  return [{ label: '다시 풀기', to: solvePath(result.problemId, result.language) }]
+  return [{ label: '다시 풀기', ...retry }]
 }

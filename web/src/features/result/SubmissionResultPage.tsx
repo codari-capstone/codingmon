@@ -14,7 +14,7 @@ import { CodeBlock } from '@/components/ui/code-block'
 import { Button } from '@/components/ui/button'
 import { RUNTIME_ERROR_INFO, STATUS_LABEL, VERDICT_INFO } from '@/constants/verdicts'
 import { LANGUAGE_LABEL, SOURCE_FILE_NAME } from '@/features/solve/labels'
-import { solvePath } from '@/features/solve/solvePath'
+import { retryState, solvePath } from '@/features/solve/solvePath'
 import { AnalysisPanel } from '@/features/ai/AnalysisPanel'
 import { analysisQuery } from '@/features/ai/analysisQuery'
 import { CodeReviewPanel } from '@/features/ai/CodeReviewPanel'
@@ -233,7 +233,9 @@ function NextActions({ result }: { result: SubmissionResult }) {
     <div className="mt-1.5 flex flex-wrap gap-2.5">
       {actions.map((action) => (
         <Button key={action.label} asChild className="min-h-11">
-          <Link to={action.to}>{action.label}</Link>
+          <Link to={action.to} state={action.state}>
+            {action.label}
+          </Link>
         </Button>
       ))}
       {history ? (
@@ -352,6 +354,7 @@ export function Component() {
               submissionId={data.id}
               sourceCode={data.sourceCode ?? ''}
               retryPath={solvePath(data.problemId, data.language)}
+              retryState={retryState(data.language, data.sourceCode)}
             />
           </div>
         ) : null}
