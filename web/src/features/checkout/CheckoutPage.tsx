@@ -80,6 +80,18 @@ export function Component() {
   const [agreeAutopay, setAgreeAutopay] = useState(draft?.agreeAutopay ?? false)
   /** 카드 등록 창이 떠 있는 동안 */
   const [registering, setRegistering] = useState(false)
+  /** 결과 모름 화면의 [다시 시도]로 같은 빌링키를 다시 보냈는지 */
+  const resentAfterUnknown = useRef(false)
+
+  // 모바일 카드 등록 페이지에서 뒤로 가면 브라우저가 떠나기 전 화면(등록 중)을 그대로 되살린다(bfcache).
+  // 등록은 끝나지 않았으니 잠금을 풀어 다시 누를 수 있게 한다(#356 리뷰)
+  useEffect(() => {
+    const unlock = (event: PageTransitionEvent) => {
+      if (event.persisted) setRegistering(false)
+    }
+    window.addEventListener('pageshow', unlock)
+    return () => window.removeEventListener('pageshow', unlock)
+  }, [])
   // 등록을 취소·실패하고 돌아왔으면 그 이유를, 동의를 이어받지 못했으면 다시 하라는 안내를 처음부터 띄운다
   const [notice, setNotice] = useState<string | null>(() =>
     !redirect || resumeWith ? null : 'code' in redirect ? redirect.message : NO_DRAFT,
@@ -104,19 +116,26 @@ export function Component() {
       queryClient.setQueryData(SUBSCRIPTION_KEY, started)
     },
     onError: (error) => {
-      const result = classifyFailure(error)
+      let result = classifyFailure(error)
       if (result === 'signedOut') return forgetSessionIfUnauthorized(queryClient, error)
+      // 결과 모름이나 실패는 서버의 결제 확인 중 여부를 바꾼다. 앞선 확인 중 상태가 캐시에 남으면
+      // 실패 화면의 [다시 시도]가 결제 화면 대신 마이페이지로 밀려난다(#356 리뷰)
+      void queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEY })
       if (result === 'already') {
-        void queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEY })
         return navigate(SUBSCRIPTION_PATH, {
           replace: true,
           state: { notice: '이미 프로 구독 중이에요' },
         })
       }
+      // 다른 탭의 결제가 결과 모름으로 남아 있으면 서버는 이번 빌링키를 지울 목록에 넣는다(계약 3단계).
+      // 확인 중에서 다시 보낸 빌링키가 그래서 거절된 것이면 그 결제는 아직 끝나지 않았다(#356 리뷰)
+      if (
+        resentAfterUnknown.current &&
+        (error as { code?: unknown } | null)?.code === 'BILLING_KEY_INVALID'
+      ) {
+        result = { kind: 'unknown' }
+      }
       setOutcome(result)
-      // 결과를 모르는 결제는 서버가 구독 조회에 확인 중으로 보여 준다
-      if (result.kind === 'unknown')
-        void queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEY })
     },
   })
   // 카드 등록에서 돌아와 바로 결제하면 effect가 결제를 보내기 전 첫 렌더부터 결제 중이다
@@ -143,6 +162,7 @@ export function Component() {
           setNotice(null)
           // 결제됐는지 모르거나 결제 전에 끊겼으면 같은 빌링키로 다시 보낸다. 서버가 남은 결제를 다시 조회해
           // 두 번 결제하지 않는다(계약 3단계). 결제 화면으로 돌리면 확인 중인 사용자는 마이페이지로 밀려나 다시 시도할 수 없다(#356 리뷰)
+          resentAfterUnknown.current = outcome.kind === 'unknown'
           if (outcome.kind !== 'failed' && start.variables) start.mutate(start.variables)
         }}
       />
@@ -170,6 +190,7 @@ export function Component() {
 
   async function pay() {
     setNotice(null)
+    resentAfterUnknown.current = false
     // 모바일은 카드 등록 페이지로 넘어갔다 돌아와 이 값으로 결제한다. 저장하지 못하면 돌아와도 결제할 수 없어
     // 같은 일을 되풀이하게 되므로 넘어가기 전에 멈춘다(#356 리뷰)
     if (!saveDraft({ cycle, agreeTerms, agreeAutopay })) return setNotice(NO_STORAGE)

@@ -33,12 +33,15 @@ function renderCheckout({
   start = () => HttpResponse.json(ACTIVE, { status: 201 }),
 }: {
   url?: string
-  subscription?: Subscription
+  /** 매번 다른 값을 주려면 함수로 준다 */
+  subscription?: Subscription | (() => Subscription)
   start?: () => Response
 } = {}) {
   const sent: unknown[] = []
   server.use(
-    http.get('*/api/users/me/subscription', () => HttpResponse.json(subscription)),
+    http.get('*/api/users/me/subscription', () =>
+      HttpResponse.json(typeof subscription === 'function' ? subscription() : subscription),
+    ),
     http.post('*/api/users/me/subscription', async ({ request }) => {
       sent.push(await request.json())
       return start()
@@ -123,14 +126,33 @@ describe('CheckoutPage 결제 화면 (PAY-01)', () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('blocked', 'SecurityError')
     })
+    // 단언이 실패해도 되돌린다. 남으면 뒤 테스트의 저장이 모두 실패해 원인이 가려진다(#356 리뷰)
+    try {
+      const user = userEvent.setup()
+      renderCheckout()
+      await agreeAll(user)
+      await user.click(payButton())
+
+      expect(screen.getByText(/결제 정보를 잠시 저장할 수 없어요/)).toBeInTheDocument()
+      expect(requestBillingKey).not.toHaveBeenCalled()
+    } finally {
+      setItem.mockRestore()
+    }
+  })
+
+  // 등록 페이지에서 뒤로 가면 브라우저가 등록 중 화면을 그대로 되살린다(bfcache, #356 리뷰)
+  it('카드 등록 중에 bfcache로 돌아오면 다시 누를 수 있다', async () => {
+    // 모바일: 등록 페이지로 넘어가 promise가 끝나지 않는다
+    vi.mocked(requestBillingKey).mockReturnValue(new Promise(() => {}))
     const user = userEvent.setup()
     renderCheckout()
     await agreeAll(user)
     await user.click(payButton())
+    expect(payButton()).toHaveAccessibleName('결제 중…')
 
-    expect(screen.getByText(/결제 정보를 잠시 저장할 수 없어요/)).toBeInTheDocument()
-    expect(requestBillingKey).not.toHaveBeenCalled()
-    setItem.mockRestore()
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+
+    expect(await screen.findByRole('button', { name: /결제하기/ })).toBeEnabled()
   })
 
   it('고객 ID로 카드를 등록하고, 빌링키·주기·동의를 보낸다', async () => {
@@ -149,10 +171,10 @@ describe('CheckoutPage 결제 화면 (PAY-01)', () => {
 })
 
 describe('CheckoutPage 결제 결과 (PAY-02)', () => {
-  async function payWith(start: () => Response) {
+  async function payWith(start: () => Response, subscription?: () => Subscription) {
     vi.mocked(requestBillingKey).mockResolvedValue({ billingKey: 'billing-1' })
     const user = userEvent.setup()
-    const rendered = renderCheckout({ start })
+    const rendered = renderCheckout({ start, subscription })
     await agreeAll(user)
     await user.click(payButton())
     return { user, ...rendered }
@@ -238,6 +260,46 @@ describe('CheckoutPage 결제 결과 (PAY-02)', () => {
     expect(sent).toHaveLength(2)
     expect(sent[1]).toEqual(sent[0])
     expect(requestBillingKey).toHaveBeenCalledTimes(1)
+  })
+
+  // 다른 탭의 결제가 결과 모름이면 서버는 이번 빌링키를 지운다. 그 결제는 아직 끝나지 않았다(#356 리뷰)
+  it('확인 중에 다시 보낸 빌링키가 거절되면 확인 중을 유지한다', async () => {
+    let calls = 0
+    const { user } = await payWith(() =>
+      ++calls === 1
+        ? HttpResponse.json({ status: 503, code: 'PAYMENT_UNAVAILABLE' }, { status: 503 })
+        : HttpResponse.json({ status: 400, code: 'BILLING_KEY_INVALID' }, { status: 400 }),
+    )
+    await user.click(await screen.findByRole('button', { name: '다시 시도' }))
+
+    await waitFor(() => expect(calls).toBe(2))
+    expect(
+      await screen.findByRole('heading', { name: '결제 결과를 확인하고 있어요' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '결제하지 못했어요' })).not.toBeInTheDocument()
+  })
+
+  // 앞선 확인 중 상태가 캐시에 남으면 실패의 [다시 시도]가 마이페이지로 밀려난다(#356 리뷰)
+  it('확인 중 뒤 실패로 끝나면 다시 시도로 결제 화면에 돌아온다', async () => {
+    // 서버는 첫 결제가 결과 모름인 동안 확인 중이고, 다시 보낸 결제가 실패로 닫으면 확인 중이 풀린다
+    let calls = 0
+    const { user } = await payWith(
+      () => {
+        calls += 1
+        return calls === 1
+          ? HttpResponse.json({ status: 503, code: 'PAYMENT_UNAVAILABLE' }, { status: 503 })
+          : HttpResponse.json(
+              { status: 402, code: 'PAYMENT_FAILED', detail: '한도 초과' },
+              { status: 402 },
+            )
+      },
+      () => ({ ...freeSubscription(1), paymentPending: calls === 1 }),
+    )
+    await user.click(await screen.findByRole('button', { name: '다시 시도' }))
+    expect(await screen.findByRole('heading', { name: '결제하지 못했어요' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '다시 시도' }))
+    expect(await screen.findByRole('heading', { name: '프로 구독 결제' })).toBeInTheDocument()
   })
 
   // 남아 있던 결과 모름 결제가 확정되면 서버는 그 결제의 주기로 시작한다(계약 3단계, #356 리뷰)

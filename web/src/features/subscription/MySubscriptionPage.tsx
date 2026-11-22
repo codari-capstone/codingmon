@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
-import { Link, useLocation } from 'react-router'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
 
 import type { Subscription } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
@@ -11,7 +11,14 @@ import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { MyLayout } from '@/features/mypage/MyLayout'
-import { AI_DAILY, PLANS, proCharge, TEST_PAYMENT_NOTICE, won } from '@/features/pricing/plans'
+import {
+  AI_DAILY,
+  PLANS,
+  proCharge,
+  TEST_PAYMENT_NOTICE,
+  won,
+  type Cycle,
+} from '@/features/pricing/plans'
 import { formatLongDate, fromBillingCycle, subscriptionQuery } from './subscriptionQuery'
 
 const PRO = PLANS.find((p) => p.id === 'pro')!
@@ -21,6 +28,15 @@ const SHORT_DATE = new Intl.DateTimeFormat('ko-KR', {
   day: 'numeric',
   timeZone: 'Asia/Seoul',
 })
+
+/** 다음 갱신 결제의 주기. 바꿨으면 `nextCycle`이다 */
+const nextCycleOf = (s: Subscription): Cycle =>
+  fromBillingCycle(s.nextCycle ?? s.cycle ?? 'MONTHLY')
+
+const cycleText = (cycle: Cycle) =>
+  cycle === 'yearly'
+    ? `연간 · 매년 ${won(proCharge('yearly'))}원`
+    : `월간 · 매월 ${won(proCharge('monthly'))}원`
 
 interface View {
   name: string
@@ -53,7 +69,8 @@ function viewOf(s: Subscription): View {
       return {
         name: `프로 ${CYCLE_NAME[cycle]}`,
         badge: { label: '진행 중', tone: 'success' },
-        line: `다음 결제일 ${end ?? '—'} · ${won(proCharge(cycle))}원`,
+        // 주기를 바꿨으면 다음 결제는 바꾼 주기의 금액이다(계약 `nextCycle`, #356 리뷰)
+        line: `다음 결제일 ${end ?? '—'} · ${won(proCharge(nextCycleOf(s)))}원`,
       }
     case 'CANCEL_SCHEDULED':
       return {
@@ -86,10 +103,17 @@ function viewOf(s: Subscription): View {
 /** 마이페이지 구독 (MY-06). 지금 플랜과 상태를 보여 준다. 결제 화면·요금제가 이리로 보낸다. */
 export function Component() {
   const location = useLocation()
-  // 결제 화면이 409(이미 프로)를 받고 보낼 때 싣는 안내다
-  const notice = (location.state as { notice?: unknown } | null)?.notice
+  const navigate = useNavigate()
+  // 결제 화면이 409(이미 프로)를 받고 보낼 때 싣는 안내다. 처음 한 번만 읽는다
+  const [notice] = useState(() => (location.state as { notice?: unknown } | null)?.notice)
   const queryClient = useQueryClient()
-  const { data, error, isPending, refetch } = useQuery(subscriptionQuery())
+  const { data, error, isPending, isFetching, refetch } = useQuery(subscriptionQuery())
+
+  // 안내는 한 번만 보인다. 기록에 남기면 새로 고침·뒤로 가기 때마다 다시 뜬다(#356 리뷰)
+  useEffect(() => {
+    if (location.state !== null) navigate(location.pathname, { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 들어온 순간 한 번만
+  }, [])
 
   useEffect(() => {
     forgetSessionIfUnauthorized(queryClient, error)
@@ -104,7 +128,25 @@ export function Component() {
     content = (
       <>
         {view.alert ? (
-          <Alert tone={view.alert.tone} title={view.alert.title} live={false}>
+          <Alert
+            tone={view.alert.tone}
+            title={view.alert.title}
+            live={false}
+            // 결제가 확정되면 서버가 웹훅으로 바꾼다. 화면을 연 채로도 새로 받을 수 있게 한다(#356 리뷰)
+            action={
+              data.paymentPending ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={isFetching}
+                  onClick={() => void refetch()}
+                >
+                  {isFetching ? '확인 중…' : '다시 확인'}
+                </Button>
+              ) : undefined
+            }
+          >
             {view.alert.body}
           </Alert>
         ) : null}
@@ -138,9 +180,13 @@ export function Component() {
               <div className="grid grid-cols-[120px_1fr] gap-4 border-b py-3">
                 <dt className="text-muted-foreground">결제 주기</dt>
                 <dd className="text-foreground m-0">
-                  {data.cycle === 'YEARLY'
-                    ? `연간 · 매년 ${won(proCharge('yearly'))}원`
-                    : `월간 · 매월 ${won(proCharge('monthly'))}원`}
+                  {cycleText(data.cycle ? fromBillingCycle(data.cycle) : 'monthly')}
+                  {data.nextCycle && data.nextCycle !== data.cycle ? (
+                    <span className="text-muted-foreground">
+                      {' '}
+                      (다음 결제부터 {cycleText(fromBillingCycle(data.nextCycle))})
+                    </span>
+                  ) : null}
                 </dd>
               </div>
               <div className="grid grid-cols-[120px_1fr] gap-4 border-b py-3">
