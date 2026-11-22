@@ -339,6 +339,64 @@ describe('MySubscriptionPage 구독 관리 (MY-06)', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
+  // 창이 저절로 닫히면 창 안의 오류도 사라진다. 카드 아래에 남겨 무슨 일이 있었는지 알린다(#357 리뷰)
+  it('주기 바꾸기 500 뒤 해지 예정이 되어 창이 닫히면 오류를 카드 아래에 보인다', async () => {
+    const user = userEvent.setup()
+    let current: Subscription = PRO
+    answerActions(() =>
+      HttpResponse.json({ status: 500, detail: '잠시 뒤 다시 시도해 주세요.' }, { status: 500 }),
+    )
+    renderPage(() => current)
+    await user.click(within(await plan()).getByRole('button', { name: '연간으로 바꾸기' }))
+    await user.click(screen.getByRole('checkbox', { name: /바뀐 금액의 자동결제에 동의/ }))
+    current = { ...PRO, status: 'CANCEL_SCHEDULED' }
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: '연간으로 바꾸기' }),
+    )
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(await plan()).toHaveTextContent('해지 예정')
+  })
+
+  // 서버는 저장했는데 응답만 잃었다. 띠가 결과를 알리니 실패 창을 남기지 않는다(#357 리뷰)
+  it('주기 바꾸기 응답을 잃었어도 새로 받은 구독에 들어 있으면 창을 닫고 실패로 알리지 않는다', async () => {
+    const user = userEvent.setup()
+    let current: Subscription = PRO
+    answerActions(() => HttpResponse.error())
+    renderPage(() => current)
+    await user.click(within(await plan()).getByRole('button', { name: '연간으로 바꾸기' }))
+    await user.click(screen.getByRole('checkbox', { name: /바뀐 금액의 자동결제에 동의/ }))
+    current = { ...PRO, nextCycle: 'YEARLY' }
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: '연간으로 바꾸기' }),
+    )
+
+    expect(await screen.findByRole('button', { name: '바꾸기 취소' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  // 짧은 날짜는 연간 갱신으로 1년 밀려도 같다. 동의는 전체 시각에 묶는다. 풀리면 포커스는 동의 칸으로 간다(#357 리뷰)
+  it('연간 갱신으로 같은 날짜 1년 뒤가 되어도 동의를 다시 받고 포커스를 동의 칸으로 옮긴다', async () => {
+    const user = userEvent.setup()
+    let current: Subscription = { ...PRO, cycle: 'YEARLY' }
+    answerActions(() =>
+      HttpResponse.json({ status: 500, detail: '잠시 뒤 다시 시도해 주세요.' }, { status: 500 }),
+    )
+    renderPage(() => current)
+    await user.click(within(await plan()).getByRole('button', { name: '월간으로 바꾸기' }))
+    await user.click(screen.getByRole('checkbox', { name: /바뀐 금액의 자동결제에 동의/ }))
+    current = { ...PRO, cycle: 'YEARLY', currentPeriodEnd: '2027-12-22T03:00:00Z' }
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: '월간으로 바꾸기' }),
+    )
+
+    const agree = screen.getByRole('checkbox', { name: /바뀐 금액의 자동결제에 동의/ })
+    await waitFor(() => expect(agree).not.toBeChecked())
+    await waitFor(() => expect(agree).toHaveFocus())
+  })
+
   // 갱신으로 바꾼 주기가 이미 적용됐으면 바꾸기 취소는 400이다. 새로 받지 않으면 같은 오류만 되풀이한다(#357 리뷰)
   it('바꾸기 취소가 400이면 알리고 구독을 새로 받는다', async () => {
     const user = userEvent.setup()

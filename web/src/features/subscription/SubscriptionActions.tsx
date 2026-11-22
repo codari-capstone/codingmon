@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import type { Subscription } from '@/api/types'
 import {
@@ -17,7 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Modal } from '@/components/ui/dialog'
 import { problemCode, problemMessage } from '@/features/auth/problemCode'
 import { CYCLE_NAME, proCharge, won, type Cycle } from '@/features/pricing/plans'
-import { fromBillingCycle, type SubscriptionAction } from './subscriptionQuery'
+import { fromBillingCycle, toBillingCycle, type SubscriptionAction } from './subscriptionQuery'
 import { type ActionMutation, PLAN_TITLE_ID } from './useSubscriptionAction'
 
 const DONE = (action: SubscriptionAction, s: Subscription) =>
@@ -29,19 +29,28 @@ const DONE = (action: SubscriptionAction, s: Subscription) =>
         ? `다음 결제부터 ${CYCLE_NAME[fromBillingCycle(s.nextCycle)]}으로 바꿨어요.`
         : '주기 바꾸기를 취소했어요.'
 
-/** 주기 바꾸기 창에서 난 오류 중 창을 닫게 하는 것(진행 중이 아님). 그 오류는 카드 아래에 보인다 */
-const closesModal = (act: ActionMutation) => problemCode(act.error) === 'SUBSCRIPTION_NOT_ACTIVE'
-
 /**
  * 결과 알림. 플랜 카드 맨 아래에 둔다. status 자리는 비어 있어도 늘 둔다 — 숨겼다 보이면
  * 영역이 새로 생긴 것으로 보여 일부 낭독기가 읽지 않는다(#357 리뷰). 비었을 때는 여백만 없앤다.
  */
-export function ActionResult({ act }: { act: ActionMutation }) {
-  const inModal = act.variables?.kind === 'cycle' && act.variables.agreed && !closesModal(act)
+export function ActionResult({
+  act,
+  subscription: s,
+  modalOpen,
+}: {
+  act: ActionMutation
+  subscription: Subscription
+  /** 주기 바꾸기 창이 열려 있으면 오류는 창 안에 보인다 */
+  modalOpen: boolean
+}) {
+  // 응답은 잃었어도 서버가 바꾸기를 저장했다(새로 받은 구독에 들어 있다). 띠가 결과를 알리니 실패로 알리지 않는다(#357 리뷰)
+  const landed =
+    act.variables?.kind === 'cycle' &&
+    act.variables.agreed &&
+    s.nextCycle === toBillingCycle(act.variables.cycle)
   return (
     <>
-      {/* 주기 바꾸기 창의 오류는 창 안에 보인다 */}
-      {act.isError && !inModal ? (
+      {act.isError && !modalOpen && !landed ? (
         <p role="alert" className="text-destructive-text m-0 mt-4 text-sm">
           {problemMessage(act.error)}
         </p>
@@ -58,18 +67,20 @@ export function PlanActions({
   subscription: s,
   end,
   act,
+  changeOpen,
+  setChangeOpen,
 }: {
   subscription: Subscription
   /** 'M월 D일' */
   end: string
   act: ActionMutation
+  /** 주기 바꾸기 창. 창의 오류를 어디에 보일지 정하려고 페이지가 갖는다 */
+  changeOpen: boolean
+  setChangeOpen: (open: boolean) => void
 }) {
-  const [changeOpen, setChangeOpen] = useState(false)
   const busy = act.isPending ? act.variables.kind : null
   const cycle: Cycle = s.cycle ? fromBillingCycle(s.cycle) : 'monthly'
   const other: Cycle = cycle === 'monthly' ? 'yearly' : 'monthly'
-  // 창을 연 채 진행 중이 아니게 되면 창이 사라진다. 열림을 남기면 다시 진행 중이 될 때 저절로 열린다(#357 리뷰)
-  if (s.status !== 'ACTIVE' && changeOpen) setChangeOpen(false)
 
   if (s.status === 'CANCEL_SCHEDULED') {
     return (
@@ -111,6 +122,8 @@ export function PlanActions({
         onClose={() => setChangeOpen(false)}
         to={other}
         end={end}
+        // 동의는 본 조건에 묶는다. 짧은 날짜(M월 D일)는 연간 갱신으로 1년 밀려도 같아 전체 시각을 쓴다(#357 리뷰)
+        terms={`${other}|${s.currentPeriodEnd}`}
         act={act}
       />
     </div>
@@ -177,19 +190,33 @@ function ChangeCycleModal({
   onClose,
   to,
   end,
+  terms,
   act,
 }: {
   open: boolean
   onClose: () => void
   to: Cycle
   end: string
+  /** 동의한 조건. 창을 연 채 구독이 새로 들어와 바뀌면 다시 체크받는다(#357 리뷰) */
+  terms: string
   act: ActionMutation
 }) {
-  // 동의는 본 조건(주기·날짜)에 묶는다. 창을 연 채 구독이 새로 들어와 조건이 바뀌면 다시 체크받는다(#357 리뷰)
-  const terms = `${to}|${end}`
+  const agreeId = useId()
+  const confirmId = useId()
   const [agreedTo, setAgreedTo] = useState<string | null>(null)
   const agreed = agreedTo === terms
   const pending = act.isPending && act.variables.kind === 'cycle'
+  // 조건이 바뀌어 동의가 풀리면 확인 버튼이 disabled가 되어 포커스가 body로 떨어진다.
+  // Radix는 요소가 지워질 때만 포커스를 되돌린다. 다시 체크할 동의 칸으로 옮긴다(#357 리뷰)
+  const seenTerms = useRef(terms)
+  useEffect(() => {
+    if (seenTerms.current === terms) return
+    seenTerms.current = terms
+    const active = document.activeElement
+    if (open && (active === document.body || active?.id === confirmId)) {
+      document.getElementById(agreeId)?.focus()
+    }
+  }, [terms, open, agreeId, confirmId])
   const close = () => {
     if (pending) return
     setAgreedTo(null)
@@ -224,6 +251,7 @@ function ChangeCycleModal({
             취소
           </Button>
           <Button
+            id={confirmId}
             type="button"
             disabled={!agreed}
             aria-disabled={pending || undefined}
@@ -255,13 +283,14 @@ function ChangeCycleModal({
       <div className="flex flex-col gap-3">
         <div className="bg-muted rounded-[16px] px-5 py-2">
           <Checkbox
+            id={agreeId}
             label="(필수) 바뀐 금액의 자동결제에 동의합니다"
             checked={agreed}
             disabled={pending}
             onChange={(e) => setAgreedTo(e.target.checked ? terms : null)}
           />
         </div>
-        {act.isError && !closesModal(act) ? (
+        {act.isError ? (
           <p role="alert" className="text-destructive-text m-0 text-sm">
             {problemMessage(act.error)}
           </p>

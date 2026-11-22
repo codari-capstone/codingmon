@@ -14,6 +14,10 @@ export const SUBSCRIPTION_KEY = ['subscription'] as const
 /** 프로를 쓰는 중이거나 첫 결제를 확인하는 중이면 결제 화면이 아니라 마이페이지 구독이다 (PAY-01, PRICE-03) */
 export const belongsToSubscription = (s: Subscription) => s.plan === 'PRO' || s.paymentPending
 
+/** 결제 주기를 바꿀 수 있는 상태(MY-06). 진행 중이고 아직 바꾸지 않았을 때다 */
+export const canChangeCycle = (s: Subscription) =>
+  s.status === 'ACTIVE' && !(s.nextCycle && s.nextCycle !== s.cycle)
+
 /** 화면은 'monthly'·'yearly'(요금제 토글과 같은 값), 계약은 'MONTHLY'·'YEARLY'다 */
 export const toBillingCycle = (cycle: Cycle): BillingCycle =>
   cycle === 'monthly' ? 'MONTHLY' : 'YEARLY'

@@ -21,7 +21,12 @@ import {
   type Cycle,
 } from '@/features/pricing/plans'
 import { ActionResult, NextCycleBand, PlanActions } from './SubscriptionActions'
-import { formatLongDate, fromBillingCycle, subscriptionQuery } from './subscriptionQuery'
+import {
+  canChangeCycle,
+  formatLongDate,
+  fromBillingCycle,
+  subscriptionQuery,
+} from './subscriptionQuery'
 import { PLAN_TITLE_ID, useSubscriptionAction } from './useSubscriptionAction'
 
 const SHORT_DATE = new Intl.DateTimeFormat('ko-KR', {
@@ -110,6 +115,10 @@ export function Component() {
   const queryClient = useQueryClient()
   const { data, error, isPending, isFetching, refetch } = useQuery(subscriptionQuery())
   const act = useSubscriptionAction()
+  const [changeOpen, setChangeOpen] = useState(false)
+  // 창을 연 채 구독이 바뀌어 더 바꿀 수 없게 되면(해지 예정이 됨, 바꾸기가 이미 저장됨) 창을 닫는다.
+  // 열림을 남기면 다시 바꿀 수 있게 될 때 저절로 열린다(#357 리뷰)
+  if (changeOpen && data && !canChangeCycle(data)) setChangeOpen(false)
 
   // 안내는 한 번만 보인다. 기록에 남기면 새로 고침·뒤로 가기 때마다 다시 뜬다(#356 리뷰)
   useEffect(() => {
@@ -185,7 +194,15 @@ export function Component() {
                 <Link to={view.action.to}>{view.action.label}</Link>
               </Button>
             ) : null}
-            {end ? <PlanActions subscription={data} end={end} act={act} /> : null}
+            {end ? (
+              <PlanActions
+                subscription={data}
+                end={end}
+                act={act}
+                changeOpen={changeOpen}
+                setChangeOpen={setChangeOpen}
+              />
+            ) : null}
           </div>
           {end ? <NextCycleBand subscription={data} end={end} act={act} /> : null}
           {pro && data.currentPeriodEnd ? (
@@ -204,7 +221,7 @@ export function Component() {
               </div>
             </dl>
           ) : null}
-          <ActionResult act={act} />
+          <ActionResult act={act} subscription={data} modalOpen={changeOpen} />
         </section>
         <section
           aria-labelledby="pro-features"
