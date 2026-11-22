@@ -21,7 +21,7 @@ export interface RetryState {
 /**
  * [다시 풀기]가 풀이 화면에 넘기는 제출 코드.
  *
- * 제출하면 저장본이 지워지므로(forgetSubmittedCode) 이 버튼들만 코드를 들고 간다. 저장소에
+ * 판정이 나면 저장본이 지워지므로(forgetJudgedCode) 이 버튼들만 코드를 들고 간다. 저장소에
  * 다시 쓰지 않는다. 쓰면 손대지 않고 나갔다 들어와도 제출한 코드가 또 열린다.
  * 채점 중에는 코드가 null이라 넘길 것이 없다.
  *
@@ -53,13 +53,23 @@ export function retriedCode(
 }
 
 /**
- * 지금 방문 기록 항목의 제출 코드를 버린다. 다시 제출한 뒤 뒤로 가기로 그 전 코드가 열리지 않게 한다.
+ * 제출하는 방문 기록 항목의 제출 코드를 비우고, 접수가 실패하면 되돌릴 함수를 준다.
+ * 다시 제출한 뒤 뒤로 가기로 그 전 코드가 열리지 않게 한다.
  *
- * 이동과 함께 쓰므로 라우터의 replace를 쓰지 않는다. 두 이동이 겹치면 앞의 것이 취소된다.
+ * 응답을 기다리는 사이 화면을 옮길 수 있어 제출을 누른 때 비운다. 되돌릴 때도 그 항목일 때만 쓴다.
+ * 제출 뒤 이동과 겹치면 앞의 이동이 취소되므로 라우터의 replace를 쓰지 않는다.
  */
-export function dropRetryState(): void {
-  const entry = window.history.state as { usr?: Partial<RetryState> | null } | null
-  if (entry?.usr?.retry) window.history.replaceState({ ...entry, usr: undefined }, '')
+export function holdRetryState(): () => void {
+  const entry = window.history.state as {
+    key?: string
+    usr?: Partial<RetryState> | null
+  } | null
+  if (!entry?.usr?.retry) return () => {}
+  window.history.replaceState({ ...entry, usr: undefined }, '')
+  return () => {
+    const now = window.history.state as { key?: string } | null
+    if (now?.key === entry.key) window.history.replaceState(entry, '')
+  }
 }
 
 /** 주소에서 받은 언어. 아는 값이고 그 문제가 지원할 때만 돌려준다 — 주소는 손으로 고친다. */

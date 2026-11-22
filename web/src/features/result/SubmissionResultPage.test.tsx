@@ -9,6 +9,7 @@ import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { resetSubmissions } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
+import { readSavedCode, storeSavedCode } from '@/features/solve/savedCode'
 import { retriedCode } from '@/features/solve/solvePath'
 import { Component as SubmissionResultPage } from './SubmissionResultPage'
 
@@ -673,6 +674,28 @@ describe('쉬운 설명과 에러 안내 (RES-03~06)', () => {
         language: 'PYTHON',
         code: 'print(1)',
       })
+    })
+
+    it('채점 불가면 제출한 코드의 저장본을 남긴다 (SOLVE-11)', async () => {
+      storeSavedCode(USER.id, 1, 'PYTHON', 'print(1)')
+      judgeError()
+      renderResult()
+      await screen.findByText('채점 불가')
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('print(1)')
+      sessionStorage.clear()
+    })
+
+    it('판정이 나면 제출한 코드의 저장본만 지운다 (SOLVE-11)', async () => {
+      storeSavedCode(USER.id, 1, 'PYTHON', 'print(1)')
+      storeSavedCode(USER.id, 1, 'CPP', '// 다른 언어')
+      completed()
+      renderResult()
+      await screen.findByText('맞았습니다!!')
+
+      await waitFor(() => expect(readSavedCode(USER.id, 1, 'PYTHON')).toBeNull())
+      expect(readSavedCode(USER.id, 1, 'CPP')).toBe('// 다른 언어')
+      sessionStorage.clear()
     })
 
     it('채점 불가에는 진행 문구를 띄우지 않는다', async () => {
