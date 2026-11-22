@@ -668,7 +668,8 @@ describe('쉬운 설명과 에러 안내 (RES-03~06)', () => {
       await user.click(await screen.findByRole('link', { name: '다시 제출하기' }))
 
       await screen.findByRole('heading', { name: '문제 풀이 도착' })
-      expect(retriedCode(lastRouter.state.location.state)).toEqual({
+      expect(retriedCode(lastRouter.state.location.state, USER.id)).toEqual({
+        userId: USER.id,
         language: 'PYTHON',
         code: 'print(1)',
       })

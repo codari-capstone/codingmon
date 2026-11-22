@@ -28,10 +28,10 @@ export interface NextAction {
  * 채점이 끝나지 않았으면 빈 배열이다 — 채점 중에 [다시 풀기]를 누르면 방금 보낸 제출의
  * 결과를 못 보게 된다.
  */
-export function nextActions(result: SubmissionResult): NextAction[] {
+export function nextActions(result: SubmissionResult, userId: number | undefined): NextAction[] {
   const retry = {
     to: solvePath(result.problemId, result.language),
-    state: retryState(result.language, result.sourceCode),
+    state: retryState(userId, result.language, result.sourceCode),
   }
   if (result.status === 'JUDGE_ERROR') {
     // [다시 풀기]와 같은 주소를 쓴다. 직접 조립했더니 언어가 빠져, C++로 제출했다가

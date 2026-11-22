@@ -15,7 +15,7 @@ export function solvePath(problemId: number, language: Language): string {
 }
 
 export interface RetryState {
-  retry: { language: Language; code: string }
+  retry: { userId: number; language: Language; code: string }
 }
 
 /**
@@ -24,18 +24,42 @@ export interface RetryState {
  * 제출하면 저장본이 지워지므로(forgetSubmittedCode) 이 버튼들만 코드를 들고 간다. 저장소에
  * 다시 쓰지 않는다. 쓰면 손대지 않고 나갔다 들어와도 제출한 코드가 또 열린다.
  * 채점 중에는 코드가 null이라 넘길 것이 없다.
+ *
+ * 주인을 함께 담는다. state는 로그아웃해도 탭의 방문 기록에 남아, 같은 탭에서 로그인한 다음
+ * 사람이 뒤로 가기로 닿을 수 있다(savedCodeKey가 막는 것과 같은 유출).
  */
 export function retryState(
+  userId: number | undefined,
   language: Language,
   code: string | null | undefined,
 ): RetryState | undefined {
-  return typeof code === 'string' ? { retry: { language, code } } : undefined
+  return userId !== undefined && typeof code === 'string'
+    ? { retry: { userId, language, code } }
+    : undefined
 }
 
-/** 이동 state에서 꺼낸 제출 코드. state는 브라우저 기록에서 오므로 모양을 확인한다. */
-export function retriedCode(state: unknown): RetryState['retry'] | null {
+/** 이 사용자의 제출 코드만 꺼낸다. state는 브라우저 기록에서 오므로 모양을 확인한다. */
+export function retriedCode(
+  state: unknown,
+  userId: number | undefined,
+): RetryState['retry'] | null {
   const retry = (state as Partial<RetryState> | null)?.retry
-  return typeof retry?.code === 'string' && typeof retry.language === 'string' ? retry : null
+  return retry?.userId === userId &&
+    userId !== undefined &&
+    typeof retry?.code === 'string' &&
+    typeof retry.language === 'string'
+    ? retry
+    : null
+}
+
+/**
+ * 지금 방문 기록 항목의 제출 코드를 버린다. 다시 제출한 뒤 뒤로 가기로 그 전 코드가 열리지 않게 한다.
+ *
+ * 이동과 함께 쓰므로 라우터의 replace를 쓰지 않는다. 두 이동이 겹치면 앞의 것이 취소된다.
+ */
+export function dropRetryState(): void {
+  const entry = window.history.state as { usr?: Partial<RetryState> | null } | null
+  if (entry?.usr?.retry) window.history.replaceState({ ...entry, usr: undefined }, '')
 }
 
 /** 주소에서 받은 언어. 아는 값이고 그 문제가 지원할 때만 돌려준다 — 주소는 손으로 고친다. */

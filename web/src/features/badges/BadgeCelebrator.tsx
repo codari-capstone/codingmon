@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/dialog'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { isDeadEnd, isFinished, submissionResultQuery } from '@/features/result/resultQuery'
+import { restoreUnjudgedCode } from '@/features/solve/savedCode'
 import { SUBMIT_MUTATION_KEY } from '@/features/solve/submitQuery'
 import { BADGE_INFO } from './badgeInfo'
 import { badgesQuery, fetchMyBadges, markCelebrated } from './badgeQuery'
@@ -33,6 +34,7 @@ export function BadgeCelebrator() {
 function Celebrator() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const ids = useMutationState({
     filters: { mutationKey: SUBMIT_MUTATION_KEY, status: 'success' },
@@ -84,7 +86,14 @@ function Celebrator() {
   useEffect(() => {
     const done = finished.filter((id) => !checking.current.has(id))
     if (done.length === 0) return
-    done.forEach((id) => checking.current.add(id))
+    done.forEach((id) => {
+      checking.current.add(id)
+      // 이번 세션에 낸 제출만 여기 온다. 결과 화면에서 처리하면 먼저 떠난 제출과 지난 기록을 가리지 못한다
+      const result = queryClient.getQueryData(submissionResultQuery(id).queryKey)
+      if (result?.status === 'JUDGE_ERROR' && typeof result.sourceCode === 'string') {
+        restoreUnjudgedCode(user?.id, result.problemId, result.language, result.sourceCode)
+      }
+    })
     const order = ++latest.current
     // fetchQuery는 진행 중인 같은 키의 요청(앞 제출의 확인, 열려 있는 배지 화면)을 그대로 돌려줘서
     // 방금 끝난 제출로 받은 배지가 빠진 응답을 볼 수 있다. 그래서 따로 묻는다(#294 리뷰).

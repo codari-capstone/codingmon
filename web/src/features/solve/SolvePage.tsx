@@ -106,7 +106,7 @@ function Workspace({ problem }: { problem: ProblemDetailView }) {
   // [다시 풀기]로 왔으면 그 제출 코드로 시작한다. 이미 고친 저장본이 있으면 그쪽이 더 새 코드다.
   const { state: locationState } = useLocation()
   const [codeByLanguage, setCodeByLanguage] = useState<Partial<Record<Language, string>>>(() => {
-    const retry = retriedCode(locationState)
+    const retry = retriedCode(locationState, user?.id)
     return retry && readSavedCode(user?.id, problem.id, retry.language) === null
       ? { [retry.language]: retry.code }
       : {}

@@ -7,6 +7,7 @@ import type { Language } from '@/api/types'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { forgetSubmittedCode } from './savedCode'
+import { dropRetryState } from './solvePath'
 
 export interface SubmitInput {
   problemId: number
@@ -63,6 +64,7 @@ export function useSubmit() {
     onSuccess: (id, input) => {
       // 접수에 실패하면 지우지 않는다. 그 코드는 아직 제출 기록에 없다.
       forgetSubmittedCode(user?.id, input.problemId, input.language, input.sourceCode)
+      dropRetryState()
       // 판정과 관계없이 접수된 제출로 그날이 이어진다(STREAK). 상단 바 칩은 마운트된 채라 직접 알린다
       void queryClient.invalidateQueries({ queryKey: ['streak'] })
       void navigate(`/submissions/${id}`)

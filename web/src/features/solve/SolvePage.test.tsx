@@ -13,7 +13,7 @@ import { server } from '@/mocks/server'
 import { EDITOR_DEFAULTS, updateEditorSettings } from './editorSettings'
 import { readSavedCode, storeSavedCode } from './savedCode'
 import { Component as SolvePage } from './SolvePage'
-import { retryState } from './solvePath'
+import { dropRetryState, retryState } from './solvePath'
 
 /**
  * 이 화면은 RequireAuth 뒤에 있다. 임시 저장 키에 사용자가 들어가므로(savedCode)
@@ -295,7 +295,10 @@ describe('SolvePage', () => {
     })
 
     it('다시 풀기로 오면 제출한 코드로 열리고 저장소에는 쓰지 않는다', async () => {
-      renderSolve({ pathname: '/problems/1', state: retryState('PYTHON', '# 제출한 코드') })
+      renderSolve({
+        pathname: '/problems/1',
+        state: retryState(USER.id, 'PYTHON', '# 제출한 코드'),
+      })
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
 
       await editorHas('# 제출한 코드')
@@ -304,10 +307,41 @@ describe('SolvePage', () => {
 
     it('다시 풀기로 와도 더 고친 저장본이 있으면 그것을 연다', async () => {
       storeSavedCode(USER.id, 1, 'PYTHON', '# 더 고친 코드')
-      renderSolve({ pathname: '/problems/1', state: retryState('PYTHON', '# 제출한 코드') })
+      renderSolve({
+        pathname: '/problems/1',
+        state: retryState(USER.id, 'PYTHON', '# 제출한 코드'),
+      })
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
 
       await editorHas('# 더 고친 코드')
+    })
+
+    it('방문 기록에 남은 다른 계정의 제출 코드는 열지 않는다', async () => {
+      renderSolve({
+        pathname: '/problems/1',
+        state: retryState(USER.id + 1, 'PYTHON', '# 앞사람 코드'),
+      })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await editorHas('sys.stdin')
+      expect(screen.getByRole('textbox', { name: '코드 편집기' })).not.toHaveTextContent(
+        '# 앞사람 코드',
+      )
+    })
+
+    it('다시 제출하면 방문 기록의 제출 코드만 버린다', () => {
+      const before = window.history.state as unknown
+      window.history.replaceState(
+        { key: 'k', idx: 3, usr: retryState(USER.id, 'PYTHON', '# 이전 제출') },
+        '',
+      )
+      dropRetryState()
+      expect(window.history.state).toEqual({ key: 'k', idx: 3, usr: undefined })
+
+      window.history.replaceState({ key: 'k', usr: { from: '/me' } }, '')
+      dropRetryState()
+      expect(window.history.state).toEqual({ key: 'k', usr: { from: '/me' } })
+      window.history.replaceState(before, '')
     })
 
     it('언어별로 따로 저장한다', async () => {
