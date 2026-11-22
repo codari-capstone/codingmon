@@ -49,6 +49,23 @@ export async function startSubscription(input: {
   return result.data
 }
 
+/** 구독 관리 동작 (MY-06). 주기 바꾸기에서 지금 주기를 보내면 바꾸기 취소다(동의 필요 없음, 계약) */
+export type SubscriptionAction =
+  { kind: 'cancel' } | { kind: 'resume' } | { kind: 'cycle'; cycle: Cycle; agreed: boolean }
+
+export async function changeSubscription(action: SubscriptionAction): Promise<Subscription> {
+  const result =
+    action.kind === 'cancel'
+      ? await api.POST('/api/users/me/subscription/cancel')
+      : action.kind === 'resume'
+        ? await api.POST('/api/users/me/subscription/resume')
+        : await api.PUT('/api/users/me/subscription/cycle', {
+            body: { cycle: toBillingCycle(action.cycle), agreed: action.agreed },
+          })
+  if (result.data === undefined) fail(result)
+  return result.data
+}
+
 /** 한국 시각은 서머타임이 없어 늘 UTC+9다 */
 const KST_OFFSET_MS = 9 * 3_600_000
 

@@ -20,7 +20,9 @@ import {
   won,
   type Cycle,
 } from '@/features/pricing/plans'
+import { ActionResult, NextCycleBand, PlanActions } from './SubscriptionActions'
 import { formatLongDate, fromBillingCycle, subscriptionQuery } from './subscriptionQuery'
+import { PLAN_TITLE_ID, useSubscriptionAction } from './useSubscriptionAction'
 
 const SHORT_DATE = new Intl.DateTimeFormat('ko-KR', {
   month: 'long',
@@ -45,7 +47,7 @@ interface View {
   alert?: { tone: 'info' | 'danger'; title: string; body: string }
 }
 
-/** 상태별 플랜 카드 (MY-06). 해지·해지 취소·주기 바꾸기는 다음 PR에서 이 카드에 붙는다 */
+/** 상태별 플랜 카드 (MY-06). 프로의 해지·해지 취소·주기 바꾸기 버튼은 SubscriptionActions가 그린다 */
 function viewOf(s: Subscription): View {
   const cycle = s.cycle ? fromBillingCycle(s.cycle) : 'monthly'
   const end = s.currentPeriodEnd ? SHORT_DATE.format(new Date(s.currentPeriodEnd)) : null
@@ -107,6 +109,7 @@ export function Component() {
   const [notice] = useState(() => (location.state as { notice?: unknown } | null)?.notice)
   const queryClient = useQueryClient()
   const { data, error, isPending, isFetching, refetch } = useQuery(subscriptionQuery())
+  const act = useSubscriptionAction()
 
   // 안내는 한 번만 보인다. 기록에 남기면 새로 고침·뒤로 가기 때마다 다시 뜬다(#356 리뷰)
   useEffect(() => {
@@ -124,6 +127,8 @@ export function Component() {
   else {
     const view = viewOf(data)
     const pro = data.plan === 'PRO'
+    const end =
+      pro && data.currentPeriodEnd ? SHORT_DATE.format(new Date(data.currentPeriodEnd)) : null
     content = (
       <>
         {view.alert ? (
@@ -163,7 +168,13 @@ export function Component() {
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-foreground m-0 text-xl font-bold">{view.name}</h2>
+                <h2
+                  id={PLAN_TITLE_ID}
+                  tabIndex={-1}
+                  className="text-foreground m-0 text-xl font-bold outline-none"
+                >
+                  {view.name}
+                </h2>
                 <Badge tone={view.badge.tone}>{view.badge.label}</Badge>
               </div>
               <p className="text-muted-foreground m-0 text-[15px]">{view.line}</p>
@@ -173,19 +184,15 @@ export function Component() {
                 <Link to={view.action.to}>{view.action.label}</Link>
               </Button>
             ) : null}
+            {end ? <PlanActions subscription={data} end={end} act={act} /> : null}
           </div>
+          {end ? <NextCycleBand subscription={data} end={end} act={act} /> : null}
           {pro && data.currentPeriodEnd ? (
             <dl className="m-0 mt-6 border-t text-[15px]">
               <div className="grid grid-cols-[120px_1fr] gap-4 border-b py-3">
                 <dt className="text-muted-foreground">결제 주기</dt>
                 <dd className="text-foreground m-0">
                   {cycleText(data.cycle ? fromBillingCycle(data.cycle) : 'monthly')}
-                  {data.nextCycle && data.nextCycle !== data.cycle ? (
-                    <span className="text-muted-foreground">
-                      {' '}
-                      (다음 결제부터 {cycleText(fromBillingCycle(data.nextCycle))})
-                    </span>
-                  ) : null}
                 </dd>
               </div>
               <div className="grid grid-cols-[120px_1fr] gap-4 border-b py-3">
@@ -197,6 +204,7 @@ export function Component() {
             </dl>
           ) : null}
         </section>
+        <ActionResult act={act} />
         <section
           aria-labelledby="pro-features"
           className="bg-card rounded-[20px] border p-6 md:p-8"
