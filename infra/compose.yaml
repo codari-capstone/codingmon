@@ -47,12 +47,7 @@ services:
 
   web:
     image: codingmon-web:${TAG:-latest}
-    build:
-      context: ../web
-      # 포트원 상점 ID·채널 키는 Vite가 빌드할 때 번들에 넣는 공개 값이라 실행 환경이 아니라 빌드 인자로 넘긴다(web/Dockerfile)
-      args:
-        VITE_PORTONE_STORE_ID: ${VITE_PORTONE_STORE_ID:-}
-        VITE_PORTONE_CHANNEL_KEY: ${VITE_PORTONE_CHANNEL_KEY:-}
+    build: ../web
     ports:
       # 앞단 HTTPS 프록시가 같은 서버에 있으면 127.0.0.1로 둔다
       - "${WEB_BIND_ADDR:-127.0.0.1}:${WEB_PORT:-80}:80"
