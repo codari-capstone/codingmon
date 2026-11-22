@@ -21,7 +21,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 // 포트원 V2 REST API(https://developers.portone.io/api/rest-v2). 시연용 테스트 채널(토스페이먼츠)이라 실제로 돈이 나가지 않는다.
-// API Secret이 비어 있으면 결제 API가 503을 주고 스케줄러는 포트원을 부르지 않는다.
+// API Secret이나 상점 ID가 비어 있으면 결제 API가 503을 주고 스케줄러는 포트원을 부르지 않는다.
 // 모든 호출은 DB 잠금 밖에서 한다(openapi startSubscription).
 @Component
 public class PortOneClient {
@@ -86,7 +86,7 @@ public class PortOneClient {
                 .defaultHeader("Authorization", "PortOne " + apiSecret).build();
         this.apiUrl = apiUrl;
         this.storeId = storeId;
-        this.configured = !apiSecret.isBlank();
+        this.configured = !apiSecret.isBlank() && !storeId.isBlank();
     }
 
     boolean isConfigured() {
@@ -95,7 +95,7 @@ public class PortOneClient {
 
     // 빌링키가 살아 있고 이 고객 ID로 발급됐는지 본다. 없거나 지워졌거나 다른 고객이면 INVALID.
     KeyOwner checkBillingKey(String billingKey, String customerId) {
-        Map<String, Object> body = get("/billing-keys/" + encode(billingKey), true);
+        Map<String, Object> body = get("/billing-keys/" + encode(billingKey));
         if (body == null || !"ISSUED".equals(body.get("status"))) {
             return KeyOwner.INVALID;
         }
@@ -146,7 +146,7 @@ public class PortOneClient {
 
     // 결제를 조회한다. 응답이 없으면 UnavailableException.
     PaymentInfo findPayment(String paymentId) {
-        Map<String, Object> body = get("/payments/" + encode(paymentId), true);
+        Map<String, Object> body = get("/payments/" + encode(paymentId));
         if (body == null) {
             return new PaymentInfo(PaymentStatus.NOT_FOUND, 0, null, null, null);
         }
@@ -184,10 +184,9 @@ public class PortOneClient {
     }
 
     // 404면 null. 그 밖의 오류와 응답 없음은 UnavailableException.
-    private Map<String, Object> get(String pathAndQuery, boolean appendStoreId) {
+    private Map<String, Object> get(String path) {
         requireConfigured();
-        String uri = appendStoreId ? pathAndQuery + (pathAndQuery.contains("?") ? "&" : "?") + "storeId=" + encode(storeId)
-                : pathAndQuery;
+        String uri = path + "?storeId=" + encode(storeId);
         try {
             // 쿼리를 이미 인코딩했으므로 URI를 그대로 넘겨 다시 인코딩되지 않게 한다.
             return rest.get().uri(URI.create(apiUrl + uri)).retrieve().body(JSON);
@@ -204,7 +203,7 @@ public class PortOneClient {
 
     private void requireConfigured() {
         if (!configured) {
-            throw new UnavailableException("포트원 설정(PORTONE_API_SECRET)이 없다", null);
+            throw new UnavailableException("포트원 설정(PORTONE_API_SECRET·PORTONE_STORE_ID)이 없다", null);
         }
     }
 

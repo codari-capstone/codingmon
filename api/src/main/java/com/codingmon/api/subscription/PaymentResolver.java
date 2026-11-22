@@ -72,7 +72,7 @@ class PaymentResolver {
         PaymentInfo info = portone.findPayment(paymentId);
         return switch (info.status()) {
             case PAID -> applyQueriedPaid(payment, info, keepKey);
-            case FAILED -> applyFailure(payment, false, keepKey);
+            case FAILED -> applyFailure(payment, keepKey);
             case CANCELLED -> applyCancelled(payment, keepKey);
             case IN_PROGRESS -> Resolution.UNKNOWN;
             case NOT_FOUND -> allowResend ? resend(payment, keepKey) : Resolution.UNKNOWN;
@@ -93,7 +93,7 @@ class PaymentResolver {
         }
         if (!send) {
             // 끝난 구독의 갱신 결제는 실패로 닫고, 이미 닫힌 기록은 그 상태를 돌려준다.
-            return applyFailure(payment, false, keepKey);
+            return applyFailure(payment, keepKey);
         }
         String customerId = repo.findCustomerId(payment.userId()).orElse(null);
         if (customerId == null) {
@@ -109,7 +109,7 @@ class PaymentResolver {
     Resolution applyPayResult(Payment payment, PayResult result, String keepKey) {
         return switch (result) {
             case PortOneClient.Paid paid -> applyPaid(payment, paid.paidAt(), keepKey);
-            case PortOneClient.Declined declined -> applyFailure(payment, false, keepKey);
+            case PortOneClient.Declined declined -> applyFailure(payment, keepKey);
             case PortOneClient.AlreadyUsed already -> requery(payment, keepKey);
             case PortOneClient.Unknown unknown -> requery(payment, keepKey);
         };
@@ -199,7 +199,7 @@ class PaymentResolver {
         }
         return switch (now) {
             case CANCELLED -> applyCancelled(payment, keepKey);
-            case FAILED -> applyFailure(payment, false, keepKey);
+            case FAILED -> applyFailure(payment, keepKey);
             default -> flag.get();
         };
     }
@@ -228,8 +228,8 @@ class PaymentResolver {
         });
     }
 
-    // 실패(또는 결과 모름 결제의 취소)를 반영한다. 프로를 준 적이 없는 결제라 실패와 같다.
-    Resolution applyFailure(Payment payment, boolean cancelled, String keepKey) {
+    // 실패를 반영한다. 프로를 준 적이 없는 결제다(결과 모름 결제의 취소는 applyCancelled).
+    Resolution applyFailure(Payment payment, String keepKey) {
         Resolution resolution = locked(payment.userId(), userId -> {
             Payment fresh = repo.findPayment(payment.paymentId()).orElse(null);
             if (fresh == null) {
@@ -241,7 +241,7 @@ class PaymentResolver {
             if (fresh.status() != PayStatus.PENDING) {
                 return Resolution.FAILED;
             }
-            repo.updatePayment(fresh.paymentId(), cancelled ? PayStatus.CANCELLED : PayStatus.FAILED, false, null);
+            repo.updatePayment(fresh.paymentId(), PayStatus.FAILED, false, null);
             failSubscription(fresh, keepKey);
             return Resolution.FAILED;
         });
