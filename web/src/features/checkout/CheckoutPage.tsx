@@ -10,14 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Icon } from '@/components/ui/icon'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { CycleToggle } from '@/features/pricing/CycleToggle'
-import {
-  PRO_PLAN,
-  proCharge,
-  TEST_PAYMENT_NOTICE,
-  won,
-  YEARLY_FREE_MONTHS,
-  type Cycle,
-} from '@/features/pricing/plans'
+import { PRO_PLAN, proCharge, won, YEARLY_FREE_MONTHS, type Cycle } from '@/features/pricing/plans'
 import {
   addMonthsKst,
   belongsToSubscription,
@@ -308,10 +301,6 @@ export function Component() {
             <Button type="button" size="lg" fullWidth disabled={!ready} onClick={() => void pay()}>
               {paying ? '결제 중…' : `카드 등록하고 ${amount}원 결제하기`}
             </Button>
-            <p className="text-muted-foreground m-0 inline-flex items-center gap-1.5 text-[13px]">
-              <Icon name="lock" size={14} />
-              {TEST_PAYMENT_NOTICE}
-            </p>
           </div>
         </section>
 

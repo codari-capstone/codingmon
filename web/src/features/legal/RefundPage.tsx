@@ -23,10 +23,7 @@ export function Component() {
         <>
           이 정책은 코딩몬 유료 서비스(프로 플랜)의 청약철회, 해지, 환불 기준을 「전자상거래
           등에서의 소비자보호에 관한 법률」과 <Link to="/terms#cancel">이용약관 제9조</Link>에 따라
-          정합니다.{' '}
-          <strong className="text-foreground font-semibold">
-            지금 코딩몬의 결제는 시연용 테스트 결제라 실제로 돈이 나가지 않습니다.
-          </strong>
+          정합니다.
         </>
       }
       sections={SECTIONS}

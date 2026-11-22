@@ -122,7 +122,7 @@ describe('PricingPage (PRICE-01~03)', () => {
     expect(screen.queryByRole('link', { name: '프로 시작하기' })).not.toBeInTheDocument()
   })
 
-  it('비교표는 포함·미포함을 말로 읽어 주고, 테스트 결제임을 알린다 (PRICE-01)', () => {
+  it('비교표는 포함·미포함을 말로 읽어 준다 (PRICE-01)', () => {
     renderPricing()
     const table = screen.getByRole('table')
     // 풀이 제안(리뷰)과 리포트는 무료도 쓴다(#333 리뷰, #321 댓글)
@@ -132,7 +132,6 @@ describe('PricingPage (PRICE-01~03)', () => {
     }
     // 만들지 않기로 한 기능은 팔지 않는다(#248)
     expect(screen.queryByText(/오답 노트/)).not.toBeInTheDocument()
-    expect(screen.getAllByText(/실제로 돈이 나가지 않아요/).length).toBeGreaterThan(0)
     expect(screen.queryByText(/7일/)).not.toBeInTheDocument()
   })
 })

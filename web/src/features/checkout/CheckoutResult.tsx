@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Icon, type IconName } from '@/components/ui/icon'
 import { Mascot } from '@/components/ui/mascot'
-import { AI_DAILY, CYCLE_NAME, proCharge, TEST_PAYMENT_NOTICE, won } from '@/features/pricing/plans'
+import { AI_DAILY, CYCLE_NAME, proCharge, won } from '@/features/pricing/plans'
 import { formatLongDate, SUBSCRIPTION_PATH } from '@/features/subscription/subscriptionQuery'
 import { cn } from '@/lib/utils'
 import type { CheckoutOutcome } from './outcome'
@@ -145,7 +145,6 @@ export function CheckoutResult({
       >
         {actions}
       </div>
-      <p className="text-muted-foreground m-0 mt-5 text-[13px]">{TEST_PAYMENT_NOTICE}</p>
     </section>
   )
 }

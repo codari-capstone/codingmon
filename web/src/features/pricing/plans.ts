@@ -121,11 +121,6 @@ export const FAQ = [
     content: `네. 문제 풀이와 채점은 기간 제한 없이 무료예요. AI 오답 분석과 풀이 제안은 합쳐서 하루 ${AI_DAILY.free}회까지 쓸 수 있어요.`,
   },
   {
-    value: 'test',
-    title: '실제로 결제되나요?',
-    content: '아니요. 지금은 시연용 테스트 결제라 카드에서 돈이 나가지 않아요.',
-  },
-  {
     value: 'cancel',
     title: '해지하면 바로 끊기나요?',
     content:
@@ -142,5 +137,3 @@ export const FAQ = [
     content: '신용카드와 체크카드로 결제할 수 있어요.',
   },
 ]
-
-export const TEST_PAYMENT_NOTICE = '시연용 테스트 결제예요. 실제로 돈이 나가지 않아요.'
