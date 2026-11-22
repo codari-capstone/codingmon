@@ -120,7 +120,7 @@ export function AnalysisPanel({
   sourceCode: string
   /** [코드 고치러 가기]의 주소. 결과 화면의 [다시 풀기]와 같다 (solvePath). */
   retryPath: string
-  /** [코드 고치러 가기]가 들고 갈 제출 코드 */
+  /** [코드 고치러 가기]가 넘길 제출 번호 */
   retryState?: RetryState
 }) {
   const queryClient = useQueryClient()

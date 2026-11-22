@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   clearSavedCode,
+  forgetProblemDrafts,
   forgetSubmittedCode,
   readSavedCode,
   savedCodeKey,
@@ -10,7 +11,7 @@ import {
 
 describe('savedCode', () => {
   afterEach(() => {
-    localStorage.clear()
+    sessionStorage.clear()
     vi.restoreAllMocks()
   })
 
@@ -46,7 +47,7 @@ describe('savedCode', () => {
   it('사용자를 모르면 읽지도 쓰지도 않는다', () => {
     storeSavedCode(undefined, 1, 'PYTHON', 'print(1)')
 
-    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(0)
     expect(readSavedCode(undefined, 1, 'PYTHON')).toBeNull()
   })
 
@@ -72,6 +73,28 @@ describe('savedCode', () => {
 
     expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
     expect(readSavedCode(5, 1, 'CPP')).toBe('// 쓰던 C++')
+  })
+
+  it('화면을 떠나면 그 사용자의 그 문제 코드만 모든 언어에서 지운다', () => {
+    storeSavedCode(5, 1, 'PYTHON', 'A')
+    storeSavedCode(5, 1, 'CPP', 'B')
+    storeSavedCode(5, 11, 'PYTHON', '다른 문제')
+    storeSavedCode(6, 1, 'PYTHON', '다른 사용자')
+
+    forgetProblemDrafts(5, 1)
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+    expect(readSavedCode(5, 1, 'CPP')).toBeNull()
+    expect(readSavedCode(5, 11, 'PYTHON')).toBe('다른 문제')
+    expect(readSavedCode(6, 1, 'PYTHON')).toBe('다른 사용자')
+  })
+
+  it('로그아웃은 예전 버전이 localStorage에 남긴 코드도 지운다', () => {
+    localStorage.setItem('solve:5:1:PYTHON', '예전 코드')
+
+    clearSavedCode()
+
+    expect(localStorage.getItem('solve:5:1:PYTHON')).toBeNull()
   })
 
   it('제출 뒤에 더 고친 저장본은 남긴다', () => {
