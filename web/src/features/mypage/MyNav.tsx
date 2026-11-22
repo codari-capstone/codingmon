@@ -114,6 +114,7 @@ export function MyNav({ user }: { user: CurrentUser }) {
 
       <Group title="내 정보">
         <Item to="/me" icon="user" label="프로필 · 학습 요약" />
+        <Item to="/me/subscription" icon="star" label="구독" />
       </Group>
 
       <Group title="설정">

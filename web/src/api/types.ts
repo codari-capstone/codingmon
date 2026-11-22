@@ -122,6 +122,10 @@ export type UserActivity = components['schemas']['UserActivity']
 /** 연속 학습 (STREAK-01·02). `week`는 이번 주 월~일 7칸이다. */
 export type UserStreak = components['schemas']['UserStreak']
 
+/** 내 구독 (MY-06, PAY-01, PRICE-03) */
+export type Subscription = components['schemas']['Subscription']
+export type BillingCycle = components['schemas']['BillingCycle']
+
 /** 배지 (BADGE-01·03). 서버는 코드만 준다 — 이름·문구·그림은 화면이 가진다(badgeInfo.ts). */
 export type BadgeCode = components['schemas']['BadgeCode']
 export type UserBadge = components['schemas']['UserBadge']

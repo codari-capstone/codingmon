@@ -72,6 +72,12 @@ import {
   type MockAdminUser,
 } from './fixtures/adminUsers'
 import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from './fixtures/users'
+import {
+  changeMockSubscription,
+  removeMockSubscription,
+  startMockSubscription,
+  subscriptionFor,
+} from './fixtures/subscriptions'
 
 /** 인증번호 오류의 문구. 실제 서버(EmailCodeService.java)의 문구와 같게 맞춘다. */
 const CODE_DETAIL: Record<Extract<VerifyResult, { ok: false }>['code'], string> = {
@@ -469,6 +475,9 @@ export function resetAdminUsers(): void {
 function userSummary({
   loginMethod: _loginMethod,
   suspensionReason: _suspensionReason,
+  subscriptionStartedAt: _subscriptionStartedAt,
+  refundAmount: _refundAmount,
+  payments: _payments,
   ...summary
 }: MockAdminUser): AdminUserSummary {
   return summary
@@ -748,6 +757,10 @@ function unauthorized() {
   return HttpResponse.json({ status: 401, title: 'Unauthorized' }, { status: 401 })
 }
 
+/** 해지·해지 취소·주기 바꾸기를 할 수 없는 구독 (계약 `SubscriptionNotActive`) */
+const notActive = () =>
+  problem(409, 'SUBSCRIPTION_NOT_ACTIVE', '진행 중인 프로 구독이 없어요. 새로 고침해 주세요.')
+
 /**
  * MSW 가짜 응답. 명세(#2)가 확정되면 응답 형태를 실제 명세에 맞춘다.
  *
@@ -758,6 +771,59 @@ function unauthorized() {
  * 개발 서버와 jsdom에서 다르다. 와일드카드로 두면 양쪽에서 같은 핸들러가 걸린다.
  */
 export const handlers: RequestHandler[] = [
+  /** 내 구독 (MY-06, PAY-01). 처음에는 구독한 적 없음이다 (fixtures/subscriptions.ts) */
+  http.get('*/api/users/me/subscription', ({ request }) => {
+    const id = userIdFromToken(bearer(request))
+    return id === null ? unauthorized() : HttpResponse.json(subscriptionFor(id))
+  }),
+
+  /**
+   * 프로 구독 시작 (PAY-01). 목은 카드 결제를 늘 성공으로 본다. 실패·확인 중 화면은 테스트가
+   * server.use로 402·503을 준다. 검사 순서는 계약과 같다: 빌링키(1단계) → 동의 400(1단계 뒤) → 이미 프로 409(2단계) → 결제
+   */
+  http.post('*/api/users/me/subscription', async ({ request }) => {
+    const id = userIdFromToken(bearer(request))
+    if (id === null) return unauthorized()
+    const body = (await request.json()) as {
+      billingKey?: unknown
+      cycle?: unknown
+      agreed?: unknown
+    }
+    if (body.cycle !== 'MONTHLY' && body.cycle !== 'YEARLY') return badRequest('결제 주기가 아니다')
+    if (typeof body.billingKey !== 'string' || body.billingKey === '') {
+      return problem(400, 'BILLING_KEY_INVALID', '카드 등록 정보를 확인하지 못했어요')
+    }
+    if (body.agreed !== true) return problem(400, 'AGREEMENT_REQUIRED', '결제 동의가 필요해요')
+    if (subscriptionFor(id).plan === 'PRO') {
+      return problem(409, 'SUBSCRIPTION_ALREADY_ACTIVE', '이미 프로 구독 중이에요')
+    }
+    return HttpResponse.json(startMockSubscription(id, body.cycle), { status: 201 })
+  }),
+
+  /** 해지·해지 취소 (MY-06). 프로가 아니면 409 */
+  ...(['cancel', 'resume'] as const).map((kind) =>
+    http.post(`*/api/users/me/subscription/${kind}`, ({ request }) => {
+      const id = userIdFromToken(bearer(request))
+      if (id === null) return unauthorized()
+      const next = changeMockSubscription(id, { kind })
+      return next ? HttpResponse.json(next) : notActive()
+    }),
+  ),
+
+  /** 결제 주기 바꾸기 (MY-06). 지금 주기와 다르면 동의가 필요하고, 같으면 바꾸기 취소다. 진행 중이 아니면 409 */
+  http.put('*/api/users/me/subscription/cycle', async ({ request }) => {
+    const id = userIdFromToken(bearer(request))
+    if (id === null) return unauthorized()
+    const body = (await request.json()) as { cycle?: unknown; agreed?: unknown }
+    if (body.cycle !== 'MONTHLY' && body.cycle !== 'YEARLY') return badRequest('결제 주기가 아니다')
+    const current = subscriptionFor(id)
+    if (current.status !== 'ACTIVE') return notActive()
+    if (body.cycle !== current.cycle && body.agreed !== true) {
+      return problem(400, 'AGREEMENT_REQUIRED', '바뀐 금액의 자동결제 동의가 필요해요')
+    }
+    return HttpResponse.json(changeMockSubscription(id, { kind: 'cycle', cycle: body.cycle }))
+  }),
+
   http.get('*/api/concept-tags', () => HttpResponse.json(allConceptTags())),
 
   /**
@@ -1691,6 +1757,7 @@ export const handlers: RequestHandler[] = [
     if (account.user.role === 'ADMIN') {
       return problem(403, 'ADMIN_CANNOT_WITHDRAW', '관리자는 탈퇴할 수 없어요')
     }
+    removeMockSubscription(account.user.id)
     return new HttpResponse(null, {
       status: 204,
       headers: { 'Set-Cookie': `${REFRESH_COOKIE}=; Path=/; Max-Age=0` },

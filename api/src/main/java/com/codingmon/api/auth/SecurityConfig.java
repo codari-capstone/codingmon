@@ -33,6 +33,8 @@ class SecurityConfig {
                         .requestMatchers("/error", "/api/auth/**").permitAll()
                         // COM-05: 비로그인은 문제 목록만. 지문은 로그인해야 본다 (KOI 기출 등 CC BY-NC-SA 출처 때문).
                         .requestMatchers(HttpMethod.GET, "/api/problems", "/api/concept-tags").permitAll()
+                        // 포트원 웹훅은 로그인 없이 Standard Webhooks 서명으로 확인한다(PortOneWebhookController).
+                        .requestMatchers(HttpMethod.POST, "/api/portone/webhook").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2

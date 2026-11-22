@@ -42,6 +42,8 @@ describe('라우터 보호 구조', () => {
     'me/display',
     'me/withdraw',
     'me/report',
+    'me/subscription',
+    'checkout',
   ])('%s는 RequireAuth 아래에 있다', (path) => {
     expect(guardsOf(path)).toContain('RequireAuth')
   })
