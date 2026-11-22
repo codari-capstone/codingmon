@@ -47,7 +47,7 @@ public class SubscriptionRepository {
             boolean needsCancel, Instant paidAt, Instant createdAt) {
     }
 
-    record Deletion(long id, String billingKey, String customerId, Instant customerSince) {
+    record Deletion(long id, String billingKey) {
     }
 
     private static final String SUB_COLUMNS = "select user_id, status, cycle, next_cycle, billing_key, anchor_at, months,"
@@ -83,7 +83,7 @@ public class SubscriptionRepository {
 
     // 비어 있을 때만 저장한다. 동시에 처음 만든 요청은 저장하지 못하고 이미 저장된 값을 읽는다.
     String ensureCustomerId(long userId) {
-        jdbc.sql("update users set customer_id = :customerId, customer_id_created_at = now()"
+        jdbc.sql("update users set customer_id = :customerId"
                 + " where id = :id and customer_id is null")
                 .param("customerId", "cus-" + UUID.randomUUID()).param("id", userId).update();
         return findCustomerId(userId).orElseThrow();
@@ -195,18 +195,20 @@ public class SubscriptionRepository {
         jdbc.sql("insert into billing_key_deletions (billing_key) values (:key)").param("key", billingKey).update();
     }
 
-    // 탈퇴. 고객 ID가 없으면(구독 화면을 연 적 없음) 카드를 등록한 적도 없으므로 넣지 않는다.
-    void queueCustomerDeletion(long userId) {
-        jdbc.sql("insert into billing_key_deletions (customer_id, customer_since)"
-                + " select customer_id, customer_id_created_at from users where id = :id and customer_id is not null")
+    // 탈퇴(사용자 행을 잠근 트랜잭션). 구독과 결과 모름 결제의 빌링키를 지울 목록에 넣는다. 다른 결제의 카드는 닫을 때 이미 넣었다.
+    void queueKeysOfUser(long userId) {
+        jdbc.sql("insert into billing_key_deletions (billing_key)"
+                + " select distinct k.key from (select billing_key as key from subscriptions where user_id = :id"
+                + " union select billing_key from payments where user_id = :id and status = 'PENDING') k"
+                + " where k.key is not null and not exists (select 1 from billing_key_deletions d where d.billing_key = k.key)")
                 .param("id", userId).update();
     }
 
+    // 무작위 순서라 계속 실패하는 행이 있어도 다른 행이 차례를 얻는다.
     List<Deletion> findDeletions(int limit) {
-        return jdbc.sql("select id, billing_key, customer_id, customer_since from billing_key_deletions order by random() limit :limit")
+        return jdbc.sql("select id, billing_key from billing_key_deletions order by random() limit :limit")
                 .param("limit", limit)
-                .query((rs, n) -> new Deletion(rs.getLong("id"), rs.getString("billing_key"), rs.getString("customer_id"),
-                        instant(rs, "customer_since")))
+                .query((rs, n) -> new Deletion(rs.getLong("id"), rs.getString("billing_key")))
                 .list();
     }
 

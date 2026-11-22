@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import com.codingmon.api.subscription.PaymentResolver.Resolution;
 import com.codingmon.api.subscription.PortOneClient.PayResult;
 import com.codingmon.api.subscription.SubscriptionRepository.Cycle;
 import com.codingmon.api.subscription.SubscriptionRepository.Deletion;
@@ -39,7 +40,7 @@ class SubscriptionScheduler {
         this.resolver = resolver;
     }
 
-    @Scheduled(fixedDelay = 60_000)
+    @Scheduled(fixedDelay = 600_000)
     void run() {
         endCancellations();
         int flagged = repo.flagLongPending();
@@ -71,11 +72,16 @@ class SubscriptionScheduler {
     // 결제 기록을 PENDING으로 먼저 저장한 뒤 결제한다. 주기는 기록을 만들 때 정한다(다음 주기가 있으면 그것으로 하고 비운다).
     void renew() {
         for (Long userId : repo.findDueRenewals(BATCH)) {
-            isolated("갱신 결제 " + userId, () -> renew(userId));
+            // 결과를 모르면(포트원 장애일 수 있다) 남은 건은 다음 실행으로 미룬다. 건마다 시간 초과를 기다리지 않게 한다.
+            boolean[] unknown = {false};
+            isolated("갱신 결제 " + userId, () -> unknown[0] = renew(userId) == Resolution.UNKNOWN);
+            if (unknown[0]) {
+                return;
+            }
         }
     }
 
-    private void renew(long userId) {
+    private Resolution renew(long userId) {
         Payment payment = resolver.locked(userId, id -> {
             Sub sub = repo.findSub(id).orElse(null);
             if (sub == null || sub.status() != Status.ACTIVE || sub.periodEnd().isAfter(Instant.now())
@@ -90,15 +96,15 @@ class SubscriptionScheduler {
             return created;
         });
         if (payment == null) {
-            return;
+            return null;
         }
         String customerId = repo.findCustomerId(userId).orElse(null);
         if (customerId == null) {
-            return;
+            return null;
         }
         PayResult result = portone.payWithBillingKey(payment.paymentId(), payment.billingKey(), customerId,
                 payment.cycle().orderName, payment.amount());
-        resolver.applyPayResult(payment, result, null);
+        return resolver.applyPayResult(payment, result, null);
     }
 
     // 결과 모름 결제(첫 결제든 갱신이든)를 결제 ID로 다시 조회해 확정한다. 포트원에 없으면 같은 결제 ID로 다시 보낸다.
@@ -121,18 +127,7 @@ class SubscriptionScheduler {
     }
 
     private void deleteKey(Deletion deletion) {
-        if (deletion.billingKey() != null) {
-            if (repo.isKeyInUseAnywhere(deletion.billingKey()) || portone.deleteBillingKey(deletion.billingKey())) {
-                repo.removeDeletion(deletion.id());
-            }
-            return;
-        }
-        // 탈퇴한 고객. 이 고객 ID의 빌링키를 모두 찾아 지운다. 하나라도 실패하면 다음 실행 때 처음부터 다시 한다.
-        boolean allDeleted = true;
-        for (String key : portone.findBillingKeysOfCustomer(deletion.customerId(), deletion.customerSince())) {
-            allDeleted &= portone.deleteBillingKey(key);
-        }
-        if (allDeleted) {
+        if (repo.isKeyInUseAnywhere(deletion.billingKey()) || portone.deleteBillingKey(deletion.billingKey())) {
             repo.removeDeletion(deletion.id());
         }
     }

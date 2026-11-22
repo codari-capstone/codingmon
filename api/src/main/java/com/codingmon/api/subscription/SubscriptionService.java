@@ -43,10 +43,13 @@ class SubscriptionService {
         return subscriptions.view(userId, repo.ensureCustomerId(userId));
     }
 
-    private sealed interface Step permits AlreadyPro, Leftover, NewPayment {
+    private sealed interface Step permits AlreadyPro, KeyQueued, Leftover, NewPayment {
     }
 
     private record AlreadyPro() implements Step {
+    }
+
+    private record KeyQueued() implements Step {
     }
 
     private record Leftover(Payment payment) implements Step {
@@ -68,7 +71,7 @@ class SubscriptionService {
             throw providerUnavailable();
         }
         if (owner != KeyOwner.MATCH || repo.isKeyQueued(billingKey)) {
-            throw ApiErrors.error(HttpStatus.BAD_REQUEST, "BILLING_KEY_INVALID", "등록한 카드를 확인할 수 없어요. 카드를 다시 등록해 주세요");
+            throw keyInvalid();
         }
         if (!Boolean.TRUE.equals(agreed)) {
             resolver.locked(userId, id -> {
@@ -88,6 +91,10 @@ class SubscriptionService {
                 if (pending.isPresent()) {
                     return new Leftover(pending.get());
                 }
+                // 1단계 뒤에 같은 카드가 지울 목록에 들어갔을 수 있다(다른 탭에서 동의 없이 보낸 경우).
+                if (repo.isKeyQueued(billingKey)) {
+                    return new KeyQueued();
+                }
                 Payment payment = new Payment(SubscriptionRepository.newPaymentId(), id, Kind.FIRST, cycle, cycle.amount,
                         billingKey, PayStatus.PENDING, false, null, null);
                 repo.insertPayment(payment);
@@ -97,6 +104,7 @@ class SubscriptionService {
                 throw new ErrorResponseException(HttpStatus.UNAUTHORIZED);
             }
             switch (step) {
+                case KeyQueued queued -> throw keyInvalid();
                 case AlreadyPro already -> {
                     dropUnused(userId, billingKey);
                     throw ApiErrors.error(HttpStatus.CONFLICT, "SUBSCRIPTION_ALREADY_ACTIVE", "이미 프로 구독 중이에요");
@@ -218,6 +226,10 @@ class SubscriptionService {
             resolver.dropKey(id, billingKey, null);
             return true;
         });
+    }
+
+    private static ErrorResponseException keyInvalid() {
+        return ApiErrors.error(HttpStatus.BAD_REQUEST, "BILLING_KEY_INVALID", "등록한 카드를 확인할 수 없어요. 카드를 다시 등록해 주세요");
     }
 
     private static ErrorResponseException notActive() {

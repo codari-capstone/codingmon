@@ -122,10 +122,12 @@ public class Subscriptions {
         return (int) ((long) last.amount() * remaining * 9 / (total * 10) / 10 * 10);
     }
 
-    // 탈퇴(MY-04, ADM-16 강제 탈퇴). 회원 행을 지우기 전에 같은 트랜잭션에서 부른다.
-    // 이 고객 ID의 빌링키를 모두 지울 목록에 넣는다. 구독·결제 기록은 회원 행과 함께 지워진다(FK).
+    // 탈퇴(MY-04, ADM-16 강제 탈퇴). 회원 행을 지우기 전에 같은 트랜잭션에서 부른다(제출 → 회원 순서로 잠근다).
+    // 이 회원의 구독·결과 모름 결제의 빌링키를 지울 목록에 넣는다. 구독·결제 기록은 회원 행과 함께 지워진다(FK).
+    // 우리 서버에 오지 않은 빌링키(카드 등록 뒤 결제 전에 창을 닫은 경우)는 찾지 않는다.
     public void onWithdraw(long userId) {
-        repo.queueCustomerDeletion(userId);
+        repo.lockUser(userId);
+        repo.queueKeysOfUser(userId);
     }
 
     // 계정 정지(ADM-16). 정지된 회원은 해지할 수 없으므로 진행 중 구독을 해지와 똑같이 해지 예정으로 바꾼다.

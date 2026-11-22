@@ -5,9 +5,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -21,8 +19,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
-
-import tools.jackson.databind.json.JsonMapper;
 
 // 포트원 V2 REST API(https://developers.portone.io/api/rest-v2). 시연용 테스트 채널(토스페이먼츠)이라 실제로 돈이 나가지 않는다.
 // API Secret이 비어 있으면 결제 API가 503을 주고 스케줄러는 포트원을 부르지 않는다.
@@ -79,7 +75,6 @@ public class PortOneClient {
     private final String apiUrl;
     private final String storeId;
     private final boolean configured;
-    private final JsonMapper json = JsonMapper.builder().build();
 
     PortOneClient(@Value("${app.portone.api-url}") String apiUrl, @Value("${app.portone.api-secret}") String apiSecret,
             @Value("${app.portone.store-id}") String storeId, @Value("${app.portone.connect-timeout}") Duration connectTimeout,
@@ -131,8 +126,10 @@ public class PortOneClient {
                 return new AlreadyUsed();
             }
             if (DECLINED.contains(type)) {
-                String message = error.get("message") instanceof String m ? m : "카드 결제에 실패했어요";
-                return new Declined(message);
+                // 카드사가 보낸 사유(pgMessage)를 먼저 쓴다. message는 없을 수 있다.
+                String reason = error.get("pgMessage") instanceof String pg && !pg.isBlank() ? pg
+                        : error.get("message") instanceof String m && !m.isBlank() ? m : "카드 결제에 실패했어요";
+                return new Declined(reason);
             }
             if (e.getStatusCode().is5xxServerError()) {
                 log.warn("포트원 결제 응답 5xx {}: {} {}", paymentId, e.getStatusCode(), type);
@@ -183,34 +180,6 @@ public class PortOneClient {
             // 예외 메시지에 빌링키가 든 URL이 있어 종류만 남긴다.
             log.warn("포트원 빌링키 삭제 응답 없음: {}", e.getClass().getSimpleName());
             return false;
-        }
-    }
-
-    // 이 고객 ID로 발급된 빌링키를 모두 찾는다(since부터 지금까지, 모든 페이지). 중간에 실패하면 UnavailableException.
-    // 필터 이름은 포트원 문서(빌링키 다건 조회)를 따른다. 키를 받은 뒤 실제 응답으로 한 번 확인한다.
-    List<String> findBillingKeysOfCustomer(String customerId, Instant since) {
-        List<String> keys = new ArrayList<>();
-        for (int page = 0; ; page++) {
-            Map<String, Object> filter = new LinkedHashMap<>();
-            filter.put("storeId", storeId);
-            filter.put("customerId", customerId);
-            filter.put("timeRangeField", "REQUESTED_AT");
-            filter.put("from", since.toString());
-            filter.put("until", Instant.now().toString());
-            String requestBody = json.writeValueAsString(Map.of("page", Map.of("number", page, "size", 100), "filter", filter));
-            // 404나 예상과 다른 모양은 실패로 본다. 빈 목록으로 보면 탈퇴 정리 기록이 지워지고 빌링키가 포트원에 남는다.
-            Map<String, Object> body = get("/billing-keys?requestBody=" + encode(requestBody), false);
-            if (body == null || !(body.get("items") instanceof List<?> items) || !(nested(body, "page", "totalCount") instanceof Number n)) {
-                throw new UnavailableException("포트원 빌링키 목록 응답이 예상과 다르다", null);
-            }
-            for (Object item : items) {
-                if (item instanceof Map<?, ?> map && map.get("billingKey") instanceof String key) {
-                    keys.add(key);
-                }
-            }
-            if (items.isEmpty() || (long) (page + 1) * 100 >= n.longValue()) {
-                return keys;
-            }
         }
     }
 

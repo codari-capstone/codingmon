@@ -2,11 +2,7 @@
 
 -- customer_id: 카드 등록 때 포트원에 넘기는 고객 ID(cus-{UUID}). 처음 필요할 때 만들고 바꾸지 않는다.
 -- DB 사용자 ID를 쓰지 않는다. 로컬·개발·배포가 테스트 상점 하나를 같이 쓰고 DB를 초기화하면 번호가 겹치기 때문이다.
--- customer_id_created_at: 탈퇴 때 이 고객의 빌링키를 포트원에서 찾는 조회 기간의 시작이다.
 ALTER TABLE users ADD COLUMN customer_id VARCHAR(64) UNIQUE;
-ALTER TABLE users ADD COLUMN customer_id_created_at TIMESTAMPTZ;
-ALTER TABLE users ADD CONSTRAINT users_customer_id_check
-    CHECK ((customer_id IS NULL) = (customer_id_created_at IS NULL));
 
 -- 사용자당 한 행이다. 다시 구독하면 같은 행을 다시 쓴다(구독한 적이 없으면 행이 없고 NONE으로 본다).
 -- anchor_at: 기준 시각(구독을 시작한 결제 시각). months: 확정한 개월 수(월간 1, 연간 12씩 더한다).
@@ -52,14 +48,10 @@ CREATE INDEX payments_user_idx ON payments (user_id, paid_at DESC);
 CREATE INDEX payments_needs_cancel_idx ON payments (user_id) WHERE needs_cancel;
 
 -- 지울 빌링키 목록. 사용자와 연결하지 않아 탈퇴해도 남는다. 스케줄러가 포트원에서 지우고 성공하면 행을 지운다.
--- 빌링키 하나를 지우거나(billing_key), 탈퇴한 고객의 빌링키를 모두 찾아 지운다(customer_id, customer_since부터 조회).
+-- 탈퇴 때는 그 회원의 구독·결과 모름 결제의 빌링키를 넣는다(포트원에서 고객 ID로 찾지 않는다).
 CREATE TABLE billing_key_deletions (
     id BIGSERIAL PRIMARY KEY,
-    billing_key VARCHAR(200),
-    customer_id VARCHAR(64),
-    customer_since TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CHECK ((billing_key IS NOT NULL AND customer_id IS NULL AND customer_since IS NULL)
-        OR (billing_key IS NULL AND customer_id IS NOT NULL AND customer_since IS NOT NULL))
+    billing_key VARCHAR(200) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX billing_key_deletions_key_idx ON billing_key_deletions (billing_key) WHERE billing_key IS NOT NULL;
+CREATE INDEX billing_key_deletions_key_idx ON billing_key_deletions (billing_key);

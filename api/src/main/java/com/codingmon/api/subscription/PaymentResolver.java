@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -135,26 +136,36 @@ class PaymentResolver {
     }
 
     // 결제됨을 반영한다. 첫 결제면 구독을 시작하고 갱신이면 기간을 한 번 늘린다.
-    // 이미 실패·취소로 닫은 결제가 늦게 결제됐거나, 환불로 끝난 구독의 갱신이면 반영하지 않고 '취소 필요'로 표시한다.
+    // 이미 실패·취소로 닫은 결제가 늦게 결제됐거나, 이미 프로인 회원의 첫 결제거나, 끝난 구독의 갱신이면
+    // 반영하지 않고 '취소 필요'로 표시한다. 표시하기 전에 잠금 밖에서 한 번 더 조회한다(recheck).
     Resolution applyPaid(Payment payment, Instant paidAt, String keepKey) {
-        Instant at = paidAt == null ? Instant.now() : paidAt;
-        Resolution resolution = locked(payment.userId(), userId -> {
+        return applyPaid(payment, paidAt == null ? Instant.now() : paidAt, keepKey, false);
+    }
+
+    // rechecked면 이미 다시 조회해 지금도 결제됨을 확인했다. 아니면 표시할 차례에 Optional.empty()로 빠져나와 다시 조회한다.
+    private Resolution applyPaid(Payment payment, Instant at, String keepKey, boolean rechecked) {
+        Optional<Resolution> done = locked(payment.userId(), userId -> {
             Payment fresh = repo.findPayment(payment.paymentId()).orElse(null);
             if (fresh == null) {
-                return Resolution.UNKNOWN;
+                return Optional.of(Resolution.UNKNOWN);
             }
             if (fresh.status() == PayStatus.PAID) {
-                return fresh.needsCancel() ? Resolution.PAID_NOT_APPLIED : Resolution.PAID_APPLIED;
-            }
-            if (fresh.status() != PayStatus.PENDING) {
-                return null;   // 늦게 결제됨. 잠금 밖에서 다시 조회한 뒤 표시한다.
+                return Optional.of(fresh.needsCancel() ? Resolution.PAID_NOT_APPLIED : Resolution.PAID_APPLIED);
             }
             Optional<Sub> sub = repo.findSub(userId);
             Status status = effective(sub, Optional.of(fresh), Instant.now());
-            if (fresh.kind() == Kind.FIRST) {
-                if (isPro(status)) {
-                    return notApplied(fresh, at);
+            boolean apply = fresh.status() == PayStatus.PENDING
+                    && (fresh.kind() == Kind.FIRST ? !isPro(status) : isPro(status));
+            if (!apply) {
+                if (!rechecked) {
+                    return Optional.empty();
                 }
+                if (fresh.status() == PayStatus.CANCELLED) {
+                    return Optional.of(Resolution.FAILED);   // 그사이 취소 웹훅이 반영됐다(운영자 환불).
+                }
+                return Optional.of(notApplied(fresh, at));
+            }
+            if (fresh.kind() == Kind.FIRST) {
                 String oldKey = sub.map(Sub::billingKey).orElse(null);
                 repo.startSub(userId, fresh.cycle(), fresh.billingKey(), at, fresh.paymentId());
                 if (repo.isSuspended(userId)) {
@@ -165,47 +176,32 @@ class PaymentResolver {
                 if (oldKey != null && !oldKey.equals(fresh.billingKey())) {
                     repo.queueKeyDeletion(oldKey);
                 }
-                return Resolution.PAID_APPLIED;
+            } else {
+                repo.extendSub(sub.get(), fresh.cycle(), fresh.paymentId());
+                repo.updatePayment(fresh.paymentId(), PayStatus.PAID, false, at);
             }
-            if (!isPro(status)) {
-                return notApplied(fresh, at);
-            }
-            repo.extendSub(sub.get(), fresh.cycle(), fresh.paymentId());
-            repo.updatePayment(fresh.paymentId(), PayStatus.PAID, false, at);
-            return Resolution.PAID_APPLIED;
+            return Optional.of(Resolution.PAID_APPLIED);
         });
-        if (resolution != null) {
-            return resolution;
+        if (done == null) {
+            return Resolution.UNKNOWN;   // 그사이 탈퇴했다.
         }
-        return lateRecheck(payment, at);
+        return done.orElseGet(() -> recheck(payment, keepKey, () -> applyPaid(payment, at, keepKey, true)));
     }
 
-    // 이미 실패·취소로 닫은 결제가 결제됨으로 나왔다. 잠금을 기다리는 사이 운영자가 취소했을 수 있어 잠금 밖에서 다시 조회하고,
-    // 지금도 결제됨일 때만 표시한다. 조회가 실패하면 표시한다(운영자가 콘솔에서 확인).
-    private Resolution lateRecheck(Payment payment, Instant paidAt) {
-        boolean stillPaid;
+    // '취소 필요'로 표시하기 전에 잠금 밖에서 포트원을 한 번 더 조회한다. 잠금을 기다리는 사이 운영자가 취소했을 수 있다.
+    // 지금도 결제됨이면 flag를 실행한다(그 안에서 다시 잠가 기록 상태를 확인한다). 조회가 실패해도 표시한다(운영자가 콘솔에서 확인).
+    private Resolution recheck(Payment payment, String keepKey, Supplier<Resolution> flag) {
+        PortOneClient.PaymentStatus now;
         try {
-            stillPaid = portone.findPayment(payment.paymentId()).status() == PortOneClient.PaymentStatus.PAID;
+            now = portone.findPayment(payment.paymentId()).status();
         } catch (PortOneClient.UnavailableException e) {
-            stillPaid = true;
+            return flag.get();
         }
-        if (!stillPaid) {
-            return Resolution.FAILED;
-        }
-        Resolution resolution = locked(payment.userId(), userId -> {
-            Payment fresh = repo.findPayment(payment.paymentId()).orElse(null);
-            if (fresh == null || fresh.status() == PayStatus.PENDING) {
-                return Resolution.UNKNOWN;
-            }
-            if (fresh.status() == PayStatus.PAID) {
-                return fresh.needsCancel() ? Resolution.PAID_NOT_APPLIED : Resolution.PAID_APPLIED;
-            }
-            if (fresh.status() == PayStatus.CANCELLED) {
-                return Resolution.FAILED;   // 그사이 취소 웹훅이 반영됐다(운영자 환불).
-            }
-            return notApplied(fresh, paidAt);
-        });
-        return resolution == null ? Resolution.UNKNOWN : resolution;
+        return switch (now) {
+            case CANCELLED -> applyCancelled(payment, keepKey);
+            case FAILED -> applyFailure(payment, false, keepKey);
+            default -> flag.get();
+        };
     }
 
     // 돈은 나갔는데 구독에 반영하지 않는다. 운영자가 콘솔에서 취소하면 취소 웹훅으로 표시가 풀린다.
@@ -216,18 +212,20 @@ class PaymentResolver {
         return Resolution.PAID_NOT_APPLIED;
     }
 
-    // 대조가 어긋났다. 결제 실패와 똑같이 처리하고, 돈이 나갔으므로 '취소 필요'로 표시한다.
+    // 대조가 어긋났다. 결제 실패와 똑같이 처리하고, 돈이 나갔으므로 '취소 필요'로 표시한다(다시 조회한 뒤).
     private Resolution mismatch(Payment payment, Instant paidAt, String keepKey) {
-        Resolution resolution = locked(payment.userId(), userId -> {
-            Payment fresh = repo.findPayment(payment.paymentId()).orElse(null);
-            if (fresh == null || fresh.status() != PayStatus.PENDING) {
-                return Resolution.FAILED;
-            }
-            repo.updatePayment(fresh.paymentId(), PayStatus.PAID, true, paidAt);
-            failSubscription(fresh, keepKey);
-            return Resolution.PAID_NOT_APPLIED;
+        return recheck(payment, keepKey, () -> {
+            Resolution resolution = locked(payment.userId(), userId -> {
+                Payment fresh = repo.findPayment(payment.paymentId()).orElse(null);
+                if (fresh == null || fresh.status() != PayStatus.PENDING) {
+                    return Resolution.FAILED;
+                }
+                repo.updatePayment(fresh.paymentId(), PayStatus.PAID, true, paidAt);
+                failSubscription(fresh, keepKey);
+                return Resolution.PAID_NOT_APPLIED;
+            });
+            return resolution == null ? Resolution.UNKNOWN : resolution;
         });
-        return resolution == null ? Resolution.UNKNOWN : resolution;
     }
 
     // 실패(또는 결과 모름 결제의 취소)를 반영한다. 프로를 준 적이 없는 결제라 실패와 같다.
@@ -286,7 +284,7 @@ class PaymentResolver {
                     }
                 }
                 case FAILED -> {
-                    // 실패로 닫은 뒤 늦게 결제됐다가 취소됐다. 취소됨으로 바꿔 두면 늦게 도는 lateRecheck가 '취소 필요'로 표시하지 않는다.
+                    // 실패로 닫은 뒤 늦게 결제됐다가 취소됐다. 취소됨으로 바꿔 두면 늦게 도는 recheck가 '취소 필요'로 표시하지 않는다.
                     repo.updatePayment(fresh.paymentId(), PayStatus.CANCELLED, false, null);
                 }
                 case CANCELLED -> {

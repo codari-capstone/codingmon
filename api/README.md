@@ -25,7 +25,7 @@ DB_URL=... DB_USERNAME=... DB_PASSWORD=... JUDGE0_URL=http://127.0.0.1:2358 JUDG
 
 프로 구독 결제(#332)는 포트원 V2 테스트 채널(토스페이먼츠)로 한다. 실제로 돈이 나가지 않는다. `PORTONE_STORE_ID`·`PORTONE_API_SECRET`·`PORTONE_WEBHOOK_SECRET`을 주면 켜지고(`.env.example`), 비워 두면 구독 시작이 503 `PAYMENT_PROVIDER_UNAVAILABLE`이고 스케줄러가 갱신 결제를 하지 않는다. 채널 키는 웹 설정이다.
 
-`SubscriptionService`가 구독 시작(빌링키 확인 → 사용자 행을 잠그고 결제 기록 `PENDING` 저장 → 결제 → 반영)을, `PaymentResolver`가 결제 결과 반영을 맡는다. 결제 시작·웹훅(`PortOneWebhookController`)·스케줄러가 같은 반영 코드를 쓴다. `SubscriptionScheduler`는 1분마다 기간이 끝난 구독의 갱신 결제, 결과 모름 결제 다시 조회, 끝난 해지 예정 정리, 빌링키 지우기를 한다. 결제 주기는 한 달(연간 1년)로 고정이라 갱신은 시연에서 기다릴 수 없다. 확인하려면 `subscriptions.current_period_end`를 지난 시각으로 바꾸거나 임시 테스트를 쓴다. 웹훅 주소는 포트원 콘솔에 배포 서버 하나만 둔다.
+`SubscriptionService`가 구독 시작(빌링키 확인 → 사용자 행을 잠그고 결제 기록 `PENDING` 저장 → 결제 → 반영)을, `PaymentResolver`가 결제 결과 반영을 맡는다. 결제 시작·웹훅(`PortOneWebhookController`)·스케줄러가 같은 반영 코드를 쓴다. `SubscriptionScheduler`는 10분마다 기간이 끝난 구독의 갱신 결제, 결과 모름 결제 다시 조회, 끝난 해지 예정 정리, 빌링키 지우기를 한다. 결제 주기는 한 달(연간 1년)로 고정이라 갱신은 시연에서 기다릴 수 없다. 확인하려면 `subscriptions.current_period_end`를 지난 시각으로 바꾸거나 임시 테스트를 쓴다. 웹훅 주소는 포트원 콘솔에 배포 서버 하나만 둔다.
 
 ## AI (LLM)
 
