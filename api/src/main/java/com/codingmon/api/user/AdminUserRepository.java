@@ -47,7 +47,7 @@ class AdminUserRepository {
     // 탭 개수는 검색어만 반영하고 탭(status)은 반영하지 않는다. 어느 탭을 봐도 세 개수가 같게 하려는 것이다.
     // 개수와 목록이 같은 시점을 보게 묶는다.
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    UserPage list(Status status, String keyword, int page, int size) {
+    UserPage list(Status status, String keyword, boolean paymentNeedsCancel, int page, int size) {
         Map<String, Object> params = new HashMap<>();
         String search = "";
         if (keyword != null) {
@@ -58,6 +58,10 @@ class AdminUserRepository {
             if (keyword.matches("\\d{1,18}")) {
                 params.put("id", Long.parseLong(keyword));
             }
+        }
+        if (paymentNeedsCancel) {
+            // 대시보드(ADM-12) 카드로 들어온 목록. 취소·확인이 필요한 결제가 있는 회원만. 탭 개수에도 반영한다.
+            search += " and exists (select 1 from payments p where p.user_id = users.id and p.needs_cancel)";
         }
         Counts counts = jdbc.sql("select count(*) as all_count, count(*) filter (where suspended_at is null) as active,"
                 + " count(*) filter (where suspended_at is not null) as suspended from users where true" + search)

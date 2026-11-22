@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.codingmon.api.subscription.Subscriptions;
 import com.codingmon.api.user.Role;
 import com.codingmon.api.user.User;
 import com.codingmon.api.user.UserRepository;
@@ -32,10 +33,11 @@ class MyAccountService {
     private final AuthRateLimiter limiter;
     private final PasswordEncoder passwordEncoder;
     private final TransactionTemplate transactions;
+    private final Subscriptions subscriptions;
 
     MyAccountService(UserRepository users, OAuthAccountRepository oauthAccounts, RefreshTokenRepository refreshTokens,
             EmailCodeRepository emailCodes, AuthRateLimiter limiter, PasswordEncoder passwordEncoder,
-            TransactionTemplate transactions) {
+            TransactionTemplate transactions, Subscriptions subscriptions) {
         this.users = users;
         this.oauthAccounts = oauthAccounts;
         this.refreshTokens = refreshTokens;
@@ -43,6 +45,7 @@ class MyAccountService {
         this.limiter = limiter;
         this.passwordEncoder = passwordEncoder;
         this.transactions = transactions;
+        this.subscriptions = subscriptions;
     }
 
     // 닉네임은 바뀔 수 있어 토큰이 아니라 DB에서 읽는다. 토큰 검증(token_version 포함)은 SecurityConfig가 이미 했다.
@@ -126,6 +129,8 @@ class MyAccountService {
             emailCodes.deleteByEmail(user.getEmail());
         }
         users.deleteSubmissions(user.getId());
+        // 이 고객의 빌링키를 모두 지울 목록에 넣는다. 구독·결제 기록은 회원 행과 함께 지워진다(#332).
+        subscriptions.onWithdraw(user.getId());
     }
 
     // ab***@gmail.com. 앞부분이 3자 미만이면 첫 글자만 보여 준다.
