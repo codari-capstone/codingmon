@@ -1,4 +1,4 @@
-import { QueryClientProvider } from '@tanstack/react-query'
+import { onlineManager, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -47,7 +47,7 @@ function renderPage(subscription: Subscription | (() => Subscription), state?: u
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
-  return router
+  return { router, client }
 }
 
 const plan = () => screen.findByRole('region', { name: '지금 플랜' })
@@ -100,7 +100,7 @@ describe('MySubscriptionPage 구독 (MY-06)', () => {
 
   // 기록에 남기면 새로 고침·뒤로 가기 때마다 다시 뜬다(#356 리뷰)
   it('결제 화면이 넘긴 안내를 보이고 기록에서는 지운다', async () => {
-    const router = renderPage(PRO, { notice: '이미 프로 구독 중이에요' })
+    const { router } = renderPage(PRO, { notice: '이미 프로 구독 중이에요' })
     expect(await screen.findByText('이미 프로 구독 중이에요')).toBeInTheDocument()
     await waitFor(() => expect(router.state.location.state).toBeNull())
     expect(screen.getByText('이미 프로 구독 중이에요')).toBeInTheDocument()
@@ -231,6 +231,139 @@ describe('MySubscriptionPage 구독 관리 (MY-06)', () => {
     expect(await plan()).toHaveTextContent('다음 결제부터 연간')
     expect(screen.getByRole('status')).toHaveTextContent('다음 결제부터 연간으로 바꿨어요.')
     expect(sent).toEqual([{ path: 'cycle', body: { cycle: 'YEARLY', agreed: true } }])
+    // 연 버튼은 사라졌다. 포커스가 body가 아니라 플랜 이름으로 간다(#357 리뷰)
+    await waitFor(() => expect(screen.getByRole('heading', { name: '프로 월간' })).toHaveFocus())
+  })
+
+  // 오프라인이면 기본 설정은 요청을 멈춘 채 처리 중으로 남겨 창을 닫을 수 없다(#357 리뷰)
+  it('오프라인으로 보여도 요청을 멈추지 않는다', async () => {
+    const user = userEvent.setup()
+    answerActions(() => HttpResponse.json({ ...PRO, nextCycle: 'YEARLY' }))
+    renderPage(PRO)
+    await user.click(within(await plan()).getByRole('button', { name: '연간으로 바꾸기' }))
+    await user.click(screen.getByRole('checkbox', { name: /바뀐 금액의 자동결제에 동의/ }))
+    onlineManager.setOnline(false)
+    try {
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', { name: '연간으로 바꾸기' }),
+      )
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    } finally {
+      onlineManager.setOnline(true)
+    }
+  })
+
+  // 창을 연 채 다른 탭의 변경·갱신이 들어오면 본 조건이 바뀐다. 옛 동의로 보내지 않는다(#357 리뷰)
+  it('창을 연 채 조건이 바뀌면 동의를 다시 받는다', async () => {
+    const user = userEvent.setup()
+    let current: Subscription = PRO
+    const { client } = renderPage(() => current)
+    await user.click(within(await plan()).getByRole('button', { name: '연간으로 바꾸기' }))
+    const agree = screen.getByRole('checkbox', { name: /바뀐 금액의 자동결제에 동의/ })
+    await user.click(agree)
+    expect(agree).toBeChecked()
+
+    current = { ...PRO, currentPeriodEnd: '2027-01-22T03:00:00Z' }
+    await client.invalidateQueries({ queryKey: ['subscription'] })
+
+    expect(await screen.findByText(/1월 22일부터 연간 99,000원/)).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /바뀐 금액의 자동결제에 동의/ })).not.toBeChecked()
+  })
+
+  // 다른 탭에서 해지했으면 창은 더 쓸 수 없다. 말없이 사라지지 않게 카드 아래에 알린다(#357 리뷰)
+  it('주기 바꾸기에서 409면 창을 닫고 카드 아래에 알리며, 해지 취소가 창을 다시 열지 않는다', async () => {
+    const user = userEvent.setup()
+    let current: Subscription = PRO
+    answerActions((path) =>
+      path === 'resume'
+        ? HttpResponse.json(PRO)
+        : HttpResponse.json(
+            {
+              status: 409,
+              code: 'SUBSCRIPTION_NOT_ACTIVE',
+              detail: '진행 중인 프로 구독이 없어요.',
+            },
+            { status: 409 },
+          ),
+    )
+    renderPage(() => current)
+    await user.click(within(await plan()).getByRole('button', { name: '연간으로 바꾸기' }))
+    await user.click(screen.getByRole('checkbox', { name: /바뀐 금액의 자동결제에 동의/ }))
+    current = { ...PRO, status: 'CANCEL_SCHEDULED' }
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: '연간으로 바꾸기' }),
+    )
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('alert')).toHaveTextContent('진행 중인 프로 구독이 없어요.')
+    current = PRO
+    await user.click(await screen.findByRole('button', { name: '해지 취소' }))
+    expect(await plan()).toHaveTextContent('진행 중')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  // 새로 받은 구독이 아직 진행 중으로 보여도 창 안에는 409를 띄우지 않으니, 창을 닫아야 오류가 보인다
+  it('주기 바꾸기 409 뒤 구독이 그대로여도 창을 닫고 알린다', async () => {
+    const user = userEvent.setup()
+    answerActions(() =>
+      HttpResponse.json(
+        { status: 409, code: 'SUBSCRIPTION_NOT_ACTIVE', detail: '진행 중인 프로 구독이 없어요.' },
+        { status: 409 },
+      ),
+    )
+    renderPage(PRO)
+    await user.click(within(await plan()).getByRole('button', { name: '연간으로 바꾸기' }))
+    await user.click(screen.getByRole('checkbox', { name: /바뀐 금액의 자동결제에 동의/ }))
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: '연간으로 바꾸기' }),
+    )
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('alert')).toHaveTextContent('진행 중인 프로 구독이 없어요.')
+  })
+
+  it('창을 연 채 해지 예정이 됐다가 돌아와도 창이 저절로 열리지 않는다', async () => {
+    const user = userEvent.setup()
+    let current: Subscription = PRO
+    const { client } = renderPage(() => current)
+    await user.click(within(await plan()).getByRole('button', { name: '연간으로 바꾸기' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    current = { ...PRO, status: 'CANCEL_SCHEDULED' }
+    await client.invalidateQueries({ queryKey: ['subscription'] })
+    expect(await screen.findByRole('button', { name: '해지 취소' })).toBeInTheDocument()
+    current = PRO
+    await client.invalidateQueries({ queryKey: ['subscription'] })
+
+    expect(await within(await plan()).findByRole('button', { name: '해지' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  // 갱신으로 바꾼 주기가 이미 적용됐으면 바꾸기 취소는 400이다. 새로 받지 않으면 같은 오류만 되풀이한다(#357 리뷰)
+  it('바꾸기 취소가 400이면 알리고 구독을 새로 받는다', async () => {
+    const user = userEvent.setup()
+    let current: Subscription = { ...PRO, nextCycle: 'YEARLY' }
+    answerActions(() =>
+      HttpResponse.json(
+        { status: 400, code: 'AGREEMENT_REQUIRED', detail: '동의가 필요해요.' },
+        { status: 400 },
+      ),
+    )
+    renderPage(() => current)
+    const undo = await screen.findByRole('button', { name: '바꾸기 취소' })
+    current = { ...PRO, cycle: 'YEARLY' }
+    await user.click(undo)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('동의가 필요해요.')
+    expect(await plan()).toHaveTextContent('프로 연간')
+    expect(screen.queryByRole('button', { name: '바꾸기 취소' })).not.toBeInTheDocument()
+  })
+
+  // 숨겼다 보이면 영역이 새로 생긴 것으로 보여 일부 낭독기가 읽지 않는다(#357 리뷰)
+  it('결과 알림 자리는 처리 전에도 접근성 트리에 있다', async () => {
+    renderPage(PRO)
+    await plan()
+    expect(screen.getByRole('status')).toBeEmptyDOMElement()
   })
 
   it('연간 구독은 월간으로 바꾸기다', async () => {

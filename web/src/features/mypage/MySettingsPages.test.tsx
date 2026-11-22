@@ -254,6 +254,18 @@ describe('회원 탈퇴 /me/withdraw (MY-04)', () => {
     expect(refund).toHaveAttribute('target', '_blank')
   })
 
+  // 모른다고 빼면 프로 회원이 경고 없이 탈퇴할 수 있다(#357 리뷰)
+  it('구독을 불러오지 못하면 프로 구독 중이라면으로 알린다', async () => {
+    server.use(
+      http.get('*/api/users/me/subscription', () =>
+        HttpResponse.json({ status: 500, title: 'Internal Server Error' }, { status: 500 }),
+      ),
+    )
+    renderAt('/me/withdraw')
+    expect(await screen.findByText('프로 구독 중이라면 구독도 바로 끝나요')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /환불 정책/ })).toHaveAttribute('href', '/refund')
+  })
+
   it('무료면 구독 안내를 보이지 않는다', async () => {
     let answered = false
     server.use(

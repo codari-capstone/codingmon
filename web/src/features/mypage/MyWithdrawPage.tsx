@@ -51,13 +51,17 @@ function Farewell() {
 
 /**
  * 프로 구독 중(진행 중·해지 예정)이면 탈퇴로 구독도 바로 끝난다고 알린다 (MY-04).
- * 구독을 불러오지 못하면 알리지 않는다 — 세션 만료는 Farewell이 처리하고, 탈퇴를 막을 일은 아니다.
+ * 구독을 불러오지 못하면 프로인지 모르니 '프로 구독 중이라면'으로 알린다 — 모른다고 빼면 프로 회원이
+ * 경고 없이 탈퇴할 수 있다(#357 리뷰). 세션 만료는 Farewell이 처리한다.
  */
 function ProNotice() {
-  const { data } = useQuery(subscriptionQuery())
-  if (data?.plan !== 'PRO') return null
+  const { data, error } = useQuery(subscriptionQuery())
+  if (!error && data?.plan !== 'PRO') return null
   return (
-    <Alert tone="warning" title="프로 구독도 바로 끝나요">
+    <Alert
+      tone="warning"
+      title={error ? '프로 구독 중이라면 구독도 바로 끝나요' : '프로 구독도 바로 끝나요'}
+    >
       남은 기간은 돌려받을 수 없어요. 환불받을 수 있는 경우라면 탈퇴하기 전에 요청하세요.{' '}
       <a
         href="/refund"

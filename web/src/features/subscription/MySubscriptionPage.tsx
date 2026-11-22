@@ -166,7 +166,8 @@ export function Component() {
             <span className="bg-accent text-primary-text inline-flex size-12 shrink-0 items-center justify-center rounded-xl">
               <Icon name={pro ? PRO_PLAN.icon : 'code'} size={22} />
             </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
+            {/* 설명 칸이 200px보다 좁아지면 버튼이 다음 줄로 내려간다. 없으면 좁은 화면에서 글자 단위로 줄이 바뀐다(#357 리뷰) */}
+            <div className="flex min-w-0 flex-1 basis-[200px] flex-col gap-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h2
                   id={PLAN_TITLE_ID}
@@ -203,8 +204,8 @@ export function Component() {
               </div>
             </dl>
           ) : null}
+          <ActionResult act={act} />
         </section>
-        <ActionResult act={act} />
         <section
           aria-labelledby="pro-features"
           className="bg-card rounded-[20px] border p-6 md:p-8"

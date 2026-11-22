@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 
 import type { Subscription } from '@/api/types'
-import { problemCode } from '@/features/auth/problemCode'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { changeSubscription, SUBSCRIPTION_KEY, type SubscriptionAction } from './subscriptionQuery'
 
@@ -21,12 +20,13 @@ export function useSubscriptionAction(): ActionMutation {
       queryClient.setQueryData(SUBSCRIPTION_KEY, next)
       document.getElementById(PLAN_TITLE_ID)?.focus()
     },
+    // 오프라인이면 기본값('online')은 요청을 멈춘 채 처리 중으로 남겨 창을 닫을 수 없다. 바로 실패시킨다(#357 리뷰)
+    networkMode: 'always',
     onError: (error) => {
       forgetSessionIfUnauthorized(queryClient, error)
-      // 다른 탭에서 해지했거나 기간이 끝났다. 화면이 본 상태가 낡았으니 새로 받는다
-      if (problemCode(error) === 'SUBSCRIPTION_NOT_ACTIVE') {
-        void queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEY })
-      }
+      // 409(다른 탭에서 해지·기간 끝남)든 400(갱신으로 주기가 이미 바뀜)이든 화면이 본 상태가 낡았을 수 있다.
+      // 새로 받지 않으면 같은 버튼이 같은 오류를 되풀이한다(#357 리뷰)
+      void queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_KEY })
     },
   })
 }
