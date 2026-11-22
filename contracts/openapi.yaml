@@ -11,7 +11,7 @@ info:
 
     권한 (COM-05): 비로그인은 `GET /api/problems`(목록), `GET /api/concept-tags`만 쓸 수 있다.
     문제 상세(지문)는 로그인해야 본다.
-    `/api/admin/**`는 ADMIN만 쓸 수 있다. 나머지는 로그인이 필요하다.
+    `/api/admin/**`는 ADMIN만 쓸 수 있다. `POST /api/portone/webhook`은 포트원이 부르므로 로그인 없이 서명으로 확인한다. 나머지는 로그인이 필요하다.
 
     오류 응답은 RFC 9457 `application/problem+json`이다.
 
@@ -465,6 +465,15 @@ paths:
         응답에서 refresh 쿠키를 지운다. 발급된 access token도 사용자가 없어져 무효가 된다.
         확인 문구(`닉네임/탈퇴하겠습니다`)는 화면이 검사한다. 실수를 막는 장치라 서버로 보내지 않는다.
         관리자는 탈퇴할 수 없다. 403 `ADMIN_CANNOT_WITHDRAW`.
+        프로 구독 중(`ACTIVE`·`CANCEL_SCHEDULED`)이면 구독을 바로 끝낸다. 남은 기간은 환불하지 않는다(MY-04).
+        이 사용자의 빌링키를 모두 지운다. 서버가 모르는 빌링키(카드 등록 직후 창을 닫았거나 1단계 조회가 실패한 요청의 키)도 있으므로, 이 사용자의 고객 ID를 '지울 빌링키' 목록에 넣는다.
+        고객 ID를 만든 적이 없으면(구독 화면을 연 적 없음) 카드를 등록한 적도 없으므로 넣지 않는다. 고객 ID 없이는 포트원을 조회하거나 지우지 않는다(같은 상점의 다른 회원·환경의 빌링키가 지워질 수 있다).
+        스케줄러가 포트원에서 그 고객 ID의 빌링키 목록을 조회해 모두 지운다(빌링키 지우기 규칙은 `POST /api/users/me/subscription`). 탈퇴는 삭제를 기다리지 않는다.
+        구독과 결제 기록도 함께 지운다. 시연용 테스트 결제라 실제 거래 기록이 아니어서다(개인정보 처리방침 보유 기간 표).
+        실제 결제를 시작하면 결제 기록은 지우지 않고 사용자 연결만 끊어 5년 보관하도록 바꾼다(전자상거래법).
+        결과를 모르는 결제가 있어도 기다리지 않고 탈퇴한다. 그 결제가 나중에 성공해도 환불하지 않고,
+        그 결제의 웹훅은 기록에 없는 결제 ID라 무시한다. 시연용 테스트 결제라 실제로 돈이 나가지 않으므로 이 경우를 따로 처리하지 않는다.
+        탈퇴 뒤에는 스케줄러가 갱신 결제를 새로 시작하지 않는다. 이미 포트원에 보낸 결제는 막지 못한다.
       tags: [users]
       responses:
         '204':
@@ -740,6 +749,217 @@ paths:
                 $ref: '#/components/schemas/AiQuota'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /api/users/me/subscription:
+    get:
+      operationId: getMySubscription
+      summary: 내 구독 (MY-06, PAY-01, PRICE-03)
+      description: |
+        구독한 적이 없어도 404가 아니라 `plan: FREE`, `status: NONE`으로 답한다. 끝난 구독(`Subscription.status`의 `CANCEL_SCHEDULED` 설명)도 `NONE`으로 답한다.
+        결제 화면(PAY-01)은 `plan`이 `PRO`이거나 `paymentPending`이면 마이페이지 구독(MY-06)으로 보낸다. 요금제 화면(PRICE-03)도 같은 기준으로 [프로 시작하기]와 [내 구독 보기]를 고른다.
+      tags: [subscription]
+      responses:
+        '200':
+          description: 내 구독
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: startSubscription
+      summary: 프로 구독 시작 (PAY-01, PAY-02)
+      description: |
+        결제 화면이 `PortOne.requestIssueBillingKey()`로 받은 빌링키와 결제 주기를 보낸다. 카드 등록 때 포트원에 구독 조회 응답의 `customerId`(`customer.customerId`)를 넘긴다.
+        시연용 테스트 결제다(토스페이먼츠 테스트 채널). 실제로 돈이 나가지 않는다.
+        결제 화면의 동의 체크 2개(약관·환불 정책, 정기 자동결제)를 모두 체크해야 보낼 수 있다(PAY-01). `agreed`가 `true`가 아니면 400 `AGREEMENT_REQUIRED`(확인은 1단계 뒤에 한다).
+        동의 시각은 따로 저장하지 않는다. `agreed`가 없으면 결제하지 않으므로, 결제 기록이 있다는 것이 동의했다는 기록이다.
+        서버는 다음 순서로 처리한다. 포트원 호출(1·3·4단계)은 DB 잠금 밖에서 하고, DB를 보고 바꾸는 일(2단계, 3·5단계의 결과 반영)은 짧은 트랜잭션에서 사용자 행(`users`)을 잠그고 한다.
+        첫 결제에는 구독 행이 아직 없으므로 늘 있는 사용자 행을 잠근다. 결제 시작·결제 결과 반영·웹훅·해지·해지 취소·주기 바꾸기·스케줄러·탈퇴가 모두 같은 행을 잠가 차례대로 처리된다.
+        1. 포트원에서 빌링키를 조회해, 없거나 지워졌거나 고객 ID가 이 사용자가 아니거나 '지울 빌링키' 목록에 들어 있으면 400 `BILLING_KEY_INVALID`. 조회가 실패하면(포트원 응답 없음) 503 `PAYMENT_PROVIDER_UNAVAILABLE`(결제 전이라 이번 요청은 결제되지 않았다. 다시 시도하면 된다).
+           이 사용자의 빌링키로 확인된 뒤 `agreed`가 `true`가 아니면 그 빌링키를 지우고 400 `AGREEMENT_REQUIRED`. 단, 구독이나 남은 결제가 쓰는 빌링키와 같으면 지우지 않는다.
+        2. 사용자 행을 잠근다. 이미 프로(`ACTIVE`·`CANCEL_SCHEDULED`. 끝난 구독은 제외)면 409 `SUBSCRIPTION_ALREADY_ACTIVE`. 결과를 모르는 결제(`PENDING`)가 남아 있으면 3단계로 간다.
+           둘 다 아니면 금액을 `cycle`로 서버가 정하고(월간 9,900원, 연간 99,000원), 결제 기록을 `PENDING`으로 저장해 커밋한 뒤 4단계로 간다.
+           결제 ID는 결제 시도마다 무작위로 새로 만들어 결제 기록에 함께 저장한다(`pay-{UUID}`). 로컬·개발·배포가 포트원 테스트 상점 하나를 같이 쓰고 DB를 초기화해도 겹치지 않는다. 다른 환경의 웹훅은 기록에 없는 결제 ID라 무시한다.
+        3. 남은 결제를 포트원에 조회한다(잠금 밖). 결과를 반영할 때는 사용자 행을 잠그고 그 결제가 아직 `PENDING`인지 다시 확인한다. 이미 다른 요청이나 웹훅이 반영했으면 그 결과를 그대로 쓴다.
+           결제됐으면 새로 결제하지 않고 그 결제로 구독을 시작해 201을 준다(반영은 5단계와 같다).
+           이때 결제 주기·금액·빌링키는 이번 요청이 아니라 그 결제 기록을 따른다(실제로 결제된 것).
+           단, 남은 결제가 이미 끝난(`NONE`) 구독의 갱신 결제면 구독을 시작하지 않는다. 결제 기록은 결제됨으로 두고 '취소 필요'로 표시한 뒤(아래 취소 필요 표시) 2단계로 돌아가 새로 결제한다.
+           실패였거나 취소됐으면(운영자가 콘솔에서 취소) 그 결제를 실패로 반영하고(취소면 결제 기록은 취소로 둔다) 그 빌링키를 지운 뒤(이번 요청의 빌링키와 같으면 지우지 않는다) 2단계로 돌아가 이번 요청(`billingKey`·`cycle`)으로 새로 결제한다.
+           포트원에 그 결제 ID가 없으면(결제 요청이 아직 포트원에 닿지 않음) 실패로 보지 않고, 그 결제 기록의 금액·빌링키로 같은 결제 ID를 다시 보낸다. 포트원은 같은 결제 ID로 두 번 결제하지 않으므로, 멈췄던 요청이 나중에 같은 ID로 보내도 두 번 결제되지 않는다. 그 결과(결제됨·실패)를 위와 같이 반영한다.
+           단, 이미 끝난(`NONE`) 구독의 갱신 결제면 다시 보내지 않고 실패로 닫는다(끝난 구독에 결제를 새로 만들지 않는다). 멈췄던 요청이 나중에 결제되면 '취소 필요'로 표시된다.
+           같은 결제 ID로 보낸 모든 결제(4단계에서 처음 보낸 결제, 다시 보낸 결제, 갱신 결제)에 포트원이 '이미 결제됐거나 진행 중인 결제 ID'라고 답하면 실패로 보지 않는다(탭 두 개에서 다른 요청이 같은 ID를 먼저 보낸 경우). 같은 결제 ID로 다시 조회해 그 결과를 따르고, 실패가 확인되기 전에는 새 결제 ID로 결제하지 않는다.
+           다시 보낸 결제나 조회가 응답하지 않으면 아직 모르는 것으로 보고 503 `PAYMENT_UNAVAILABLE`. 조회 결과가 아직 처리 중(결제됨·실패·취소가 아님)이어도 같다. 새 결제 ID로 결제하지 않고, 스케줄러가 다음 실행 때 다시 조회한다.
+        4. 빌링키로 바로 결제한다.
+        5. 결과가 오면 사용자 행을 잠그고 결제 기록을 다시 확인한 뒤 반영한다. 웹훅이 먼저 반영했으면 그 결과를 그대로 쓴다.
+           성공하면 구독을 시작한다. 기간은 결제 시각부터 한 달(연간은 1년)이고, 끝나는 시각에 서버 스케줄러가 갱신 결제를 한다.
+           기간 계산: 구독을 시작한 결제 시각을 기준 시각으로 저장한다. 기간이 끝나는 시각은 기준 시각에 지금까지 확정한 개월 수를 더한 시각이다. 개월 수는 구독에 저장하고 결제를 성공으로 확정할 때마다 더한다(월간 1, 연간 12). 지난 결제가 나중에 취소돼도 줄이지 않는다. 다시 구독하면(`NONE`·`PAYMENT_FAILED`에서 구독 시작 결제가 확정되면) 기준 시각은 그 결제 시각, 개월 수는 그 결제의 개월 수로 새로 시작한다.
+           날짜는 한국 시간(Asia/Seoul)으로 센다. 그 달에 같은 날짜가 없으면 그 달 말일로 한다(1월 31일 시작이면 2월 28일, 3월 31일, 4월 30일). 결제 확정이 늦어져도 끝나는 시각은 이 계산을 따른다.
+        카드 결제가 실패하면 402 `PAYMENT_FAILED`이고 `detail`에 포트원이 준 실패 이유를 적는다. 구독은 만들지 않고 그 빌링키는 포트원에서 지운다.
+        포트원이 응답하지 않으면 결제 ID로 다시 조회해 그 결과대로 처리한다. 조회도 실패하면 결제 기록을 `PENDING`으로 두고 503 `PAYMENT_UNAVAILABLE`이다.
+        그 결제는 웹훅이 오거나, 사용자가 다시 결제하거나(3단계), 서버 스케줄러가 다시 조회할 때 확정한다. 그래서 다시 시도해도 두 번 결제되지 않는다.
+        스케줄러는 몇 분마다 결과를 모르는 결제를 첫 결제든 갱신이든 모두 결제 ID로 다시 조회해 3단계와 같은 방법으로 확정한다(첫 결제가 결제됐으면 구독을 시작한다).
+        결과 모름이 1시간 넘게 이어지면(포트원이 계속 처리 중이거나 응답하지 않음) 오류 로그를 남기고 `needsCancel`을 표시한다. 관리자 화면은 결과 모름(`PENDING`)인 결제의 이 표시를 '확인 필요'로 보여 준다. 운영자가 콘솔에서 상태를 확인해 취소하면 취소 웹훅으로 실패처럼 닫힌다.
+        이 표시는 그 결제의 결과가 확정되면(결제됨으로 구독에 반영되거나 실패·취소로 닫힘) 함께 푼다. 그래서 늦게 성공한 정상 결제가 '취소 필요'로 남지 않는다.
+        이번 요청의 빌링키를 결제에 쓰지 않고 끝나면(2단계 409, 3단계 201·503) 포트원에서 지운다. 단, 구독이나 남은 결제가 쓰는 빌링키와 같으면 지우지 않는다(같은 요청을 다시 보낸 경우).
+        1단계에서 이 사용자의 빌링키인지 확인했으므로 남의 빌링키는 지우지 않는다.
+        빌링키 지우기: 이 명세에서 '빌링키를 지운다'는 모두 이 규칙을 따른다. 그 자리에서 포트원을 부르지 않고 '지울 빌링키' 목록에 넣고, 요청과 상태 변경은 삭제를 기다리지 않는다.
+        서버 스케줄러가 몇 분마다 목록의 빌링키를 포트원에서 지우고, 성공하면 목록에서 뺀다. 포트원이 이미 지워졌거나 없는 빌링키라고 답해도 성공으로 본다(삭제 응답을 잃었거나 같은 키가 두 번 들어간 경우). 포트원 응답 없음 같은 일시적인 오류만 다음 실행 때 다시 지운다.
+        탈퇴 때는 빌링키 대신 고객 ID와 그 고객 ID를 만든 시각을 넣고, 스케줄러가 그 고객 ID의 빌링키를 포트원에서 조회해 모두 지운다.
+        조회 기간은 고객 ID를 만든 시각부터 지금까지다(그보다 먼저 생긴 빌링키는 없다). 모든 페이지를 읽은 뒤에 끝내고, 중간에 실패하면 다음 실행 때 처음부터 다시 한다.
+        목록은 사용자와 연결하지 않으므로 탈퇴해도 남는다. 그래서 탈퇴나 포트원 장애가 있어도 빌링키는 결국 지워진다(개인정보 처리방침 '탈퇴하면 결제대행사에서 바로 삭제').
+        결제 확정 전 확인: 포트원 결과가 '결제됨'이어도 금액·통화(KRW)·빌링키가 결제 기록과 모두 같을 때만 성공으로 확정한다. 포트원 조회로 알게 된 결과(3단계, 응답이 없어 다시 조회한 결과, 스케줄러)와 웹훅에 적용한다. 서버가 보낸 결제 요청의 성공 응답(4단계, 갱신 결제 응답)은 금액·빌링키를 서버가 정해 보낸 것이라 대조하지 않는다.
+        하나라도 다르면 결제 실패와 똑같이 처리하고 돈이 나갔으므로 '취소 필요'로 표시한다. 3단계면 3단계의 실패 처리대로 그 결제를 닫고 2단계로 돌아가 이번 요청으로 새로 결제한다.
+        4단계 응답이 없어 다시 조회한 결과면 402 `PAYMENT_FAILED`, 갱신 결제면 `PAYMENT_FAILED` 상태(그 사이 해지했으면 `NONE`)다.
+        취소 필요 표시: 돈은 나갔는데 구독에 반영하지 않는 결제(대조가 다른 결제, 끝난 구독의 갱신 결제, 실패·취소로 반영한 뒤 결제됨으로 나온 결제)는 결제 기록에 `needsCancel`을 표시하고 오류 로그를 남긴다.
+        표시하기 전에 포트원에 그 결제를 한 번 더 조회해 지금도 결제됨일 때만 표시한다. 잠금을 기다리는 사이 운영자가 취소했을 수 있어서다.
+        이 조회도 잠금 밖에서 하고, 다시 잠가 그 결제가 아직 같은 상태인지 확인한 뒤 표시한다. 조회가 실패하면 표시한다(운영자가 콘솔에서 확인).
+        관리자 회원 상세(ADM-15)와 대시보드(ADM-12)에 보인다. 운영자가 포트원 콘솔에서 취소하면 취소 웹훅으로 결제 기록이 취소가 되고 표시가 풀린다.
+        [결제]를 두 번 눌러도 결제는 한 번만 된다. 두 번째 요청은 2단계에서 첫 요청이 커밋할 때까지 기다린 뒤,
+        첫 결제가 진행 중이면 3단계에서 503 `PAYMENT_UNAVAILABLE`, 끝났으면 2단계에서 409 `SUBSCRIPTION_ALREADY_ACTIVE` 또는 3단계에서 그 결제로 201을 받는다.
+        화면은 결제 중 버튼을 꺼 둔다(PAY-01). 그래서 이 경우는 탭 두 개나 새로고침으로만 생긴다.
+        기간이 끝났거나(`NONE`) 갱신 결제가 실패한(`PAYMENT_FAILED`) 사용자도 이 API로 카드를 다시 등록해 구독한다.
+      tags: [subscription]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [billingKey, cycle]
+              properties:
+                billingKey:
+                  type: string
+                  description: 포트원이 발급한 빌링키
+                cycle:
+                  $ref: '#/components/schemas/BillingCycle'
+                agreed:
+                  type: boolean
+                  description: 이용약관·환불 정책(청약철회 제한 포함)과 정기 자동결제에 모두 동의함. `true`가 아니거나 빠졌으면 400 `AGREEMENT_REQUIRED`(형식 검사가 아니라 1단계 뒤에 확인한다. 그래야 그 빌링키를 지운다)
+      responses:
+        '201':
+          description: 구독 시작. `status`는 `ACTIVE`다
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          description: '오류 `code`: `BILLING_KEY_INVALID`, `AGREEMENT_REQUIRED`(동의하지 않음). `cycle`이 `BillingCycle` 값이 아니면 `code` 없는 400이다'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          description: '오류 `code`: `PAYMENT_FAILED`(카드 결제 실패). `detail`에 실패 이유를 적는다. 화면은 결제 결과 실패(PAY-02)를 띄운다'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: '오류 `code`: `SUBSCRIPTION_ALREADY_ACTIVE`(이미 프로)'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '503':
+          description: '오류 `code`: `PAYMENT_PROVIDER_UNAVAILABLE`(결제 전 1단계에서 포트원이 응답하지 않음. 이번 요청은 결제되지 않음), `PAYMENT_UNAVAILABLE`(결제 결과를 모름)'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /api/users/me/subscription/cancel:
+    post:
+      operationId: cancelSubscription
+      summary: 구독 해지 (MY-06)
+      description: |
+        `ACTIVE`를 `CANCEL_SCHEDULED`로 바꾼다. 결제는 없고 `currentPeriodEnd`까지 프로로 쓴다. 그 시각이 지나면 `NONE`이 된다.
+        결제 주기를 바꿔 두었으면(`nextCycle`) 그것도 취소한다. 해지를 취소해도 되살리지 않는다.
+        이미 `CANCEL_SCHEDULED`면 그대로 200이다. 탭 두 개에서 눌러도 오류가 나지 않는다.
+        `NONE`·`PAYMENT_FAILED`면 409 `SUBSCRIPTION_NOT_ACTIVE`.
+        갱신 결제의 결과를 모르는(`PENDING`) 중에도 해지를 받는다. 그 결제가 확정될 때까지는 `currentPeriodEnd`가 지나도 `NONE`으로 바꾸지 않는다.
+        확정되면 결제됐을 때는 기간을 한 번 늘리고 `CANCEL_SCHEDULED`를 그대로 둔다(늘어난 기간까지 프로). 실패였으면 바로 `NONE`이 된다.
+      tags: [subscription]
+      responses:
+        '200':
+          description: 해지 예정
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/SubscriptionNotActive'
+
+  /api/users/me/subscription/resume:
+    post:
+      operationId: resumeSubscription
+      summary: 구독 해지 취소 (MY-06)
+      description: |
+        `CANCEL_SCHEDULED`를 `ACTIVE`로 되돌린다. 결제는 없고 `currentPeriodEnd`에 갱신 결제를 한다.
+        이미 `ACTIVE`면 그대로 200이다.
+        `NONE`·`PAYMENT_FAILED`면 409 `SUBSCRIPTION_NOT_ACTIVE`. 기간이 끝났으면 다시 결제해야 한다(PAY-01).
+        끝난 구독(`Subscription.status`의 `CANCEL_SCHEDULED` 설명)이면 저장된 상태가 `CANCEL_SCHEDULED`라도 409 `SUBSCRIPTION_NOT_ACTIVE`다.
+        동의(PAY-01) 없이 갱신 결제가 일어나지 않게 하기 위해서다. 결과를 모르는 갱신 결제가 있으면 해지 취소를 받는다(그 결제는 이미 동의한 주기로 요청한 것이다).
+      tags: [subscription]
+      responses:
+        '200':
+          description: 진행 중
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/SubscriptionNotActive'
+
+  /api/users/me/subscription/cycle:
+    put:
+      operationId: changeSubscriptionCycle
+      summary: 결제 주기 바꾸기 (MY-06)
+      description: |
+        다음 갱신 결제부터 쓸 결제 주기를 정한다. 지금 기간과 금액은 그대로이고, 바로 결제하거나 차액을 계산하지 않는다.
+        `cycle`이 지금 주기와 다르면 `nextCycle`에 저장하고, 같으면 바꾸기를 취소한다(`nextCycle` null). 같은 값을 다시 보내도 200이다.
+        비교하는 '지금 주기'는 결과를 모르는 갱신 결제(`PENDING`)가 있으면 그 결제 기록의 주기이고, 없으면 `cycle`이다. 그 결제가 확정되면 `cycle`이 그 주기가 되기 때문이다. 구독 조회 응답의 `cycle`도 같은 기준이라, 화면은 응답의 `cycle`로 버튼을 고르면 된다.
+        바꾸면 자동결제 금액이 달라지므로 확인 팝업의 동의 체크가 필요하다. `agreed`가 `true`가 아니면 400 `AGREEMENT_REQUIRED`. 바꾸기 취소에는 동의가 필요 없다.
+        `ACTIVE`일 때만 된다. `NONE`·`PAYMENT_FAILED`·`CANCEL_SCHEDULED`면 409 `SUBSCRIPTION_NOT_ACTIVE`(해지 예정이면 다음 결제가 없어서다. 해지를 취소한 뒤 바꾼다).
+        갱신 결제의 결과를 모르는(`PENDING`) 중에 바꾸면 그 결제가 아니라 그다음 갱신 결제부터 적용한다.
+      tags: [subscription]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cycle]
+              properties:
+                cycle:
+                  $ref: '#/components/schemas/BillingCycle'
+                agreed:
+                  type: boolean
+                  description: 바뀐 금액의 자동결제에 동의함. 지금 주기와 다른 `cycle`을 보낼 때만 필요하다
+      responses:
+        '200':
+          description: 바뀐 구독. 바꾸면 `nextCycle`이 생기고, 취소하면 null이다
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          description: '오류 `code`: `AGREEMENT_REQUIRED`(동의하지 않음). `cycle`이 `BillingCycle` 값이 아니면 `code` 없는 400이다'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/SubscriptionNotActive'
 
   /api/users/me/problem-history:
     get:
@@ -1489,6 +1709,86 @@ paths:
                   $ref: '#/components/schemas/ConceptTag'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /api/portone/webhook:
+    post:
+      operationId: receivePortoneWebhook
+      summary: 포트원 결제 알림 받기
+      description: |
+        포트원 V2 웹훅(본문 버전 2024-04-25)을 받는다. 서버는 결제를 요청하기 전에 결제 기록을 `PENDING`으로 저장하므로, 웹훅은 기록에 없는 결제로는 구독을 만들지 않고, 기록에 있는 결제를 확정하는 일만 한다(첫 결제가 확정되면 그때 구독을 시작한다).
+        서명은 Standard Webhooks 규격으로 확인한다(헤더 `webhook-id`·`webhook-timestamp`·`webhook-signature`, 웹훅 Secret). 시각이 5분 넘게 차이 나면 거절한다.
+        본문의 상태는 믿지 않는다. `data.paymentId`로 포트원 결제를 조회해 그 결과를 반영한다. 사용자 행을 잠그고 결제 기록을 다시 확인하므로, 결제 요청과 겹치거나 같은 알림이 여러 번 와도 한 번만 반영된다.
+        결제 기록에 없는 결제 ID(탈퇴로 지워진 결제, 다른 환경의 결제 등)는 무시하고 200을 준다. 서명을 확인한 뒤 결제 기록부터 보고, 없으면 포트원을 조회하지 않는다(조회 실패로 500을 줘 포트원이 쓸데없이 다시 보내지 않게).
+        웹훅 주소는 포트원 콘솔에 하나(배포 서버)만 둔다. 같은 테스트 상점을 쓰는 개발·로컬 서버는 웹훅을 받지 못하므로 결제 확정은 다시 조회(3단계, 스케줄러)로만 하고, 콘솔에서 한 취소는 반영되지 않는다.
+        - `Transaction.Paid`: 그 결제가 `PENDING`이면 결제 확정 전 확인(`POST /api/users/me/subscription`)을 거쳐 `PAID`로 바꾼다. 첫 결제면 구독을 시작하고, 갱신 결제면 기간을 한 번 늘린다. 이미 `PAID`면 아무것도 하지 않는다. 이미 실패·취소로 반영한 결제가 결제됨으로 나오면(순서가 꼬여 늦게 결제된 경우) 구독은 건드리지 않고 '취소 필요'로 표시한다(취소 필요 표시는 `POST /api/users/me/subscription`). 스케줄러·3단계의 다시 조회에서도 같다.
+        - `Transaction.Cancelled`·`Transaction.PartialCancelled`: 운영자가 환불 정책(`/refund`)에 따라 포트원 콘솔에서 결제를 전액 또는 일부 취소한 경우다.
+          두 경우 모두 결제 기록을 취소로 바꾼다. 일부 취소 금액은 기록하지 않는다(포트원 콘솔에서 본다). 이미 취소로 반영한 결제면 아무것도 하지 않는다.
+          취소된 결제가 지금 기간의 결제(그 구독의 기간을 시작하거나 늘린 결제 중 마지막 것)일 때만 구독을 바로 끝낸다(`NONE`). '취소 필요' 결제는 기간을 늘린 적이 없으므로 결제된 시각이 늦어도 여기에 들지 않는다.
+          결과를 모르는 갱신 결제가 있어도 기다리지 않고 끝낸다. 그 결제가 나중에 결제됨으로 확인되면 끝난 구독을 되살리지 않고 '취소 필요'로 표시한다.
+          지난 기간이나 예전 구독의 결제면 구독은 그대로 둔다.
+          운영자 절차: 환불(구독 종료)을 처리할 때 그 뒤 갱신 결제가 이미 나갔으면(환불 웹훅이 오기 전에 스케줄러가 결제한 경우), 끝난 구독에 잘못 나간 결제이므로 그 갱신 결제도 콘솔에서 전액 취소한다. 그 결제가 기간을 늘린 마지막 결제라서 위 규칙대로 구독이 끝난다.
+          결과를 모르던(`PENDING`) 결제가 취소됐으면 프로를 준 적이 없으므로 아래 `Transaction.Failed`와 똑같이 처리한다(결제 기록은 취소로 둔다).
+        - `Transaction.Failed`: 그 결제가 `PENDING`일 때만 처리한다. 포트원 조회로 실패가 확인되면 결제 기록을 실패로 바꾸고 그 빌링키를 포트원에서 지운다.
+          첫 결제면 구독을 만들지 않는다. 갱신 결제면 `ACTIVE`는 `PAYMENT_FAILED`, `CANCEL_SCHEDULED`는 `NONE`으로 바꾼다(스케줄러가 실패를 확인했을 때와 같다). 이미 반영한 결제면 아무것도 하지 않는다.
+        - 그 밖의 `type`과 모르는 필드는 무시하고 200을 준다.
+        포트원 결제 조회가 실패하거나(응답 없음) 서버 오류(DB 등)가 나면 500을 준다. 200을 주면 포트원이 다시 보내지 않아 그 알림이 반영되지 않기 때문이다. 포트원이 최대 5번 다시 보낸다.
+        운영자 절차: 서버 장애로 5번 모두 받지 못한 알림은 반영되지 않는다(스케줄러는 `PENDING`만 다시 조회한다). 장애가 끝나면 그동안 놓친 웹훅을 포트원 콘솔에서 다시 보낸다(콘솔의 재전송 기능은 구현할 때 확인).
+      tags: [subscription]
+      security: []
+      parameters:
+        - in: header
+          name: webhook-id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: webhook-timestamp
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: webhook-signature
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, timestamp, data]
+              properties:
+                type:
+                  type: string
+                  description: 예) `Transaction.Paid`, `Transaction.Failed`, `Transaction.Cancelled`
+                timestamp:
+                  type: string
+                  format: date-time
+                data:
+                  type: object
+                  properties:
+                    paymentId:
+                      type: string
+                    storeId:
+                      type: string
+                    transactionId:
+                      type: string
+      responses:
+        '200':
+          description: 처리했거나 무시함
+        '400':
+          description: '오류 `code`: `WEBHOOK_SIGNATURE_INVALID`(서명이 틀리거나 시각이 5분 넘게 차이 남)'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '500':
+          description: 포트원 결제 조회 실패 또는 서버 오류. 포트원이 다시 보낸다
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
 
   /api/admin/problems:
     get:
@@ -2312,6 +2612,11 @@ paths:
             type: string
             enum: [ACTIVE, SUSPENDED]
         - in: query
+          name: paymentNeedsCancel
+          description: '`true`면 취소가 필요한 결제(`needsCancel`)가 있는 회원만. 대시보드(ADM-12)는 `size=1`로 불러 `totalElements`를 회원 수로 쓴다(취소·확인이 필요한 결제가 있는 회원 N명. 1시간 넘은 결과 모름 결제도 들어간다)'
+          schema:
+            type: boolean
+        - in: query
           name: keyword
           description: |
             닉네임·이메일 부분 일치, 대소문자 무시. `%`·`_`도 글자로 찾는다(`GET /api/admin/problems`와 같다).
@@ -2379,7 +2684,7 @@ paths:
       operationId: getAdminUser
       summary: 회원 상세 (ADM-15)
       description: |
-        기본 정보, 정지 상태와 사유, 오늘 AI 사용 횟수를 준다. 제출 목록과 푼 문제는 따로 부른다.
+        기본 정보, 정지 상태와 사유, 오늘 AI 사용 횟수, 구독(요금제·시작·다음 결제일·연간 환불 금액)과 결제 기록을 준다. 제출 목록과 푼 문제는 따로 부른다.
         정지 배너의 "24시간이 지나 강제 탈퇴할 수 있어요"는 화면이 `suspendedAt`으로 계산한다.
         오류 `code`: `USER_NOT_FOUND`(없는 회원).
       tags: [admin]
@@ -2444,6 +2749,8 @@ paths:
         `suspendedAt`을 지금 시각으로 하고 사유를 저장한다. 로그인 중인 기기도 바로 막는다.
         비밀번호 재설정처럼 `token_version`을 올려 발급된 access token을 무효로 하고, refresh token을 모두 폐기한다.
         그래서 다음 요청은 401, 토큰 갱신도 401이 되어 로그인 화면으로 간다. 다시 로그인하면 403 `ACCOUNT_SUSPENDED`다.
+        프로 구독이 `ACTIVE`면 해지(`POST /api/users/me/subscription/cancel`)와 똑같이 `CANCEL_SCHEDULED`로 바꾼다. 정지된 회원은 로그인하지 못해 해지할 수 없으므로 다음 갱신 결제가 나가지 않게 한다. 남은 기간은 환불하지 않는다.
+        정지를 풀어도 구독은 되돌리지 않는다. 회원이 MY-06에서 해지를 취소하거나, 기간이 끝났으면 다시 구독한다.
         이미 정지된 회원이면 아무것도 바꾸지 않고 204다. 정지 시각과 사유도 그대로라 24시간을 다시 세지 않는다.
         오류 `code`: `USER_NOT_FOUND`(없는 회원), `ADMIN_CANNOT_BE_SUSPENDED`(관리자 계정).
       tags: [admin]
@@ -3374,6 +3681,66 @@ components:
           format: date-time
           description: 다음에 횟수가 초기화되는 시각(다음 UTC 자정, 한국 시각 오전 9시)
 
+    BillingCycle:
+      type: string
+      enum: [MONTHLY, YEARLY]
+      description: 결제 주기. 월간 9,900원, 연간 99,000원
+
+    Subscription:
+      type: object
+      required: [plan, status, cycle, nextCycle, currentPeriodEnd, customerId, paymentPending]
+      properties:
+        plan:
+          type: string
+          enum: [FREE, PRO]
+          description: '`ACTIVE`·`CANCEL_SCHEDULED`면 `PRO`, 그 밖에는 `FREE`. AI 한도(#321)는 이 값으로 나눈다'
+        status:
+          type: string
+          enum: [NONE, ACTIVE, CANCEL_SCHEDULED, PAYMENT_FAILED]
+          description: |
+            - `NONE`: 구독한 적 없음, 또는 기간이 끝남
+            - `ACTIVE`: 진행 중. `currentPeriodEnd`가 되면 서버 스케줄러가 갱신 결제를 한다(결제 기록을 `PENDING`으로 먼저 저장).
+              결제 기록을 만들 때 주기를 정한다. `nextCycle`이 있으면 그 주기와 금액으로 기록하고 `nextCycle`을 비운다. 없으면 지금 `cycle`이다.
+              결제를 확정할 때는 `cycle`·`nextCycle`이 아니라 그 결제 기록의 주기로 `cycle`을 바꾸고 기간을 늘린다. 결과를 모르는 동안 주기를 바꾸거나 해지해도 이미 만든 결제 기록은 바뀌지 않고, 새로 바꾼 `nextCycle`은 그다음 결제에 쓴다.
+              결과를 모르면(시간 초과) 확정될 때까지 `ACTIVE` 그대로 둔다. 스케줄러는 새로 결제하지 않고 그 결제를 다시 조회하고, 웹훅이 먼저 오면 그걸로 확정한다.
+              결제됐으면 기간을 한 번 늘리고(기간 계산은 구독 시작 5단계), 실패였거나 취소됐으면 `PAYMENT_FAILED`로 바꾼다(그 사이 해지했으면 `NONE`). 그 사이 환불로 구독이 끝났으면(`NONE`) 어느 결과든 구독은 그대로 둔다(웹훅 `Transaction.Cancelled`).
+              포트원에 그 결제 ID가 없으면 실패로 보지 않고 같은 결제 ID로 다시 보낸다. 그 사이 환불로 구독이 끝났으면 다시 보내지 않고 실패로 닫는다(구독 시작 3단계와 같다)
+            - `CANCEL_SCHEDULED`: 해지 예정. `currentPeriodEnd`까지 프로이고 그 뒤 `NONE`. 결과를 모르는 갱신 결제가 남아 있으면 확정될 때까지 `NONE`으로 바꾸지 않는다.
+              끝난 구독: 저장된 상태가 `CANCEL_SCHEDULED`라도 `currentPeriodEnd`가 지났고 결과를 모르는 갱신 결제가 없으면, 스케줄러가 `NONE`으로 바꾸기 전이라도 `NONE`(`plan: FREE`)으로 본다.
+              구독 조회 응답, 구독 시작, 해지·해지 취소·주기 바꾸기, AI 한도(#321)가 모두 이 판단을 따른다. 스케줄러는 나중에 저장된 상태를 `NONE`으로 정리한다.
+              `ACTIVE`는 기간이 지나도 그대로 프로다(이미 동의한 갱신 결제가 곧 나간다)
+            - `PAYMENT_FAILED`: 갱신 결제가 실패해 무료로 바뀜. 다시 결제하지 않는다. 다시 구독할 때까지 이 상태로 남는다.
+              실패가 확정되면 그 빌링키를 지운다(환불 정책 4절 1항, 개인정보 처리방침 보유 기간 표. 빌링키 지우기 규칙은 `POST /api/users/me/subscription`). 상태는 삭제를 기다리지 않고 바꾼다
+        cycle:
+          oneOf:
+            - $ref: '#/components/schemas/BillingCycle'
+            - type: 'null'
+          description: 지금 결제 주기. 진행 중 구독에 결과를 모르는 갱신 결제(`PENDING`)가 있으면 그 결제 기록의 주기를 보여 준다(확정되면 그 주기가 되고, 주기 바꾸기도 이 값과 비교한다). `PAYMENT_FAILED`면 실패한 갱신 결제의 주기(ADM-14 '프로 월간 [결제 실패]'). `NONE`이면 null
+        nextCycle:
+          oneOf:
+            - $ref: '#/components/schemas/BillingCycle'
+            - type: 'null'
+          description: 다음 갱신 결제부터 쓸 결제 주기(MY-06 '다음 결제부터 연간'). 바꾸지 않았으면 null. `ACTIVE`에서만 값이 있다
+        currentPeriodEnd:
+          type: [string, 'null']
+          format: date-time
+          description: 이번 기간이 끝나는 시각. `ACTIVE`면 다음 결제일, `CANCEL_SCHEDULED`면 프로가 끝나는 날로 보여 준다. `NONE`·`PAYMENT_FAILED`면 null. 진행 중 구독에 결과를 모르는 갱신 결제(`PENDING`)가 있으면 그 결제가 됐을 때 끝나는 시각을 보여 준다(`cycle`과 같은 기준. MY-06 주기 바꾸기 팝업 날짜). 보여 주기만 하고, 저장된 기간은 결제가 확인될 때 늘린다
+        paymentPending:
+          type: boolean
+          description: |
+            확정되면 프로가 되는 결과 모름 결제(`PENDING`)가 있음. 두 가지뿐이다:
+            - 구독 시작 결제(`POST /api/users/me/subscription`): `status`는 아직 `NONE` 또는 `PAYMENT_FAILED`(실패 뒤 다시 결제)다. MY-06은 두 경우 모두 '결제 결과를 확인하고 있어요'를 보여 주고 [프로 시작하기]·[카드 다시 등록]을 숨긴다.
+            - 진행 중(`ACTIVE`·`CANCEL_SCHEDULED`) 구독의 갱신 결제: `cycle`·`currentPeriodEnd`는 그 결제가 됐을 때의 값이다. MY-06 해지 팝업에 결제되지 않으면 바로 무료로 바뀐다고 안내한다.
+            환불로 끝난(`NONE`) 구독의 갱신 결제는 확정돼도 프로를 주지 않으므로 `false`로 센다
+        customerId:
+          type: [string, 'null']
+          description: |
+            카드 등록 때 포트원에 넘기는 고객 ID(`cus-{UUID}`). 사용자마다 처음 필요할 때 무작위로 만들어 저장하고 바꾸지 않는다.
+            내 구독 조회(`GET /api/users/me/subscription`)는 없으면 만들어 늘 값을 준다. 관리자 회원 목록·상세는 만들지 않고, 아직 없으면 null이다.
+            비어 있을 때만 저장한다(`UPDATE … WHERE customer_id IS NULL`). 동시에 처음 만들어 저장하지 못한 요청은 이미 저장된 값을 다시 읽어 돌려준다. 그래서 두 탭이 같은 값을 받는다.
+            DB 사용자 ID를 쓰지 않는 이유: 로컬·개발·배포가 포트원 테스트 상점 하나를 같이 쓰고 DB를 초기화하면 번호가 겹쳐, 빌링키 주인 확인과 탈퇴 때 빌링키 지우기가 다른 사람의 키에 닿는다
+          example: cus-3f9a1c2e-7b4d-4e8a-9c1f-2d5e6a7b8c9d
+
     SubmissionCodeReview:
       type: object
       required: [submissionId, status, failureReason, blocked, summary, complexity, improvements, nextConcepts, quota, createdAt,
@@ -3801,7 +4168,7 @@ components:
 
     AdminUserSummary:
       type: object
-      required: [id, nickname, email, role, createdAt, suspendedAt]
+      required: [id, nickname, email, role, createdAt, suspendedAt, subscription]
       properties:
         id:
           type: integer
@@ -3822,12 +4189,15 @@ components:
           type: [string, 'null']
           format: date-time
           description: 정지한 시각. 정지되지 않았으면 null
+        subscription:
+          $ref: '#/components/schemas/Subscription'
+          description: 이 회원의 구독. `GET /api/users/me/subscription`과 같다. 목록의 요금제·마감일 칸(ADM-14)에 쓴다
 
     AdminUserDetail:
       allOf:
         - $ref: '#/components/schemas/AdminUserSummary'
         - type: object
-          required: [loginMethod, suspensionReason, aiQuota]
+          required: [loginMethod, suspensionReason, aiQuota, subscriptionStartedAt, refundAmount, payments]
           properties:
             loginMethod:
               type: string
@@ -3838,6 +4208,47 @@ components:
             aiQuota:
               $ref: '#/components/schemas/AiQuota'
               description: 이 회원의 오늘 AI 분석·리뷰 사용량. `GET /api/users/me/ai-quota`와 같다. 한국 시각 오전 9시(`resetsAt`)에 다시 채워진다
+            subscriptionStartedAt:
+              type: [string, 'null']
+              format: date-time
+              description: 지금 구독의 기준 시각(구독을 시작한 결제 시각). 구독이 없으면 null
+            refundAmount:
+              type: [integer, 'null']
+              description: |
+                연간 구독(`ACTIVE`·`CANCEL_SCHEDULED`)을 오늘 중도 해지 환불하면 돌려줄 금액(원). 환불 정책 2절 3항: 남은 기간의 금액(결제 금액 × 남은 일수 ÷ 전체 일수)에서 10%를 빼고 10원 미만은 버린다.
+                결제 금액과 기간은 지금 기간의 확정된(`PAID`) 결제와 저장된 기간을 쓴다(응답의 `cycle`·`currentPeriodEnd`가 아니다). 결과를 모르는 갱신 결제가 있거나 저장된 기간이 이미 지났으면(갱신 결제 전) null(확정된 뒤 계산). 남은 일수는 한국 시간 날짜로 센다(오늘을 빼고 기간이 끝나는 날까지).
+                운영자가 포트원 콘솔에서 부분 취소할 금액이다. 월간이거나 구독이 없으면 null(7일 안 청약철회는 운영자가 판단한다)
+            payments:
+              type: array
+              description: 이 회원의 결제 기록. 최신순 전부
+              items:
+                $ref: '#/components/schemas/AdminPayment'
+
+    AdminPayment:
+      type: object
+      required: [paymentId, paidAt, amount, cycle, status, needsCancel]
+      properties:
+        paymentId:
+          type: string
+          description: 포트원 결제 ID(`pay-{UUID}`). 포트원 콘솔에서 찾을 때 쓴다
+        paidAt:
+          type: string
+          format: date-time
+          description: |
+            결제 시각. 결제 기록은 결제를 보내기 전에 저장하므로 처음에는 [결제]를 누른 시각을 넣고, 결제됨으로 확정하면 포트원이 준 실제 결제 시각으로 바꾼다.
+            그래서 결제된 기록은 실제 결제 시각이고(다시 보내서 늦게 결제된 경우도), 실패·결과 모름 기록은 시도한 시각이다. ADM-15의 '결제일'과 7일 청약철회 판단에 쓴다
+        amount:
+          type: integer
+          description: 금액(원)
+        cycle:
+          $ref: '#/components/schemas/BillingCycle'
+        status:
+          type: string
+          enum: [PENDING, PAID, FAILED, CANCELLED]
+          description: '`PENDING` 결과 모름, `PAID` 결제됨, `FAILED` 실패, `CANCELLED` 취소(환불)'
+        needsCancel:
+          type: boolean
+          description: 돈은 나갔는데 구독에 반영하지 않아 운영자가 콘솔에서 취소해야 함. `status`가 `PENDING`이면 1시간 넘게 결과를 모르는 결제라 화면은 '확인 필요'로 보여 준다(취소 필요 표시는 `POST /api/users/me/subscription`)
 
     AdminUserSubmission:
       type: object
@@ -4033,6 +4444,13 @@ components:
                   quota:
                     $ref: '#/components/schemas/AiQuota'
                     description: 거절한 시점의 한도. `remaining`은 0이다
+
+    SubscriptionNotActive:
+      description: '오류 `code`: `SUBSCRIPTION_NOT_ACTIVE`(프로 구독이 없음. `NONE`·`PAYMENT_FAILED`. 결제 주기 바꾸기는 `CANCEL_SCHEDULED`도 포함)'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
 
     Unauthorized:
       description: 토큰이 없거나 유효하지 않음
