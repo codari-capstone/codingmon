@@ -68,7 +68,7 @@ class AdminUserController {
         var s = row.summary();
         Subscriptions.AdminDetail billing = subscriptions.adminDetail(id);
         return new Detail(s.id(), s.nickname(), s.email(), s.role(), s.createdAt(), s.suspendedAt(),
-                subscriptions.adminView(id), row.loginMethod(), row.suspensionReason(), aiQuota.status(id),
+                billing.subscription(), row.loginMethod(), row.suspensionReason(), aiQuota.status(id),
                 billing.subscriptionStartedAt(), billing.refundAmount(), billing.payments());
     }
 }

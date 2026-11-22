@@ -36,7 +36,8 @@ public class Subscriptions {
     }
 
     // openapi AdminUserDetail의 구독 부분
-    public record AdminDetail(Instant subscriptionStartedAt, Integer refundAmount, List<AdminPayment> payments) {
+    public record AdminDetail(View subscription, Instant subscriptionStartedAt, Integer refundAmount,
+            List<AdminPayment> payments) {
     }
 
     private final SubscriptionRepository repo;
@@ -89,7 +90,8 @@ public class Subscriptions {
         List<Payment> payments = repo.findPayments(userId);
         Instant startedAt = status == Status.NONE ? null : sub.get().anchorAt();
         Integer refund = PaymentResolver.isPro(status) && pending.isEmpty() ? refundAmount(sub.get(), payments, now) : null;
-        return new AdminDetail(startedAt, refund, payments.stream()
+        View view = readView(userId, repo.findCustomerId(userId).orElse(null));
+        return new AdminDetail(view, startedAt, refund, payments.stream()
                 .map(p -> new AdminPayment(p.paymentId(), p.paidAt(), p.amount(), p.cycle(), p.status(), p.needsCancel()))
                 .toList());
     }
@@ -110,8 +112,11 @@ public class Subscriptions {
                 .atZone(SubscriptionRepository.SEOUL).toLocalDate();
         long total = ChronoUnit.DAYS.between(start, end);
         long remaining = ChronoUnit.DAYS.between(now.atZone(SubscriptionRepository.SEOUL).toLocalDate(), end);
-        if (total <= 0 || remaining <= 0) {
+        if (total <= 0) {
             return null;
+        }
+        if (remaining <= 0) {
+            return 0;   // 끝나는 날 당일(끝나는 시각 전). 기간이 지난 경우는 위에서 걸렀다.
         }
         // 남은 금액 × 90%를 분수 그대로 계산하고 마지막에 한 번만 10원 단위로 버린다.
         return (int) ((long) last.amount() * remaining * 9 / (total * 10) / 10 * 10);

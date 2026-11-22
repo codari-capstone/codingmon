@@ -203,7 +203,7 @@ public class SubscriptionRepository {
     }
 
     List<Deletion> findDeletions(int limit) {
-        return jdbc.sql("select id, billing_key, customer_id, customer_since from billing_key_deletions order by id limit :limit")
+        return jdbc.sql("select id, billing_key, customer_id, customer_since from billing_key_deletions order by random() limit :limit")
                 .param("limit", limit)
                 .query((rs, n) -> new Deletion(rs.getLong("id"), rs.getString("billing_key"), rs.getString("customer_id"),
                         instant(rs, "customer_since")))
@@ -234,7 +234,7 @@ public class SubscriptionRepository {
     // 만든 지 olderThanSeconds가 지난 결과 모름 결제(막 보낸 결제와 겹치지 않게 조금 기다린다).
     List<String> findStalePending(long olderThanSeconds, int limit) {
         return jdbc.sql("select payment_id from payments where status = 'PENDING'"
-                + " and created_at <= now() - make_interval(secs => :secs) order by created_at limit :limit")
+                + " and created_at <= now() - make_interval(secs => :secs) order by random() limit :limit")
                 .param("secs", olderThanSeconds).param("limit", limit).query(String.class).list();
     }
 

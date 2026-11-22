@@ -123,10 +123,7 @@ public class PortOneClient {
             Object paidAt = nested(body, "payment", "paidAt");
             return new Paid(paidAt instanceof String s ? Instant.parse(s) : Instant.now());
         } catch (RestClientResponseException e) {
-            if (e.getStatusCode().is5xxServerError()) {
-                log.warn("포트원 결제 응답 5xx {}: {}", paymentId, e.getStatusCode());
-                return new Unknown();
-            }
+            // type을 먼저 본다. 카드사 거절(PG_PROVIDER)은 502로 온다.
             Map<String, Object> error = errorBody(e);
             String type = String.valueOf(error.get("type"));
             // 같은 ID가 이미 결제됐거나 진행 중이다(openapi startSubscription 3단계).
@@ -136,6 +133,10 @@ public class PortOneClient {
             if (DECLINED.contains(type)) {
                 String message = error.get("message") instanceof String m ? m : "카드 결제에 실패했어요";
                 return new Declined(message);
+            }
+            if (e.getStatusCode().is5xxServerError()) {
+                log.warn("포트원 결제 응답 5xx {}: {} {}", paymentId, e.getStatusCode(), type);
+                return new Unknown();
             }
             // 인증·요청 제한·요청 형식 오류 등 카드와 상관없는 오류. 실패로 닫지 않고 결과 모름으로 두면 같은 ID로 다시 보낸다.
             log.error("포트원 결제 요청 오류 {}: {} {}", paymentId, e.getStatusCode(), type);
@@ -197,15 +198,17 @@ public class PortOneClient {
             filter.put("from", since.toString());
             filter.put("until", Instant.now().toString());
             String requestBody = json.writeValueAsString(Map.of("page", Map.of("number", page, "size", 100), "filter", filter));
+            // 404나 예상과 다른 모양은 실패로 본다. 빈 목록으로 보면 탈퇴 정리 기록이 지워지고 빌링키가 포트원에 남는다.
             Map<String, Object> body = get("/billing-keys?requestBody=" + encode(requestBody), false);
-            List<?> items = body == null || !(body.get("items") instanceof List<?> list) ? List.of() : list;
+            if (body == null || !(body.get("items") instanceof List<?> items) || !(nested(body, "page", "totalCount") instanceof Number n)) {
+                throw new UnavailableException("포트원 빌링키 목록 응답이 예상과 다르다", null);
+            }
             for (Object item : items) {
                 if (item instanceof Map<?, ?> map && map.get("billingKey") instanceof String key) {
                     keys.add(key);
                 }
             }
-            Object totalCount = nested(body, "page", "totalCount");
-            if (items.isEmpty() || !(totalCount instanceof Number n) || (long) (page + 1) * 100 >= n.longValue()) {
+            if (items.isEmpty() || (long) (page + 1) * 100 >= n.longValue()) {
                 return keys;
             }
         }

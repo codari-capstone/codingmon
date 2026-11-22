@@ -188,6 +188,10 @@ class SubscriptionService {
         Boolean done = resolver.locked(userId, id -> {
             Optional<Sub> sub = repo.findSub(id);
             Status status = PaymentResolver.effective(sub, repo.findPending(id), Instant.now());
+            if (repo.isSuspended(id)) {
+                // 토큰 검사를 지난 직후 정지됐다. 정지 뒤 다른 요청과 같이 401이다(정지가 바꾼 해지 예정을 되돌리지 않게).
+                throw new ErrorResponseException(HttpStatus.UNAUTHORIZED);
+            }
             if (sub.isEmpty()) {
                 throw notActive();
             }

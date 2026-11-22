@@ -81,7 +81,17 @@ class PaymentResolver {
     // 포트원에 결제 ID가 없다(요청이 아직 닿지 않음). 실패로 보지 않고 같은 결제 ID로 다시 보낸다.
     // 포트원은 같은 결제 ID로 두 번 결제하지 않는다. 끝난 구독의 갱신 결제는 다시 보내지 않고 실패로 닫는다.
     private Resolution resend(Payment payment, String keepKey) {
-        if (payment.kind() == Kind.RENEWAL && endedSubscription(payment)) {
+        // 잠금 안에서 기록이 아직 PENDING인지 다시 본다. 조회 목록을 가져간 뒤 다른 요청이 닫았으면 보내지 않는다.
+        Boolean send = locked(payment.userId(), userId -> {
+            Payment fresh = repo.findPayment(payment.paymentId()).orElse(null);
+            return fresh != null && fresh.status() == PayStatus.PENDING
+                    && !(fresh.kind() == Kind.RENEWAL && endedSubscription(fresh));
+        });
+        if (send == null) {
+            return Resolution.UNKNOWN;
+        }
+        if (!send) {
+            // 끝난 구독의 갱신 결제는 실패로 닫고, 이미 닫힌 기록은 그 상태를 돌려준다.
             return applyFailure(payment, false, keepKey);
         }
         String customerId = repo.findCustomerId(payment.userId()).orElse(null);
@@ -93,20 +103,23 @@ class PaymentResolver {
         return applyPayResult(payment, result, keepKey);
     }
 
-    // 서버가 보낸 결제 요청의 응답을 반영한다. '이미 결제됐거나 진행 중' 답은 실패가 아니므로 결과 모름으로 두고 다시 조회한다.
+    // 서버가 보낸 결제 요청의 응답을 반영한다. '이미 결제됐거나 진행 중' 답과 응답 없음은 결제 ID로 한 번 조회해 따른다.
+    // 조회도 실패하면 결과 모름이다(openapi startSubscription).
     Resolution applyPayResult(Payment payment, PayResult result, String keepKey) {
         return switch (result) {
             case PortOneClient.Paid paid -> applyPaid(payment, paid.paidAt(), keepKey);
             case PortOneClient.Declined declined -> applyFailure(payment, false, keepKey);
-            case PortOneClient.AlreadyUsed already -> {
-                try {
-                    yield resolve(payment.paymentId(), keepKey, false);
-                } catch (PortOneClient.UnavailableException e) {
-                    yield Resolution.UNKNOWN;
-                }
-            }
-            case PortOneClient.Unknown unknown -> Resolution.UNKNOWN;
+            case PortOneClient.AlreadyUsed already -> requery(payment, keepKey);
+            case PortOneClient.Unknown unknown -> requery(payment, keepKey);
         };
+    }
+
+    private Resolution requery(Payment payment, String keepKey) {
+        try {
+            return resolve(payment.paymentId(), keepKey, false);
+        } catch (PortOneClient.UnavailableException e) {
+            return Resolution.UNKNOWN;
+        }
     }
 
     // 조회로 알게 된 '결제됨'은 금액·통화·빌링키를 결제 기록과 대조한 뒤에만 성공으로 확정한다.
