@@ -29,6 +29,14 @@ const DONE = (action: SubscriptionAction, s: Subscription) =>
         ? `다음 결제부터 ${CYCLE_NAME[fromBillingCycle(s.nextCycle)]}으로 바꿨어요.`
         : '주기 바꾸기를 취소했어요.'
 
+/** 구독이 이미 이 동작의 결과인가. 바꾸기 취소는 지금 주기가 보낸 주기여야 한다 — 갱신으로 주기가 바뀌어 거절된 경우와 가른다 */
+function reflects(action: SubscriptionAction, s: Subscription): boolean {
+  if (action.kind === 'cancel') return s.status === 'CANCEL_SCHEDULED'
+  if (action.kind === 'resume') return s.status === 'ACTIVE'
+  const sent = toBillingCycle(action.cycle)
+  return action.agreed ? s.nextCycle === sent : s.cycle === sent && s.nextCycle === null
+}
+
 /**
  * 결과 알림. 플랜 카드 맨 아래에 둔다. status 자리는 비어 있어도 늘 둔다 — 숨겼다 보이면
  * 영역이 새로 생긴 것으로 보여 일부 낭독기가 읽지 않는다(#357 리뷰). 비었을 때는 여백만 없앤다.
@@ -43,11 +51,8 @@ export function ActionResult({
   /** 주기 바꾸기 창이 열려 있으면 오류는 창 안에 보인다 */
   modalOpen: boolean
 }) {
-  // 응답은 잃었어도 서버가 바꾸기를 저장했다(새로 받은 구독에 들어 있다). 띠가 결과를 알리니 실패로 알리지 않는다(#357 리뷰)
-  const landed =
-    act.variables?.kind === 'cycle' &&
-    act.variables.agreed &&
-    s.nextCycle === toBillingCycle(act.variables.cycle)
+  // 응답은 잃었어도 서버가 처리했다(새로 받은 구독이 이미 그 결과다). 카드가 결과를 알리니 실패로 알리지 않는다(#357 리뷰)
+  const landed = act.variables !== undefined && reflects(act.variables, s)
   return (
     <>
       {act.isError && !modalOpen && !landed ? (
@@ -204,6 +209,8 @@ function ChangeCycleModal({
   const agreeId = useId()
   const confirmId = useId()
   const [agreedTo, setAgreedTo] = useState<string | null>(null)
+  // 페이지가 창을 닫으면(close를 거치지 않음) 동의가 남아 같은 조건으로 다시 열 때 미리 체크돼 있다(#357 리뷰)
+  if (!open && agreedTo !== null) setAgreedTo(null)
   const agreed = agreedTo === terms
   const pending = act.isPending && act.variables.kind === 'cycle'
   // 조건이 바뀌어 동의가 풀리면 확인 버튼이 disabled가 되어 포커스가 body로 떨어진다.

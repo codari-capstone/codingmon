@@ -118,7 +118,16 @@ export function Component() {
   const [changeOpen, setChangeOpen] = useState(false)
   // 창을 연 채 구독이 바뀌어 더 바꿀 수 없게 되면(해지 예정이 됨, 바꾸기가 이미 저장됨) 창을 닫는다.
   // 열림을 남기면 다시 바꿀 수 있게 될 때 저절로 열린다(#357 리뷰)
-  if (changeOpen && data && !canChangeCycle(data)) setChangeOpen(false)
+  // 다시 받기가 실패해 ErrorState가 되면 창도 사라진다. 열림을 남기면 [다시 시도]가 성공할 때 저절로 열린다(#357 리뷰)
+  if (changeOpen && (!data || error || !canChangeCycle(data))) setChangeOpen(false)
+
+  // 오류 뒤 새로 받은 구독으로 버튼이 바뀌면(409로 창을 닫아 연 버튼에 돌아간 포커스 등) 포커스가 body로 떨어진다.
+  // 성공 때처럼 플랜 이름으로 옮긴다(#357 리뷰)
+  useEffect(() => {
+    if (act.isError && document.activeElement === document.body) {
+      document.getElementById(PLAN_TITLE_ID)?.focus()
+    }
+  }, [data, act.isError])
 
   // 안내는 한 번만 보인다. 기록에 남기면 새로 고침·뒤로 가기 때마다 다시 뜬다(#356 리뷰)
   useEffect(() => {
