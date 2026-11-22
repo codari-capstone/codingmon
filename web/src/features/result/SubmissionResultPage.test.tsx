@@ -629,6 +629,8 @@ describe('쉬운 설명과 에러 안내 (RES-03~06)', () => {
   })
 
   describe('채점 불가 (RES-06)', () => {
+    afterEach(() => sessionStorage.clear())
+
     const judgeError = () =>
       completed({
         status: 'JUDGE_ERROR',
@@ -686,7 +688,6 @@ describe('쉬운 설명과 에러 안내 (RES-03~06)', () => {
       await screen.findByText('채점 불가')
 
       expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('print(1)')
-      sessionStorage.clear()
     })
 
     it('판정이 나면 제출한 코드의 저장본만 지운다 (SOLVE-11)', async () => {
@@ -698,7 +699,6 @@ describe('쉬운 설명과 에러 안내 (RES-03~06)', () => {
 
       await waitFor(() => expect(readSavedCode(USER.id, 1, 'PYTHON')).toBeNull())
       expect(readSavedCode(USER.id, 1, 'CPP')).toBe('// 다른 언어')
-      sessionStorage.clear()
     })
 
     it('채점 불가에는 진행 문구를 띄우지 않는다', async () => {

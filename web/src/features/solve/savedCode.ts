@@ -1,3 +1,4 @@
+import { SESSION_CHANNEL } from '@/api/session'
 import type { Language, SubmissionResult } from '@/api/types'
 
 /** 이 기능이 쓰는 모든 키의 앞머리. 로그아웃이 이걸로 골라 지운다. */
@@ -20,6 +21,13 @@ export function savedCodeKey(userId: number, problemId: number, language: Langua
   return `${PREFIX}${userId}:${problemId}:${language}`
 }
 
+/** 판정을 기다리는 제출 코드의 자리. 작성 중 코드와 달리 화면을 떠나도 지우지 않는다. */
+const HELD_PREFIX = `${PREFIX}held:`
+
+function heldKey(userId: number, problemId: number, language: Language): string {
+  return `${HELD_PREFIX}${userId}:${problemId}:${language}`
+}
+
 /**
  * 저장된 코드. 없으면 null.
  *
@@ -36,7 +44,10 @@ export function readSavedCode(
 ): string | null {
   if (userId === undefined) return null
   try {
-    return sessionStorage.getItem(savedCodeKey(userId, problemId, language))
+    return (
+      sessionStorage.getItem(savedCodeKey(userId, problemId, language)) ??
+      sessionStorage.getItem(heldKey(userId, problemId, language))
+    )
   } catch {
     return null
   }
@@ -72,28 +83,46 @@ export function forgetSubmittedCode(
 ): void {
   if (userId === undefined) return
   try {
-    const key = savedCodeKey(userId, problemId, language)
-    if (sessionStorage.getItem(key) === submitted) sessionStorage.removeItem(key)
+    for (const key of [
+      savedCodeKey(userId, problemId, language),
+      heldKey(userId, problemId, language),
+    ]) {
+      if (sessionStorage.getItem(key) === submitted) sessionStorage.removeItem(key)
+    }
   } catch {
     // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
   }
 }
 
 /**
- * 접수된 코드를 판정이 날 때까지 저장본으로 잡아 둔다.
+ * 보내는 코드를 판정이 날 때까지 잡아 두고, 접수가 실패하면 되돌릴 함수를 준다.
  *
- * [다시 풀기]로 받은 코드를 손대지 않고 내면 저장본이 없다. 그 제출이 채점 불가로 끝나면
- * 제출 기록에도 나오지 않아(계약 getMyProblemHistory) 되찾을 길이 없어진다.
- * 이미 저장본이 있으면 그쪽이 더 새 코드라 덮지 않는다.
+ * 채점 불가로 끝난 제출은 제출 기록에 나오지 않아(계약 getMyProblemHistory) 여기 없으면 되찾을
+ * 길이 없다. 응답 전에 새로고침해도 남도록 보내기 전에 쓴다. 작성 중 코드와 자리가 달라,
+ * 풀이 화면을 다시 열었다 나가도 지워지지 않는다.
  */
 export function keepUntilJudged(
   userId: number | undefined,
   problemId: number,
   language: Language,
   code: string,
-): void {
-  if (readSavedCode(userId, problemId, language) === null) {
-    storeSavedCode(userId, problemId, language, code)
+): () => void {
+  if (userId === undefined) return () => {}
+  const key = heldKey(userId, problemId, language)
+  try {
+    const before = sessionStorage.getItem(key)
+    sessionStorage.setItem(key, code)
+    return () => {
+      try {
+        if (sessionStorage.getItem(key) !== code) return
+        if (before === null) sessionStorage.removeItem(key)
+        else sessionStorage.setItem(key, before)
+      } catch {
+        // 저장소를 못 쓰는 브라우저에는 되돌릴 것도 없다.
+      }
+    }
+  } catch {
+    return () => {}
   }
 }
 
@@ -135,12 +164,56 @@ export function forgetProblemDrafts(userId: number | undefined, problemId: numbe
   }
 }
 
+/**
+ * 문서를 새로 불러왔을 때 저장본을 정리한다.
+ *
+ * 주소창으로 옮기면 React cleanup이 돌지 않으므로 다음 문서가 '화면을 떠남'을 대신 처리한다.
+ * 새로고침과 뒤로 가기는 그대로 두고, GitHub 로그인 복귀는 세션이 끊겨 다녀온 길이라 남긴다.
+ * 예전 버전의 localStorage 저장본은 새로고침일 때만 옮기고 어느 경우든 지운다.
+ */
+export function settleSavedCodeOnLoad(navigationType: string | undefined, pathname: string): void {
+  try {
+    if (navigationType === 'reload') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (!key?.startsWith(PREFIX) || sessionStorage.getItem(key) !== null) continue
+        sessionStorage.setItem(key, localStorage.getItem(key) ?? '')
+      }
+    }
+    removeKeys(localStorage, PREFIX)
+    if (navigationType === 'navigate' && pathname !== '/login/github') {
+      removeKeys(sessionStorage, PREFIX, (key) => !key.startsWith(HELD_PREFIX))
+    }
+  } catch {
+    // 저장소를 못 읽는 브라우저에는 정리할 것도 없다.
+  }
+}
+
+/**
+ * 앱이 시작될 때 한 번 부른다(main.tsx).
+ *
+ * 저장소가 탭마다 따로라, 다른 탭의 로그아웃·탈퇴 알림을 받아 이 탭의 코드도 지운다(MY-04).
+ */
+export function startSavedCodeSync(): void {
+  const entry = performance.getEntriesByType('navigation')[0] as
+    PerformanceNavigationTiming | undefined
+  settleSavedCodeOnLoad(entry?.type, window.location.pathname)
+  if (typeof BroadcastChannel === 'undefined') return
+  new BroadcastChannel(SESSION_CHANNEL).addEventListener('message', (event: MessageEvent) => {
+    if (event.data === 'ended') clearSavedCode()
+  })
+}
+
 /** 지우기 전에 키를 다 모은다. 지우면서 순회하면 인덱스가 밀려 건너뛰는 키가 생긴다. */
-function removeKeys(storage: Storage, prefix: string): void {
+function removeKeys(
+  storage: Storage,
+  prefix: string,
+  matches: (key: string) => boolean = () => true,
+): void {
   const keys: string[] = []
   for (let i = 0; i < storage.length; i++) {
     const key = storage.key(i)
-    if (key?.startsWith(prefix)) keys.push(key)
+    if (key?.startsWith(prefix) && matches(key)) keys.push(key)
   }
   for (const key of keys) storage.removeItem(key)
 }

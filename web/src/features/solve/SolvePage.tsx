@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { LoadingState } from '@/components/LoadingState'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
+import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { submissionResultQuery } from '@/features/result/resultQuery'
@@ -77,39 +78,19 @@ function Header({
 function Workspace({
   problem,
   retried,
+  onAccepted,
 }: {
   problem: ProblemDetailView
   /** [다시 풀기]로 넘겨받은 제출의 코드 */
   retried: { language: Language; code: string } | null
+  /** 제출이 접수됐다. 이 뒤의 이동은 '작성하다 떠남'이 아니다. */
+  onAccepted: () => void
 }) {
   const wide = useWideLayout()
   const { user } = useAuth()
   // 반응형 분기 **바깥**에서 부른다. 안에서 부르면 폭이 64rem을 넘나들 때 진행 중인
   // 제출을 잃는다 (submitQuery 주석).
-  const accepted = useRef(false)
-  const submit = useSubmit(() => {
-    accepted.current = true
-  })
-  /**
-   * 화면을 떠나면 작성 중 코드를 지운다 (SOLVE-11).
-   *
-   * 지우기를 한 박자 늦춘다. StrictMode는 마운트 직후 cleanup과 setup을 다시 돌리는데, 바로
-   * 지우면 쓰던 코드가 사라진다. 제출로 떠나면 판정이 날 때까지 남기고, 세션이 끊겨 떠나면
-   * 다시 로그인해 이어 쓰도록 남긴다.
-   */
-  const queryClient = useQueryClient()
-  const leaving = useRef<number | undefined>(undefined)
-  const userId = user?.id
-  useEffect(() => {
-    window.clearTimeout(leaving.current)
-    return () => {
-      leaving.current = window.setTimeout(() => {
-        if (!accepted.current && queryClient.getQueryData(ME_QUERY_KEY)) {
-          forgetProblemDrafts(userId, problem.id)
-        }
-      }, 0)
-    }
-  }, [queryClient, userId, problem.id])
+  const submit = useSubmit(onAccepted)
   // 같은 이유로 여기서 부른다 — 폭이 바뀌면 실행 번호가 사라져 결과를 영영 못 본다.
   const sampleRun = useSampleRun()
   /**
@@ -324,32 +305,68 @@ function Workspace({
   )
 }
 
-/** 문제 풀이 (SOLVE-01~07·10·11). 주소를 읽고 문제를 받아 Workspace에 넘긴다. */
+/** 문제 풀이 (SOLVE-01~07·10·11). 주소를 읽어 문제별 화면을 연다. */
 export function Component() {
   const params = useParams()
   const problemId = parsePathId(params.id)
-  const { data, isPending, error, refetch } = useQuery({
-    ...problemDetailQuery(problemId ?? 0),
-    enabled: problemId !== null,
-  })
-  // [다시 풀기]로 왔으면 제출 코드를 받은 뒤에 에디터를 연다. 못 받으면 저장본이나 시작 코드로 연다
-  const { user } = useAuth()
-  const { state } = useLocation()
-  const retry = retriedSubmission(state, user?.id)
-  const submission = useQuery({
-    ...submissionResultQuery(retry?.submissionId ?? 0),
-    enabled: retry !== null,
-  })
-
   // 주소를 손으로 고친 경우다. 요청을 보내지 않고 없는 문제와 같은 문구로 끝낸다
   // (parsePathId 주석). 화면 전체가 오류이므로 그 제목이 h1이다.
   if (problemId === null) return <ErrorState problem={{ status: 404 }} headingLevel={1} />
+  // key로 문제를 묶는다. 다른 문제로 옮기는 것도 이 문제의 화면을 떠나는 것이다.
+  return <SolveProblem key={problemId} problemId={problemId} />
+}
+
+/** 문제 하나의 풀이 화면. 문제를 받아 Workspace에 넘기고, 떠날 때 작성 중 코드를 지운다. */
+function SolveProblem({ problemId }: { problemId: number }) {
+  const { data, isPending, error, refetch } = useQuery(problemDetailQuery(problemId))
+  // [다시 풀기]로 왔으면 제출 코드를 받은 뒤에 에디터를 연다. 못 받으면 시작 코드로 연다.
+  // 저장본이 있으면 그쪽을 열므로 받지 않는다.
+  const { user } = useAuth()
+  const userId = user?.id
+  const { state } = useLocation()
+  const retry = retriedSubmission(state, userId)
+  const [needsSubmission] = useState(
+    () => retry !== null && readSavedCode(userId, problemId, retry.language) === null,
+  )
+  const submission = useQuery({
+    ...submissionResultQuery(retry?.submissionId ?? 0),
+    enabled: needsSubmission && retry !== null,
+  })
+
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, submission.error)
+  }, [queryClient, submission.error])
+
+  /**
+   * 화면을 떠나면 작성 중 코드를 지운다 (SOLVE-11).
+   *
+   * Workspace가 아니라 여기서 본다. 재조회 실패로 같은 주소에서 오류 화면으로 바뀌면 Workspace만
+   * 내려가는데, 그때 지우면 [다시 시도]가 쓰던 코드를 잃는다.
+   *
+   * 지우기를 한 박자 늦춘다. StrictMode는 마운트 직후 cleanup과 setup을 다시 돌리는데, 바로
+   * 지우면 쓰던 코드가 사라진다. 제출로 떠나면 판정이 날 때까지 남기고, 세션이 끊겨 떠나면
+   * 다시 로그인해 이어 쓰도록 남긴다.
+   */
+  const accepted = useRef(false)
+  const leaving = useRef<number | undefined>(undefined)
+  useEffect(() => {
+    window.clearTimeout(leaving.current)
+    return () => {
+      leaving.current = window.setTimeout(() => {
+        if (!accepted.current && queryClient.getQueryData(ME_QUERY_KEY)) {
+          forgetProblemDrafts(userId, problemId)
+        }
+      }, 0)
+    }
+  }, [queryClient, userId, problemId])
+
   if (error) {
     return <ErrorState problem={error} headingLevel={1} onRetry={() => void refetch()} />
   }
   // 제목을 아직 모르지만 제목 없는 화면을 두지 않는다. 스크린 리더의 제목 탐색으로
   // 잡을 것이 있어야 한다 (ProblemListPage는 h1을 늘 띄워 두고 그 아래를 갈아끼운다).
-  if (isPending || !data || (retry !== null && submission.isPending)) {
+  if (isPending || !data || (needsSubmission && submission.isPending)) {
     return (
       <section className="flex flex-col gap-4">
         <h1 className="page-title">문제 풀이</h1>
@@ -371,5 +388,14 @@ export function Component() {
   // key로 문제를 묶는다. 캐시가 있어 isPending을 거치지 않고 다른 문제로 넘어가면 같은
   // 인스턴스가 재사용돼, 이전 문제의 codeByLanguage가 새 문제의 저장본보다 우선하고
   // 다음 입력에서 새 문제의 저장소를 이전 코드로 덮어쓴다.
-  return <Workspace key={data.id} problem={data} retried={retried} />
+  return (
+    <Workspace
+      key={data.id}
+      problem={data}
+      retried={retried}
+      onAccepted={() => {
+        accepted.current = true
+      }}
+    />
+  )
 }

@@ -12,9 +12,10 @@ import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { problemDetails } from '@/mocks/fixtures/problemDetails'
 import { server } from '@/mocks/server'
 import { EDITOR_DEFAULTS, updateEditorSettings } from './editorSettings'
-import { readSavedCode, storeSavedCode } from './savedCode'
+import { keepUntilJudged, readSavedCode, storeSavedCode } from './savedCode'
 import { Component as SolvePage } from './SolvePage'
 import { holdRetryState, retryState } from './solvePath'
+import { problemDetailQuery } from './solveQuery'
 
 /**
  * 이 화면은 RequireAuth 뒤에 있다. 임시 저장 키에 사용자가 들어가므로(savedCode)
@@ -336,15 +337,91 @@ describe('SolvePage', () => {
     })
 
     it('StrictMode의 다시 마운트로는 작성 중 코드를 지우지 않는다', async () => {
-      const user = userEvent.setup()
+      // 마운트 전에 심는다. 뒤에 입력하면 지워져도 입력이 다시 만들어 이 검사를 지나친다
+      storeSavedCode(USER.id, 1, 'PYTHON', '# 남아야 할 코드')
       renderSolve('/problems/1', true)
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
-      await user.click(screen.getByRole('textbox', { name: '코드 편집기' }))
-      await user.keyboard('# 남아야 할 코드')
-      await editorHas('# 남아야 할 코드')
       await new Promise((resolve) => setTimeout(resolve, 0))
 
-      expect(readSavedCode(USER.id, 1, 'PYTHON')).toContain('# 남아야 할 코드')
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 남아야 할 코드')
+      await editorHas('# 남아야 할 코드')
+    })
+
+    it('재조회 실패로 오류 화면이 떠도 작성 중 코드를 남긴다', async () => {
+      storeSavedCode(USER.id, 1, 'PYTHON', '# 네트워크 오류 전 코드')
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await editorHas('# 네트워크 오류 전 코드')
+
+      server.use(
+        http.get('*/api/problems/:id', () =>
+          HttpResponse.json({ status: 500, title: 'Error' }, { status: 500 }),
+        ),
+      )
+      await act(async () => {
+        await lastClient.refetchQueries({ queryKey: problemDetailQuery(1).queryKey })
+      })
+      await screen.findByRole('button', { name: /다시 시도/ }, { timeout: 5000 })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 네트워크 오류 전 코드')
+    }, 10_000)
+
+    it('판정을 기다리는 제출 코드는 풀이 화면을 열었다 나가도 남긴다', async () => {
+      keepUntilJudged(USER.id, 1, 'PYTHON', '# 채점 중인 코드')
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await editorHas('# 채점 중인 코드')
+
+      await act(() => lastRouter.navigate('/submissions/9'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 채점 중인 코드')
+    })
+
+    it('제출 코드 조회가 401이면 세션을 버린다', async () => {
+      server.use(
+        http.get('*/api/submissions/:id', () =>
+          HttpResponse.json({ status: 401, title: 'Unauthorized' }, { status: 401 }),
+        ),
+      )
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+
+      await waitFor(() => expect(lastClient.getQueryData(ME_QUERY_KEY)).toBeNull())
+    })
+
+    it('저장본이 있으면 제출 코드를 받지 않고 바로 연다', async () => {
+      let asked = 0
+      server.use(
+        http.get('*/api/submissions/:id', () => {
+          asked++
+          return HttpResponse.json({ status: 404 }, { status: 404 })
+        }),
+      )
+      storeSavedCode(USER.id, 1, 'PYTHON', '# 저장본')
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await editorHas('# 저장본')
+      expect(asked).toBe(0)
+    })
+
+    it('접수가 실패하면 판정 대기로 잡아 둔 코드를 되돌린다', async () => {
+      const user = userEvent.setup()
+      server.use(
+        http.post('*/api/submissions', () =>
+          HttpResponse.json({ status: 500, title: 'Error' }, { status: 500 }),
+        ),
+      )
+      serveSubmission('# 받은 코드')
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await editorHas('# 받은 코드')
+
+      await user.click(screen.getByRole('button', { name: '제출하기' }))
+      await screen.findByRole('alert')
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBeNull()
     })
 
     it('제출이 접수되어도 판정 전에는 저장본을 남긴다', async () => {

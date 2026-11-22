@@ -61,11 +61,14 @@ export function useSubmit(onAccepted: () => void) {
     mutationFn: submitCode,
     // 제출은 되돌릴 수 없다(시도 횟수가 오른다). 실패하면 사람이 다시 누르게 한다.
     retry: false,
-    onMutate: () => ({ restoreRetry: holdRetryState() }),
-    onSuccess: (id, input) => {
+    // 보내기 전에 코드를 잡아 둔 뒤 방문 기록의 제출 번호를 비운다. 응답 전에 새로고침해도 코드가 남는다.
+    // 저장본은 판정이 난 뒤에 지운다(forgetJudgedCode). 채점 불가면 코드를 되찾을 곳이 없다.
+    onMutate: (input) => ({
+      releaseCode: keepUntilJudged(user?.id, input.problemId, input.language, input.sourceCode),
+      restoreRetry: holdRetryState(),
+    }),
+    onSuccess: (id) => {
       onAccepted()
-      // 저장본은 판정이 난 뒤에 지운다(forgetJudgedCode). 채점 불가면 코드를 되찾을 곳이 없다.
-      keepUntilJudged(user?.id, input.problemId, input.language, input.sourceCode)
       // 판정과 관계없이 접수된 제출로 그날이 이어진다(STREAK). 상단 바 칩은 마운트된 채라 직접 알린다
       void queryClient.invalidateQueries({ queryKey: ['streak'] })
       void navigate(`/submissions/${id}`)
@@ -73,6 +76,7 @@ export function useSubmit(onAccepted: () => void) {
     // 세션이 끊겼으면 로그인 화면으로 보낸다(session.ts). 쓰던 코드는 이 탭의 저장소에
     // 남아 있어(SOLVE-11) 다시 로그인하면 그대로 열린다.
     onError: (error, _input, context) => {
+      context?.releaseCode()
       context?.restoreRetry()
       forgetSessionIfUnauthorized(queryClient, error)
     },

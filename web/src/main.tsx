@@ -2,10 +2,13 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { startMotionSync } from './app/motion'
+import { startSavedCodeSync } from './features/solve/savedCode'
 import './index.css'
 
 // 첫 화면부터 저장한 움직임 설정을 따르고, 다른 탭의 변경도 받는다 (UX-08)
 startMotionSync()
+// 주소창 이동으로 떠난 코드를 정리하고, 다른 탭의 로그아웃을 받는다 (SOLVE-11)
+startSavedCodeSync()
 
 /**
  * 목 모드는 빌드 모드 하나로만 켠다 (`vite --mode mock`, `vite build --mode mock`).

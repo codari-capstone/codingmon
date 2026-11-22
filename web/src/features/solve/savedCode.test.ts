@@ -4,14 +4,17 @@ import {
   clearSavedCode,
   forgetProblemDrafts,
   forgetSubmittedCode,
+  keepUntilJudged,
   readSavedCode,
   savedCodeKey,
+  settleSavedCodeOnLoad,
   storeSavedCode,
 } from './savedCode'
 
 describe('savedCode', () => {
   afterEach(() => {
     sessionStorage.clear()
+    localStorage.clear()
     vi.restoreAllMocks()
   })
 
@@ -94,6 +97,58 @@ describe('savedCode', () => {
 
     clearSavedCode()
 
+    expect(localStorage.getItem('solve:5:1:PYTHON')).toBeNull()
+  })
+
+  it('판정 대기 코드는 작성 중 코드를 지워도 남고, 판정이 나면 지워진다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+
+    forgetProblemDrafts(5, 1)
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
+
+    forgetSubmittedCode(5, 1, 'PYTHON', 'print(1)')
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+  })
+
+  it('접수가 실패하면 판정 대기 자리를 이전 값으로 되돌린다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', '이전 제출')
+    const release = keepUntilJudged(5, 1, 'PYTHON', '실패한 제출')
+
+    release()
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('이전 제출')
+  })
+
+  it('주소창 이동으로 문서를 새로 열면 작성 중 코드만 지운다', () => {
+    storeSavedCode(5, 1, 'PYTHON', '작성 중')
+    keepUntilJudged(5, 2, 'PYTHON', '판정 대기')
+
+    settleSavedCodeOnLoad('navigate', '/problems')
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+    expect(readSavedCode(5, 2, 'PYTHON')).toBe('판정 대기')
+  })
+
+  it('새로고침·뒤로 가기·GitHub 로그인 복귀는 작성 중 코드를 남긴다', () => {
+    storeSavedCode(5, 1, 'PYTHON', '작성 중')
+
+    settleSavedCodeOnLoad('reload', '/problems/1')
+    settleSavedCodeOnLoad('back_forward', '/problems/1')
+    settleSavedCodeOnLoad('navigate', '/login/github')
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('작성 중')
+  })
+
+  it('예전 localStorage 저장본은 새로고침일 때만 옮기고 어느 경우든 지운다', () => {
+    localStorage.setItem('solve:5:1:PYTHON', '예전 코드')
+    settleSavedCodeOnLoad('reload', '/problems/1')
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('예전 코드')
+    expect(localStorage.getItem('solve:5:1:PYTHON')).toBeNull()
+
+    sessionStorage.clear()
+    localStorage.setItem('solve:5:1:PYTHON', '예전 코드')
+    settleSavedCodeOnLoad('navigate', '/problems')
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
     expect(localStorage.getItem('solve:5:1:PYTHON')).toBeNull()
   })
 
