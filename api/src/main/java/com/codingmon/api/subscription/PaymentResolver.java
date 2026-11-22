@@ -163,7 +163,7 @@ class PaymentResolver {
                 if (fresh.status() == PayStatus.CANCELLED) {
                     return Optional.of(Resolution.FAILED);   // 그사이 취소 웹훅이 반영됐다(운영자 환불).
                 }
-                return Optional.of(notApplied(fresh, at));
+                return Optional.of(notApplied(fresh, at, keepKey));
             }
             if (fresh.kind() == Kind.FIRST) {
                 String oldKey = sub.map(Sub::billingKey).orElse(null);
@@ -205,10 +205,10 @@ class PaymentResolver {
     }
 
     // 돈은 나갔는데 구독에 반영하지 않는다. 운영자가 콘솔에서 취소하면 취소 웹훅으로 표시가 풀린다.
-    private Resolution notApplied(Payment payment, Instant paidAt) {
+    private Resolution notApplied(Payment payment, Instant paidAt, String keepKey) {
         log.error("구독에 반영하지 않은 결제(취소 필요) {} 사용자 {}", payment.paymentId(), payment.userId());
         repo.updatePayment(payment.paymentId(), PayStatus.PAID, true, paidAt);
-        dropKey(payment.userId(), payment.billingKey(), null);
+        dropKey(payment.userId(), payment.billingKey(), keepKey);
         return Resolution.PAID_NOT_APPLIED;
     }
 

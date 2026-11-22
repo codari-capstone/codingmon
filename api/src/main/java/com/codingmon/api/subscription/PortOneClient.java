@@ -162,7 +162,8 @@ public class PortOneClient {
                 (String) body.get("billingKey"), paidAt instanceof String s ? Instant.parse(s) : null);
     }
 
-    // 지웠거나 이미 없으면 true. 일시적인 오류(응답 없음·5xx)면 false라 다음 실행 때 다시 지운다.
+    // 지웠거나 이미 없으면 true. 포트원이 답한 다른 오류(5xx·인증 등)면 false라 다음 실행 때 다시 지운다.
+    // 응답이 없으면 UnavailableException이라 스케줄러가 이번 실행의 삭제를 멈춘다(남은 키마다 시간 초과를 기다리지 않게).
     boolean deleteBillingKey(String billingKey) {
         requireConfigured();
         try {
@@ -178,8 +179,7 @@ public class PortOneClient {
             return false;
         } catch (RestClientException e) {
             // 예외 메시지에 빌링키가 든 URL이 있어 종류만 남긴다.
-            log.warn("포트원 빌링키 삭제 응답 없음: {}", e.getClass().getSimpleName());
-            return false;
+            throw new UnavailableException("포트원 빌링키 삭제 응답 없음 " + e.getClass().getSimpleName(), null);
         }
     }
 
