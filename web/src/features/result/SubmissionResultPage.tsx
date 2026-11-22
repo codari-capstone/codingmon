@@ -14,7 +14,6 @@ import { CodeBlock } from '@/components/ui/code-block'
 import { Button } from '@/components/ui/button'
 import { RUNTIME_ERROR_INFO, STATUS_LABEL, VERDICT_INFO } from '@/constants/verdicts'
 import { LANGUAGE_LABEL, SOURCE_FILE_NAME } from '@/features/solve/labels'
-import { forgetJudgedCode } from '@/features/solve/savedCode'
 import { retryState, solvePath } from '@/features/solve/solvePath'
 import { AnalysisPanel } from '@/features/ai/AnalysisPanel'
 import { analysisQuery } from '@/features/ai/analysisQuery'
@@ -284,11 +283,6 @@ export function Component() {
   useEffect(() => {
     forgetSessionIfUnauthorized(queryClient, error)
   }, [queryClient, error])
-
-  // 채점 중에 새로고침하면 축하 창이 이 제출을 놓치므로(BadgeCelebrator) 결과 화면도 지운다
-  useEffect(() => {
-    if (data) forgetJudgedCode(user?.id, data)
-  }, [user?.id, data])
 
   // 주소를 손으로 고친 경우다. 요청을 보내지 않고 없는 제출과 같은 문구로 끝낸다
   // (parsePathId 주석).

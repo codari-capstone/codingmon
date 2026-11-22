@@ -1,5 +1,5 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
 import { useLocation, useParams, useSearchParams } from 'react-router'
 
 import type { Language, ProblemDetailView } from '@/api/types'
@@ -7,7 +7,6 @@ import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
 import { LoadingState } from '@/components/LoadingState'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { useAuth } from '@/features/auth/useAuth'
 import { DIFFICULTY_LABEL } from '@/features/problems/labels'
 import { parsePathId } from '@/lib/pathId'
@@ -20,7 +19,7 @@ import { ReportProblem } from './ReportProblem'
 import { RunButton, SampleRun } from './SampleRun'
 import { useSampleRun } from './sampleRunQuery'
 import { Samples } from './Samples'
-import { forgetProblemDrafts, readSavedCode, storeSavedCode } from './savedCode'
+import { readSavedCode, storeSavedCode } from './savedCode'
 import { askedLanguage, retriedCode } from './solvePath'
 import { problemDetailQuery } from './solveQuery'
 import { StarterCodeButton } from './StarterCodeButton'
@@ -78,30 +77,7 @@ function Workspace({ problem }: { problem: ProblemDetailView }) {
   const { user } = useAuth()
   // 반응형 분기 **바깥**에서 부른다. 안에서 부르면 폭이 64rem을 넘나들 때 진행 중인
   // 제출을 잃는다 (submitQuery 주석).
-  const accepted = useRef(false)
-  const submit = useSubmit(() => {
-    accepted.current = true
-  })
-  /**
-   * 화면을 떠나면 작성 중 코드를 지운다 (SOLVE-11).
-   *
-   * 지우기를 한 박자 늦춘다. StrictMode는 마운트 직후 cleanup과 setup을 다시 돌리는데, 바로
-   * 지우면 쓰던 코드가 사라진다. 제출로 떠나면 판정이 날 때까지 남기고, 세션이 끊겨 떠나면
-   * 다시 로그인해 이어 쓰도록 남긴다.
-   */
-  const queryClient = useQueryClient()
-  const leaving = useRef<number | undefined>(undefined)
-  const userId = user?.id
-  useEffect(() => {
-    window.clearTimeout(leaving.current)
-    return () => {
-      leaving.current = window.setTimeout(() => {
-        if (!accepted.current && queryClient.getQueryData(ME_QUERY_KEY)) {
-          forgetProblemDrafts(userId, problem.id)
-        }
-      }, 0)
-    }
-  }, [queryClient, userId, problem.id])
+  const submit = useSubmit()
   // 같은 이유로 여기서 부른다 — 폭이 바뀌면 실행 번호가 사라져 결과를 영영 못 본다.
   const sampleRun = useSampleRun()
   /**

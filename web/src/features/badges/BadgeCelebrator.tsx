@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/dialog'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { isDeadEnd, isFinished, submissionResultQuery } from '@/features/result/resultQuery'
-import { forgetJudgedCode } from '@/features/solve/savedCode'
+import { restoreUnjudgedCode } from '@/features/solve/savedCode'
 import { SUBMIT_MUTATION_KEY } from '@/features/solve/submitQuery'
 import { BADGE_INFO } from './badgeInfo'
 import { badgesQuery, fetchMyBadges, markCelebrated } from './badgeQuery'
@@ -88,9 +88,11 @@ function Celebrator() {
     if (done.length === 0) return
     done.forEach((id) => {
       checking.current.add(id)
-      // 결과 화면을 먼저 떠나도 판정이 나면 저장본을 지운다. 폴링이 이어지는 곳이 여기다
+      // 이번 세션에 낸 제출만 여기 온다. 결과 화면에서 처리하면 먼저 떠난 제출과 지난 기록을 가리지 못한다
       const result = queryClient.getQueryData(submissionResultQuery(id).queryKey)
-      if (result) forgetJudgedCode(user?.id, result)
+      if (result?.status === 'JUDGE_ERROR' && typeof result.sourceCode === 'string') {
+        restoreUnjudgedCode(user?.id, result.problemId, result.language, result.sourceCode)
+      }
     })
     const order = ++latest.current
     // fetchQuery는 진행 중인 같은 키의 요청(앞 제출의 확인, 열려 있는 배지 화면)을 그대로 돌려줘서

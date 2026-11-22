@@ -433,24 +433,18 @@ describe('BadgeCelebrator (BADGE-03)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
-  describe('결과 화면을 떠나도 판정이 나면 저장본 정리 (SOLVE-11)', () => {
-    /** 채점이 끝난 응답을 주고, 정리 바로 뒤에 나가는 배지 요청을 센다 */
-    const finishWith = (status: 'COMPLETED' | 'JUDGE_ERROR') => {
-      const seen = { asked: 0 }
+  describe('채점 불가 코드 되돌리기 (SOLVE-11)', () => {
+    const judgeError = () =>
       server.use(
-        http.get('*/api/users/me/badges', () => {
-          seen.asked++
-          return HttpResponse.json({ badges: badgesFor(1) })
-        }),
         http.get('*/api/submissions/:id', () =>
           HttpResponse.json({
             id: 1,
             problemId: 1,
             problemTitle: '두 수의 합',
             language: 'PYTHON',
-            status,
+            status: 'JUDGE_ERROR',
             progress: 0,
-            verdict: status === 'COMPLETED' ? 'WRONG_ANSWER' : null,
+            verdict: null,
             sourceCode: 'print(1)',
             runtimeErrorType: null,
             runtimeErrorMessage: null,
@@ -462,33 +456,23 @@ describe('BadgeCelebrator (BADGE-03)', () => {
           }),
         ),
       )
-      return seen
-    }
-    afterEach(() => sessionStorage.clear())
+    afterEach(() => localStorage.clear())
 
-    it('판정이 나면 제출한 코드의 저장본을 지운다', async () => {
-      finishWith('COMPLETED')
-      storeSavedCode(USER.id, 1, 'PYTHON', 'print(1)')
-      const { client } = renderAt('/problems')
+    it('지워진 저장본을 제출한 코드로 되돌린다', async () => {
+      serveBadges()
+      judgeError()
+      const { client } = renderAt('/submissions/1')
       await submitLikeSolvePage(client)
-      await waitFor(() => expect(readSavedCode(USER.id, 1, 'PYTHON')).toBeNull())
+      await waitFor(() => expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('print(1)'))
     })
 
-    it('채점 불가면 저장본을 남긴다', async () => {
-      const seen = finishWith('JUDGE_ERROR')
-      storeSavedCode(USER.id, 1, 'PYTHON', 'print(1)')
-      const { client } = renderAt('/problems')
-      await submitLikeSolvePage(client)
-      await waitFor(() => expect(seen.asked).toBeGreaterThan(0))
-      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('print(1)')
-    })
-
-    it('채점을 기다리는 사이 더 고친 저장본은 지우지 않는다', async () => {
-      const seen = finishWith('COMPLETED')
+    it('그사이 새로 쓴 저장본은 덮지 않는다', async () => {
+      serveBadges()
+      judgeError()
       storeSavedCode(USER.id, 1, 'PYTHON', '# 새로 쓴 코드')
-      const { client } = renderAt('/problems')
+      const { client } = renderAt('/submissions/1')
       await submitLikeSolvePage(client)
-      await waitFor(() => expect(seen.asked).toBeGreaterThan(0))
+      await new Promise((resolve) => setTimeout(resolve, 300))
       expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 새로 쓴 코드')
     })
   })
