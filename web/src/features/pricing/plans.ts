@@ -82,6 +82,10 @@ export const PLANS: Plan[] = [
   },
 ]
 
+export const PRO_PLAN = PLANS.find((p) => p.id === 'pro')!
+
+export const CYCLE_NAME = { monthly: '월간', yearly: '연간' } as const
+
 /** 비교표 칸. true는 포함(체크), 글자는 그대로 보여 준다. 순서는 PLANS와 같다 */
 type Cell = true | string
 

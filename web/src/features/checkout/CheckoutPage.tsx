@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router'
 
-import type { Subscription } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingState } from '@/components/LoadingState'
 import { Alert } from '@/components/ui/alert'
@@ -12,7 +11,7 @@ import { Icon } from '@/components/ui/icon'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { CycleToggle } from '@/features/pricing/CycleToggle'
 import {
-  PLANS,
+  PRO_PLAN,
   proCharge,
   TEST_PAYMENT_NOTICE,
   won,
@@ -21,6 +20,7 @@ import {
 } from '@/features/pricing/plans'
 import {
   addMonthsKst,
+  belongsToSubscription,
   formatLongDate,
   fromBillingCycle,
   startSubscription,
@@ -32,8 +32,6 @@ import { clearDraft, readDraft, saveDraft } from './checkoutDraft'
 import { CheckoutResult } from './CheckoutResult'
 import { classifyFailure, type CheckoutOutcome } from './outcome'
 import { readBillingRedirect, requestBillingKey } from './portone'
-
-const PRO = PLANS.find((p) => p.id === 'pro')!
 
 const COPY = {
   monthly: {
@@ -48,7 +46,7 @@ const COPY = {
     per: '년',
     term: '1년',
     every: '매년',
-    sub: `월 ${won(PRO.price.yearly)}원꼴${YEARLY_FREE_MONTHS > 0 ? ` · ${YEARLY_FREE_MONTHS}개월 무료` : ''}`,
+    sub: `월 ${won(PRO_PLAN.price.yearly)}원꼴${YEARLY_FREE_MONTHS > 0 ? ` · ${YEARLY_FREE_MONTHS}개월 무료` : ''}`,
   },
 } as const
 
@@ -56,9 +54,6 @@ const NO_DRAFT = '카드 등록 정보를 이어받지 못했어요. 동의를 �
 const KEY_EXPIRED = '등록한 카드를 더 쓸 수 없어요. 카드를 다시 등록해 주세요.'
 const NO_STORAGE =
   '이 브라우저에서는 결제 정보를 잠시 저장할 수 없어요. 사생활 보호 모드를 끄고 다시 시도해 주세요.'
-
-/** 프로를 쓰는 중이거나 첫 결제를 확인하는 중이면 결제 화면이 아니라 마이페이지 구독이다 (PAY-01) */
-const belongsToSubscription = (s: Subscription) => s.plan === 'PRO' || s.paymentPending
 
 const cycleFrom = (raw: string | null): Cycle => (raw === 'yearly' ? 'yearly' : 'monthly')
 
@@ -135,16 +130,16 @@ export function Component() {
       }
       // 다른 탭의 결제가 결과 모름으로 남아 있으면 서버는 이번 빌링키를 지울 목록에 넣는다(계약 3단계).
       // 확인 중에서 다시 보낸 빌링키가 그래서 거절됐으면 서버에 확인 중인 결제가 남았는지 본다.
-      // 남았으면 확인 중, 끝났으면 이 빌링키는 더 못 쓰니 새로 등록하게 실패로 보낸다(#356 리뷰)
+      // 남았으면 확인 중, 그 결제로 이미 프로가 됐으면 마이페이지, 끝났으면 이 빌링키는 더 못 쓰니
+      // 새로 등록하게 실패로 보낸다(#356 리뷰)
       if (
         resentAfterUnknown.current &&
         (error as { code?: unknown } | null)?.code === 'BILLING_KEY_INVALID'
       ) {
-        const pending = await queryClient
-          .fetchQuery(subscriptionQuery())
-          .then((s) => s.paymentPending)
-          .catch(() => true)
-        result = pending ? { kind: 'unknown' } : { kind: 'failed', reason: KEY_EXPIRED }
+        const now = await queryClient.fetchQuery(subscriptionQuery()).catch(() => null)
+        if (now?.plan === 'PRO') return navigate(SUBSCRIPTION_PATH, { replace: true })
+        result =
+          !now || now.paymentPending ? { kind: 'unknown' } : { kind: 'failed', reason: KEY_EXPIRED }
       }
       setOutcome(result)
     },
@@ -155,9 +150,12 @@ export function Component() {
   // 돌아온 주소의 빌링키는 읽자마자 지운다(브라우저 기록에 남지 않게). StrictMode의 두 번 실행에도 한 번만 결제한다
   const resumed = useRef(false)
   useEffect(() => {
-    if (!redirect || resumed.current) return
+    if (resumed.current) return
     resumed.current = true
+    // 카드 등록에서 돌아온 게 아니면 남은 값은 지난 등록의 것이다. 뒤로 가기로 새로 불러온 뒤 앞으로 가기로
+    // 그 등록을 마치면 옛 주기·동의로 결제된다(#356 리뷰). 돌아왔으면 위에서 이미 읽었다
     clearDraft()
+    if (!redirect) return
     setParams(draft ? { cycle: draft.cycle } : {}, { replace: true })
     // 동의를 이어받지 못했으면 결제하지 않는다(안내는 notice가 처음부터 띄운다)
     if (resumeWith) start.mutate(resumeWith)
@@ -321,7 +319,7 @@ export function Component() {
           <div className="bg-card border-primary shadow-card flex flex-col gap-5 rounded-[24px] border-2 p-7">
             <div className="flex items-center gap-3">
               <span className="bg-accent text-primary-text inline-flex size-10 items-center justify-center rounded-xl">
-                <Icon name={PRO.icon} size={20} />
+                <Icon name={PRO_PLAN.icon} size={20} />
               </span>
               <div className="flex flex-col">
                 <strong className="text-foreground text-lg">{copy.name}</strong>
@@ -336,7 +334,7 @@ export function Component() {
               <span className="text-muted-foreground text-base">/ {copy.per}</span>
             </p>
             <ul className="m-0 flex list-none flex-col gap-2.5 border-t p-0 pt-5">
-              {PRO.features.map((f) => (
+              {PRO_PLAN.features.map((f) => (
                 <li key={f} className="text-body-foreground flex items-start gap-2.5 text-[15px]">
                   <Icon name="check" size={18} className="text-primary-text mt-0.5" />
                   {f}

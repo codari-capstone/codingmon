@@ -34,8 +34,10 @@ export async function requestBillingKey(customerId: string): Promise<BillingKeyR
       return { code: response.code, message: response.message ?? FALLBACK }
     return { billingKey: response.billingKey }
   } catch (error) {
-    // SDK를 받지 못했거나 요청이 잘못된 경우다. 결제 전이라 화면에 그대로 둔다
-    return { code: 'SDK_ERROR', message: error instanceof Error ? error.message : FALLBACK }
+    // SDK를 받지 못했거나 요청이 잘못된 경우다. 결제 전이라 화면에 그대로 둔다.
+    // 원문은 영문 기술 문구라 화면에는 정해 둔 문구를 보이고 원문은 콘솔에만 남긴다(#356 리뷰)
+    console.error('[PortOne] 카드 등록 요청 실패', error)
+    return { code: 'SDK_ERROR', message: FALLBACK }
   }
 }
 

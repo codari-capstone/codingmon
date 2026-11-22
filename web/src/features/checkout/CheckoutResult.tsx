@@ -3,12 +3,10 @@ import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Icon, type IconName } from '@/components/ui/icon'
 import { Mascot } from '@/components/ui/mascot'
-import { AI_DAILY, TEST_PAYMENT_NOTICE, won, proCharge } from '@/features/pricing/plans'
+import { AI_DAILY, CYCLE_NAME, proCharge, TEST_PAYMENT_NOTICE, won } from '@/features/pricing/plans'
 import { formatLongDate, SUBSCRIPTION_PATH } from '@/features/subscription/subscriptionQuery'
 import { cn } from '@/lib/utils'
 import type { CheckoutOutcome } from './outcome'
-
-const CYCLE_NAME = { monthly: '월간', yearly: '연간' } as const
 
 const ICON_TONE = {
   warning: 'bg-warning-soft text-warning-text',

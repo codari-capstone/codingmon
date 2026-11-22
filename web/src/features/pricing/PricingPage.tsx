@@ -8,7 +8,11 @@ import { Icon } from '@/components/ui/icon'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { StartButton } from '@/features/landing/StartButton'
-import { SUBSCRIPTION_PATH, subscriptionQuery } from '@/features/subscription/subscriptionQuery'
+import {
+  belongsToSubscription,
+  SUBSCRIPTION_PATH,
+  subscriptionQuery,
+} from '@/features/subscription/subscriptionQuery'
 import { cn } from '@/lib/utils'
 import { CycleToggle } from './CycleToggle'
 import {
@@ -208,7 +212,7 @@ function ProStart({ signedIn, cycle }: { signedIn: boolean | undefined; cycle: C
     )
   }
   if (signedIn) {
-    const subscribed = data !== undefined && (data.plan === 'PRO' || data.paymentPending)
+    const subscribed = data !== undefined && belongsToSubscription(data)
     return (
       <Button asChild size="lg" fullWidth>
         {subscribed ? (

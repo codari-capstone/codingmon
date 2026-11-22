@@ -158,6 +158,15 @@ describe('CheckoutPage 결제 화면 (PAY-01)', () => {
     expect(sessionStorage.length).toBe(0)
   })
 
+  // bfcache를 쓰지 않는 브라우저는 뒤로 가기에서 화면을 새로 불러온다(#356 리뷰)
+  it('카드 등록에서 돌아온 게 아니면 지난 등록의 저장 값을 지운다', async () => {
+    saveDraft({ cycle: 'monthly', agreeTerms: true, agreeAutopay: true })
+    renderCheckout({ url: '/checkout?cycle=yearly' })
+
+    expect(await screen.findByRole('heading', { name: '프로 구독 결제' })).toBeInTheDocument()
+    expect(sessionStorage.length).toBe(0)
+  })
+
   it('고객 ID로 카드를 등록하고, 빌링키·주기·동의를 보낸다', async () => {
     vi.mocked(requestBillingKey).mockResolvedValue({ billingKey: 'billing-1' })
     const user = userEvent.setup()
@@ -304,6 +313,26 @@ describe('CheckoutPage 결제 결과 (PAY-02)', () => {
     expect(screen.getByText(/카드를 다시 등록해 주세요/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '다시 시도' }))
     expect(await screen.findByRole('heading', { name: '프로 구독 결제' })).toBeInTheDocument()
+  })
+
+  // 다른 탭의 결과 모름 결제가 그 사이 성공으로 확정됐으면 구독은 이미 시작됐다(#356 리뷰)
+  it('다시 보낸 빌링키가 거절됐는데 그 사이 프로가 됐으면 마이페이지 구독으로 보낸다', async () => {
+    let calls = 0
+    const { user } = await payWith(
+      () =>
+        ++calls === 1
+          ? HttpResponse.json({ status: 503, code: 'PAYMENT_UNAVAILABLE' }, { status: 503 })
+          : HttpResponse.json({ status: 400, code: 'BILLING_KEY_INVALID' }, { status: 400 }),
+      () =>
+        calls === 1
+          ? { ...freeSubscription(1), paymentPending: true }
+          : calls > 1
+            ? ACTIVE
+            : freeSubscription(1),
+    )
+    await user.click(await screen.findByRole('button', { name: '다시 시도' }))
+
+    expect(await screen.findByRole('heading', { name: '내 구독 화면' })).toBeInTheDocument()
   })
 
   // 실패 뒤 구독을 다시 받는 동안 캐시에는 앞선 확인 중 값이 남아 있다(#356 리뷰)

@@ -13,7 +13,8 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { MyLayout } from '@/features/mypage/MyLayout'
 import {
   AI_DAILY,
-  PLANS,
+  CYCLE_NAME,
+  PRO_PLAN,
   proCharge,
   TEST_PAYMENT_NOTICE,
   won,
@@ -21,8 +22,6 @@ import {
 } from '@/features/pricing/plans'
 import { formatLongDate, fromBillingCycle, subscriptionQuery } from './subscriptionQuery'
 
-const PRO = PLANS.find((p) => p.id === 'pro')!
-const CYCLE_NAME = { monthly: '월간', yearly: '연간' } as const
 const SHORT_DATE = new Intl.DateTimeFormat('ko-KR', {
   month: 'long',
   day: 'numeric',
@@ -160,7 +159,7 @@ export function Component() {
         >
           <div className="flex flex-wrap items-center gap-4">
             <span className="bg-accent text-primary-text inline-flex size-12 shrink-0 items-center justify-center rounded-xl">
-              <Icon name={pro ? PRO.icon : 'code'} size={22} />
+              <Icon name={pro ? PRO_PLAN.icon : 'code'} size={22} />
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -206,7 +205,7 @@ export function Component() {
             {pro ? '프로에서 쓰고 있는 것' : '프로로 올리면'}
           </h2>
           <ul className="m-0 mt-4 grid list-none gap-2.5 p-0 sm:grid-cols-2">
-            {PRO.features.map((f) => (
+            {PRO_PLAN.features.map((f) => (
               <li key={f} className="text-body-foreground flex items-start gap-2.5 text-[15px]">
                 <Icon
                   name="check"
