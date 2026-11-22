@@ -1,12 +1,20 @@
-import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { Accordion } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
+import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { StartButton } from '@/features/landing/StartButton'
+import {
+  belongsToSubscription,
+  SUBSCRIPTION_PATH,
+  subscriptionQuery,
+} from '@/features/subscription/subscriptionQuery'
 import { cn } from '@/lib/utils'
+import { CycleToggle } from './CycleToggle'
 import {
   COMPARE,
   COMPARE_NOTE,
@@ -14,7 +22,6 @@ import {
   PLANS,
   TEST_PAYMENT_NOTICE,
   won,
-  YEARLY_FREE_MONTHS,
   type Cycle,
   type Plan,
 } from './plans'
@@ -111,45 +118,6 @@ export function Component() {
   )
 }
 
-/** PRICE-02. 고른 칸은 흰 면 + 그림자, 아닌 칸은 투명 + 흐린 글자. */
-function CycleToggle({ cycle, onChange }: { cycle: Cycle; onChange: (c: Cycle) => void }) {
-  const options: { value: Cycle; label: string }[] = [
-    { value: 'monthly', label: '월간 결제' },
-    { value: 'yearly', label: '연간 결제' },
-  ]
-  return (
-    <div role="group" aria-label="결제 주기" className="bg-muted inline-flex rounded-full p-1">
-      {options.map((o) => {
-        const on = cycle === o.value
-        return (
-          <button
-            key={o.value}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onChange(o.value)}
-            className={cn(
-              'focus-visible:outline-ring inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border-0 px-5 text-[15px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2',
-              on ? 'bg-card text-foreground shadow-card' : 'text-muted-foreground bg-transparent',
-            )}
-          >
-            {o.label}
-            {/* 공백이 없으면 이름이 '연간 결제2개월 무료'로 붙어 읽힌다. 간격은 gap이 맡는다.
-                한 달도 안 아끼면 배지를 숨긴다 */}
-            {o.value === 'yearly' && YEARLY_FREE_MONTHS > 0 ? (
-              <>
-                {' '}
-                <span className="bg-success-soft text-success-text rounded-full px-2 py-0.5 text-xs font-bold">
-                  {YEARLY_FREE_MONTHS}개월 무료
-                </span>
-              </>
-            ) : null}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 function PlanCard({
   plan,
   cycle,
@@ -198,7 +166,7 @@ function PlanCard({
           <p className="text-muted-foreground m-0 text-sm">{plan.note[cycle]}</p>
         </div>
         {pro ? (
-          <ProStart signedIn={signedIn} />
+          <ProStart signedIn={signedIn} cycle={cycle} />
         ) : (
           <StartButton signedIn={signedIn} variant="secondary" fullWidth />
         )}
@@ -222,11 +190,21 @@ function PlanCard({
 }
 
 /**
- * 비로그인은 로그인 화면(돌아올 곳은 이 화면), 로그인한 사용자는 아직 누를 수 없다 (PRICE-03).
- * 결제 화면(#332)이 생기면 로그인한 사용자를 그리로 보낸다.
+ * 프로 버튼 (PRICE-03). 비로그인은 로그인 화면(돌아올 곳은 이 화면). 로그인한 사용자는 무료·결제 실패면
+ * 고른 주기로 결제 화면, 프로를 쓰는 중이거나 첫 결제를 확인하는 중이면 마이페이지 구독이다.
+ * 구독을 읽지 못하면 결제 화면으로 보낸다 — 결제 화면이 다시 확인하고 맞는 곳으로 보낸다.
  */
-function ProStart({ signedIn }: { signedIn: boolean | undefined }) {
-  if (signedIn === undefined) {
+function ProStart({ signedIn, cycle }: { signedIn: boolean | undefined; cycle: Cycle }) {
+  const { data, isPending, error } = useQuery({
+    ...subscriptionQuery(),
+    enabled: signedIn === true,
+  })
+  // 세션이 끊겼으면 캐시에서 지워 헤더와 버튼을 비로그인으로 바꾼다(결제 화면과 같은 처리, #356 리뷰)
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, error)
+  }, [queryClient, error])
+  if (signedIn === undefined || (signedIn && isPending)) {
     return (
       <Button size="lg" fullWidth aria-hidden tabIndex={-1} className="invisible">
         프로 시작하기
@@ -234,9 +212,14 @@ function ProStart({ signedIn }: { signedIn: boolean | undefined }) {
     )
   }
   if (signedIn) {
+    const subscribed = data !== undefined && belongsToSubscription(data)
     return (
-      <Button size="lg" fullWidth disabled>
-        결제 준비 중
+      <Button asChild size="lg" fullWidth>
+        {subscribed ? (
+          <Link to={SUBSCRIPTION_PATH}>내 구독 보기</Link>
+        ) : (
+          <Link to={`/checkout?cycle=${cycle}`}>프로 시작하기</Link>
+        )}
       </Button>
     )
   }

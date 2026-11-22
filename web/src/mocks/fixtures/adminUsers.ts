@@ -1,5 +1,6 @@
 import type { AdminSolvedProblem, AdminUserDetail, AdminUserSubmission } from '@/api/types'
 import { problemHistories, submissionsOf } from './history'
+import { freeSubscription } from './subscriptions'
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
@@ -59,6 +60,11 @@ export function seedAdminUsers(now = Date.now()): MockAdminUser[] {
       createdAt: id <= 4 ? null : new Date(now - (SEEDS.length - index) * DAY).toISOString(),
       suspendedAt: suspension ? new Date(now - suspension.hoursAgo * HOUR).toISOString() : null,
       suspensionReason: suspension?.reason ?? null,
+      // 구독 칸(ADM-14·15)은 아직 화면이 없다. 모두 구독한 적 없는 무료 회원으로 둔다
+      subscription: freeSubscription(id),
+      subscriptionStartedAt: null,
+      refundAmount: null,
+      payments: [],
     }
   })
 }

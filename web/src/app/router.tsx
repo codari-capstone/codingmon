@@ -133,6 +133,12 @@ export const router = createBrowserRouter([
                 handle: { pageTone: 'subtle', title: '처음 안내' } satisfies PageHandle,
               },
               {
+                // 프로 구독 결제·결과 (PAY-01·02, #332). 카드가 옅은 바탕 위에 놓인다(디자인 Checkout)
+                path: 'checkout',
+                lazy: () => import('@/features/checkout/CheckoutPage'),
+                handle: { pageTone: 'subtle', title: '프로 구독 결제' } satisfies PageHandle,
+              },
+              {
                 path: 'submissions',
                 lazy: () => import('@/features/history/SubmissionHistoryPage'),
                 handle: { title: '제출 기록' } satisfies PageHandle,
@@ -160,6 +166,12 @@ export const router = createBrowserRouter([
                 path: 'me/account',
                 lazy: () => import('@/features/mypage/MyAccountPage'),
                 handle: { pageTone: 'subtle', title: '계정 설정' } satisfies PageHandle,
+              },
+              {
+                // 구독 (MY-06, #332). 결제 화면·요금제가 이리로 보낸다
+                path: 'me/subscription',
+                lazy: () => import('@/features/subscription/MySubscriptionPage'),
+                handle: { pageTone: 'subtle', title: '구독' } satisfies PageHandle,
               },
               {
                 path: 'me/display',
