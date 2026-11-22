@@ -16,7 +16,6 @@ import {
   CYCLE_NAME,
   PRO_PLAN,
   proCharge,
-  TEST_PAYMENT_NOTICE,
   won,
   type Cycle,
 } from '@/features/pricing/plans'
@@ -261,7 +260,7 @@ export function Component() {
       {typeof notice === 'string' ? <Alert tone="info" title={notice} /> : null}
       {content}
       <p className="text-muted-foreground m-0 text-[13px]">
-        {TEST_PAYMENT_NOTICE} 환불은{' '}
+        환불은{' '}
         <a
           href="/refund"
           target="_blank"
