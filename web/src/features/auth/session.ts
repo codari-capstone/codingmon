@@ -69,6 +69,8 @@ export async function adoptSession(client: QueryClient, user: CurrentUser): Prom
   client.removeQueries({ queryKey: ['ai-quota'] })
   // 배지(BADGE-01)도 본인 것이다.
   client.removeQueries({ queryKey: ['badges'] })
+  // 구독(MY-06)도 본인 것이다. 남기면 B의 요금제 버튼이 A의 프로 상태로 [내 구독 보기]가 된다.
+  client.removeQueries({ queryKey: ['subscription'] })
   // 축하 창은 이번 세션에 낸 제출(['submit'] mutation)의 채점을 지켜본다(BadgeCelebrator).
   // 앞사람의 제출을 남기면 B가 A의 제출을 404가 날 때까지 묻는다. 지금 이 코드를 부르는
   // 로그인 mutation은 남겨야 해서 제출 기록만 지운다(#248 리뷰). 키는 submitQuery.ts의

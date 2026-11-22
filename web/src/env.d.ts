@@ -7,6 +7,10 @@
 interface ImportMetaEnv {
   /** 채점 진행률 폴링 간격(ms) */
   readonly VITE_POLL_INTERVAL_MS?: string
+  /** 포트원 상점 ID (PAY-01). 공개 값이다. 비어 있으면 결제 버튼이 '결제 설정이 아직 준비되지 않았어요'를 띄운다 */
+  readonly VITE_PORTONE_STORE_ID?: string
+  /** 포트원 채널 키(토스페이먼츠 테스트 채널). 공개 값이다. API Secret은 서버에만 둔다 */
+  readonly VITE_PORTONE_CHANNEL_KEY?: string
 }
 
 interface ImportMeta {

@@ -1,0 +1,68 @@
+import { queryOptions } from '@tanstack/react-query'
+
+import { api } from '@/api/client'
+import { fail } from '@/api/fail'
+import type { BillingCycle, Subscription } from '@/api/types'
+import type { Cycle } from '@/features/pricing/plans'
+
+/** 마이페이지 구독 (MY-06). 결제 화면·요금제가 이리로 보낸다 */
+export const SUBSCRIPTION_PATH = '/me/subscription'
+
+/** 사용자별 응답이라 `adoptSession`이 로그인할 때 지운다(session.ts) */
+export const SUBSCRIPTION_KEY = ['subscription'] as const
+
+/** 화면은 'monthly'·'yearly'(요금제 토글과 같은 값), 계약은 'MONTHLY'·'YEARLY'다 */
+export const toBillingCycle = (cycle: Cycle): BillingCycle =>
+  cycle === 'monthly' ? 'MONTHLY' : 'YEARLY'
+
+/**
+ * 내 구독. 구독한 적이 없어도 `plan: FREE`, `status: NONE`이고 카드 등록에 쓸 `customerId`는 늘 있다(계약).
+ * 결제 화면·요금제·마이페이지가 같은 키를 본다. 결제 결과가 다른 탭에서 바뀔 수 있어 매번 새로 받는다.
+ */
+export function subscriptionQuery() {
+  return queryOptions({
+    queryKey: SUBSCRIPTION_KEY,
+    queryFn: async (): Promise<Subscription> => {
+      const result = await api.GET('/api/users/me/subscription')
+      if (result.data === undefined) fail(result)
+      return result.data
+    },
+    staleTime: 0,
+  })
+}
+
+/** 프로 구독 시작 (PAY-01). 금액은 서버가 `cycle`로 정한다. `agreed`는 동의 체크 2개를 모두 했다는 뜻이다 */
+export async function startSubscription(input: {
+  billingKey: string
+  cycle: Cycle
+}): Promise<Subscription> {
+  const result = await api.POST('/api/users/me/subscription', {
+    body: { billingKey: input.billingKey, cycle: toBillingCycle(input.cycle), agreed: true },
+  })
+  if (result.data === undefined) fail(result)
+  return result.data
+}
+
+/**
+ * 결제일에서 개월 수를 더한 날. 서버처럼 달의 끝을 넘지 않는다(1월 31일 + 1개월 = 2월 28일).
+ * 결제 전 고지의 '다음 결제일'에 쓴다. 결제 뒤에는 서버의 `currentPeriodEnd`를 쓴다.
+ */
+export function addMonths(from: Date, months: number): Date {
+  const d = new Date(from)
+  const day = d.getDate()
+  d.setDate(1)
+  d.setMonth(d.getMonth() + months)
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  d.setDate(Math.min(day, last))
+  return d
+}
+
+const LONG_DATE = new Intl.DateTimeFormat('ko-KR', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+  timeZone: 'Asia/Seoul',
+})
+
+/** '2026년 12월 22일'. 결제일은 한국 시각으로 보여 준다 */
+export const formatLongDate = (date: Date | string) => LONG_DATE.format(new Date(date))
