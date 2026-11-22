@@ -14,12 +14,13 @@ import { CodeBlock } from '@/components/ui/code-block'
 import { Button } from '@/components/ui/button'
 import { RUNTIME_ERROR_INFO, STATUS_LABEL, VERDICT_INFO } from '@/constants/verdicts'
 import { LANGUAGE_LABEL, SOURCE_FILE_NAME } from '@/features/solve/labels'
-import { solvePath } from '@/features/solve/solvePath'
+import { retryState, solvePath } from '@/features/solve/solvePath'
 import { AnalysisPanel } from '@/features/ai/AnalysisPanel'
 import { analysisQuery } from '@/features/ai/analysisQuery'
 import { CodeReviewPanel } from '@/features/ai/CodeReviewPanel'
 import { suspectLines } from '@/features/ai/countLines'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
+import { useAuth } from '@/features/auth/useAuth'
 import { parsePathId } from '@/lib/pathId'
 import { BLANK_PIXEL, cn } from '@/lib/utils'
 import { nextActions } from './nextActions'
@@ -224,7 +225,8 @@ function Scene({ result }: { result: SubmissionResult }) {
 
 /** 다음 행동 (RES-06·07)과 이 문제의 제출 기록. 주 동작(primary)은 첫 버튼 하나다. */
 function NextActions({ result }: { result: SubmissionResult }) {
-  const actions = nextActions(result)
+  const { user } = useAuth()
+  const actions = nextActions(result, user?.id)
   // 끝난 제출만 기록 목록에 있다(계약). 채점 중에는 갈 곳이 없다.
   const history = isFinished(result.status)
   if (actions.length === 0 && !history) return null
@@ -233,7 +235,9 @@ function NextActions({ result }: { result: SubmissionResult }) {
     <div className="mt-1.5 flex flex-wrap gap-2.5">
       {actions.map((action) => (
         <Button key={action.label} asChild className="min-h-11">
-          <Link to={action.to}>{action.label}</Link>
+          <Link to={action.to} state={action.state}>
+            {action.label}
+          </Link>
         </Button>
       ))}
       {history ? (
@@ -248,6 +252,7 @@ function NextActions({ result }: { result: SubmissionResult }) {
 /** 제출 결과 (RES-01~07). */
 export function Component() {
   const params = useParams()
+  const { user } = useAuth()
   const submissionId = parsePathId(params.id)
   const { data, isPending, error, refetch } = useQuery({
     ...submissionResultQuery(submissionId ?? 0),
@@ -311,7 +316,7 @@ export function Component() {
       >
         <div className="flex min-w-0 flex-[999_1_480px] flex-col gap-3.5">
           <p className="text-eyebrow text-primary-text">
-            {/* 다시 풀기와 같은 주소를 쓴다 (solvePath) */}
+            {/* 다시 풀기와 같은 주소를 쓴다 (solvePath). 코드는 버튼만 들고 가고(SOLVE-11) 제목은 문제로 간다 */}
             <Link to={solvePath(data.problemId, data.language)} className="hover:underline">
               {data.problemTitle}
             </Link>
@@ -352,6 +357,7 @@ export function Component() {
               submissionId={data.id}
               sourceCode={data.sourceCode ?? ''}
               retryPath={solvePath(data.problemId, data.language)}
+              retryState={retryState(user?.id, data.language, data.sourceCode)}
             />
           </div>
         ) : null}

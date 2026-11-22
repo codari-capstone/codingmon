@@ -56,6 +56,44 @@ export function storeSavedCode(
 }
 
 /**
+ * 제출이 접수된 코드의 저장본을 지운다. 판정과 관계없이, 낸 코드는 제출 기록에 남는다.
+ *
+ * 저장본이 낸 코드와 같을 때만 지운다. 접수를 기다리는 사이 더 친 글자는 제출 기록에 없어서
+ * 지우면 되찾을 수 없다. 같은 이유로 다른 언어의 저장본도 건드리지 않는다.
+ */
+export function forgetSubmittedCode(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+  submitted: string,
+): void {
+  if (userId === undefined) return
+  try {
+    const key = savedCodeKey(userId, problemId, language)
+    if (localStorage.getItem(key) === submitted) localStorage.removeItem(key)
+  } catch {
+    // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
+  }
+}
+
+/**
+ * 채점 불가로 끝난 제출의 코드를 저장본으로 되돌린다.
+ *
+ * 채점 불가만 있는 문제는 제출 기록에 나오지 않아(계약 getMyProblemHistory) 지운 채로 두면
+ * 되찾을 길이 없다. 그사이 새로 쓴 저장본이 있으면 그쪽이 더 새 코드라 덮지 않는다.
+ */
+export function restoreUnjudgedCode(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+  code: string,
+): void {
+  if (readSavedCode(userId, problemId, language) === null) {
+    storeSavedCode(userId, problemId, language, code)
+  }
+}
+
+/**
  * 저장된 코드를 전부 지운다. 로그아웃이 부른다.
  *
  * 키에 사용자가 들어가 있어 B가 A의 코드를 볼 일은 없지만, 로그아웃은 "이 사람의

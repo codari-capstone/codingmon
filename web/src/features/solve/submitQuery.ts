@@ -5,6 +5,9 @@ import { api } from '@/api/client'
 import { fail } from '@/api/fail'
 import type { Language } from '@/api/types'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
+import { useAuth } from '@/features/auth/useAuth'
+import { forgetSubmittedCode } from './savedCode'
+import { dropRetryState } from './solvePath'
 
 export interface SubmitInput {
   problemId: number
@@ -50,6 +53,7 @@ export const SUBMIT_MUTATION_KEY = ['submit'] as const
 export function useSubmit() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { user } = useAuth()
 
   return useMutation({
     // 축하 창(BadgeCelebrator)이 이 키로 이번 세션에 낸 제출 번호를 읽어 채점을 지켜본다
@@ -57,7 +61,10 @@ export function useSubmit() {
     mutationFn: submitCode,
     // 제출은 되돌릴 수 없다(시도 횟수가 오른다). 실패하면 사람이 다시 누르게 한다.
     retry: false,
-    onSuccess: (id) => {
+    onSuccess: (id, input) => {
+      // 접수에 실패하면 지우지 않는다. 그 코드는 아직 제출 기록에 없다.
+      forgetSubmittedCode(user?.id, input.problemId, input.language, input.sourceCode)
+      dropRetryState()
       // 판정과 관계없이 접수된 제출로 그날이 이어진다(STREAK). 상단 바 칩은 마운트된 채라 직접 알린다
       void queryClient.invalidateQueries({ queryKey: ['streak'] })
       void navigate(`/submissions/${id}`)

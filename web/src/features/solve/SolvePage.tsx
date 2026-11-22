@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { useParams, useSearchParams } from 'react-router'
+import { useLocation, useParams, useSearchParams } from 'react-router'
 
 import type { Language, ProblemDetailView } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
@@ -20,7 +20,7 @@ import { RunButton, SampleRun } from './SampleRun'
 import { useSampleRun } from './sampleRunQuery'
 import { Samples } from './Samples'
 import { readSavedCode, storeSavedCode } from './savedCode'
-import { askedLanguage } from './solvePath'
+import { askedLanguage, retriedCode } from './solvePath'
 import { problemDetailQuery } from './solveQuery'
 import { StarterCodeButton } from './StarterCodeButton'
 import { useSubmit } from './submitQuery'
@@ -103,7 +103,14 @@ function Workspace({ problem }: { problem: ProblemDetailView }) {
       { replace: true, preventScrollReset: true },
     )
   // 언어별로 따로 들고 있는다. C++로 갔다 돌아왔을 때 Python 코드가 그대로 있어야 한다.
-  const [codeByLanguage, setCodeByLanguage] = useState<Partial<Record<Language, string>>>({})
+  // [다시 풀기]로 왔으면 그 제출 코드로 시작한다. 이미 고친 저장본이 있으면 그쪽이 더 새 코드다.
+  const { state: locationState } = useLocation()
+  const [codeByLanguage, setCodeByLanguage] = useState<Partial<Record<Language, string>>>(() => {
+    const retry = retriedCode(locationState, user?.id)
+    return retry && readSavedCode(user?.id, problem.id, retry.language) === null
+      ? { [retry.language]: retry.code }
+      : {}
+  })
   // 밖에서 코드를 갈아끼운 횟수. 에디터 key에 들어간다 — 아래 CodeEditor 주석.
   const [generation, setGeneration] = useState(0)
 

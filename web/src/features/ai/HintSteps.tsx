@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { HintBox } from '@/components/ui/hint-box'
 import { Stepper } from '@/components/ui/stepper'
 import { problemMessage } from '@/features/auth/problemCode'
+import type { RetryState } from '@/features/solve/solvePath'
 import { useRevealHint } from './analysisQuery'
 
 /** 단계 이름 (AI_FEATURES 4절). 순서가 곧 단계다. 힌트 상자와 버튼에 쓴다 */
@@ -30,11 +31,14 @@ export function HintSteps({
   submissionId,
   analysis,
   retryPath,
+  retryState,
 }: {
   submissionId: number
   analysis: SubmissionAnalysis
-  /** 다시 풀기와 같은 주소 (solvePath). 저장해 둔 코드가 열린다. */
+  /** 다시 풀기와 같은 주소 (solvePath) */
   retryPath: string
+  /** 풀이 화면에 들고 갈 제출 코드. 힌트를 보고 그 코드를 고치러 간다. */
+  retryState?: RetryState
 }) {
   const reveal = useRevealHint(submissionId)
   // 단계는 셋뿐이다(계약: 길이 = revealedHintLevel ≤ 3). 넘쳐 와도 이름 없는 단계를 그리지 않는다
@@ -115,7 +119,9 @@ export function HintSteps({
 
       {/* 패널의 주 동작이다. 힌트를 보고 고치러 가는 것이 이 화면의 마지막 걸음이다 */}
       <Button asChild size="lg" fullWidth className="mt-2">
-        <Link to={retryPath}>코드 고치러 가기</Link>
+        <Link to={retryPath} state={retryState}>
+          코드 고치러 가기
+        </Link>
       </Button>
     </section>
   )

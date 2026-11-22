@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { clearSavedCode, readSavedCode, savedCodeKey, storeSavedCode } from './savedCode'
+import {
+  clearSavedCode,
+  forgetSubmittedCode,
+  readSavedCode,
+  savedCodeKey,
+  storeSavedCode,
+} from './savedCode'
 
 describe('savedCode', () => {
   afterEach(() => {
@@ -56,6 +62,24 @@ describe('savedCode', () => {
     expect(readSavedCode(6, 2, 'CPP')).toBeNull()
     // 테마는 사람이 아니라 이 기기의 보기 설정이다.
     expect(localStorage.getItem('codari-theme')).toBe('dark')
+  })
+
+  it('제출한 코드의 저장본만 지운다', () => {
+    storeSavedCode(5, 1, 'PYTHON', 'print(1)')
+    storeSavedCode(5, 1, 'CPP', '// 쓰던 C++')
+
+    forgetSubmittedCode(5, 1, 'PYTHON', 'print(1)')
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+    expect(readSavedCode(5, 1, 'CPP')).toBe('// 쓰던 C++')
+  })
+
+  it('제출 뒤에 더 고친 저장본은 남긴다', () => {
+    storeSavedCode(5, 1, 'PYTHON', 'print(2)')
+
+    forgetSubmittedCode(5, 1, 'PYTHON', 'print(1)')
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(2)')
   })
 
   /**

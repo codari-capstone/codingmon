@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { BadgeCode } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
+import { readSavedCode, storeSavedCode } from '@/features/solve/savedCode'
 import { submitCode, SUBMIT_MUTATION_KEY } from '@/features/solve/submitQuery'
 import { badgesFor } from '@/mocks/fixtures/badges'
 import { resetSubmissions } from '@/mocks/handlers'
@@ -430,6 +431,50 @@ describe('BadgeCelebrator (BADGE-03)', () => {
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/me/badges'))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  describe('채점 불가 코드 되돌리기 (SOLVE-11)', () => {
+    const judgeError = () =>
+      server.use(
+        http.get('*/api/submissions/:id', () =>
+          HttpResponse.json({
+            id: 1,
+            problemId: 1,
+            problemTitle: '두 수의 합',
+            language: 'PYTHON',
+            status: 'JUDGE_ERROR',
+            progress: 0,
+            verdict: null,
+            sourceCode: 'print(1)',
+            runtimeErrorType: null,
+            runtimeErrorMessage: null,
+            compilerMessage: null,
+            executionTimeMs: null,
+            memoryUsedKb: null,
+            submittedAt: '2026-10-24T05:00:00Z',
+            judgedAt: '2026-10-24T05:00:03Z',
+          }),
+        ),
+      )
+    afterEach(() => localStorage.clear())
+
+    it('지워진 저장본을 제출한 코드로 되돌린다', async () => {
+      serveBadges()
+      judgeError()
+      const { client } = renderAt('/submissions/1')
+      await submitLikeSolvePage(client)
+      await waitFor(() => expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('print(1)'))
+    })
+
+    it('그사이 새로 쓴 저장본은 덮지 않는다', async () => {
+      serveBadges()
+      judgeError()
+      storeSavedCode(USER.id, 1, 'PYTHON', '# 새로 쓴 코드')
+      const { client } = renderAt('/submissions/1')
+      await submitLikeSolvePage(client)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 새로 쓴 코드')
+    })
   })
 
   it('기록에서 연 끝난 제출(내가 이번에 낸 제출이 아님)로는 배지를 묻지 않는다', async () => {

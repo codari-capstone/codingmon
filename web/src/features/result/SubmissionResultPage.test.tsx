@@ -9,9 +9,12 @@ import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { resetSubmissions } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
+import { retriedCode } from '@/features/solve/solvePath'
 import { Component as SubmissionResultPage } from './SubmissionResultPage'
 
 const USER = { id: 1, nickname: '코다리', role: 'USER' } as const
+
+let lastRouter: ReturnType<typeof createMemoryRouter>
 
 function renderResult(url = '/submissions/1') {
   const client = createQueryClient()
@@ -23,6 +26,7 @@ function renderResult(url = '/submissions/1') {
     ],
     { initialEntries: [url] },
   )
+  lastRouter = router
 
   render(
     <QueryClientProvider client={client}>
@@ -648,14 +652,27 @@ describe('쉬운 설명과 에러 안내 (RES-03~06)', () => {
       renderResult()
       await screen.findByText('채점 불가')
 
-      // 결과 응답에는 제출한 코드가 없다. 풀이 화면으로 돌려보내면 저장해 둔 코드가
-      // 그대로 열린다 (SOLVE-11).
       // [다시 풀기]와 같은 주소를 쓴다. 언어가 빠지면 C++로 제출한 사람이 Python 자리로
       // 돌아간다 (solvePath).
       expect(screen.getByRole('link', { name: '다시 제출하기' })).toHaveAttribute(
         'href',
         '/problems/1?language=PYTHON',
       )
+    })
+
+    it('다시 제출하기는 제출한 코드를 들고 간다 (SOLVE-11)', async () => {
+      const user = userEvent.setup()
+      judgeError()
+      renderResult()
+
+      await user.click(await screen.findByRole('link', { name: '다시 제출하기' }))
+
+      await screen.findByRole('heading', { name: '문제 풀이 도착' })
+      expect(retriedCode(lastRouter.state.location.state, USER.id)).toEqual({
+        userId: USER.id,
+        language: 'PYTHON',
+        code: 'print(1)',
+      })
     })
 
     it('채점 불가에는 진행 문구를 띄우지 않는다', async () => {
