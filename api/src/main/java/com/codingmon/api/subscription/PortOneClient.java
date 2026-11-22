@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +35,12 @@ public class PortOneClient {
     private static final ParameterizedTypeReference<Map<String, Object>> JSON = new ParameterizedTypeReference<>() {
     };
 
+    // 포트원 오류 type. 이름은 포트원 REST V2 문서를 따르며, 키를 받은 뒤 실제 응답으로 한 번 확인한다.
+    private static final Set<String> ALREADY_PAID = Set.of("ALREADY_PAID", "ALREADY_PAID_OR_WAITING");
+    private static final Set<String> KEY_GONE = Set.of("BILLING_KEY_NOT_FOUND", "BILLING_KEY_ALREADY_DELETED");
+    // 결제 실패로 닫는 오류. 카드사 거절과 쓸 수 없는 빌링키뿐이다.
+    private static final Set<String> DECLINED = Set.of("PG_PROVIDER", "BILLING_KEY_NOT_FOUND", "BILLING_KEY_ALREADY_DELETED");
+
     enum KeyOwner { MATCH, INVALID }
 
     // 포트원 결제 조회 결과. 결제 대기·가상계좌 발급 같은 중간 상태는 IN_PROGRESS로 본다.
@@ -57,7 +64,7 @@ public class PortOneClient {
     record AlreadyUsed() implements PayResult {
     }
 
-    // 응답을 받지 못했다(시간 초과·5xx). 돈이 나갔는지 모른다.
+    // 응답을 받지 못했거나(시간 초과·5xx) 카드와 상관없는 오류(인증·요청 제한 등)다. 돈이 나갔는지 모르는 것으로 둔다.
     record Unknown() implements PayResult {
     }
 
@@ -122,14 +129,19 @@ public class PortOneClient {
             }
             Map<String, Object> error = errorBody(e);
             String type = String.valueOf(error.get("type"));
-            // ALREADY_PAID 등: 같은 ID가 이미 결제됐거나 진행 중이다(openapi startSubscription 3단계).
-            if (type.contains("ALREADY") || e.getStatusCode().value() == 409) {
+            // 같은 ID가 이미 결제됐거나 진행 중이다(openapi startSubscription 3단계).
+            if (ALREADY_PAID.contains(type)) {
                 return new AlreadyUsed();
             }
-            String message = error.get("message") instanceof String m ? m : "카드 결제에 실패했어요";
-            return new Declined(message);
+            if (DECLINED.contains(type)) {
+                String message = error.get("message") instanceof String m ? m : "카드 결제에 실패했어요";
+                return new Declined(message);
+            }
+            // 인증·요청 제한·요청 형식 오류 등 카드와 상관없는 오류. 실패로 닫지 않고 결과 모름으로 두면 같은 ID로 다시 보낸다.
+            log.error("포트원 결제 요청 오류 {}: {} {}", paymentId, e.getStatusCode(), type);
+            return new Unknown();
         } catch (RestClientException e) {
-            log.warn("포트원 결제 응답 없음 {}: {}", paymentId, e.toString());
+            log.warn("포트원 결제 응답 없음 {}: {}", paymentId, e.getClass().getSimpleName());
             return new Unknown();
         }
     }
@@ -159,14 +171,16 @@ public class PortOneClient {
             rest.delete().uri("/billing-keys/{key}?storeId={store}", billingKey, storeId).retrieve().toBodilessEntity();
             return true;
         } catch (RestClientResponseException e) {
-            if (e.getStatusCode().is4xxClientError()) {
-                // BILLING_KEY_NOT_FOUND·BILLING_KEY_ALREADY_DELETED. 삭제 응답을 잃었거나 같은 키가 두 번 들어간 경우다.
+            // 삭제 응답을 잃었거나 같은 키가 두 번 들어간 경우다. 다른 오류(인증·요청 제한 등)는 다음 실행 때 다시 지운다.
+            String type = String.valueOf(errorBody(e).get("type"));
+            if (KEY_GONE.contains(type)) {
                 return true;
             }
-            log.warn("포트원 빌링키 삭제 실패: {}", e.getStatusCode());
+            log.warn("포트원 빌링키 삭제 실패: {} {}", e.getStatusCode(), type);
             return false;
         } catch (RestClientException e) {
-            log.warn("포트원 빌링키 삭제 응답 없음: {}", e.toString());
+            // 예외 메시지에 빌링키가 든 URL이 있어 종류만 남긴다.
+            log.warn("포트원 빌링키 삭제 응답 없음: {}", e.getClass().getSimpleName());
             return false;
         }
     }
@@ -211,7 +225,8 @@ public class PortOneClient {
             }
             throw new UnavailableException("포트원 응답 오류 " + e.getStatusCode(), e);
         } catch (RestClientException e) {
-            throw new UnavailableException("포트원 응답 없음", e);
+            // 원인 예외는 넘기지 않는다. 메시지에 빌링키가 든 URL이 있다.
+            throw new UnavailableException("포트원 응답 없음 " + e.getClass().getSimpleName(), null);
         }
     }
 

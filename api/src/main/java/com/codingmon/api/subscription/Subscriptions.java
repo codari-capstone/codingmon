@@ -8,6 +8,9 @@ import java.util.Optional;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.codingmon.api.subscription.SubscriptionRepository.Cycle;
 import com.codingmon.api.subscription.SubscriptionRepository.Kind;
@@ -38,13 +41,22 @@ public class Subscriptions {
 
     private final SubscriptionRepository repo;
     private final JdbcClient jdbc;
+    // 구독과 남은 결제를 같은 시점으로 읽는다. 따로 읽으면 그 사이 반영된 갱신 때문에 잠깐 NONE으로 보일 수 있다.
+    private final TransactionTemplate snapshot;
 
-    Subscriptions(SubscriptionRepository repo, JdbcClient jdbc) {
+    Subscriptions(SubscriptionRepository repo, JdbcClient jdbc, PlatformTransactionManager transactionManager) {
         this.repo = repo;
         this.jdbc = jdbc;
+        this.snapshot = new TransactionTemplate(transactionManager);
+        snapshot.setReadOnly(true);
+        snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
     }
 
     View view(long userId, String customerId) {
+        return snapshot.execute(status -> readView(userId, customerId));
+    }
+
+    private View readView(long userId, String customerId) {
         Optional<Sub> sub = repo.findSub(userId);
         Optional<Payment> pending = repo.findPending(userId);
         Status status = PaymentResolver.effective(sub, pending, Instant.now());
@@ -66,6 +78,10 @@ public class Subscriptions {
     }
 
     public AdminDetail adminDetail(long userId) {
+        return snapshot.execute(status -> readAdminDetail(userId));
+    }
+
+    private AdminDetail readAdminDetail(long userId) {
         Optional<Sub> sub = repo.findSub(userId);
         Optional<Payment> pending = repo.findPending(userId);
         Instant now = Instant.now();
@@ -97,8 +113,8 @@ public class Subscriptions {
         if (total <= 0 || remaining <= 0) {
             return null;
         }
-        long remainingAmount = (long) last.amount() * remaining / total;
-        return (int) (remainingAmount * 9 / 10 / 10 * 10);
+        // 남은 금액 × 90%를 분수 그대로 계산하고 마지막에 한 번만 10원 단위로 버린다.
+        return (int) ((long) last.amount() * remaining * 9 / (total * 10) / 10 * 10);
     }
 
     // 탈퇴(MY-04, ADM-16 강제 탈퇴). 회원 행을 지우기 전에 같은 트랜잭션에서 부른다.

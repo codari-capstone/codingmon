@@ -94,7 +94,9 @@ class PortOneWebhookController {
         } catch (NumberFormatException e) {
             return false;
         }
-        if (Duration.between(Instant.ofEpochSecond(seconds), Instant.now()).abs().compareTo(TOLERANCE) > 0) {
+        // 초 단위 숫자로만 비교한다. Instant로 바꾸면 범위 밖 값에서 예외가 난다.
+        long now = Instant.now().getEpochSecond();
+        if (seconds < now - TOLERANCE.toSeconds() || seconds > now + TOLERANCE.toSeconds()) {
             return false;
         }
         byte[] expected;

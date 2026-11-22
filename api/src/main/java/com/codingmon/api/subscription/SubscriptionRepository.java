@@ -127,10 +127,6 @@ public class SubscriptionRepository {
                 .param("id", paymentId).update();
     }
 
-    void markNeedsCancel(String paymentId) {
-        jdbc.sql("update payments set needs_cancel = true where payment_id = :id").param("id", paymentId).update();
-    }
-
     // 구독을 새로 시작한다(처음이든 다시 구독이든). 기준 시각과 개월 수를 새로 센다.
     void startSub(long userId, Cycle cycle, String billingKey, Instant anchorAt, String paymentId) {
         jdbc.sql("insert into subscriptions (user_id, status, cycle, next_cycle, billing_key, anchor_at, months,"

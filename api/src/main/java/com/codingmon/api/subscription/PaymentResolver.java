@@ -144,6 +144,10 @@ class PaymentResolver {
                 }
                 String oldKey = sub.map(Sub::billingKey).orElse(null);
                 repo.startSub(userId, fresh.cycle(), fresh.billingKey(), at, fresh.paymentId());
+                if (repo.isSuspended(userId)) {
+                    // 결과를 기다리는 사이 정지됐다. 정지 때와 같이 해지 예정으로 둔다(낸 기간만 쓰고 갱신하지 않는다).
+                    repo.setStatus(userId, Status.CANCEL_SCHEDULED);
+                }
                 repo.updatePayment(fresh.paymentId(), PayStatus.PAID, false, at);
                 if (oldKey != null && !oldKey.equals(fresh.billingKey())) {
                     repo.queueKeyDeletion(oldKey);
@@ -183,6 +187,9 @@ class PaymentResolver {
             if (fresh.status() == PayStatus.PAID) {
                 return fresh.needsCancel() ? Resolution.PAID_NOT_APPLIED : Resolution.PAID_APPLIED;
             }
+            if (fresh.status() == PayStatus.CANCELLED) {
+                return Resolution.FAILED;   // 그사이 취소 웹훅이 반영됐다(운영자 환불).
+            }
             return notApplied(fresh, paidAt);
         });
         return resolution == null ? Resolution.UNKNOWN : resolution;
@@ -217,8 +224,11 @@ class PaymentResolver {
             if (fresh == null) {
                 return Resolution.UNKNOWN;
             }
+            if (fresh.status() == PayStatus.PAID) {
+                return fresh.needsCancel() ? Resolution.PAID_NOT_APPLIED : Resolution.PAID_APPLIED;
+            }
             if (fresh.status() != PayStatus.PENDING) {
-                return fresh.status() == PayStatus.PAID ? Resolution.PAID_APPLIED : Resolution.FAILED;
+                return Resolution.FAILED;
             }
             repo.updatePayment(fresh.paymentId(), cancelled ? PayStatus.CANCELLED : PayStatus.FAILED, false, null);
             failSubscription(fresh, keepKey);
@@ -262,8 +272,12 @@ class PaymentResolver {
                         endSubscription(sub.get());
                     }
                 }
-                default -> {
-                    // 이미 실패·취소로 반영했다.
+                case FAILED -> {
+                    // 실패로 닫은 뒤 늦게 결제됐다가 취소됐다. 취소됨으로 바꿔 두면 늦게 도는 lateRecheck가 '취소 필요'로 표시하지 않는다.
+                    repo.updatePayment(fresh.paymentId(), PayStatus.CANCELLED, false, null);
+                }
+                case CANCELLED -> {
+                    // 이미 취소로 반영했다.
                 }
             }
             return Resolution.FAILED;
