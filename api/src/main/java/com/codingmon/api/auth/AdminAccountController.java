@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.codingmon.api.ApiErrors;
+import com.codingmon.api.subscription.Subscriptions;
 import com.codingmon.api.user.Role;
 import com.codingmon.api.user.User;
 import com.codingmon.api.user.UserRepository;
@@ -37,14 +38,16 @@ class AdminAccountController {
     private final RefreshTokenRepository refreshTokens;
     private final MyAccountService accounts;
     private final TransactionTemplate transactions;
+    private final Subscriptions subscriptions;
 
     AdminAccountController(JdbcClient jdbc, UserRepository users, RefreshTokenRepository refreshTokens,
-            MyAccountService accounts, TransactionTemplate transactions) {
+            MyAccountService accounts, TransactionTemplate transactions, Subscriptions subscriptions) {
         this.jdbc = jdbc;
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.accounts = accounts;
         this.transactions = transactions;
+        this.subscriptions = subscriptions;
     }
 
     // 이미 정지됐으면 아무것도 바꾸지 않는다. 정지 시각을 그대로 둬 24시간을 다시 세지 않는다.
@@ -60,6 +63,8 @@ class AdminAccountController {
                     .update();
             if (updated == 1) {
                 refreshTokens.revokeAllOfUser(id, Instant.now());
+                // 정지된 회원은 해지할 수 없으므로 진행 중 구독을 해지 예정으로 바꿔 다음 결제가 나가지 않게 한다(#332).
+                subscriptions.onSuspend(id);
                 return;
             }
             User user = users.findById(id).orElseThrow(AdminAccountController::notFound);
