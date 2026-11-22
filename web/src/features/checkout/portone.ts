@@ -46,7 +46,8 @@ export async function requestBillingKey(customerId: string): Promise<BillingKeyR
 export function readBillingRedirect(params: URLSearchParams): BillingKeyResult | null {
   if (params.get('result') !== 'billing') return null
   const code = params.get('code')
-  if (code) return { code, message: params.get('message') || FALLBACK }
+  // 주소의 message는 누구나 링크에 넣을 수 있어 그대로 보이지 않고 정해 둔 문구를 쓴다(#356 리뷰)
+  if (code) return { code, message: FALLBACK }
   const billingKey = params.get('billingKey')
   return billingKey ? { billingKey } : { code: 'NO_BILLING_KEY', message: FALLBACK }
 }

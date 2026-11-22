@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Icon, type IconName } from '@/components/ui/icon'
 import { Mascot } from '@/components/ui/mascot'
-import { TEST_PAYMENT_NOTICE, won, proCharge } from '@/features/pricing/plans'
+import { AI_DAILY, TEST_PAYMENT_NOTICE, won, proCharge } from '@/features/pricing/plans'
 import { formatLongDate, SUBSCRIPTION_PATH } from '@/features/subscription/subscriptionQuery'
 import { cn } from '@/lib/utils'
 import type { CheckoutOutcome } from './outcome'
@@ -59,7 +59,9 @@ export function CheckoutResult({
       title = '프로 구독이 시작됐어요'
       body = (
         <>
-          <p className="m-0">이제 AI 오답 분석을 하루 30회, 힌트는 3단계까지 쓸 수 있어요.</p>
+          <p className="m-0">
+            이제 AI 오답 분석을 하루 {AI_DAILY.pro}회, 힌트는 3단계까지 쓸 수 있어요.
+          </p>
           <dl className="bg-muted m-0 mt-6 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-[14px] px-5 py-4 text-left text-[15px]">
             <dt className="text-muted-foreground">플랜</dt>
             <dd className="text-foreground m-0 font-semibold">
@@ -103,7 +105,8 @@ export function CheckoutResult({
       title = '결제하지 못했어요'
       body = (
         <>
-          <p className="m-0">카드는 등록되지 않았고 결제도 되지 않았어요.</p>
+          {/* 결제한 뒤 확인에서 막힌 402도 있어(계약 5단계) 결제되지 않았다고 단정하지 않는다(#356 리뷰) */}
+          <p className="m-0">결제가 완료되지 않았어요.</p>
           {outcome.reason ? (
             <p className="bg-destructive-soft text-body-foreground m-0 mt-6 rounded-[14px] px-5 py-4 text-left text-[15px]">
               <strong className="text-destructive-text font-bold">실패 이유</strong> ·{' '}

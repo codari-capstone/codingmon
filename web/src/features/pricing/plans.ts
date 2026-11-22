@@ -24,7 +24,7 @@ export const YEARLY_FREE_MONTHS = Math.floor(
 )
 
 /** 하루 AI 분석·리뷰 횟수(합산). 문구는 모두 이 값에서 만든다(#333 리뷰) */
-const AI_DAILY = { free: 3, pro: 30 }
+export const AI_DAILY = { free: 3, pro: 30 }
 
 export const COMPARE_NOTE = `하루 ${AI_DAILY.free}회·${AI_DAILY.pro}회는 AI 오답 분석과 더 나은 풀이 제안을 합친 횟수예요.`
 

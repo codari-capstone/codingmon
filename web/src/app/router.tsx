@@ -168,6 +168,12 @@ export const router = createBrowserRouter([
                 handle: { pageTone: 'subtle', title: '계정 설정' } satisfies PageHandle,
               },
               {
+                // 구독 (MY-06, #332). 결제 화면·요금제가 이리로 보낸다
+                path: 'me/subscription',
+                lazy: () => import('@/features/subscription/MySubscriptionPage'),
+                handle: { pageTone: 'subtle', title: '구독' } satisfies PageHandle,
+              },
+              {
                 path: 'me/display',
                 lazy: () => import('@/features/mypage/MyDisplayPage'),
                 handle: { pageTone: 'subtle', title: '화면 설정' } satisfies PageHandle,

@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { Accordion } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
+import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
 import { StartButton } from '@/features/landing/StartButton'
 import { SUBSCRIPTION_PATH, subscriptionQuery } from '@/features/subscription/subscriptionQuery'
@@ -190,7 +191,15 @@ function PlanCard({
  * 구독을 읽지 못하면 결제 화면으로 보낸다 — 결제 화면이 다시 확인하고 맞는 곳으로 보낸다.
  */
 function ProStart({ signedIn, cycle }: { signedIn: boolean | undefined; cycle: Cycle }) {
-  const { data, isPending } = useQuery({ ...subscriptionQuery(), enabled: signedIn === true })
+  const { data, isPending, error } = useQuery({
+    ...subscriptionQuery(),
+    enabled: signedIn === true,
+  })
+  // 세션이 끊겼으면 캐시에서 지워 헤더와 버튼을 비로그인으로 바꾼다(결제 화면과 같은 처리, #356 리뷰)
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, error)
+  }, [queryClient, error])
   if (signedIn === undefined || (signedIn && isPending)) {
     return (
       <Button size="lg" fullWidth aria-hidden tabIndex={-1} className="invisible">

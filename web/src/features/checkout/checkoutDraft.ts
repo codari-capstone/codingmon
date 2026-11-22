@@ -9,12 +9,13 @@ export interface CheckoutDraft {
 
 const KEY = 'codingmon:checkout-draft'
 
-// 저장소가 막힌 브라우저(사생활 보호 모드 등)에서도 결제 화면은 돌아야 해서 실패를 삼킨다
-export function saveDraft(draft: CheckoutDraft): void {
+/** 저장했으면 true. 저장소가 막힌 브라우저(사생활 보호 모드 등)에서는 false다 */
+export function saveDraft(draft: CheckoutDraft): boolean {
   try {
     sessionStorage.setItem(KEY, JSON.stringify(draft))
+    return true
   } catch {
-    /* 저장하지 못하면 돌아와서 다시 고른다 */
+    return false
   }
 }
 

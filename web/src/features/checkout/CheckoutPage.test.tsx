@@ -118,6 +118,21 @@ describe('CheckoutPage 결제 화면 (PAY-01)', () => {
     expect(sent).toHaveLength(0)
   })
 
+  // 모바일에서 돌아와도 결제할 수 없어 같은 일을 되풀이하게 된다. 넘어가기 전에 멈춘다(#356 리뷰)
+  it('저장소가 막혀 있으면 카드 등록 창을 띄우지 않고 알린다', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError')
+    })
+    const user = userEvent.setup()
+    renderCheckout()
+    await agreeAll(user)
+    await user.click(payButton())
+
+    expect(screen.getByText(/결제 정보를 잠시 저장할 수 없어요/)).toBeInTheDocument()
+    expect(requestBillingKey).not.toHaveBeenCalled()
+    setItem.mockRestore()
+  })
+
   it('고객 ID로 카드를 등록하고, 빌링키·주기·동의를 보낸다', async () => {
     vi.mocked(requestBillingKey).mockResolvedValue({ billingKey: 'billing-1' })
     const user = userEvent.setup()
@@ -199,6 +214,38 @@ describe('CheckoutPage 결제 결과 (PAY-02)', () => {
     expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument()
   })
 
+  // 결제한 뒤 반영하다 난 오류일 수 있어 결제되지 않았다고 말하지 않는다(#356 리뷰)
+  it('서버 오류(500)도 확인 중이다', async () => {
+    await payWith(() => HttpResponse.json({ status: 500 }, { status: 500 }))
+    expect(
+      await screen.findByRole('heading', { name: '결제 결과를 확인하고 있어요' }),
+    ).toBeInTheDocument()
+  })
+
+  // 결제 화면으로 돌리면 확인 중인 사용자는 마이페이지로 밀려나 다시 시도할 수 없다(#356 리뷰)
+  it('확인 중에 다시 시도하면 같은 빌링키로 다시 보낸다', async () => {
+    let calls = 0
+    const { user, sent } = await payWith(() =>
+      ++calls === 1
+        ? HttpResponse.json({ status: 503, code: 'PAYMENT_UNAVAILABLE' }, { status: 503 })
+        : HttpResponse.json(ACTIVE, { status: 201 }),
+    )
+    await user.click(await screen.findByRole('button', { name: '다시 시도' }))
+
+    expect(
+      await screen.findByRole('heading', { name: '프로 구독이 시작됐어요' }),
+    ).toBeInTheDocument()
+    expect(sent).toHaveLength(2)
+    expect(sent[1]).toEqual(sent[0])
+    expect(requestBillingKey).toHaveBeenCalledTimes(1)
+  })
+
+  // 남아 있던 결과 모름 결제가 확정되면 서버는 그 결제의 주기로 시작한다(계약 3단계, #356 리뷰)
+  it('성공 화면의 플랜은 서버가 확정한 주기다', async () => {
+    await payWith(() => HttpResponse.json({ ...ACTIVE, cycle: 'YEARLY' }, { status: 201 }))
+    expect(await screen.findByText('프로 연간 · 99,000원')).toBeInTheDocument()
+  })
+
   it('이미 프로(409): 마이페이지 구독으로 보내며 알린다', async () => {
     const { router } = await payWith(() =>
       HttpResponse.json({ status: 409, code: 'SUBSCRIPTION_ALREADY_ACTIVE' }, { status: 409 }),
@@ -226,10 +273,11 @@ describe('CheckoutPage 모바일 카드 등록에서 돌아옴 (PAY-01)', () => 
   it('등록을 취소하고 돌아오면 저장한 값으로 화면을 다시 채운다', async () => {
     saveDraft({ cycle: 'yearly', agreeTerms: true, agreeAutopay: false })
     const { sent } = renderCheckout({
-      url: '/checkout?result=billing&code=FAILURE_TYPE_PG&message=등록을 취소했어요',
+      url: '/checkout?result=billing&code=FAILURE_TYPE_PG&message=여기로 연락하세요',
     })
 
-    expect(await screen.findByText('등록을 취소했어요')).toBeInTheDocument()
+    expect(await screen.findByText(/카드를 등록하지 못했어요/)).toBeInTheDocument()
+    expect(screen.queryByText('여기로 연락하세요')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /연간/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('checkbox', { name: /이용약관과 환불 정책/ })).toBeChecked()
     expect(sent).toHaveLength(0)

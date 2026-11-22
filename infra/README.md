@@ -20,7 +20,9 @@
 ```bash
 TAG=$(git rev-parse --short HEAD)
 docker buildx build --platform linux/amd64 -t codingmon-api:$TAG --load api
-docker buildx build --platform linux/amd64 -t codingmon-web:$TAG --load web
+# 포트원 상점 ID·채널 키는 화면 번들에 들어가는 공개 값이라 빌드할 때 넣는다(비우면 결제 버튼이 준비 안 됨 안내만 띄운다)
+docker buildx build --platform linux/amd64 -t codingmon-web:$TAG --load \
+  --build-arg VITE_PORTONE_STORE_ID=<상점 ID> --build-arg VITE_PORTONE_CHANNEL_KEY=<채널 키> web
 # 레지스트리 없이 서버로 옮긴다
 docker save codingmon-api:$TAG codingmon-web:$TAG | gzip -1 | ssh <서버> 'gunzip | docker load'
 ```

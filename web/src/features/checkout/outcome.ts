@@ -19,10 +19,9 @@ export function classifyFailure(error: unknown): CheckoutOutcome | 'already' | '
   if (status === undefined) return { kind: 'unknown' }
   if (status === 401) return 'signedOut'
   if (status === 409) return 'already'
-  if (status === 503) {
-    return body.code === 'PAYMENT_PROVIDER_UNAVAILABLE' ? { kind: 'provider' } : { kind: 'unknown' }
-  }
-  // 게이트웨이 시간 초과도 서버가 결제를 끝냈는지 모른다
-  if (status === 502 || status === 504) return { kind: 'unknown' }
+  // 결제 전 1단계에서 끊긴 것만 결제되지 않았다고 확신할 수 있다
+  if (status === 503 && body.code === 'PAYMENT_PROVIDER_UNAVAILABLE') return { kind: 'provider' }
+  // 그 밖의 서버 오류는 결제한 뒤 반영하다 났을 수 있다(계약 4·5단계). 결제됐는지 모르는 것으로 본다(#356 리뷰)
+  if (status >= 500) return { kind: 'unknown' }
   return { kind: 'failed', reason: typeof body.detail === 'string' ? body.detail : null }
 }

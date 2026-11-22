@@ -1,4 +1,5 @@
 import type { BillingCycle, Subscription } from '@/api/types'
+import { addMonthsKst } from '@/features/subscription/subscriptionQuery'
 
 /** 목의 구독. 사용자마다 처음에는 구독한 적 없음(`NONE`)이다 */
 const subscriptions = new Map<number, Subscription>()
@@ -20,8 +21,8 @@ export function subscriptionFor(userId: number): Subscription {
 
 /** 결제가 된 것으로 보고 구독을 시작한다. 기간은 지금부터 한 달(연간은 1년)이다 */
 export function startMockSubscription(userId: number, cycle: BillingCycle): Subscription {
-  const end = new Date()
-  end.setMonth(end.getMonth() + (cycle === 'MONTHLY' ? 1 : 12))
+  // 결제 화면이 고지한 다음 결제일과 같은 계산이다(월말을 넘지 않는다)
+  const end = addMonthsKst(new Date(), cycle === 'MONTHLY' ? 1 : 12)
   const started: Subscription = {
     ...freeSubscription(userId),
     plan: 'PRO',

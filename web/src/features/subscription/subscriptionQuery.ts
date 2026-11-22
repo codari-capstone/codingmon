@@ -15,6 +15,9 @@ export const SUBSCRIPTION_KEY = ['subscription'] as const
 export const toBillingCycle = (cycle: Cycle): BillingCycle =>
   cycle === 'monthly' ? 'MONTHLY' : 'YEARLY'
 
+export const fromBillingCycle = (cycle: BillingCycle): Cycle =>
+  cycle === 'MONTHLY' ? 'monthly' : 'yearly'
+
 /**
  * 내 구독. 구독한 적이 없어도 `plan: FREE`, `status: NONE`이고 카드 등록에 쓸 `customerId`는 늘 있다(계약).
  * 결제 화면·요금제·마이페이지가 같은 키를 본다. 결제 결과가 다른 탭에서 바뀔 수 있어 매번 새로 받는다.
@@ -43,18 +46,22 @@ export async function startSubscription(input: {
   return result.data
 }
 
+/** 한국 시각은 서머타임이 없어 늘 UTC+9다 */
+const KST_OFFSET_MS = 9 * 3_600_000
+
 /**
- * 결제일에서 개월 수를 더한 날. 서버처럼 달의 끝을 넘지 않는다(1월 31일 + 1개월 = 2월 28일).
- * 결제 전 고지의 '다음 결제일'에 쓴다. 결제 뒤에는 서버의 `currentPeriodEnd`를 쓴다.
+ * 한국 날짜로 개월 수를 더한 시각. 서버처럼 달의 끝을 넘지 않는다(1월 31일 + 1개월 = 2월 28일).
+ * 브라우저 시간대와 관계없이 한국 날짜로 센다 — 서버가 기간을 한국 날짜로 잡기 때문이다.
+ * 결제 전 고지의 '다음 결제일'과 목의 구독 기간에 쓴다. 결제 뒤에는 서버의 `currentPeriodEnd`를 쓴다.
  */
-export function addMonths(from: Date, months: number): Date {
-  const d = new Date(from)
-  const day = d.getDate()
-  d.setDate(1)
-  d.setMonth(d.getMonth() + months)
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-  d.setDate(Math.min(day, last))
-  return d
+export function addMonthsKst(from: Date, months: number): Date {
+  // 한국 벽시계를 UTC 칸에 옮겨 놓고 달력 계산을 한다
+  const kst = new Date(from.getTime() + KST_OFFSET_MS)
+  const year = kst.getUTCFullYear()
+  const month = kst.getUTCMonth() + months
+  const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  kst.setUTCFullYear(year, month, Math.min(kst.getUTCDate(), last))
+  return new Date(kst.getTime() - KST_OFFSET_MS)
 }
 
 const LONG_DATE = new Intl.DateTimeFormat('ko-KR', {

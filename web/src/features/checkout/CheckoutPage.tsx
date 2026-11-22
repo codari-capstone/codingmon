@@ -20,8 +20,9 @@ import {
   type Cycle,
 } from '@/features/pricing/plans'
 import {
-  addMonths,
+  addMonthsKst,
   formatLongDate,
+  fromBillingCycle,
   startSubscription,
   SUBSCRIPTION_KEY,
   SUBSCRIPTION_PATH,
@@ -52,6 +53,8 @@ const COPY = {
 } as const
 
 const NO_DRAFT = '카드 등록 정보를 이어받지 못했어요. 동의를 확인하고 다시 결제해 주세요.'
+const NO_STORAGE =
+  '이 브라우저에서는 결제 정보를 잠시 저장할 수 없어요. 사생활 보호 모드를 끄고 다시 시도해 주세요.'
 
 /** 프로를 쓰는 중이거나 첫 결제를 확인하는 중이면 결제 화면이 아니라 마이페이지 구독이다 (PAY-01) */
 const belongsToSubscription = (s: Subscription) => s.plan === 'PRO' || s.paymentPending
@@ -93,7 +96,9 @@ export function Component() {
 
   const start = useMutation({
     mutationFn: startSubscription,
-    onSuccess: (started, { cycle: paid }) => {
+    onSuccess: (started, { cycle: asked }) => {
+      // 남아 있던 결과 모름 결제가 확정되면 서버는 그 결제의 주기로 시작한다(계약 3단계). 그래서 응답의 주기를 보인다(#356 리뷰)
+      const paid = started.cycle ? fromBillingCycle(started.cycle) : asked
       // 결과를 먼저 정한다. 캐시가 프로로 바뀌면 이 화면이 마이페이지로 보내기 때문이다(같은 렌더에 묶인다)
       setOutcome({ kind: 'success', subscription: started, cycle: paid })
       queryClient.setQueryData(SUBSCRIPTION_KEY, started)
@@ -136,6 +141,9 @@ export function Component() {
         onRetry={() => {
           setOutcome(null)
           setNotice(null)
+          // 결제됐는지 모르거나 결제 전에 끊겼으면 같은 빌링키로 다시 보낸다. 서버가 남은 결제를 다시 조회해
+          // 두 번 결제하지 않는다(계약 3단계). 결제 화면으로 돌리면 확인 중인 사용자는 마이페이지로 밀려나 다시 시도할 수 없다(#356 리뷰)
+          if (outcome.kind !== 'failed' && start.variables) start.mutate(start.variables)
         }}
       />
     )
@@ -162,8 +170,10 @@ export function Component() {
 
   async function pay() {
     setNotice(null)
+    // 모바일은 카드 등록 페이지로 넘어갔다 돌아와 이 값으로 결제한다. 저장하지 못하면 돌아와도 결제할 수 없어
+    // 같은 일을 되풀이하게 되므로 넘어가기 전에 멈춘다(#356 리뷰)
+    if (!saveDraft({ cycle, agreeTerms, agreeAutopay })) return setNotice(NO_STORAGE)
     setRegistering(true)
-    saveDraft({ cycle, agreeTerms, agreeAutopay })
     // 내 구독 조회는 늘 customerId를 준다(계약). 빈 값으로 카드를 등록하면 빌링키 주인 확인에서 막힌다
     const result = await requestBillingKey(subscription.data?.customerId ?? '')
     // 모바일은 카드 등록 페이지로 넘어간다. 돌아오면 위 effect가 이어서 결제한다
@@ -215,7 +225,7 @@ export function Component() {
                 ['결제 방식', `등록한 카드로 ${copy.every} 자동결제`],
                 [
                   '다음 결제일',
-                  formatLongDate(addMonths(new Date(), cycle === 'monthly' ? 1 : 12)),
+                  formatLongDate(addMonthsKst(new Date(), cycle === 'monthly' ? 1 : 12)),
                 ],
                 [
                   '해지',

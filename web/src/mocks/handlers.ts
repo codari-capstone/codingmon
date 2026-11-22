@@ -470,6 +470,9 @@ export function resetAdminUsers(): void {
 function userSummary({
   loginMethod: _loginMethod,
   suspensionReason: _suspensionReason,
+  subscriptionStartedAt: _subscriptionStartedAt,
+  refundAmount: _refundAmount,
+  payments: _payments,
   ...summary
 }: MockAdminUser): AdminUserSummary {
   return summary
@@ -767,7 +770,7 @@ export const handlers: RequestHandler[] = [
 
   /**
    * 프로 구독 시작 (PAY-01). 목은 카드 결제를 늘 성공으로 본다. 실패·확인 중 화면은 테스트가
-   * server.use로 402·503을 준다. 검사 순서는 계약과 같다: 이미 프로 409 → 동의 400 → 결제
+   * server.use로 402·503을 준다. 검사 순서는 계약과 같다: 빌링키(1단계) → 동의 400(1단계 뒤) → 이미 프로 409(2단계) → 결제
    */
   http.post('*/api/users/me/subscription', async ({ request }) => {
     const id = userIdFromToken(bearer(request))
@@ -781,10 +784,10 @@ export const handlers: RequestHandler[] = [
     if (typeof body.billingKey !== 'string' || body.billingKey === '') {
       return problem(400, 'BILLING_KEY_INVALID', '카드 등록 정보를 확인하지 못했어요')
     }
+    if (body.agreed !== true) return problem(400, 'AGREEMENT_REQUIRED', '결제 동의가 필요해요')
     if (subscriptionFor(id).plan === 'PRO') {
       return problem(409, 'SUBSCRIPTION_ALREADY_ACTIVE', '이미 프로 구독 중이에요')
     }
-    if (body.agreed !== true) return problem(400, 'AGREEMENT_REQUIRED', '결제 동의가 필요해요')
     return HttpResponse.json(startMockSubscription(id, body.cycle), { status: 201 })
   }),
 
