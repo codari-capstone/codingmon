@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 
+import { resetSubscriptions } from '@/mocks/fixtures/subscriptions'
 import { server } from '@/mocks/server'
 
 /**
@@ -21,6 +22,8 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 afterEach(() => {
   cleanup()
   server.resetHandlers()
+  // 목 구독은 사용자 번호로 남는다. 한 테스트가 프로로 만들면 다음 테스트의 결제 화면이 마이페이지로 간다(#356 리뷰)
+  resetSubscriptions()
 })
 
 afterAll(() => server.close())

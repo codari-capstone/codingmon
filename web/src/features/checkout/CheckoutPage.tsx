@@ -53,6 +53,7 @@ const COPY = {
 } as const
 
 const NO_DRAFT = '카드 등록 정보를 이어받지 못했어요. 동의를 확인하고 다시 결제해 주세요.'
+const KEY_EXPIRED = '등록한 카드를 더 쓸 수 없어요. 카드를 다시 등록해 주세요.'
 const NO_STORAGE =
   '이 브라우저에서는 결제 정보를 잠시 저장할 수 없어요. 사생활 보호 모드를 끄고 다시 시도해 주세요.'
 
@@ -84,10 +85,13 @@ export function Component() {
   const resentAfterUnknown = useRef(false)
 
   // 모바일 카드 등록 페이지에서 뒤로 가면 브라우저가 떠나기 전 화면(등록 중)을 그대로 되살린다(bfcache).
-  // 등록은 끝나지 않았으니 잠금을 풀어 다시 누를 수 있게 한다(#356 리뷰)
+  // 등록은 끝나지 않았으니 잠금을 풀어 다시 누를 수 있게 한다. 저장한 값도 지운다 — 남기면 앞으로 가기로
+  // 그 등록을 마쳤을 때 화면에서 새로 고른 값이 아니라 옛 값으로 결제된다(#356 리뷰)
   useEffect(() => {
     const unlock = (event: PageTransitionEvent) => {
-      if (event.persisted) setRegistering(false)
+      if (!event.persisted) return
+      clearDraft()
+      setRegistering(false)
     }
     window.addEventListener('pageshow', unlock)
     return () => window.removeEventListener('pageshow', unlock)
@@ -108,14 +112,16 @@ export function Component() {
 
   const start = useMutation({
     mutationFn: startSubscription,
-    onSuccess: (started, { cycle: asked }) => {
+    onSuccess: async (started, { cycle: asked }) => {
       // 남아 있던 결과 모름 결제가 확정되면 서버는 그 결제의 주기로 시작한다(계약 3단계). 그래서 응답의 주기를 보인다(#356 리뷰)
       const paid = started.cycle ? fromBillingCycle(started.cycle) : asked
-      // 결과를 먼저 정한다. 캐시가 프로로 바뀌면 이 화면이 마이페이지로 보내기 때문이다(같은 렌더에 묶인다)
+      // 결과를 먼저 정한다. 캐시가 프로로 바뀌면 이 화면이 마이페이지로 보내기 때문이다
       setOutcome({ kind: 'success', subscription: started, cycle: paid })
+      // 결제 전에 나간 구독 조회가 늦게 끝나 결제 전 값으로 덮지 않게 먼저 취소한다(#356 리뷰)
+      await queryClient.cancelQueries({ queryKey: SUBSCRIPTION_KEY })
       queryClient.setQueryData(SUBSCRIPTION_KEY, started)
     },
-    onError: (error) => {
+    onError: async (error) => {
       let result = classifyFailure(error)
       if (result === 'signedOut') return forgetSessionIfUnauthorized(queryClient, error)
       // 결과 모름이나 실패는 서버의 결제 확인 중 여부를 바꾼다. 앞선 확인 중 상태가 캐시에 남으면
@@ -128,12 +134,17 @@ export function Component() {
         })
       }
       // 다른 탭의 결제가 결과 모름으로 남아 있으면 서버는 이번 빌링키를 지울 목록에 넣는다(계약 3단계).
-      // 확인 중에서 다시 보낸 빌링키가 그래서 거절된 것이면 그 결제는 아직 끝나지 않았다(#356 리뷰)
+      // 확인 중에서 다시 보낸 빌링키가 그래서 거절됐으면 서버에 확인 중인 결제가 남았는지 본다.
+      // 남았으면 확인 중, 끝났으면 이 빌링키는 더 못 쓰니 새로 등록하게 실패로 보낸다(#356 리뷰)
       if (
         resentAfterUnknown.current &&
         (error as { code?: unknown } | null)?.code === 'BILLING_KEY_INVALID'
       ) {
-        result = { kind: 'unknown' }
+        const pending = await queryClient
+          .fetchQuery(subscriptionQuery())
+          .then((s) => s.paymentPending)
+          .catch(() => true)
+        result = pending ? { kind: 'unknown' } : { kind: 'failed', reason: KEY_EXPIRED }
       }
       setOutcome(result)
     },
@@ -172,7 +183,8 @@ export function Component() {
   if (subscription.error) {
     return <ErrorState problem={subscription.error} onRetry={() => void subscription.refetch()} />
   }
-  if (!paying && belongsToSubscription(subscription.data)) {
+  // 결제가 실패한 직후에는 구독을 다시 받는 중이고 캐시에 앞선 확인 중 값이 남아 있다. 새 값을 받은 뒤에 판단한다(#356 리뷰)
+  if (!paying && !subscription.isFetching && belongsToSubscription(subscription.data)) {
     return <Navigate to={SUBSCRIPTION_PATH} replace />
   }
 

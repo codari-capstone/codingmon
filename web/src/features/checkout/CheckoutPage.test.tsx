@@ -34,13 +34,13 @@ function renderCheckout({
 }: {
   url?: string
   /** 매번 다른 값을 주려면 함수로 준다 */
-  subscription?: Subscription | (() => Subscription)
+  subscription?: Subscription | (() => Subscription | Promise<Subscription>)
   start?: () => Response
 } = {}) {
   const sent: unknown[] = []
   server.use(
-    http.get('*/api/users/me/subscription', () =>
-      HttpResponse.json(typeof subscription === 'function' ? subscription() : subscription),
+    http.get('*/api/users/me/subscription', async () =>
+      HttpResponse.json(typeof subscription === 'function' ? await subscription() : subscription),
     ),
     http.post('*/api/users/me/subscription', async ({ request }) => {
       sent.push(await request.json())
@@ -149,10 +149,13 @@ describe('CheckoutPage 결제 화면 (PAY-01)', () => {
     await agreeAll(user)
     await user.click(payButton())
     expect(payButton()).toHaveAccessibleName('결제 중…')
+    expect(sessionStorage.length).toBe(1)
 
     window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
 
     expect(await screen.findByRole('button', { name: /결제하기/ })).toBeEnabled()
+    // 앞으로 가기로 옛 등록을 마쳐도 옛 값으로 결제되지 않게 저장한 값을 지운다(#356 리뷰)
+    expect(sessionStorage.length).toBe(0)
   })
 
   it('고객 ID로 카드를 등록하고, 빌링키·주기·동의를 보낸다', async () => {
@@ -171,7 +174,10 @@ describe('CheckoutPage 결제 화면 (PAY-01)', () => {
 })
 
 describe('CheckoutPage 결제 결과 (PAY-02)', () => {
-  async function payWith(start: () => Response, subscription?: () => Subscription) {
+  async function payWith(
+    start: () => Response,
+    subscription?: () => Subscription | Promise<Subscription>,
+  ) {
     vi.mocked(requestBillingKey).mockResolvedValue({ billingKey: 'billing-1' })
     const user = userEvent.setup()
     const rendered = renderCheckout({ start, subscription })
@@ -263,12 +269,14 @@ describe('CheckoutPage 결제 결과 (PAY-02)', () => {
   })
 
   // 다른 탭의 결제가 결과 모름이면 서버는 이번 빌링키를 지운다. 그 결제는 아직 끝나지 않았다(#356 리뷰)
-  it('확인 중에 다시 보낸 빌링키가 거절되면 확인 중을 유지한다', async () => {
+  it('확인 중에 다시 보낸 빌링키가 거절되고 확인 중 결제가 남았으면 확인 중을 유지한다', async () => {
     let calls = 0
-    const { user } = await payWith(() =>
-      ++calls === 1
-        ? HttpResponse.json({ status: 503, code: 'PAYMENT_UNAVAILABLE' }, { status: 503 })
-        : HttpResponse.json({ status: 400, code: 'BILLING_KEY_INVALID' }, { status: 400 }),
+    const { user } = await payWith(
+      () =>
+        ++calls === 1
+          ? HttpResponse.json({ status: 503, code: 'PAYMENT_UNAVAILABLE' }, { status: 503 })
+          : HttpResponse.json({ status: 400, code: 'BILLING_KEY_INVALID' }, { status: 400 }),
+      () => ({ ...freeSubscription(1), paymentPending: calls > 0 }),
     )
     await user.click(await screen.findByRole('button', { name: '다시 시도' }))
 
@@ -277,6 +285,56 @@ describe('CheckoutPage 결제 결과 (PAY-02)', () => {
       await screen.findByRole('heading', { name: '결제 결과를 확인하고 있어요' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '결제하지 못했어요' })).not.toBeInTheDocument()
+  })
+
+  // 남은 결제가 끝났는데 확인 중으로 두면 몇 번을 눌러도 같은 화면이 되풀이된다(#356 리뷰)
+  it('다시 보낸 빌링키가 거절되고 확인 중 결제가 끝났으면 카드를 다시 등록하게 한다', async () => {
+    let calls = 0
+    const { user } = await payWith(
+      () =>
+        ++calls === 1
+          ? HttpResponse.json({ status: 503, code: 'PAYMENT_UNAVAILABLE' }, { status: 503 })
+          : HttpResponse.json({ status: 400, code: 'BILLING_KEY_INVALID' }, { status: 400 }),
+      // 첫 결제 뒤에는 확인 중, 다시 보낼 때는 이미 실패로 닫혀 확인 중이 아니다
+      () => ({ ...freeSubscription(1), paymentPending: calls === 1 }),
+    )
+    await user.click(await screen.findByRole('button', { name: '다시 시도' }))
+
+    expect(await screen.findByRole('heading', { name: '결제하지 못했어요' })).toBeInTheDocument()
+    expect(screen.getByText(/카드를 다시 등록해 주세요/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '다시 시도' }))
+    expect(await screen.findByRole('heading', { name: '프로 구독 결제' })).toBeInTheDocument()
+  })
+
+  // 실패 뒤 구독을 다시 받는 동안 캐시에는 앞선 확인 중 값이 남아 있다(#356 리뷰)
+  it('실패 뒤 구독을 다시 받기 전에 다시 시도해도 결제 화면에 남는다', async () => {
+    let calls = 0
+    // 실패(두 번째 결제) 뒤의 다시 받기를 풀어 줄 때까지 붙잡아 둔다
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    const { user, router } = await payWith(
+      () => {
+        calls += 1
+        return calls === 1
+          ? HttpResponse.json({ status: 503, code: 'PAYMENT_UNAVAILABLE' }, { status: 503 })
+          : HttpResponse.json({ status: 402, code: 'PAYMENT_FAILED' }, { status: 402 })
+      },
+      async () => {
+        if (calls >= 2) await held
+        return { ...freeSubscription(1), paymentPending: calls === 1 }
+      },
+    )
+    await user.click(await screen.findByRole('button', { name: '다시 시도' }))
+    expect(await screen.findByRole('heading', { name: '결제하지 못했어요' })).toBeInTheDocument()
+
+    // 캐시에는 아직 첫 결제 뒤의 확인 중 값이 있다
+    await user.click(screen.getByRole('button', { name: '다시 시도' }))
+    expect(await screen.findByRole('heading', { name: '프로 구독 결제' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/checkout')
+
+    release()
+    expect(await screen.findByRole('heading', { name: '프로 구독 결제' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/checkout')
   })
 
   // 앞선 확인 중 상태가 캐시에 남으면 실패의 [다시 시도]가 마이페이지로 밀려난다(#356 리뷰)
