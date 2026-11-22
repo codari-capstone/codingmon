@@ -15,16 +15,7 @@ import {
 } from '@/features/subscription/subscriptionQuery'
 import { cn } from '@/lib/utils'
 import { CycleToggle } from './CycleToggle'
-import {
-  COMPARE,
-  COMPARE_NOTE,
-  FAQ,
-  PLANS,
-  TEST_PAYMENT_NOTICE,
-  won,
-  type Cycle,
-  type Plan,
-} from './plans'
+import { COMPARE, COMPARE_NOTE, FAQ, PLANS, won, type Cycle, type Plan } from './plans'
 
 // 랜딩과 같은 구역 폭·제목 크기다(LandingPage)
 const SECTION = 'max-w-content mx-auto box-content px-6'
@@ -67,8 +58,6 @@ export function Component() {
           <p className="text-muted-foreground m-0 text-center text-sm leading-[1.6]">
             모든 가격은 부가세 포함이에요. 유료 플랜은 언제든 해지할 수 있고, 남은 기간까지는 그대로
             쓸 수 있어요.
-            <br />
-            <strong className="text-foreground font-semibold">{TEST_PAYMENT_NOTICE}</strong>
           </p>
         </div>
       </section>
