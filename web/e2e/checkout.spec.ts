@@ -32,4 +32,34 @@ test.describe('프로 구독 결제', () => {
       '/me/subscription',
     )
   })
+
+  /** 결제 뒤 마이페이지 구독에서 주기 바꾸기·바꾸기 취소·해지·해지 취소 (MY-06) */
+  test('구독을 관리한다: 주기 바꾸기와 취소, 해지와 해지 취소', async ({ page }) => {
+    await login(page)
+    await page.getByRole('navigation').getByRole('link', { name: '요금제' }).first().click()
+    await page.getByRole('link', { name: '프로 시작하기' }).click()
+    await page.getByRole('checkbox', { name: /이용약관과 환불 정책/ }).check()
+    await page.getByRole('checkbox', { name: /매월 9,900원이 자동결제/ }).check()
+    await page.getByRole('button', { name: '카드 등록하고 9,900원 결제하기' }).click()
+    await page.getByRole('link', { name: '내 구독 보기' }).click()
+
+    const card = page.getByRole('region', { name: '지금 플랜' })
+    await expect(card).toContainText('프로 월간')
+
+    await card.getByRole('button', { name: '연간으로 바꾸기' }).click()
+    const dialog = page.getByRole('dialog', { name: '연간으로 바꿀까요?' })
+    await dialog.getByRole('checkbox', { name: /바뀐 금액의 자동결제에 동의/ }).check()
+    await dialog.getByRole('button', { name: '연간으로 바꾸기' }).click()
+    await expect(card).toContainText('다음 결제부터 연간')
+
+    await card.getByRole('button', { name: '바꾸기 취소' }).click()
+    await expect(card.getByRole('button', { name: '연간으로 바꾸기' })).toBeVisible()
+
+    await card.getByRole('button', { name: '해지' }).click()
+    await page.getByRole('alertdialog').getByRole('button', { name: '해지' }).click()
+    await expect(card).toContainText('해지 예정')
+
+    await card.getByRole('button', { name: '해지 취소' }).click()
+    await expect(card).toContainText('진행 중')
+  })
 })

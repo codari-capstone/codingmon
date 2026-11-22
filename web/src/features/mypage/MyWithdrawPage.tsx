@@ -7,6 +7,7 @@ import { Alert } from '@/components/ui/alert'
 import { Icon } from '@/components/ui/icon'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
+import { subscriptionQuery } from '@/features/subscription/subscriptionQuery'
 import { cn } from '@/lib/utils'
 import { WithdrawSection } from './AccountSettings'
 import { MY_CARD, MyLayout } from './MyLayout'
@@ -48,6 +49,32 @@ function Farewell() {
   )
 }
 
+/**
+ * 프로 구독 중(진행 중·해지 예정)이면 탈퇴로 구독도 바로 끝난다고 알린다 (MY-04).
+ * 구독을 불러오지 못하면 프로인지 모르니 '프로 구독 중이라면'으로 알린다 — 모른다고 빼면 프로 회원이
+ * 경고 없이 탈퇴할 수 있다(#357 리뷰). 세션 만료는 Farewell이 처리한다.
+ */
+function ProNotice() {
+  const { data, error } = useQuery(subscriptionQuery())
+  if (!error && data?.plan !== 'PRO') return null
+  return (
+    <Alert
+      tone="warning"
+      title={error ? '프로 구독 중이라면 구독도 바로 끝나요' : '프로 구독도 바로 끝나요'}
+    >
+      남은 기간은 돌려받을 수 없어요. 환불받을 수 있는 경우라면 탈퇴하기 전에 요청하세요.{' '}
+      <a
+        href="/refund"
+        target="_blank"
+        rel="noreferrer"
+        className="text-primary-text font-semibold hover:underline"
+      >
+        환불 정책<span className="sr-only">(새 탭)</span>
+      </a>
+    </Alert>
+  )
+}
+
 /** 회원 탈퇴 (MY-04). 관리자는 탈퇴할 수 없어(명세, 서버 403) 마이페이지로 돌려보낸다. */
 export function Component() {
   const { user } = useAuth()
@@ -72,6 +99,7 @@ export function Component() {
         <Alert tone="danger">
           탈퇴한 뒤에는 되돌릴 수 없어요. 같은 이메일로 다시 가입해도 기록은 복구되지 않아요.
         </Alert>
+        <ProNotice />
       </section>
       {user ? <WithdrawSection user={user} /> : null}
     </MyLayout>

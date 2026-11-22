@@ -55,6 +55,7 @@ function Modal({
   size = 'md',
   align = 'start',
   className,
+  fallbackFocus,
 }: {
   open: boolean
   onClose: () => void
@@ -68,6 +69,8 @@ function Modal({
   size?: keyof typeof MODAL_SIZE
   align?: 'start' | 'center'
   className?: string
+  /** 연 버튼이 닫는 사이 사라졌을 때 포커스를 돌려줄 곳. 없으면 Radix 기본(body)이다 */
+  fallbackFocus?: () => HTMLElement | null
 }) {
   const center = align === 'center'
   // 렌더 중 상태 갱신으로 '이전 값과 달라졌을 때'를 잡는 React 문서의 방식이다(effect는 커밋 뒤라 늦다)
@@ -87,9 +90,10 @@ function Modal({
           // 설명이 없으면 Radix가 찾는 aria-describedby를 끊는다(없는 id를 가리키지 않게)
           {...(description ? {} : { 'aria-describedby': undefined })}
           onCloseAutoFocus={(event) => {
-            if (opener?.isConnected) {
+            const target = opener?.isConnected ? opener : fallbackFocus?.()
+            if (target) {
               event.preventDefault()
-              opener.focus()
+              target.focus()
             }
           }}
         >

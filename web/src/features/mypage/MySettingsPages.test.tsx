@@ -17,6 +17,7 @@ import {
   updateEditorSettings,
 } from '@/features/solve/editorSettings'
 import { activityFor } from '@/mocks/fixtures/activity'
+import { freeSubscription, startMockSubscription } from '@/mocks/fixtures/subscriptions'
 import { server } from '@/mocks/server'
 import { Component as MyAccountPage } from './MyAccountPage'
 import { Component as MyDisplayPage } from './MyDisplayPage'
@@ -240,6 +241,44 @@ describe('회원 탈퇴 /me/withdraw (MY-04)', () => {
     expect(screen.getByRole('heading', { name: '지워지는 것' })).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent(/되돌릴 수 없어요/)
     expect(screen.getByRole('button', { name: '회원 탈퇴' })).toBeDisabled()
+  })
+
+  it('프로 구독 중이면 구독도 바로 끝난다고 알리고 환불 정책을 새 탭으로 연다', async () => {
+    const pro = startMockSubscription(EMAIL_USER.id, 'MONTHLY')
+    server.use(http.get('*/api/users/me/subscription', () => HttpResponse.json(pro)))
+    renderAt('/me/withdraw')
+    expect(await screen.findByText('프로 구독도 바로 끝나요')).toBeInTheDocument()
+    expect(screen.getByText(/남은 기간은 돌려받을 수 없어요/)).toBeInTheDocument()
+    const refund = screen.getByRole('link', { name: /환불 정책/ })
+    expect(refund).toHaveAttribute('href', '/refund')
+    expect(refund).toHaveAttribute('target', '_blank')
+  })
+
+  // 모른다고 빼면 프로 회원이 경고 없이 탈퇴할 수 있다(#357 리뷰)
+  it('구독을 불러오지 못하면 프로 구독 중이라면으로 알린다', async () => {
+    server.use(
+      http.get('*/api/users/me/subscription', () =>
+        HttpResponse.json({ status: 500, title: 'Internal Server Error' }, { status: 500 }),
+      ),
+    )
+    renderAt('/me/withdraw')
+    expect(await screen.findByText('프로 구독 중이라면 구독도 바로 끝나요')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /환불 정책/ })).toHaveAttribute('href', '/refund')
+  })
+
+  it('무료면 구독 안내를 보이지 않는다', async () => {
+    let answered = false
+    server.use(
+      http.get('*/api/users/me/subscription', () => {
+        answered = true
+        return HttpResponse.json(freeSubscription(EMAIL_USER.id))
+      }),
+    )
+    renderAt('/me/withdraw')
+    expect(await screen.findByRole('heading', { name: '지워지는 것' })).toBeInTheDocument()
+    // 구독 응답을 받은 뒤에도 없어야 한다
+    await waitFor(() => expect(answered).toBe(true))
+    expect(screen.queryByText('프로 구독도 바로 끝나요')).not.toBeInTheDocument()
   })
 
   it('관리자가 주소로 들어오면 마이페이지로 돌려보낸다', async () => {

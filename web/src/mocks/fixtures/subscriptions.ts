@@ -34,6 +34,30 @@ export function startMockSubscription(userId: number, cycle: BillingCycle): Subs
   return started
 }
 
+/**
+ * 해지·해지 취소·주기 바꾸기 (MY-06). 계약대로 할 수 없는 상태면 null(→ 409 `SUBSCRIPTION_NOT_ACTIVE`).
+ * 해지하면 바꿔 둔 주기도 취소하고, 같은 상태로 다시 보내면 그대로다.
+ */
+export function changeMockSubscription(
+  userId: number,
+  action: { kind: 'cancel' } | { kind: 'resume' } | { kind: 'cycle'; cycle: BillingCycle },
+): Subscription | null {
+  const s = subscriptionFor(userId)
+  if (s.plan !== 'PRO') return null
+  let next: Subscription
+  if (action.kind === 'cancel') next = { ...s, status: 'CANCEL_SCHEDULED', nextCycle: null }
+  else if (action.kind === 'resume') next = { ...s, status: 'ACTIVE' }
+  else if (s.status !== 'ACTIVE') return null
+  else next = { ...s, nextCycle: action.cycle === s.cycle ? null : action.cycle }
+  subscriptions.set(userId, next)
+  return next
+}
+
+/** 탈퇴하면 구독도 끝난다(MY-04) */
+export function removeMockSubscription(userId: number): void {
+  subscriptions.delete(userId)
+}
+
 /** 테스트 사이에 구독이 새지 않게 비운다 */
 export function resetSubscriptions(): void {
   subscriptions.clear()

@@ -20,7 +20,14 @@ import {
   won,
   type Cycle,
 } from '@/features/pricing/plans'
-import { formatLongDate, fromBillingCycle, subscriptionQuery } from './subscriptionQuery'
+import { ActionResult, NextCycleBand, PlanActions } from './SubscriptionActions'
+import {
+  canChangeCycle,
+  formatLongDate,
+  fromBillingCycle,
+  subscriptionQuery,
+} from './subscriptionQuery'
+import { PLAN_TITLE_ID, useSubscriptionAction } from './useSubscriptionAction'
 
 const SHORT_DATE = new Intl.DateTimeFormat('ko-KR', {
   month: 'long',
@@ -45,7 +52,7 @@ interface View {
   alert?: { tone: 'info' | 'danger'; title: string; body: string }
 }
 
-/** 상태별 플랜 카드 (MY-06). 해지·해지 취소·주기 바꾸기는 다음 PR에서 이 카드에 붙는다 */
+/** 상태별 플랜 카드 (MY-06). 프로의 해지·해지 취소·주기 바꾸기 버튼은 SubscriptionActions가 그린다 */
 function viewOf(s: Subscription): View {
   const cycle = s.cycle ? fromBillingCycle(s.cycle) : 'monthly'
   const end = s.currentPeriodEnd ? SHORT_DATE.format(new Date(s.currentPeriodEnd)) : null
@@ -107,6 +114,20 @@ export function Component() {
   const [notice] = useState(() => (location.state as { notice?: unknown } | null)?.notice)
   const queryClient = useQueryClient()
   const { data, error, isPending, isFetching, refetch } = useQuery(subscriptionQuery())
+  const act = useSubscriptionAction()
+  const [changeOpen, setChangeOpen] = useState(false)
+  // 창을 연 채 구독이 바뀌어 더 바꿀 수 없게 되면(해지 예정이 됨, 바꾸기가 이미 저장됨) 창을 닫는다.
+  // 열림을 남기면 다시 바꿀 수 있게 될 때 저절로 열린다(#357 리뷰)
+  // 다시 받기가 실패해 ErrorState가 되면 창도 사라진다. 열림을 남기면 [다시 시도]가 성공할 때 저절로 열린다(#357 리뷰)
+  if (changeOpen && (!data || error || !canChangeCycle(data))) setChangeOpen(false)
+
+  // 오류 뒤 새로 받은 구독으로 버튼이 바뀌면(409로 창을 닫아 연 버튼에 돌아간 포커스 등) 포커스가 body로 떨어진다.
+  // 성공 때처럼 플랜 이름으로 옮긴다(#357 리뷰)
+  useEffect(() => {
+    if (act.isError && document.activeElement === document.body) {
+      document.getElementById(PLAN_TITLE_ID)?.focus()
+    }
+  }, [data, act.isError])
 
   // 안내는 한 번만 보인다. 기록에 남기면 새로 고침·뒤로 가기 때마다 다시 뜬다(#356 리뷰)
   useEffect(() => {
@@ -124,6 +145,8 @@ export function Component() {
   else {
     const view = viewOf(data)
     const pro = data.plan === 'PRO'
+    const end =
+      pro && data.currentPeriodEnd ? SHORT_DATE.format(new Date(data.currentPeriodEnd)) : null
     content = (
       <>
         {view.alert ? (
@@ -161,9 +184,16 @@ export function Component() {
             <span className="bg-accent text-primary-text inline-flex size-12 shrink-0 items-center justify-center rounded-xl">
               <Icon name={pro ? PRO_PLAN.icon : 'code'} size={22} />
             </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
+            {/* 설명 칸이 200px보다 좁아지면 버튼이 다음 줄로 내려간다. 없으면 좁은 화면에서 글자 단위로 줄이 바뀐다(#357 리뷰) */}
+            <div className="flex min-w-0 flex-1 basis-[200px] flex-col gap-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-foreground m-0 text-xl font-bold">{view.name}</h2>
+                <h2
+                  id={PLAN_TITLE_ID}
+                  tabIndex={-1}
+                  className="text-foreground m-0 text-xl font-bold outline-none"
+                >
+                  {view.name}
+                </h2>
                 <Badge tone={view.badge.tone}>{view.badge.label}</Badge>
               </div>
               <p className="text-muted-foreground m-0 text-[15px]">{view.line}</p>
@@ -173,19 +203,23 @@ export function Component() {
                 <Link to={view.action.to}>{view.action.label}</Link>
               </Button>
             ) : null}
+            {end ? (
+              <PlanActions
+                subscription={data}
+                end={end}
+                act={act}
+                changeOpen={changeOpen}
+                setChangeOpen={setChangeOpen}
+              />
+            ) : null}
           </div>
+          {end ? <NextCycleBand subscription={data} end={end} act={act} /> : null}
           {pro && data.currentPeriodEnd ? (
             <dl className="m-0 mt-6 border-t text-[15px]">
               <div className="grid grid-cols-[120px_1fr] gap-4 border-b py-3">
                 <dt className="text-muted-foreground">결제 주기</dt>
                 <dd className="text-foreground m-0">
                   {cycleText(data.cycle ? fromBillingCycle(data.cycle) : 'monthly')}
-                  {data.nextCycle && data.nextCycle !== data.cycle ? (
-                    <span className="text-muted-foreground">
-                      {' '}
-                      (다음 결제부터 {cycleText(fromBillingCycle(data.nextCycle))})
-                    </span>
-                  ) : null}
                 </dd>
               </div>
               <div className="grid grid-cols-[120px_1fr] gap-4 border-b py-3">
@@ -196,6 +230,7 @@ export function Component() {
               </div>
             </dl>
           ) : null}
+          <ActionResult act={act} subscription={data} modalOpen={changeOpen} />
         </section>
         <section
           aria-labelledby="pro-features"
