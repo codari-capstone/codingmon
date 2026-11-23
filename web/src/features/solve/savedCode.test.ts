@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  claimUnansweredCode,
+  showOpenCode,
   clearSavedCode,
   forgetJudgedCode,
   forgetProblemDrafts,
@@ -26,9 +26,16 @@ const judged = (id: number) => ({
 })
 
 describe('savedCode', () => {
+  let stopShowing = () => {}
+  /** 에디터가 이 코드를 화면에 보여 주는 상태로 둔다. 테스트가 끝나면 걷는다. */
+  const show = (...args: Parameters<typeof showOpenCode>) => {
+    stopShowing()
+    stopShowing = showOpenCode(...args)
+  }
+
   afterEach(() => {
-    // 응답 대기 표시는 메모리에 있어 저장소를 비워도 남는다. 새 문서처럼 비운다
-    settleSavedCodeOnLoad(undefined, '/')
+    stopShowing()
+    stopShowing = () => {}
     sessionStorage.clear()
     localStorage.clear()
     vi.restoreAllMocks()
@@ -179,6 +186,7 @@ describe('savedCode', () => {
     keepUntilJudged(5, 1, 'PYTHON', '이전 제출')
     markHeldSubmission(5, 1, 'PYTHON', '이전 제출', 7)
     const release = keepUntilJudged(5, 1, 'PYTHON', '실패한 제출')
+    show(5, 1, 'PYTHON', '실패한 제출')
 
     release()
 
@@ -189,10 +197,12 @@ describe('savedCode', () => {
 
   it('접수 실패가 더 고친 코드를 덮지 않고, 로그아웃 뒤에는 되살리지 않는다', () => {
     storeSavedCode(5, 1, 'PYTHON', '더 고친 코드')
+    show(5, 1, 'PYTHON', '더 고친 코드')
     keepUntilJudged(5, 1, 'PYTHON', '보낸 코드')()
     expect(readDraftCode(5, 1, 'PYTHON')).toBe('더 고친 코드')
 
     const release = keepUntilJudged(5, 2, 'PYTHON', '보낸 코드')
+    show(5, 2, 'PYTHON', '보낸 코드')
     clearSavedCode()
     release()
     expect(readSavedCode(5, 2, 'PYTHON')).toBeNull()
@@ -202,7 +212,7 @@ describe('savedCode', () => {
     storeSavedCode(5, 1, 'PYTHON', '응답 대기')
     const release = keepUntilJudged(5, 1, 'PYTHON', '응답 대기')
 
-    release(true)
+    release()
     forgetProblemDrafts(5, 1)
 
     expect(readSavedCode(5, 1, 'PYTHON')).toBe('응답 대기')
@@ -210,12 +220,12 @@ describe('savedCode', () => {
 
   it('떠난 뒤 실패한 코드는 주소창 이동이 이어져도 남고, 열어 본 뒤 떠나면 지워진다', () => {
     const release = keepUntilJudged(5, 1, 'PYTHON', '실패한 코드')
-    release(true)
+    release()
 
     settleSavedCodeOnLoad('navigate', '/problems/1')
     expect(readSavedCode(5, 1, 'PYTHON')).toBe('실패한 코드')
 
-    claimUnansweredCode(5, 1, 'PYTHON')
+    show(5, 1, 'PYTHON', '실패한 코드')
     expect(readDraftCode(5, 1, 'PYTHON')).toBe('실패한 코드')
     forgetProblemDrafts(5, 1)
     expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
@@ -225,7 +235,7 @@ describe('savedCode', () => {
     keepUntilJudged(5, 1, 'PYTHON', '못 본 코드')
     settleSavedCodeOnLoad('reload', '/problems/1')
 
-    claimUnansweredCode(5, 1, 'CPP')
+    show(5, 1, 'CPP', '다른 코드')
     forgetProblemDrafts(5, 1)
 
     expect(readSavedCode(5, 1, 'PYTHON')).toBe('못 본 코드')
@@ -235,7 +245,7 @@ describe('savedCode', () => {
     keepUntilJudged(5, 1, 'PYTHON', '본 코드')
     settleSavedCodeOnLoad('reload', '/problems/1')
 
-    claimUnansweredCode(5, 1, 'PYTHON')
+    show(5, 1, 'PYTHON', '본 코드')
     settleSavedCodeOnLoad('navigate', '/problems')
 
     expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
@@ -244,7 +254,7 @@ describe('savedCode', () => {
   it('응답을 기다리는 코드는 열어도 옮기지 않는다', () => {
     keepUntilJudged(5, 1, 'PYTHON', '보내는 중')
 
-    claimUnansweredCode(5, 1, 'PYTHON')
+    show(5, 1, 'PYTHON', '보내는 중')
 
     expect(readDraftCode(5, 1, 'PYTHON')).toBeNull()
     expect(readSavedCode(5, 1, 'PYTHON')).toBe('보내는 중')
@@ -253,10 +263,11 @@ describe('savedCode', () => {
   it('같은 언어로 두 번 보내 뒤 요청이 먼저 실패해도 앞 요청의 코드를 지키고 번호를 적는다', () => {
     keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
     const second = keepUntilJudged(5, 1, 'PYTHON', '뒤 코드')
+    show(5, 1, 'PYTHON', '뒤 코드')
 
     second()
     forgetProblemDrafts(5, 1)
-    claimUnansweredCode(5, 1, 'PYTHON')
+    show(5, 1, 'PYTHON', 'print(1)')
     expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
     expect(readDraftCode(5, 1, 'PYTHON')).toBeNull()
 
@@ -265,12 +276,93 @@ describe('savedCode', () => {
     expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
   })
 
+  it('못 본 코드는 뒤 제출이 접수돼도 남고, 그 제출의 판정 뒤에 다시 열린다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', '못 본 코드')()
+
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+    markHeldSubmission(5, 1, 'PYTHON', 'print(1)', 9)
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
+
+    forgetJudgedCode(5, judged(9))
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('못 본 코드')
+  })
+
+  it('목록 안쪽의 제출도 판정이 나면 지워져 되살아나지 않는다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+    markHeldSubmission(5, 1, 'PYTHON', 'print(1)', 7)
+    keepUntilJudged(5, 1, 'PYTHON', '실패한 코드')()
+
+    forgetJudgedCode(5, judged(7))
+    show(5, 1, 'PYTHON', '실패한 코드')
+    forgetProblemDrafts(5, 1)
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+  })
+
+  it('저장에 실패한 요청의 접수가 다른 요청의 응답 대기를 지우지 않는다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', '보내는 중')
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      throw new Error('quota')
+    })
+    keepUntilJudged(5, 1, 'PYTHON', '저장 못 한 코드')
+    setItem.mockRestore()
+
+    markHeldSubmission(5, 1, 'PYTHON', '저장 못 한 코드', 8)
+    show(5, 1, 'PYTHON', '보내는 중')
+
+    expect(readDraftCode(5, 1, 'PYTHON')).toBeNull()
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('보내는 중')
+  })
+
+  it('다시 연 화면에서 요청이 실패하면 보고 있던 코드가 작성 중 코드가 된다', () => {
+    const release = keepUntilJudged(5, 1, 'PYTHON', '보던 코드')
+    show(5, 1, 'PYTHON', '보던 코드')
+
+    release()
+    expect(readDraftCode(5, 1, 'PYTHON')).toBe('보던 코드')
+
+    forgetProblemDrafts(5, 1)
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+  })
+
+  it('앞 요청이 대기 중이어도 실패한 뒤 코드를 보면 작성 중 코드로 옮긴다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', '앞 코드')
+    keepUntilJudged(5, 1, 'PYTHON', '뒤 코드')()
+
+    show(5, 1, 'PYTHON', '뒤 코드')
+    expect(readDraftCode(5, 1, 'PYTHON')).toBe('뒤 코드')
+
+    forgetProblemDrafts(5, 1)
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('앞 코드')
+  })
+
+  it('다른 코드를 보고 있으면 실패한 코드를 본 것으로 치지 않는다', () => {
+    const release = keepUntilJudged(5, 1, 'PYTHON', '못 본 코드')
+    show(5, 1, 'PYTHON', '다시 풀기로 연 코드')
+
+    release()
+
+    expect(readDraftCode(5, 1, 'PYTHON')).toBeNull()
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('못 본 코드')
+  })
+
+  it('이전 버전이 한 건으로 저장한 판정 대기 코드도 읽고 판정으로 지운다', () => {
+    sessionStorage.setItem(
+      'solve:held:5:1:PYTHON',
+      JSON.stringify({ code: 'print(1)', submissionId: 7 }),
+    )
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
+
+    forgetJudgedCode(5, judged(7))
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+  })
+
   it('떠난 뒤 실패한 코드를 열어 치우면 그 앞의 판정 대기 코드가 돌아온다', () => {
     keepUntilJudged(5, 1, 'PYTHON', '앞 제출')
     markHeldSubmission(5, 1, 'PYTHON', '앞 제출', 7)
-    keepUntilJudged(5, 1, 'PYTHON', '실패한 코드')(true)
+    keepUntilJudged(5, 1, 'PYTHON', '실패한 코드')()
 
-    claimUnansweredCode(5, 1, 'PYTHON')
+    show(5, 1, 'PYTHON', '실패한 코드')
     forgetProblemDrafts(5, 1)
 
     expect(readSavedCode(5, 1, 'PYTHON')).toBe('앞 제출')
@@ -305,7 +397,7 @@ describe('savedCode', () => {
     const release = keepUntilJudged(5, 1, 'PYTHON', '응답 대기')
 
     forgetProblemDrafts(5, 1)
-    release(true)
+    release()
 
     expect(readSavedCode(5, 1, 'PYTHON')).toBe('응답 대기')
     expect(readSavedCode(5, 1, 'CPP')).toBeNull()
@@ -317,7 +409,7 @@ describe('savedCode', () => {
     settleSavedCodeOnLoad('reload', '/problems/1')
     expect(readSavedCode(5, 1, 'PYTHON')).toBe('응답 못 받음')
 
-    claimUnansweredCode(5, 1, 'PYTHON')
+    show(5, 1, 'PYTHON', '응답 못 받음')
     forgetProblemDrafts(5, 1)
     expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
   })

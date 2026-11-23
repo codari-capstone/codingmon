@@ -23,11 +23,11 @@ import { RunButton, SampleRun } from './SampleRun'
 import { useSampleRun } from './sampleRunQuery'
 import { Samples } from './Samples'
 import {
-  claimUnansweredCode,
   forgetProblemDrafts,
   readDraftCode,
   readMissedRetryCode,
   readSavedCode,
+  showOpenCode,
   storeSavedCode,
 } from './savedCode'
 import { askedLanguage, retriedSubmission } from './solvePath'
@@ -173,14 +173,13 @@ function Workspace({
 
   const code = language ? (codeByLanguage[language] ?? opening) : ''
 
-  // 응답을 못 받은 코드는 실제로 열린 언어만 작성 중 코드로 옮긴다. 안 본 코드는 떠나도 지우지 않는다
-  const openedFromStorage =
-    language !== undefined &&
-    language !== missed?.language &&
-    codeByLanguage[language] === undefined
+  // 좁은 화면의 에디터는 지문 탭 뒤에 숨은 채 마운트돼 있다. 보이는 동안만 '본 코드'로 친다
+  const [tab, setTab] = useState('statement')
+  const editorVisible = wide || tab === 'editor'
   useEffect(() => {
-    if (openedFromStorage) claimUnansweredCode(user?.id, problem.id, language)
-  }, [openedFromStorage, user?.id, problem.id, language])
+    if (!language || !editorVisible) return undefined
+    return showOpenCode(user?.id, problem.id, language, code)
+  }, [editorVisible, user?.id, problem.id, language, code])
 
   const editor =
     language && current ? (
@@ -293,7 +292,7 @@ function Workspace({
           <div className="sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto">{editor}</div>
         </div>
       ) : (
-        <Tabs defaultValue="statement">
+        <Tabs value={tab} onValueChange={setTab}>
           {/*
             받은 부품의 기본 높이는 리스트 32px·트리거 25px이다. 좁은 화면에서 지문↔코드
             전환은 이 탭뿐이라 프로젝트 공통 터치 영역(44px)을 리스트와 트리거 양쪽에

@@ -122,8 +122,6 @@ function asWide() {
 describe('SolvePage', () => {
   // 앞 테스트의 unmount가 건 '화면을 떠남' 지우기가 이 테스트의 저장본을 지우지 않게 먼저 흘려보낸다
   beforeEach(async () => {
-    // 응답 대기 표시는 메모리에 있어 저장소를 비워도 남는다. 새 문서처럼 비운다
-    settleSavedCodeOnLoad(undefined, '/')
     await new Promise((resolve) => setTimeout(resolve, 0))
     sessionStorage.clear()
   })
@@ -427,7 +425,32 @@ describe('SolvePage', () => {
       )
     })
 
+    it('좁은 화면은 코드 작성 탭을 열어야 응답 못 받은 코드를 본 것으로 친다', async () => {
+      const user = userEvent.setup()
+      keepUntilJudged(USER.id, 1, 'PYTHON', '# 못 본 코드')
+      settleSavedCodeOnLoad('reload', '/problems/1')
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      expect(readDraftCode(USER.id, 1, 'PYTHON')).toBeNull()
+
+      await user.click(screen.getByRole('tab', { name: '코드 작성' }))
+      await waitFor(() => expect(readDraftCode(USER.id, 1, 'PYTHON')).toBe('# 못 본 코드'))
+    })
+
+    it('좁은 화면의 숨은 에디터만 마운트된 채 떠나도 코드가 남는다', async () => {
+      keepUntilJudged(USER.id, 1, 'PYTHON', '# 못 본 코드')
+      settleSavedCodeOnLoad('reload', '/problems/1')
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await act(() => lastRouter.navigate('/submissions/9'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 못 본 코드')
+    })
+
     it('제출 응답 전에 화면을 옮기고 접수가 실패해도 코드를 남긴다', async () => {
+      asWide()
       const user = userEvent.setup()
       let failNow = () => {}
       const answered = new Promise<void>((resolve) => (failNow = resolve))
@@ -513,6 +536,7 @@ describe('SolvePage', () => {
     })
 
     it('손대지 않은 다시 풀기 코드도 접수가 실패하면 작성 중 코드로 남는다', async () => {
+      asWide()
       const user = userEvent.setup()
       server.use(
         http.post('*/api/submissions', () =>
