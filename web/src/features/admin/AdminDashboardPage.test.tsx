@@ -93,7 +93,7 @@ describe('AdminDashboardPage (ADM-12)', () => {
     )
     renderPage()
 
-    const card = await screen.findByRole('region', { name: '취소가 필요한 결제' })
+    const card = await screen.findByRole('region', { name: '취소·확인이 필요한 결제' })
     expect(within(card).getByText('2')).toBeInTheDocument()
     expect(within(card).getByRole('link')).toHaveAttribute(
       'href',
@@ -110,7 +110,9 @@ describe('AdminDashboardPage (ADM-12)', () => {
     await waitFor(() =>
       expect(client.getQueryData(paymentNeedsCancelCountQuery().queryKey)).toBe(0),
     )
-    expect(screen.queryByRole('region', { name: '취소가 필요한 결제' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('region', { name: '취소·확인이 필요한 결제' }),
+    ).not.toBeInTheDocument()
   })
 
   it('신고가 없으면 빈 안내를 보인다', async () => {

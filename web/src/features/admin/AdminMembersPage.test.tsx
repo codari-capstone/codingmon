@@ -13,17 +13,42 @@ import { Component as AdminMembersPage } from './AdminMembersPage'
 
 // 닉네임 칸 글은 아바타의 첫 글자가 앞에 붙는다(코코린이).
 // 시드 회원 24명: 정지 2(3 코딩왕·8 밤샘코더), 관리자 2번, 가입일 없음 1~4, GitHub 6·10·16 (fixtures/adminUsers)
+// 대시보드 카드로 들어온 것처럼 대시보드를 앞 기록으로 둔다
 function renderPage(entry = '/admin/members') {
   const client = createQueryClient()
   client.setQueryData(ME_QUERY_KEY, { id: 2, nickname: '관리자', role: 'ADMIN' })
-  const router = createMemoryRouter([{ path: '/admin/members', Component: AdminMembersPage }], {
-    initialEntries: [entry],
-  })
+  const router = createMemoryRouter(
+    [
+      { path: '/admin/members', Component: AdminMembersPage },
+      { path: '/admin/dashboard', element: <p>대시보드 화면</p> },
+    ],
+    { initialEntries: ['/admin/dashboard', entry], initialIndex: 1 },
+  )
   render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+  return router
+}
+
+/** 취소·확인이 필요한 결제가 있는 회원 하나(코딩왕, 정상·프로 연간) */
+const needsCancelMember = {
+  id: 3,
+  nickname: '코딩왕',
+  email: 'king@example.com',
+  role: 'USER',
+  createdAt: null,
+  suspendedAt: null,
+  subscription: {
+    plan: 'PRO',
+    status: 'ACTIVE',
+    cycle: 'YEARLY',
+    nextCycle: null,
+    currentPeriodEnd: '2027-10-20T03:00:00Z',
+    customerId: null,
+    paymentPending: false,
+  },
 }
 
 const firstCells = async () =>
@@ -152,7 +177,7 @@ describe('AdminMembersPage (ADM-14)', () => {
     await firstCells()
     expect(screen.getAllByRole('row').map((row) => row.textContent)).toEqual([
       'ID닉네임이메일가입일요금제마감일상태',
-      '4회회원4m4@example.com—무료결제 실패—정상',
+      '4회회원4m4@example.com—프로 월간결제 실패—정상',
       '3회회원3m3@example.com—프로 월간해지 예정2026-11-30정상',
       '2회회원2m2@example.com—프로 연간2027-09-14정상',
       '1회회원1m1@example.com—무료—정상',
@@ -160,7 +185,7 @@ describe('AdminMembersPage (ADM-14)', () => {
     expect(screen.getByText(/마감일은 진행 중이면 다음 결제일/)).toBeInTheDocument()
   })
 
-  it('대시보드 카드에서 들어오면 취소가 필요한 결제가 있는 회원만 보이고, ×로 필터를 지운다', async () => {
+  it('대시보드 카드에서 들어오면 취소·확인이 필요한 회원만 보이고, ×로 필터를 지워도 기록은 쌓지 않는다', async () => {
     const user = userEvent.setup()
     const asked: (string | null)[] = []
     server.use(
@@ -169,42 +194,67 @@ describe('AdminMembersPage (ADM-14)', () => {
         asked.push(needsCancel)
         if (needsCancel !== 'true') return undefined
         return HttpResponse.json({
-          content: [
-            {
-              id: 3,
-              nickname: '코딩왕',
-              email: 'king@example.com',
-              role: 'USER',
-              createdAt: null,
-              suspendedAt: null,
-              subscription: {
-                plan: 'PRO',
-                status: 'ACTIVE',
-                cycle: 'YEARLY',
-                nextCycle: null,
-                currentPeriodEnd: '2027-10-20T03:00:00Z',
-                customerId: null,
-                paymentPending: false,
-              },
-            },
-          ],
+          content: [needsCancelMember],
           totalElements: 1,
           counts: { all: 1, active: 1, suspended: 0 },
         })
       }),
     )
-    renderPage('/admin/members?paymentNeedsCancel=true')
+    const router = renderPage('/admin/members?paymentNeedsCancel=true')
 
     expect(await firstCells()).toEqual(['3'])
     expect(asked[0]).toBe('true')
-    expect(screen.getByText('취소가 필요한 결제만')).toHaveTextContent('취소가 필요한 결제만 · 1명')
-    expect(screen.getAllByRole('row')[1]).toHaveTextContent('프로 연간취소 필요')
+    expect(screen.getByText('취소·확인이 필요한 결제만')).toHaveTextContent(
+      '취소·확인이 필요한 결제만 · 1명',
+    )
+    expect(screen.getAllByRole('row')[1]).toHaveTextContent('프로 연간취소·확인 필요')
 
-    await user.click(screen.getByRole('button', { name: '취소가 필요한 결제 필터 지우기' }))
+    await user.click(screen.getByRole('button', { name: '취소·확인이 필요한 결제 필터 지우기' }))
     expect(await screen.findByRole('tab', { name: '전체24' })).toBeInTheDocument()
     expect(asked.at(-1)).toBeNull()
-    expect(screen.queryByText(/취소가 필요한 결제만/)).not.toBeInTheDocument()
-    expect(screen.queryByText('취소 필요')).not.toBeInTheDocument()
+    expect(screen.queryByText(/취소·확인이 필요한 결제만/)).not.toBeInTheDocument()
+    expect(screen.queryByText('취소·확인 필요')).not.toBeInTheDocument()
+
+    // 뒤로 가면 필터 목록이 아니라 들어온 대시보드로 간다
+    await router.navigate(-1)
+    expect(await screen.findByText('대시보드 화면')).toBeInTheDocument()
+  })
+
+  it('대상 회원은 있는데 고른 탭에만 없으면 탭 기준으로 안내한다', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get('*/api/admin/users', ({ request }) => {
+        const status = new URL(request.url).searchParams.get('status')
+        return HttpResponse.json({
+          content: status === 'SUSPENDED' ? [] : [needsCancelMember],
+          totalElements: status === 'SUSPENDED' ? 0 : 1,
+          counts: { all: 1, active: 1, suspended: 0 },
+        })
+      }),
+    )
+    renderPage('/admin/members?paymentNeedsCancel=true')
+    await firstCells()
+
+    await user.click(screen.getByRole('tab', { name: '정지0' }))
+    expect(await screen.findByText('정지된 회원이 없어요')).toBeInTheDocument()
+    expect(screen.queryByText(/결제가 있는 회원이 없어요/)).not.toBeInTheDocument()
+  })
+
+  it('대상 회원이 하나도 없으면 그렇게 말한다', async () => {
+    server.use(
+      http.get('*/api/admin/users', () =>
+        HttpResponse.json({
+          content: [],
+          totalElements: 0,
+          counts: { all: 0, active: 0, suspended: 0 },
+        }),
+      ),
+    )
+    renderPage('/admin/members?paymentNeedsCancel=true')
+
+    expect(
+      await screen.findByText('취소·확인이 필요한 결제가 있는 회원이 없어요'),
+    ).toBeInTheDocument()
   })
 
   it('가입일 안내는 표가 있을 때만 단다', async () => {

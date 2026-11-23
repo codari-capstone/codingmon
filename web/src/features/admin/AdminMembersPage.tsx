@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
@@ -38,8 +38,9 @@ const FILTERS = [
 ] as const satisfies readonly { value: AdminUserFilter; label: string; count: string }[]
 
 /**
- * 요금제 칸 (ADM-14). 결제 실패는 계약상 `plan: FREE`라 '무료 [결제 실패]'다.
- * shortcut: 목록 응답에 회원별 `needsCancel`이 없어 '취소 필요'는 그 필터로 들어왔을 때만 단다. 계약에 값이 생기면 그걸 쓴다
+ * 요금제 칸 (ADM-14). 결제 실패는 계약(`Subscription.cycle`)대로 실패한 갱신 결제의 주기를 남겨 '프로 월간 [결제 실패]'다.
+ * 지금은 무료라 굵게 하지 않는다.
+ * shortcut: 목록 응답에 회원별 `needsCancel`이 없어 '취소·확인 필요'는 그 필터로 들어왔을 때만 단다. 계약에 값이 생기면 그걸 쓴다
  */
 function PlanCell({
   subscription: { plan, status, cycle },
@@ -52,12 +53,14 @@ function PlanCell({
     <span className="flex items-center gap-1.5 whitespace-nowrap">
       {plan === 'PRO' && cycle ? (
         <b>프로 {CYCLE_NAME[fromBillingCycle(cycle)]}</b>
+      ) : status === 'PAYMENT_FAILED' && cycle ? (
+        <span>프로 {CYCLE_NAME[fromBillingCycle(cycle)]}</span>
       ) : (
         <span className="text-muted-foreground">무료</span>
       )}
       {status === 'CANCEL_SCHEDULED' ? <Badge tone="warning">해지 예정</Badge> : null}
       {status === 'PAYMENT_FAILED' ? <Badge tone="danger">결제 실패</Badge> : null}
-      {needsCancel ? <Badge tone="danger">취소 필요</Badge> : null}
+      {needsCancel ? <Badge tone="danger">취소·확인 필요</Badge> : null}
     </span>
   )
 }
@@ -72,14 +75,18 @@ export function Component() {
     page: 1,
   })
   const { filter, keyword, page } = params
-  // 대시보드의 '취소가 필요한 결제' 카드가 주소로 넘긴다(ADM-12)
+  // 대시보드의 '취소·확인이 필요한 결제' 카드가 주소로 넘긴다(ADM-12)
   const [searchParams, setSearchParams] = useSearchParams()
   const needsCancel = searchParams.get('paymentNeedsCancel') === 'true'
 
   const { data, isPending, isFetching, error, refetch } = useQuery({
     ...adminUserListQuery({ ...params, paymentNeedsCancel: needsCancel }),
-    // 탭·검색·페이지를 바꾸는 동안 이전 표를 둔다(문제 관리 목록과 같은 선택)
-    placeholderData: keepPreviousData,
+    // 탭·검색·페이지를 바꾸는 동안 이전 표를 둔다(문제 관리 목록과 같은 선택).
+    // 필터가 바뀔 때는 두지 않는다. 걸러지지 않은 회원에 '취소·확인 필요'가 붙어 보인다
+    placeholderData: (previous, previousQuery) =>
+      (previousQuery?.queryKey[2].paymentNeedsCancel ?? false) === needsCancel
+        ? previous
+        : undefined,
   })
 
   const queryClient = useQueryClient()
@@ -135,14 +142,15 @@ export function Component() {
           </TabsList>
           {needsCancel ? (
             <span className="bg-destructive-soft text-destructive-text mr-auto inline-flex h-8 items-center gap-1 rounded-full pr-1 pl-3 text-sm font-semibold">
-              취소가 필요한 결제만
+              취소·확인이 필요한 결제만
               {data ? <span className="tabular-nums"> · {data.counts.all}명</span> : null}
               <button
                 type="button"
-                aria-label="취소가 필요한 결제 필터 지우기"
+                aria-label="취소·확인이 필요한 결제 필터 지우기"
                 className="hover:bg-destructive/10 grid size-6 place-items-center rounded-full"
                 onClick={() => {
-                  setSearchParams({})
+                  // 기록을 쌓지 않는다. 쌓으면 뒤로 가기로 필터만 돌아오고 페이지 상태는 남아 어긋난다
+                  setSearchParams({}, { replace: true })
                   setParams((prev) => ({ ...prev, page: 1 }))
                 }}
               >
@@ -178,8 +186,11 @@ export function Component() {
                     title="조건에 맞는 회원이 없어요"
                     description="검색어를 바꿔 보세요."
                   />
-                ) : needsCancel ? (
-                  <EmptyState title="취소가 필요한 결제가 있는 회원이 없어요" />
+                ) : needsCancel && data.counts.all === 0 ? (
+                  <EmptyState title="취소·확인이 필요한 결제가 있는 회원이 없어요" />
+                ) : needsCancel && filter === 'ACTIVE' ? (
+                  // 대상은 있는데 고른 탭에만 없다. 칩의 'N명'과 어긋나지 않게 탭 기준으로 말한다
+                  <EmptyState title="정상 상태인 회원이 없어요" />
                 ) : (
                   <EmptyState
                     title={filter === 'SUSPENDED' ? '정지된 회원이 없어요' : '아직 회원이 없어요'}

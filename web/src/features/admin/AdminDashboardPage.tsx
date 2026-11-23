@@ -22,7 +22,7 @@ const statusCount = (status: 'RECEIVED' | 'IN_PROGRESS') => ({
 })
 
 /**
- * 관리자 대시보드 (ADM-12). 처리 안 한 신고 수와 최근 신고, 취소가 필요한 결제가 있는 회원 수를 보인다.
+ * 관리자 대시보드 (ADM-12). 처리 안 한 신고 수와 최근 신고, 취소·확인이 필요한 결제가 있는 회원 수를 보인다.
  * 문제·회원·제출 수는 넣지 않는다(#222에서 정함).
  */
 export function Component() {
@@ -88,7 +88,7 @@ export function Component() {
 
         {/* 1건 이상일 때만 보인다. 0건이면 신고 카드가 전체 폭을 쓴다 */}
         {needsCancel.data ? (
-          <section aria-label="취소가 필요한 결제">
+          <section aria-label="취소·확인이 필요한 결제">
             <Link
               to="/admin/members?paymentNeedsCancel=true"
               className="bg-card border-destructive hover:bg-muted/40 flex h-full flex-col gap-1 rounded-lg border-2 p-6 sm:p-8"
@@ -96,7 +96,7 @@ export function Component() {
               <span className="text-destructive-text flex items-center justify-between gap-2 text-sm font-semibold">
                 <span className="flex items-center gap-2">
                   <CreditCard aria-hidden className="size-4" />
-                  취소가 필요한 결제
+                  취소·확인이 필요한 결제
                 </span>
                 <ChevronRight aria-hidden className="text-foreground size-5" />
               </span>
@@ -106,7 +106,9 @@ export function Component() {
                 <span className="ml-1 text-lg">명</span>
               </span>
               <span className="text-muted-foreground mt-2 text-sm">
-                돈은 나갔는데 구독에 반영하지 않은 결제예요. 포트원 콘솔에서 취소해 주세요.
+                {/* 1시간 넘게 결과를 모르는 결제도 센다(계약). 곧 확정될 결제를 취소하지 않게 확인부터 안내한다 */}
+                돈은 나갔는데 구독에 반영하지 않았거나, 1시간 넘게 결과를 모르는 결제예요. 포트원
+                콘솔에서 상태를 확인하고 처리해 주세요.
               </span>
             </Link>
           </section>
