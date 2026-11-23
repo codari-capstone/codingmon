@@ -24,10 +24,11 @@ import { useSampleRun } from './sampleRunQuery'
 import { Samples } from './Samples'
 import {
   forgetProblemDrafts,
+  openCodeView,
   readDraftCode,
   readMissedRetryCode,
   readSavedCode,
-  sendingHeldKeys,
+  showViewedCode,
   storeSavedCode,
 } from './savedCode'
 import { askedLanguage, retriedSubmission } from './solvePath'
@@ -173,6 +174,18 @@ function Workspace({
 
   const code = language ? (codeByLanguage[language] ?? opening) : ''
 
+  // 좁은 화면의 에디터는 지문 탭 뒤에 숨은 채 마운트돼 있다. 보이는 동안만 '본 코드'로 친다
+  const [tab, setTab] = useState('statement')
+  const editorVisible = wide || tab === 'editor'
+  useEffect(() => {
+    if (!language || !editorVisible) return undefined
+    return openCodeView(user?.id, problem.id, language)
+  }, [editorVisible, user?.id, problem.id, language])
+  // 위 effect 뒤에 돌아야 한다. 입력마다 화면을 새로 열면 이 화면에서 본 요청을 잊는다
+  useEffect(() => {
+    if (language && editorVisible) showViewedCode(code)
+  }, [editorVisible, user?.id, problem.id, language, code])
+
   const editor =
     language && current ? (
       <div className="flex flex-col gap-4">
@@ -284,7 +297,7 @@ function Workspace({
           <div className="sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto">{editor}</div>
         </div>
       ) : (
-        <Tabs defaultValue="statement">
+        <Tabs value={tab} onValueChange={setTab}>
           {/*
             받은 부품의 기본 높이는 리스트 32px·트리거 25px이다. 좁은 화면에서 지문↔코드
             전환은 이 탭뿐이라 프로젝트 공통 터치 영역(44px)을 리스트와 트리거 양쪽에
@@ -368,11 +381,9 @@ function SolveProblem({ problemId }: { problemId: number }) {
   useEffect(() => {
     window.clearTimeout(leaving.current)
     return () => {
-      // 떠나는 순간에 읽는다. 타이머 전에 접수 실패가 오면 대기 표시가 사라져 코드를 지우게 된다
-      const sendingAtLeave = sendingHeldKeys()
       leaving.current = window.setTimeout(() => {
         if (!accepted.current && queryClient.getQueryData(ME_QUERY_KEY)) {
-          forgetProblemDrafts(userId, problemId, sendingAtLeave)
+          forgetProblemDrafts(userId, problemId)
         }
       }, 0)
     }

@@ -14,9 +14,9 @@ import { server } from '@/mocks/server'
 import { EDITOR_DEFAULTS, updateEditorSettings } from './editorSettings'
 import {
   keepUntilJudged,
-  markHeldSubmission,
   readDraftCode,
   readSavedCode,
+  settleSavedCodeOnLoad,
   storeSavedCode,
 } from './savedCode'
 import { Component as SolvePage } from './SolvePage'
@@ -424,7 +424,32 @@ describe('SolvePage', () => {
       )
     })
 
+    it('좁은 화면은 코드 작성 탭을 열어야 응답 못 받은 코드를 본 것으로 친다', async () => {
+      const user = userEvent.setup()
+      keepUntilJudged(USER.id, 1, 'PYTHON', '# 못 본 코드')
+      settleSavedCodeOnLoad('reload', '/problems/1')
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      expect(readDraftCode(USER.id, 1, 'PYTHON')).toBeNull()
+
+      await user.click(screen.getByRole('tab', { name: '코드 작성' }))
+      await waitFor(() => expect(readDraftCode(USER.id, 1, 'PYTHON')).toBe('# 못 본 코드'))
+    })
+
+    it('좁은 화면의 숨은 에디터만 마운트된 채 떠나도 코드가 남는다', async () => {
+      keepUntilJudged(USER.id, 1, 'PYTHON', '# 못 본 코드')
+      settleSavedCodeOnLoad('reload', '/problems/1')
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await act(() => lastRouter.navigate('/submissions/9'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 못 본 코드')
+    })
+
     it('제출 응답 전에 화면을 옮기고 접수가 실패해도 코드를 남긴다', async () => {
+      asWide()
       const user = userEvent.setup()
       let failNow = () => {}
       const answered = new Promise<void>((resolve) => (failNow = resolve))
@@ -446,14 +471,30 @@ describe('SolvePage', () => {
       const mutation = lastClient.getMutationCache().getAll()[0]
       failNow()
       await waitFor(() => expect(mutation?.state.status).toBe('error'))
+      expect(readDraftCode(USER.id, 1, 'PYTHON')).toBeNull()
 
-      // 판정 대기 사본으로 통과하지 않게 작성 중 자리를 직접 본다
-      expect(readDraftCode(USER.id, 1, 'PYTHON')).toContain('# 접수 안 된 코드')
+      // 다시 열면 그 코드가 보이고, 그때 작성 중 코드가 된다
+      await act(() => lastRouter.navigate('/problems/1'))
+      await editorHas('# 접수 안 된 코드')
+      await waitFor(() =>
+        expect(readDraftCode(USER.id, 1, 'PYTHON')).toContain('# 접수 안 된 코드'),
+      )
+    })
+
+    it('응답을 못 받은 코드를 열지 않은 언어로 보고 떠나도 지우지 않는다', async () => {
+      keepUntilJudged(USER.id, 1, 'CPP', '// 못 본 코드')
+      settleSavedCodeOnLoad('reload', '/problems/1')
+      renderSolve('/problems/1?language=PYTHON')
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await act(() => lastRouter.navigate('/submissions/9'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(readSavedCode(USER.id, 1, 'CPP')).toBe('// 못 본 코드')
     })
 
     it('다시 풀기의 제출을 못 받아도 그 제출의 판정 대기 코드는 연다', async () => {
-      keepUntilJudged(USER.id, 1, 'PYTHON', '# 채점 불가 제출')
-      markHeldSubmission(USER.id, 1, 'PYTHON', '# 채점 불가 제출', 7)
+      keepUntilJudged(USER.id, 1, 'PYTHON', '# 채점 불가 제출').accept(7)
       server.use(
         http.get('*/api/submissions/:id', () =>
           HttpResponse.json({ status: 404, title: 'Not Found' }, { status: 404 }),
@@ -493,6 +534,7 @@ describe('SolvePage', () => {
     })
 
     it('손대지 않은 다시 풀기 코드도 접수가 실패하면 작성 중 코드로 남는다', async () => {
+      asWide()
       const user = userEvent.setup()
       server.use(
         http.post('*/api/submissions', () =>
