@@ -21,10 +21,13 @@ export function adminUserListQuery(params: {
   filter: AdminUserFilter
   keyword: string
   page: number
+  /** 대시보드 카드에서 들어오면 true. 취소가 필요한 결제가 있는 회원만 */
+  paymentNeedsCancel: boolean
 }) {
   const query = {
     status: params.filter === 'ALL' ? undefined : params.filter,
     keyword: params.keyword || undefined,
+    paymentNeedsCancel: params.paymentNeedsCancel || undefined,
     page: params.page - 1,
     size: ADMIN_PAGE_SIZE,
   }
@@ -34,6 +37,21 @@ export function adminUserListQuery(params: {
       const result = await api.GET('/api/admin/users', { params: { query } })
       if (result.data === undefined) fail(result)
       return result.data
+    },
+  })
+}
+
+/** 취소가 필요한 결제가 있는 회원 수 (ADM-12 대시보드 카드). 회원 목록 키 아래라 정지·탈퇴 뒤 같이 새로 받는다 */
+export function paymentNeedsCancelCountQuery() {
+  const query = { paymentNeedsCancel: true, size: 1 }
+  return queryOptions({
+    queryKey: [ADMIN_USERS_KEY, 'needs-cancel-count'] as const,
+    // 카드가 포트원 콘솔로 보낸다. 거기서 처리하고 돌아오면 수를 새로 받는다(회원 상세와 같다)
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const result = await api.GET('/api/admin/users', { params: { query } })
+      if (result.data === undefined) fail(result)
+      return result.data.totalElements
     },
   })
 }
