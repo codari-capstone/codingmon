@@ -12,7 +12,13 @@ import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { problemDetails } from '@/mocks/fixtures/problemDetails'
 import { server } from '@/mocks/server'
 import { EDITOR_DEFAULTS, updateEditorSettings } from './editorSettings'
-import { keepUntilJudged, readSavedCode, storeSavedCode } from './savedCode'
+import {
+  keepUntilJudged,
+  markHeldSubmission,
+  readDraftCode,
+  readSavedCode,
+  storeSavedCode,
+} from './savedCode'
 import { Component as SolvePage } from './SolvePage'
 import { holdRetryState, retryState } from './solvePath'
 import { problemDetailQuery } from './solveQuery'
@@ -441,7 +447,22 @@ describe('SolvePage', () => {
       failNow()
       await waitFor(() => expect(mutation?.state.status).toBe('error'))
 
-      expect(readSavedCode(USER.id, 1, 'PYTHON')).toContain('# 접수 안 된 코드')
+      // 판정 대기 사본으로 통과하지 않게 작성 중 자리를 직접 본다
+      expect(readDraftCode(USER.id, 1, 'PYTHON')).toContain('# 접수 안 된 코드')
+    })
+
+    it('다시 풀기의 제출을 못 받아도 그 제출의 판정 대기 코드는 연다', async () => {
+      keepUntilJudged(USER.id, 1, 'PYTHON', '# 채점 불가 제출')
+      markHeldSubmission(USER.id, 1, 'PYTHON', '# 채점 불가 제출', 7)
+      server.use(
+        http.get('*/api/submissions/:id', () =>
+          HttpResponse.json({ status: 404, title: 'Not Found' }, { status: 404 }),
+        ),
+      )
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await editorHas('# 채점 불가 제출')
     })
 
     it('제출 코드 조회가 401이면 세션을 버린다', async () => {
@@ -471,7 +492,7 @@ describe('SolvePage', () => {
       expect(asked).toBe(0)
     })
 
-    it('접수가 실패하면 판정 대기로 잡아 둔 코드를 되돌린다', async () => {
+    it('손대지 않은 다시 풀기 코드도 접수가 실패하면 작성 중 코드로 남는다', async () => {
       const user = userEvent.setup()
       server.use(
         http.post('*/api/submissions', () =>
@@ -486,7 +507,7 @@ describe('SolvePage', () => {
       await user.click(screen.getByRole('button', { name: '제출하기' }))
       await screen.findByRole('alert')
 
-      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBeNull()
+      expect(readDraftCode(USER.id, 1, 'PYTHON')).toBe('# 받은 코드')
     })
 
     it('제출이 접수되어도 판정 전에는 저장본을 남긴다', async () => {

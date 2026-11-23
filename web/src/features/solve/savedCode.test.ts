@@ -8,9 +8,12 @@ import {
   keepUntilJudged,
   markHeldSubmission,
   readDraftCode,
+  readMissedRetryCode,
   readSavedCode,
   savedCodeKey,
+  sendingHeldKeys,
   settleSavedCodeOnLoad,
+  startSavedCodeSync,
   storeSavedCode,
 } from './savedCode'
 
@@ -169,13 +172,49 @@ describe('savedCode', () => {
     expect(readDraftCode(5, 1, 'PYTHON')).toBe('작성 중')
   })
 
-  it('접수가 실패하면 판정 대기 자리를 이전 값으로 되돌린다', () => {
+  it('접수가 실패하면 판정 대기 자리를 되돌리고 그 코드를 작성 중 코드로 남긴다', () => {
     keepUntilJudged(5, 1, 'PYTHON', '이전 제출')
+    markHeldSubmission(5, 1, 'PYTHON', '이전 제출', 7)
     const release = keepUntilJudged(5, 1, 'PYTHON', '실패한 제출')
 
     release()
 
+    expect(readDraftCode(5, 1, 'PYTHON')).toBe('실패한 제출')
+    forgetProblemDrafts(5, 1)
     expect(readSavedCode(5, 1, 'PYTHON')).toBe('이전 제출')
+  })
+
+  it('접수 실패가 더 고친 코드를 덮지 않고, 로그아웃 뒤에는 되살리지 않는다', () => {
+    storeSavedCode(5, 1, 'PYTHON', '더 고친 코드')
+    keepUntilJudged(5, 1, 'PYTHON', '보낸 코드')()
+    expect(readDraftCode(5, 1, 'PYTHON')).toBe('더 고친 코드')
+
+    const release = keepUntilJudged(5, 2, 'PYTHON', '보낸 코드')
+    clearSavedCode()
+    release()
+    expect(readSavedCode(5, 2, 'PYTHON')).toBeNull()
+  })
+
+  it('떠난 순간 응답을 기다렸으면 지우기 전에 실패가 와도 코드를 남긴다', () => {
+    storeSavedCode(5, 1, 'PYTHON', '응답 대기')
+    const release = keepUntilJudged(5, 1, 'PYTHON', '응답 대기')
+    const keep = sendingHeldKeys()
+
+    release()
+    forgetProblemDrafts(5, 1, keep)
+
+    expect(readDraftCode(5, 1, 'PYTHON')).toBe('응답 대기')
+  })
+
+  it('다시 풀기 조회가 실패하면 그 제출의 판정 대기 코드만 연다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', '고른 제출')
+    markHeldSubmission(5, 1, 'PYTHON', '고른 제출', 7)
+
+    expect(readMissedRetryCode(5, 1, 'PYTHON', 7)).toBe('고른 제출')
+    expect(readMissedRetryCode(5, 1, 'PYTHON', 8)).toBeNull()
+
+    storeSavedCode(5, 1, 'PYTHON', '작성 중')
+    expect(readMissedRetryCode(5, 1, 'PYTHON', 8)).toBe('작성 중')
   })
 
   it('접수 응답을 기다리는 언어의 작성 중 코드는 화면을 떠나도 남긴다', () => {
@@ -190,26 +229,53 @@ describe('savedCode', () => {
     expect(readSavedCode(5, 1, 'CPP')).toBeNull()
   })
 
-  it('응답 전에 새로고침한 코드는 작성 중 코드가 되어 떠나면 지워진다', () => {
+  it('응답 전에 새로고침한 코드는 남아 있다가 화면을 떠나면 지워진다', () => {
     keepUntilJudged(5, 1, 'PYTHON', '응답 못 받음')
 
     settleSavedCodeOnLoad('reload', '/problems/1')
-    expect(readDraftCode(5, 1, 'PYTHON')).toBe('응답 못 받음')
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('응답 못 받음')
 
     forgetProblemDrafts(5, 1)
     expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
   })
 
-  it('응답 전에 새로고침해도 더 새로 쓴 코드와 번호 있는 판정 대기 코드는 그대로다', () => {
-    keepUntilJudged(5, 1, 'PYTHON', '보낸 코드')
-    storeSavedCode(5, 1, 'PYTHON', '더 고친 코드')
-    keepUntilJudged(5, 2, 'PYTHON', '접수된 코드')
-    markHeldSubmission(5, 2, 'PYTHON', '접수된 코드', 7)
+  it('응답 전에 주소창 이동이 두 번 이어져도 코드가 남는다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', '응답 못 받음')
 
+    settleSavedCodeOnLoad('navigate', '/problems')
+    settleSavedCodeOnLoad('navigate', '/problems/1')
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('응답 못 받음')
+  })
+
+  it('문서가 내려가며 끊긴 요청은 접수 실패로 치지 않아 다음 문서에도 코드가 남는다', () => {
+    startSavedCodeSync()
+    const release = keepUntilJudged(5, 1, 'PYTHON', '응답 못 받음')
+
+    window.dispatchEvent(new Event('pagehide'))
+    release()
+    window.dispatchEvent(new Event('pageshow'))
+    settleSavedCodeOnLoad('navigate', '/problems')
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('응답 못 받음')
+  })
+
+  it('응답을 못 받은 코드는 같은 코드의 판정이 나면 지워진다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
     settleSavedCodeOnLoad('reload', '/problems/1')
 
-    expect(readDraftCode(5, 1, 'PYTHON')).toBe('더 고친 코드')
-    expect(readDraftCode(5, 2, 'PYTHON')).toBeNull()
+    forgetJudgedCode(5, judged(7))
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+  })
+
+  it('화면을 떠나도 번호 있는 판정 대기 코드는 남긴다', () => {
+    keepUntilJudged(5, 2, 'PYTHON', '접수된 코드')
+    markHeldSubmission(5, 2, 'PYTHON', '접수된 코드', 7)
+    settleSavedCodeOnLoad('reload', '/problems/2')
+
+    forgetProblemDrafts(5, 2)
+
     expect(readSavedCode(5, 2, 'PYTHON')).toBe('접수된 코드')
   })
 
