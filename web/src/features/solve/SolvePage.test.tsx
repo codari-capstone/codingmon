@@ -2,8 +2,9 @@ import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
+import { StrictMode } from 'react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/app/queryClient'
 import { ThemeProvider } from '@/app/ThemeProvider'
@@ -11,9 +12,10 @@ import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { problemDetails } from '@/mocks/fixtures/problemDetails'
 import { server } from '@/mocks/server'
 import { EDITOR_DEFAULTS, updateEditorSettings } from './editorSettings'
-import { readSavedCode, storeSavedCode } from './savedCode'
+import { keepUntilJudged, readSavedCode, storeSavedCode } from './savedCode'
 import { Component as SolvePage } from './SolvePage'
-import { dropRetryState, retryState } from './solvePath'
+import { holdRetryState, retryState } from './solvePath'
+import { problemDetailQuery } from './solveQuery'
 
 /**
  * 이 화면은 RequireAuth 뒤에 있다. 임시 저장 키에 사용자가 들어가므로(savedCode)
@@ -25,7 +27,10 @@ const USER = { id: 1, nickname: '코다리', role: 'USER' } as const
 let lastClient: QueryClient
 let lastRouter: ReturnType<typeof createMemoryRouter>
 
-function renderSolve(url: string | { pathname: string; state?: unknown } = '/problems/1') {
+function renderSolve(
+  url: string | { pathname: string; state?: unknown } = '/problems/1',
+  strict = false,
+) {
   // 제출이 도착할 자리. 실제 결과 화면은 #31이 채운다 (SOLVE-09는 '이동'까지다).
   const router = createMemoryRouter(
     [
@@ -39,15 +44,53 @@ function renderSolve(url: string | { pathname: string; state?: unknown } = '/pro
   lastClient = client
   lastRouter = router
 
-  const { container } = render(
+  const app = (
     <ThemeProvider>
       <QueryClientProvider client={client}>
         <RouterProvider router={router} />
       </QueryClientProvider>
-    </ThemeProvider>,
+    </ThemeProvider>
   )
+  const { container } = render(strict ? <StrictMode>{app}</StrictMode> : app)
 
   return container
+}
+
+/** [다시 풀기]가 넘긴 제출 번호로 받을 끝난 제출 */
+function serveSubmission(sourceCode: string, over: Record<string, unknown> = {}) {
+  server.use(
+    http.get('*/api/submissions/:id', () =>
+      HttpResponse.json({
+        id: 7,
+        problemId: 1,
+        problemTitle: '두 수의 합',
+        language: 'PYTHON',
+        status: 'COMPLETED',
+        progress: 100,
+        verdict: 'WRONG_ANSWER',
+        sourceCode,
+        runtimeErrorType: null,
+        runtimeErrorMessage: null,
+        compilerMessage: null,
+        executionTimeMs: 10,
+        memoryUsedKb: 1000,
+        submittedAt: '2026-10-24T05:00:00Z',
+        judgedAt: '2026-10-24T05:00:03Z',
+        ...over,
+      }),
+    ),
+  )
+}
+
+/**
+ * 새로고침. 실제로는 unmount 없이 페이지가 사라져 저장소가 그대로 남는다.
+ * 테스트의 unmount는 '화면을 떠남'으로 처리되므로 지워진 저장소를 되살린다.
+ */
+async function reloadPage() {
+  const saved = Object.entries(sessionStorage)
+  cleanup()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  saved.forEach(([key, value]) => sessionStorage.setItem(key, value))
 }
 
 /**
@@ -70,10 +113,16 @@ function asWide() {
 }
 
 describe('SolvePage', () => {
+  // 앞 테스트의 unmount가 건 '화면을 떠남' 지우기가 이 테스트의 저장본을 지우지 않게 먼저 흘려보낸다
+  beforeEach(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    sessionStorage.clear()
+  })
+
   afterEach(() => {
     vi.restoreAllMocks()
-    // SOLVE-11이 localStorage에 쓴다. 테스트 사이에 남으면 다음 테스트가 그 코드로 열린다.
-    localStorage.clear()
+    // SOLVE-11이 sessionStorage에 쓴다. 테스트 사이에 남으면 다음 테스트가 그 코드로 열린다.
+    sessionStorage.clear()
   })
 
   it('제목·난이도·제한을 보여 준다', async () => {
@@ -161,7 +210,7 @@ describe('SolvePage', () => {
 
     /**
      * 세션이 끊긴 상태로 제출하면 문구만 띄우고 끝낼 수 없다. 로그인 화면으로 보내야
-     * 돌아올 주소도 함께 담긴다(RequireAuth). 쓰던 코드는 localStorage에 남는다.
+     * 돌아올 주소도 함께 담긴다(RequireAuth). 쓰던 코드는 이 탭의 저장소에 남는다.
      */
     it('401이면 세션을 버려 로그인으로 보낼 수 있게 한다', async () => {
       const user = userEvent.setup()
@@ -252,14 +301,153 @@ describe('SolvePage', () => {
       await editorHas('# 쓰다 만 코드')
 
       // 새로고침은 재마운트와 같다. state는 사라지고 저장소만 남는다.
-      cleanup()
+      await reloadPage()
       renderSolve()
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
 
       await editorHas('# 쓰다 만 코드')
     })
 
-    it('제출이 접수되면 그 코드의 저장본을 지운다', async () => {
+    it('제출하지 않고 화면을 떠나면 작성 중 코드를 지운다', async () => {
+      const user = userEvent.setup()
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await user.click(screen.getByRole('textbox', { name: '코드 편집기' }))
+      await user.keyboard('# 쓰다 나간 코드')
+      await editorHas('# 쓰다 나간 코드')
+
+      await act(() => lastRouter.navigate('/submissions/9'))
+
+      await waitFor(() => expect(readSavedCode(USER.id, 1, 'PYTHON')).toBeNull())
+    })
+
+    it('세션이 끊겨 떠나면 다시 로그인해 이어 쓰도록 남긴다', async () => {
+      const user = userEvent.setup()
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await user.click(screen.getByRole('textbox', { name: '코드 편집기' }))
+      await user.keyboard('# 세션이 끊긴 코드')
+      await editorHas('# 세션이 끊긴 코드')
+
+      lastClient.setQueryData(ME_QUERY_KEY, null)
+      await act(() => lastRouter.navigate('/submissions/9'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toContain('# 세션이 끊긴 코드')
+    })
+
+    it('StrictMode의 다시 마운트로는 작성 중 코드를 지우지 않는다', async () => {
+      // 마운트 전에 심는다. 뒤에 입력하면 지워져도 입력이 다시 만들어 이 검사를 지나친다
+      storeSavedCode(USER.id, 1, 'PYTHON', '# 남아야 할 코드')
+      renderSolve('/problems/1', true)
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 남아야 할 코드')
+      await editorHas('# 남아야 할 코드')
+    })
+
+    it('재조회 실패로 오류 화면이 떠도 작성 중 코드를 남긴다', async () => {
+      storeSavedCode(USER.id, 1, 'PYTHON', '# 네트워크 오류 전 코드')
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await editorHas('# 네트워크 오류 전 코드')
+
+      server.use(
+        http.get('*/api/problems/:id', () =>
+          HttpResponse.json({ status: 500, title: 'Error' }, { status: 500 }),
+        ),
+      )
+      await act(async () => {
+        await lastClient.refetchQueries({ queryKey: problemDetailQuery(1).queryKey })
+      })
+      await screen.findByRole('button', { name: /다시 시도/ }, { timeout: 5000 })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 네트워크 오류 전 코드')
+    }, 10_000)
+
+    it('판정을 기다리는 제출 코드는 풀이 화면을 열었다 나가도 남긴다', async () => {
+      keepUntilJudged(USER.id, 1, 'PYTHON', '# 채점 중인 코드')
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await editorHas('# 채점 중인 코드')
+
+      await act(() => lastRouter.navigate('/submissions/9'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 채점 중인 코드')
+    })
+
+    it('다시 풀기로 연 뒤 언어를 바꿔도 로딩에 갇히지 않는다', async () => {
+      const user = userEvent.setup()
+      serveSubmission('# 제출한 코드')
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await editorHas('# 제출한 코드')
+
+      await user.click(screen.getByRole('radio', { name: 'C++' }))
+      await editorHas('ios::sync_with_stdio(false);')
+
+      await user.click(screen.getByRole('radio', { name: 'Python' }))
+      await editorHas('# 제출한 코드')
+    })
+
+    it('다른 제출의 판정 대기 코드보다 다시 풀기로 고른 제출을 연다', async () => {
+      keepUntilJudged(USER.id, 1, 'PYTHON', '# 채점 중인 다른 제출')
+      serveSubmission('# 고른 제출')
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await editorHas('# 고른 제출')
+    })
+
+    it('제출 코드 조회가 401이면 세션을 버린다', async () => {
+      server.use(
+        http.get('*/api/submissions/:id', () =>
+          HttpResponse.json({ status: 401, title: 'Unauthorized' }, { status: 401 }),
+        ),
+      )
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+
+      await waitFor(() => expect(lastClient.getQueryData(ME_QUERY_KEY)).toBeNull())
+    })
+
+    it('저장본이 있으면 제출 코드를 받지 않고 바로 연다', async () => {
+      let asked = 0
+      server.use(
+        http.get('*/api/submissions/:id', () => {
+          asked++
+          return HttpResponse.json({ status: 404 }, { status: 404 })
+        }),
+      )
+      storeSavedCode(USER.id, 1, 'PYTHON', '# 저장본')
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await editorHas('# 저장본')
+      expect(asked).toBe(0)
+    })
+
+    it('접수가 실패하면 판정 대기로 잡아 둔 코드를 되돌린다', async () => {
+      const user = userEvent.setup()
+      server.use(
+        http.post('*/api/submissions', () =>
+          HttpResponse.json({ status: 500, title: 'Error' }, { status: 500 }),
+        ),
+      )
+      serveSubmission('# 받은 코드')
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await editorHas('# 받은 코드')
+
+      await user.click(screen.getByRole('button', { name: '제출하기' }))
+      await screen.findByRole('alert')
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBeNull()
+    })
+
+    it('제출이 접수되어도 판정 전에는 저장본을 남긴다', async () => {
       const user = userEvent.setup()
       renderSolve()
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
@@ -267,12 +455,24 @@ describe('SolvePage', () => {
       await user.click(screen.getByRole('textbox', { name: '코드 편집기' }))
       await user.keyboard('# 제출할 코드')
       await editorHas('# 제출할 코드')
-      expect(readSavedCode(USER.id, 1, 'PYTHON')).not.toBeNull()
 
       await user.click(screen.getByRole('button', { name: '제출하기' }))
       await screen.findByRole('heading', { name: '제출 결과 도착' })
 
-      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBeNull()
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toContain('# 제출할 코드')
+    })
+
+    it('다시 풀기로 받은 코드를 그대로 내면 판정 전까지 저장본으로 잡아 둔다', async () => {
+      const user = userEvent.setup()
+      serveSubmission('# 받은 코드')
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await editorHas('# 받은 코드')
+
+      await user.click(screen.getByRole('button', { name: '제출하기' }))
+      await screen.findByRole('heading', { name: '제출 결과 도착' })
+
+      expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 받은 코드')
     })
 
     it('제출이 실패하면 저장본을 남긴다', async () => {
@@ -295,10 +495,8 @@ describe('SolvePage', () => {
     })
 
     it('다시 풀기로 오면 제출한 코드로 열리고 저장소에는 쓰지 않는다', async () => {
-      renderSolve({
-        pathname: '/problems/1',
-        state: retryState(USER.id, 'PYTHON', '# 제출한 코드'),
-      })
+      serveSubmission('# 제출한 코드')
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
 
       await editorHas('# 제출한 코드')
@@ -306,41 +504,69 @@ describe('SolvePage', () => {
     })
 
     it('다시 풀기로 와도 더 고친 저장본이 있으면 그것을 연다', async () => {
+      serveSubmission('# 제출한 코드')
       storeSavedCode(USER.id, 1, 'PYTHON', '# 더 고친 코드')
-      renderSolve({
-        pathname: '/problems/1',
-        state: retryState(USER.id, 'PYTHON', '# 제출한 코드'),
-      })
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
 
       await editorHas('# 더 고친 코드')
     })
 
-    it('방문 기록에 남은 다른 계정의 제출 코드는 열지 않는다', async () => {
-      renderSolve({
-        pathname: '/problems/1',
-        state: retryState(USER.id + 1, 'PYTHON', '# 앞사람 코드'),
-      })
+    it('방문 기록에 남은 다른 계정의 제출은 조회하지도 열지도 않는다', async () => {
+      let asked = 0
+      server.use(
+        http.get('*/api/submissions/:id', () => {
+          asked++
+          return HttpResponse.json({ status: 404 }, { status: 404 })
+        }),
+      )
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id + 1, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await editorHas('sys.stdin')
+      expect(asked).toBe(0)
+    })
+
+    it('제출 코드를 받지 못하면 시작 코드로 연다', async () => {
+      server.use(
+        http.get('*/api/submissions/:id', () =>
+          HttpResponse.json({ status: 404 }, { status: 404 }),
+        ),
+      )
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await editorHas('sys.stdin')
+    })
+
+    it('주소의 문제와 다른 제출의 코드는 열지 않는다', async () => {
+      serveSubmission('# 다른 문제 코드', { problemId: 2 })
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
 
       await editorHas('sys.stdin')
       expect(screen.getByRole('textbox', { name: '코드 편집기' })).not.toHaveTextContent(
-        '# 앞사람 코드',
+        '# 다른 문제 코드',
       )
     })
 
-    it('다시 제출하면 방문 기록의 제출 코드만 버린다', () => {
+    it('제출하면 그 방문 기록의 제출 코드만 비우고, 실패하면 그 항목에만 되돌린다', () => {
       const before = window.history.state as unknown
-      window.history.replaceState(
-        { key: 'k', idx: 3, usr: retryState(USER.id, 'PYTHON', '# 이전 제출') },
-        '',
-      )
-      dropRetryState()
+      const entry = { key: 'k', idx: 3, usr: retryState(USER.id, 7, 'PYTHON') }
+      window.history.replaceState(entry, '')
+      const restore = holdRetryState()
       expect(window.history.state).toEqual({ key: 'k', idx: 3, usr: undefined })
+      restore()
+      expect(window.history.state).toEqual(entry)
 
-      window.history.replaceState({ key: 'k', usr: { from: '/me' } }, '')
-      dropRetryState()
-      expect(window.history.state).toEqual({ key: 'k', usr: { from: '/me' } })
+      // 응답을 기다리는 사이 다른 화면으로 옮겼으면 그 화면의 기록을 건드리지 않는다
+      const restoreLate = holdRetryState()
+      window.history.replaceState({ key: 'other', usr: { from: '/me' } }, '')
+      restoreLate()
+      expect(window.history.state).toEqual({ key: 'other', usr: { from: '/me' } })
+
+      holdRetryState()
+      expect(window.history.state).toEqual({ key: 'other', usr: { from: '/me' } })
       window.history.replaceState(before, '')
     })
 
@@ -353,7 +579,7 @@ describe('SolvePage', () => {
       await user.keyboard('# 파이썬으로 쓴 것')
       await editorHas('# 파이썬으로 쓴 것')
 
-      cleanup()
+      await reloadPage()
       renderSolve()
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
       await user.click(screen.getByRole('radio', { name: 'C++' }))
@@ -378,7 +604,7 @@ describe('SolvePage', () => {
       await user.click(screen.getByRole('button', { name: '불러오기' }))
       await editorHas('sys.stdin.read()')
 
-      cleanup()
+      await reloadPage()
       renderSolve()
       await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
 

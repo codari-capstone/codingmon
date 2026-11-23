@@ -2,14 +2,29 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   clearSavedCode,
+  forgetJudgedCode,
+  forgetProblemDrafts,
   forgetSubmittedCode,
+  keepUntilJudged,
+  markHeldSubmission,
+  readDraftCode,
   readSavedCode,
   savedCodeKey,
+  settleSavedCodeOnLoad,
   storeSavedCode,
 } from './savedCode'
 
+const judged = (id: number) => ({
+  id,
+  status: 'COMPLETED' as const,
+  problemId: 1,
+  language: 'PYTHON' as const,
+  sourceCode: 'print(1)',
+})
+
 describe('savedCode', () => {
   afterEach(() => {
+    sessionStorage.clear()
     localStorage.clear()
     vi.restoreAllMocks()
   })
@@ -46,7 +61,7 @@ describe('savedCode', () => {
   it('사용자를 모르면 읽지도 쓰지도 않는다', () => {
     storeSavedCode(undefined, 1, 'PYTHON', 'print(1)')
 
-    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(0)
     expect(readSavedCode(undefined, 1, 'PYTHON')).toBeNull()
   })
 
@@ -72,6 +87,128 @@ describe('savedCode', () => {
 
     expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
     expect(readSavedCode(5, 1, 'CPP')).toBe('// 쓰던 C++')
+  })
+
+  it('화면을 떠나면 그 사용자의 그 문제 코드만 모든 언어에서 지운다', () => {
+    storeSavedCode(5, 1, 'PYTHON', 'A')
+    storeSavedCode(5, 1, 'CPP', 'B')
+    storeSavedCode(5, 11, 'PYTHON', '다른 문제')
+    storeSavedCode(6, 1, 'PYTHON', '다른 사용자')
+
+    forgetProblemDrafts(5, 1)
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+    expect(readSavedCode(5, 1, 'CPP')).toBeNull()
+    expect(readSavedCode(5, 11, 'PYTHON')).toBe('다른 문제')
+    expect(readSavedCode(6, 1, 'PYTHON')).toBe('다른 사용자')
+  })
+
+  it('로그아웃은 예전 버전이 localStorage에 남긴 코드도 지운다', () => {
+    localStorage.setItem('solve:5:1:PYTHON', '예전 코드')
+
+    clearSavedCode()
+
+    expect(localStorage.getItem('solve:5:1:PYTHON')).toBeNull()
+  })
+
+  it('판정 대기 코드는 작성 중 코드를 지워도 남고, 판정이 나면 지워진다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+    markHeldSubmission(5, 1, 'PYTHON', 'print(1)', 7)
+
+    forgetProblemDrafts(5, 1)
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
+
+    forgetJudgedCode(5, judged(7))
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+  })
+
+  it('코드가 같아도 다른 제출의 판정으로는 판정 대기 코드를 지우지 않는다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+    markHeldSubmission(5, 1, 'PYTHON', 'print(1)', 8)
+
+    forgetJudgedCode(5, judged(7))
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
+  })
+
+  it('접수 전 판정 대기 코드는 어떤 판정으로도 지우지 않는다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+
+    forgetJudgedCode(5, judged(7))
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
+  })
+
+  it('그사이 다른 코드를 보냈으면 앞 제출의 번호를 적지 않는다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', '새 코드')
+
+    markHeldSubmission(5, 1, 'PYTHON', '앞 코드', 7)
+    forgetJudgedCode(5, { ...judged(7), sourceCode: '새 코드' })
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('새 코드')
+  })
+
+  it('접수되면 같은 코드의 작성 중 사본만 없애고, 더 고친 코드는 남긴다', () => {
+    storeSavedCode(5, 1, 'PYTHON', 'print(1)')
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+    markHeldSubmission(5, 1, 'PYTHON', 'print(1)', 7)
+    expect(readDraftCode(5, 1, 'PYTHON')).toBeNull()
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
+
+    storeSavedCode(5, 2, 'PYTHON', '더 고친 코드')
+    keepUntilJudged(5, 2, 'PYTHON', 'print(2)')
+    markHeldSubmission(5, 2, 'PYTHON', 'print(2)', 8)
+    expect(readDraftCode(5, 2, 'PYTHON')).toBe('더 고친 코드')
+  })
+
+  it('작성 중 코드만 읽을 때는 판정 대기 코드를 돌려주지 않는다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+    expect(readDraftCode(5, 1, 'PYTHON')).toBeNull()
+
+    storeSavedCode(5, 1, 'PYTHON', '작성 중')
+    expect(readDraftCode(5, 1, 'PYTHON')).toBe('작성 중')
+  })
+
+  it('접수가 실패하면 판정 대기 자리를 이전 값으로 되돌린다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', '이전 제출')
+    const release = keepUntilJudged(5, 1, 'PYTHON', '실패한 제출')
+
+    release()
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('이전 제출')
+  })
+
+  it('주소창 이동으로 문서를 새로 열면 작성 중 코드만 지운다', () => {
+    storeSavedCode(5, 1, 'PYTHON', '작성 중')
+    keepUntilJudged(5, 2, 'PYTHON', '판정 대기')
+
+    settleSavedCodeOnLoad('navigate', '/problems')
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+    expect(readSavedCode(5, 2, 'PYTHON')).toBe('판정 대기')
+  })
+
+  it('새로고침·뒤로 가기·GitHub 로그인 복귀는 작성 중 코드를 남긴다', () => {
+    storeSavedCode(5, 1, 'PYTHON', '작성 중')
+
+    settleSavedCodeOnLoad('reload', '/problems/1')
+    settleSavedCodeOnLoad('back_forward', '/problems/1')
+    settleSavedCodeOnLoad('navigate', '/login/github')
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('작성 중')
+  })
+
+  it('예전 localStorage 저장본은 새로고침일 때만 옮기고 어느 경우든 지운다', () => {
+    localStorage.setItem('solve:5:1:PYTHON', '예전 코드')
+    settleSavedCodeOnLoad('reload', '/problems/1')
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('예전 코드')
+    expect(localStorage.getItem('solve:5:1:PYTHON')).toBeNull()
+
+    sessionStorage.clear()
+    localStorage.setItem('solve:5:1:PYTHON', '예전 코드')
+    settleSavedCodeOnLoad('navigate', '/problems')
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+    expect(localStorage.getItem('solve:5:1:PYTHON')).toBeNull()
   })
 
   it('제출 뒤에 더 고친 저장본은 남긴다', () => {

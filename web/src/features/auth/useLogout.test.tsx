@@ -76,6 +76,7 @@ function renderLogoutWithSessionLabel() {
 describe('useLogout', () => {
   afterEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
   })
 
   it('문제 목록으로 이동한다 (COM-03)', async () => {

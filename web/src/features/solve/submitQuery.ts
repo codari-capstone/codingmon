@@ -6,8 +6,8 @@ import { fail } from '@/api/fail'
 import type { Language } from '@/api/types'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
-import { forgetSubmittedCode } from './savedCode'
-import { dropRetryState } from './solvePath'
+import { keepUntilJudged, markHeldSubmission } from './savedCode'
+import { holdRetryState } from './solvePath'
 
 export interface SubmitInput {
   problemId: number
@@ -50,7 +50,7 @@ export const SUBMIT_MUTATION_KEY = ['submit'] as const
  * 가드를 또 두지 않는다 — 같은 검사가 두 벌이 되면 둘이 갈라지는 날 어느 쪽이 진짜
  * 규칙인지 알 수 없다.
  */
-export function useSubmit() {
+export function useSubmit(onAccepted: () => void) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { user } = useAuth()
@@ -61,16 +61,25 @@ export function useSubmit() {
     mutationFn: submitCode,
     // 제출은 되돌릴 수 없다(시도 횟수가 오른다). 실패하면 사람이 다시 누르게 한다.
     retry: false,
+    // 보내기 전에 코드를 잡아 둔 뒤 방문 기록의 제출 번호를 비운다. 응답 전에 새로고침해도 코드가 남는다.
+    // 저장본은 판정이 난 뒤에 지운다(forgetJudgedCode). 채점 불가면 코드를 되찾을 곳이 없다.
+    onMutate: (input) => ({
+      releaseCode: keepUntilJudged(user?.id, input.problemId, input.language, input.sourceCode),
+      restoreRetry: holdRetryState(),
+    }),
     onSuccess: (id, input) => {
-      // 접수에 실패하면 지우지 않는다. 그 코드는 아직 제출 기록에 없다.
-      forgetSubmittedCode(user?.id, input.problemId, input.language, input.sourceCode)
-      dropRetryState()
+      onAccepted()
+      markHeldSubmission(user?.id, input.problemId, input.language, input.sourceCode, id)
       // 판정과 관계없이 접수된 제출로 그날이 이어진다(STREAK). 상단 바 칩은 마운트된 채라 직접 알린다
       void queryClient.invalidateQueries({ queryKey: ['streak'] })
       void navigate(`/submissions/${id}`)
     },
-    // 세션이 끊겼으면 로그인 화면으로 보낸다(session.ts). 쓰던 코드는 localStorage에
+    // 세션이 끊겼으면 로그인 화면으로 보낸다(session.ts). 쓰던 코드는 이 탭의 저장소에
     // 남아 있어(SOLVE-11) 다시 로그인하면 그대로 열린다.
-    onError: (error) => forgetSessionIfUnauthorized(queryClient, error),
+    onError: (error, _input, context) => {
+      context?.releaseCode()
+      context?.restoreRetry()
+      forgetSessionIfUnauthorized(queryClient, error)
+    },
   })
 }

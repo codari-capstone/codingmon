@@ -37,7 +37,7 @@ export function HintSteps({
   analysis: SubmissionAnalysis
   /** 다시 풀기와 같은 주소 (solvePath) */
   retryPath: string
-  /** 풀이 화면에 들고 갈 제출 코드. 힌트를 보고 그 코드를 고치러 간다. */
+  /** 풀이 화면에 넘길 제출 번호. 힌트를 보고 그 코드를 고치러 간다. */
   retryState?: RetryState
 }) {
   const reveal = useRevealHint(submissionId)

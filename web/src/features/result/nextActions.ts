@@ -5,7 +5,7 @@ export interface NextAction {
   label: string
   /** 눌렀을 때 갈 곳 */
   to: string
-  /** 풀이 화면에 들고 갈 제출 코드 */
+  /** 풀이 화면에 넘길 제출 번호 */
   state?: RetryState
 }
 
@@ -23,7 +23,7 @@ export interface NextAction {
  * 채점 불가는 서버 문제라 판정이 없다(계약: `verdict`가 null이고 시도 횟수에 넣지
  * 않는다). 다시 제출할 길만 준다 — 안내 문구는 `VERDICT_INFO.JUDGE_ERROR`가 가진다.
  *
- * 제출하면 브라우저 저장본이 지워지므로(SOLVE-11) 두 버튼은 제출한 코드를 들고 간다.
+ * 판정이 나면 브라우저 저장본이 지워지므로(SOLVE-11) 두 버튼은 제출 번호를 넘겨 그 코드로 연다.
  *
  * 채점이 끝나지 않았으면 빈 배열이다 — 채점 중에 [다시 풀기]를 누르면 방금 보낸 제출의
  * 결과를 못 보게 된다.
@@ -31,7 +31,7 @@ export interface NextAction {
 export function nextActions(result: SubmissionResult, userId: number | undefined): NextAction[] {
   const retry = {
     to: solvePath(result.problemId, result.language),
-    state: retryState(userId, result.language, result.sourceCode),
+    state: retryState(userId, result.id, result.language),
   }
   if (result.status === 'JUDGE_ERROR') {
     // [다시 풀기]와 같은 주소를 쓴다. 직접 조립했더니 언어가 빠져, C++로 제출했다가
