@@ -223,7 +223,12 @@ export function MemberActions({
           if (!act.isPending) closeSuspend()
         }}
         title={`'${user.nickname}' 계정을 정지할까요?`}
-        description="바로 로그인할 수 없고, 로그인 중인 기기도 로그아웃돼요. 정지하고 24시간이 지나면 강제 탈퇴할 수 있어요."
+        // 진행 중인 프로 구독은 서버가 해지 예정으로 바꾼다. 남은 기간은 환불하지 않는다(ADM-16)
+        description={`바로 로그인할 수 없고, 로그인 중인 기기도 로그아웃돼요. 정지하고 24시간이 지나면 강제 탈퇴할 수 있어요.${
+          user.subscription.status === 'ACTIVE'
+            ? ' 프로 구독은 해지 예정으로 바뀌어 다음 결제가 나가지 않아요.'
+            : ''
+        }`}
         footer={
           <>
             {/* 처리 중에도 disabled로 두지 않는다. 브라우저가 포커스를 창 밖으로 옮긴다(위 정지·해제 버튼과 같다, #319 리뷰) */}

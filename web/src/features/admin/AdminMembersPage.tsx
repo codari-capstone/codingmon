@@ -21,12 +21,10 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
-import { CYCLE_NAME } from '@/features/pricing/plans'
-import { fromBillingCycle } from '@/features/subscription/subscriptionQuery'
 import { cn } from '@/lib/utils'
 import { ADMIN_PAGE_SIZE } from './adminProblemQuery'
 import { adminUserListQuery, type AdminUserFilter } from './adminUserQuery'
-import { formatJoinedOn } from './labels'
+import { formatJoinedOn, planName } from './labels'
 
 /** 검색어를 조회에 반영하기까지 기다리는 시간. 문제 관리 목록과 같은 값이다 */
 const SEARCH_DEBOUNCE_MS = 300
@@ -38,25 +36,24 @@ const FILTERS = [
 ] as const satisfies readonly { value: AdminUserFilter; label: string; count: string }[]
 
 /**
- * 요금제 칸 (ADM-14). 결제 실패는 계약(`Subscription.cycle`)대로 실패한 갱신 결제의 주기를 남겨 '프로 월간 [결제 실패]'다.
- * 지금은 무료라 굵게 하지 않는다.
+ * 요금제 칸 (ADM-14). 프로만 굵게 한다. 결제 실패는 '프로 월간'이지만 지금은 무료라 굵게 하지 않는다.
  * shortcut: 목록 응답에 회원별 `needsCancel`이 없어 '취소·확인 필요'는 그 필터로 들어왔을 때만 단다. 계약에 값이 생기면 그걸 쓴다
  */
 function PlanCell({
-  subscription: { plan, status, cycle },
+  subscription,
   needsCancel,
 }: {
   subscription: Subscription
   needsCancel: boolean
 }) {
+  const { plan, status } = subscription
+  const name = planName(subscription)
   return (
     <span className="flex items-center gap-1.5 whitespace-nowrap">
-      {plan === 'PRO' && cycle ? (
-        <b>프로 {CYCLE_NAME[fromBillingCycle(cycle)]}</b>
-      ) : status === 'PAYMENT_FAILED' && cycle ? (
-        <span>프로 {CYCLE_NAME[fromBillingCycle(cycle)]}</span>
+      {plan === 'PRO' ? (
+        <b>{name}</b>
       ) : (
-        <span className="text-muted-foreground">무료</span>
+        <span className={cn(name === '무료' && 'text-muted-foreground')}>{name}</span>
       )}
       {status === 'CANCEL_SCHEDULED' ? <Badge tone="warning">해지 예정</Badge> : null}
       {status === 'PAYMENT_FAILED' ? <Badge tone="danger">결제 실패</Badge> : null}

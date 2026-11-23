@@ -1,10 +1,46 @@
 import type {
+  AdminUserDetail,
   ProblemVersionStatus,
   PublishCondition,
   ReportStatus,
   SolutionStatus,
+  Subscription,
 } from '@/api/types'
 import type { BadgeTone } from '@/components/ui/badge'
+import { CYCLE_NAME } from '@/features/pricing/plans'
+import { fromBillingCycle } from '@/features/subscription/subscriptionQuery'
+
+/**
+ * 요금제 이름 (ADM-14·15). 결제 실패는 계약(`Subscription.cycle`)대로 실패한 갱신 결제의 주기를 남겨
+ * '프로 월간'이다(옆에 [결제 실패] 배지). 구독이 없으면 '무료'
+ */
+export function planName({ plan, status, cycle }: Subscription) {
+  return cycle && (plan === 'PRO' || status === 'PAYMENT_FAILED')
+    ? `프로 ${CYCLE_NAME[fromBillingCycle(cycle)]}`
+    : '무료'
+}
+
+/** 구독 상태 배지 (ADM-15). 구독 화면(MY-06)과 같은 말이다 */
+export const SUBSCRIPTION_STATUS: Record<
+  Subscription['status'],
+  { label: string; tone: BadgeTone }
+> = {
+  NONE: { label: '무료', tone: 'neutral' },
+  ACTIVE: { label: '진행 중', tone: 'success' },
+  CANCEL_SCHEDULED: { label: '해지 예정', tone: 'warning' },
+  PAYMENT_FAILED: { label: '결제 실패', tone: 'danger' },
+}
+
+/** 결제 기록 한 건의 결과 배지 (ADM-15, 결제-구독-화면 문서의 결제 상태 표시) */
+export const PAYMENT_STATUS: Record<
+  AdminUserDetail['payments'][number]['status'],
+  { label: string; tone: BadgeTone }
+> = {
+  PAID: { label: '결제 완료', tone: 'success' },
+  FAILED: { label: '실패', tone: 'danger' },
+  CANCELLED: { label: '취소', tone: 'neutral' },
+  PENDING: { label: '결과 모름', tone: 'info' },
+}
 
 /** 버전 하나의 상태. 기능명세 ADM-01의 '작성 중·검증 중·공개' 문구를 쓴다. */
 export const VERSION_STATUS_LABEL: Record<ProblemVersionStatus, string> = {

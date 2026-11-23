@@ -1047,6 +1047,14 @@ export const handlers: RequestHandler[] = [
         suspendedAt: new Date().toISOString(),
         suspensionReason: stripped === '' ? null : stripped,
       })
+      // 서버처럼 진행 중인 프로 구독은 해지 예정으로 바꾼다(ADM-16). 바꿔 둔 주기도 취소된다
+      if (found.user.subscription.status === 'ACTIVE') {
+        found.user.subscription = {
+          ...found.user.subscription,
+          status: 'CANCEL_SCHEDULED',
+          nextCycle: null,
+        }
+      }
     }
     return new HttpResponse(null, { status: 204 })
   }),

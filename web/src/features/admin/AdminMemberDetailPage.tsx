@@ -31,6 +31,7 @@ import {
 import { formatJoinedOn } from './labels'
 import { MemberActions } from './MemberActions'
 import { MemberSubmissions } from './MemberSubmissions'
+import { PaymentHistory, SubscriptionSummary } from './MemberSubscription'
 
 /** 올해 것과 지난해 것(연도를 붙임) 한 쌍. 해가 다른 날을 가른다(formatSubmittedAt과 같은 선택) */
 function kstFormats(options: Intl.DateTimeFormatOptions) {
@@ -138,6 +139,10 @@ export function Component() {
           {format(AT, suspendedAt)}에 정지했어요.{' '}
           {withdrawable ? '24시간이 지나 강제 탈퇴할 수 있어요. ' : ''}
           로그인과 토큰 갱신이 막혀 있어요.
+          {/* 정지하면 서버가 프로 구독을 해지 예정으로 바꾼다. 풀어도 되돌리지 않는다(ADM-16) */}
+          {user.subscription.plan === 'PRO'
+            ? ' 프로 구독은 해지 예정으로 바뀌어 다음 결제가 나가지 않아요.'
+            : ''}
           {user.suspensionReason ? (
             <span className="mt-1 block break-keep whitespace-pre-wrap [overflow-wrap:anywhere]">
               사유: {user.suspensionReason}
@@ -146,48 +151,55 @@ export function Component() {
         </Alert>
       ) : null}
 
+      {/* 오른쪽 칸(구독 요약)은 아래 오른쪽 열과 폭을 맞춘다 */}
       <section
         aria-label="회원 정보"
-        className="bg-card flex flex-wrap items-start gap-6 rounded-lg border p-6"
+        className="bg-card grid rounded-lg border lg:grid-cols-[minmax(0,1fr)_360px]"
       >
-        <span aria-hidden="true" className="flex shrink-0">
-          <Avatar name={user.nickname} size={64} />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="page-title break-keep [overflow-wrap:anywhere]">{user.nickname}</h1>
-            {user.role === 'ADMIN' ? <Badge tone="brand">관리자</Badge> : null}
-            {suspendedAt === null ? (
-              <Badge tone="success">정상</Badge>
-            ) : (
-              <Badge tone="danger">정지</Badge>
-            )}
+        <div className="flex flex-wrap items-start gap-6 p-6">
+          <span aria-hidden="true" className="flex shrink-0">
+            <Avatar name={user.nickname} size={64} />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="page-title break-keep [overflow-wrap:anywhere]">{user.nickname}</h1>
+              {user.role === 'ADMIN' ? <Badge tone="brand">관리자</Badge> : null}
+              {suspendedAt === null ? (
+                <Badge tone="success">정상</Badge>
+              ) : (
+                <Badge tone="danger">정지</Badge>
+              )}
+            </div>
+            <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm">
+              <dt className="text-muted-foreground">ID</dt>
+              <dd className="m-0 tabular-nums">{user.id}</dd>
+              <dt className="text-muted-foreground">이메일</dt>
+              <dd className="m-0 [overflow-wrap:anywhere]">{user.email ?? '(GitHub)'}</dd>
+              <dt className="text-muted-foreground">가입 방법</dt>
+              <dd className="m-0">{user.loginMethod === 'GITHUB' ? 'GitHub' : '이메일'}</dd>
+              <dt className="text-muted-foreground">가입일</dt>
+              <dd className="m-0 tabular-nums">
+                {user.createdAt === null ? '— (기록 전 가입)' : formatJoinedOn(user.createdAt)}
+              </dd>
+            </dl>
           </div>
-          <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm">
-            <dt className="text-muted-foreground">ID</dt>
-            <dd className="m-0 tabular-nums">{user.id}</dd>
-            <dt className="text-muted-foreground">이메일</dt>
-            <dd className="m-0 [overflow-wrap:anywhere]">{user.email ?? '(GitHub)'}</dd>
-            <dt className="text-muted-foreground">가입 방법</dt>
-            <dd className="m-0">{user.loginMethod === 'GITHUB' ? 'GitHub' : '이메일'}</dd>
-            <dt className="text-muted-foreground">가입일</dt>
-            <dd className="m-0 tabular-nums">
-              {user.createdAt === null ? '— (기록 전 가입)' : formatJoinedOn(user.createdAt)}
-            </dd>
-          </dl>
+          <MemberActions
+            user={user}
+            now={now}
+            submissionCount={submissions.data?.totalElements}
+            solvedCount={solved.data?.length}
+          />
         </div>
-        <MemberActions
-          user={user}
-          now={now}
-          submissionCount={submissions.data?.totalElements}
-          solvedCount={solved.data?.length}
-        />
+        <div className="border-t p-6 lg:border-t-0 lg:border-l">
+          <SubscriptionSummary user={user} />
+        </div>
       </section>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <MemberSubmissions userId={user.id} />
 
         <div className="flex min-w-0 flex-col gap-6">
+          <PaymentHistory payments={user.payments} />
           <section
             aria-labelledby="member-ai"
             className="bg-card flex flex-col gap-3 rounded-lg border p-6"
