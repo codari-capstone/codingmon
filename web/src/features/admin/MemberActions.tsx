@@ -25,6 +25,7 @@ import { hasNul, reportLength } from '@/features/solve/reportRules'
 import { cn } from '@/lib/utils'
 import { ADMIN_REPORTS_KEY } from './adminReportQuery'
 import { ADMIN_USERS_KEY, SUSPENSION_REASON_MAX, WITHDRAW_AFTER_MS } from './adminUserQuery'
+import { suspendNote } from './labels'
 
 type Action = { kind: 'suspend'; reason: string } | { kind: 'unsuspend' } | { kind: 'withdraw' }
 
@@ -223,7 +224,8 @@ export function MemberActions({
           if (!act.isPending) closeSuspend()
         }}
         title={`'${user.nickname}' 계정을 정지할까요?`}
-        description="바로 로그인할 수 없고, 로그인 중인 기기도 로그아웃돼요. 정지하고 24시간이 지나면 강제 탈퇴할 수 있어요."
+        // 진행 중인 프로 구독은 서버가 해지 예정으로 바꾼다. 남은 기간은 환불하지 않는다(ADM-16)
+        description={`바로 로그인할 수 없고, 로그인 중인 기기도 로그아웃돼요. 정지하고 24시간이 지나면 강제 탈퇴할 수 있어요.${suspendNote(user.subscription)}`}
         footer={
           <>
             {/* 처리 중에도 disabled로 두지 않는다. 브라우저가 포커스를 창 밖으로 옮긴다(위 정지·해제 버튼과 같다, #319 리뷰) */}

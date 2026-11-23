@@ -480,7 +480,7 @@ function userSummary({
   payments: _payments,
   ...summary
 }: MockAdminUser): AdminUserSummary {
-  return summary
+  return { ...summary, subscription: subscriptionFor(summary.id) }
 }
 
 /** 정지·해제·탈퇴가 받을 회원. 없거나 id가 이상하면 서버와 같은 오류 응답이다 */
@@ -988,6 +988,8 @@ export const handlers: RequestHandler[] = [
     if (found.error) return found.error
     return HttpResponse.json({
       ...found.user,
+      // 목 결제(POST /api/users/me/subscription)가 쓰는 같은 저장소에서 읽는다. 사본을 두면 둘이 어긋난다
+      subscription: subscriptionFor(found.user.id),
       aiQuota: mockQuota(new Date(), found.user.role === 'ADMIN'),
     })
   }),
@@ -1047,6 +1049,10 @@ export const handlers: RequestHandler[] = [
         suspendedAt: new Date().toISOString(),
         suspensionReason: stripped === '' ? null : stripped,
       })
+      // 서버(Subscriptions.onSuspend)처럼 진행 중인 프로 구독은 해지와 똑같이 해지 예정으로 바꾼다(ADM-16)
+      if (subscriptionFor(found.user.id).status === 'ACTIVE') {
+        changeMockSubscription(found.user.id, { kind: 'cancel' })
+      }
     }
     return new HttpResponse(null, { status: 204 })
   }),
@@ -1072,6 +1078,7 @@ export const handlers: RequestHandler[] = [
       return problem(409, 'SUSPENSION_TOO_RECENT', '정지하고 24시간이 지나야 강제 탈퇴할 수 있어요')
     }
     mockAdminUsers = mockAdminUsers.filter((item) => item.id !== user.id)
+    removeMockSubscription(user.id)
     mockReports = mockReports.map((item) =>
       item.reporterId === user.id ? { ...item, reporterId: null, reporterNickname: null } : item,
     )

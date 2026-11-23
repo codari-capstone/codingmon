@@ -8,11 +8,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import type { AdminReportDetail } from '@/api/types'
+import { startMockSubscription } from '@/mocks/fixtures/subscriptions'
 import { resetAdminUsers, resetReports } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 import { Component as AdminMemberDetailPage } from './AdminMemberDetailPage'
 
 const unauthorized = () => HttpResponse.json({ status: 401 }, { status: 401 })
+
+/** 상세 응답을 직접 만들 때 넣는 구독 칸(계약상 늘 온다). 구독한 적 없는 회원이다 */
+const noSubscription = {
+  subscription: {
+    plan: 'FREE',
+    status: 'NONE',
+    cycle: null,
+    nextCycle: null,
+    currentPeriodEnd: null,
+    customerId: null,
+    paymentPending: false,
+  },
+  subscriptionStartedAt: null,
+  refundAmount: null,
+  payments: [],
+}
 
 // 시드(fixtures/adminUsers): 1 코다리(정상, 제출 92·푼 문제 12), 2 관리자, 3 코딩왕(50시간 전 정지·사유 있음),
 // 8 밤샘코더(2시간 전 정지). 제출·푼 문제는 1·3만 있다
@@ -179,6 +196,7 @@ describe('AdminMemberDetailPage (ADM-15·16)', () => {
           loginMethod: 'EMAIL',
           suspensionReason: null,
           aiQuota: { limit: 20, used: 0, remaining: 20, resetsAt: '2026-11-18T00:00:00Z' },
+          ...noSubscription,
         }),
       ),
     )
@@ -439,6 +457,7 @@ describe('AdminMemberDetailPage (ADM-15·16)', () => {
           loginMethod: 'EMAIL',
           suspensionReason: null,
           aiQuota: { limit: 20, used: 0, remaining: 20, resetsAt: '2026-11-18T00:00:00Z' },
+          ...noSubscription,
         }),
       ),
       http.get('*/api/admin/users/1/solved-problems', () =>
@@ -505,6 +524,220 @@ describe('AdminMemberDetailPage (ADM-15·16)', () => {
     expect(screen.queryByRole('button', { name: '계정 정지' })).not.toBeInTheDocument()
     expect(await screen.findByText('아직 제출이 없어요.')).toBeInTheDocument()
     expect(await screen.findByText('아직 맞힌 문제가 없어요.')).toBeInTheDocument()
+  })
+
+  // 서버(readAdminDetail)가 돌려줄 수 있는 조합만 쓴다: 환불 금액은 지금 기간의 확정된 연간 결제가 있고
+  // 결과를 모르는 갱신 결제가 없을 때만 온다
+  const activeYearly = {
+    ...noSubscription.subscription,
+    plan: 'PRO',
+    status: 'ACTIVE',
+    cycle: 'YEARLY',
+    currentPeriodEnd: '2027-10-20T03:00:00Z',
+  }
+
+  it('구독 요약은 상태·요금제·시작일·다음 결제일과 연간 환불 금액을 보인다', async () => {
+    const base = await (await fetch('/api/admin/users/1')).json()
+    server.use(
+      http.get('*/api/admin/users/1', () =>
+        HttpResponse.json({
+          ...base,
+          subscription: activeYearly,
+          subscriptionStartedAt: '2026-10-20T01:04:00Z',
+          refundAmount: 81040,
+          payments: [
+            {
+              paymentId: 'pay-1',
+              paidAt: '2026-10-20T01:04:00Z',
+              amount: 99000,
+              cycle: 'YEARLY',
+              status: 'PAID',
+              needsCancel: false,
+            },
+          ],
+        }),
+      ),
+    )
+    renderPage(1)
+
+    const summary = await screen.findByRole('region', { name: '구독' })
+    expect(summary).toHaveTextContent(
+      '구독진행 중프로 연간구독 시작일2026-10-20다음 결제일2027-10-20오늘 환불하면 81,040원 (남은 기간의 90%)',
+    )
+  })
+
+  it('결과를 모르는 갱신 결제가 있으면 다음 결제일에 확정 전을 붙이고, 환불 금액은 오지 않는다', async () => {
+    const base = await (await fetch('/api/admin/users/1')).json()
+    server.use(
+      http.get('*/api/admin/users/1', () =>
+        HttpResponse.json({
+          ...base,
+          subscription: { ...activeYearly, paymentPending: true },
+          subscriptionStartedAt: '2025-10-20T01:04:00Z',
+        }),
+      ),
+    )
+    renderPage(1)
+
+    const summary = await screen.findByRole('region', { name: '구독' })
+    expect(summary).toHaveTextContent(
+      /^구독진행 중프로 연간구독 시작일2025-10-20다음 결제일2027-10-20확정 전$/,
+    )
+    expect(await screen.findByText('결제 기록이 없어요.')).toBeInTheDocument()
+  })
+
+  it('구독 시작 결제의 결과를 모르면 무료라도 결제 확인 중이라고 알린다', async () => {
+    const base = await (await fetch('/api/admin/users/1')).json()
+    server.use(
+      http.get('*/api/admin/users/1', () =>
+        HttpResponse.json({
+          ...base,
+          subscription: { ...noSubscription.subscription, paymentPending: true },
+        }),
+      ),
+    )
+    renderPage(1)
+
+    const summary = await screen.findByRole('region', { name: '구독' })
+    expect(summary).toHaveTextContent(/^구독결제 확인 중무료결제가 확인되면 프로로 바뀌어요\.$/)
+  })
+
+  it('해지 예정이면 끝나는 날을, 구독한 적 없으면 무료만 보인다', async () => {
+    const base = await (await fetch('/api/admin/users/1')).json()
+    server.use(
+      http.get('*/api/admin/users/1', () =>
+        HttpResponse.json({
+          ...base,
+          subscription: {
+            ...noSubscription.subscription,
+            plan: 'PRO',
+            status: 'CANCEL_SCHEDULED',
+            cycle: 'MONTHLY',
+            currentPeriodEnd: '2026-12-22T03:00:00Z',
+          },
+          subscriptionStartedAt: '2026-11-22T01:00:00Z',
+        }),
+      ),
+    )
+    renderPage(1)
+    const summary = await screen.findByRole('region', { name: '구독' })
+    expect(summary).toHaveTextContent(
+      '구독해지 예정프로 월간구독 시작일2026-11-22끝나는 날2026-12-22',
+    )
+  })
+
+  it('구독한 적 없는 회원은 무료 배지와 이름만 보인다', async () => {
+    renderPage(1)
+    const summary = await screen.findByRole('region', { name: '구독' })
+    expect(summary).toHaveTextContent(/^구독무료무료$/)
+  })
+
+  it('결제 기록은 금액·주기·결과·시각·결제 ID를 보이고, 취소·확인이 필요한 결제에는 할 일을 적는다', async () => {
+    const base = await (await fetch('/api/admin/users/1')).json()
+    const payment = (over: object) => ({
+      paymentId: 'pay-0',
+      paidAt: '2026-10-20T01:04:00Z',
+      amount: 99000,
+      cycle: 'YEARLY',
+      status: 'PAID',
+      needsCancel: false,
+      ...over,
+    })
+    server.use(
+      http.get('*/api/admin/users/1', () =>
+        HttpResponse.json({
+          ...base,
+          payments: [
+            payment({ paymentId: 'pay-4', status: 'PENDING', needsCancel: true }),
+            payment({ paymentId: 'pay-3', needsCancel: true }),
+            payment({ paymentId: 'pay-2', paidAt: '2026-10-20T01:02:00Z' }),
+            payment({ paymentId: 'pay-1', status: 'FAILED', amount: 9900, cycle: 'MONTHLY' }),
+            payment({ paymentId: 'pay-0', status: 'CANCELLED' }),
+          ],
+        }),
+      ),
+    )
+    renderPage(1)
+
+    const card = await screen.findByRole('region', { name: '결제 기록' })
+    expect(card).toHaveTextContent('5건')
+    const items = within(card).getAllByRole('listitem')
+    expect(items.map((item) => item.textContent)).toEqual([
+      '99,000원 연간결과 모름확인 필요2026-10-20 10:04pay-41시간 넘게 결과를 모르는 결제예요. 포트원 콘솔에서 상태를 확인해 주세요.',
+      '99,000원 연간결제 완료취소 필요2026-10-20 10:04pay-3구독에 반영되지 않은 결제예요. 포트원 콘솔에서 취소해 주세요.',
+      '99,000원 연간결제 완료2026-10-20 10:02pay-2',
+      '9,900원 월간실패2026-10-20 10:04pay-1',
+      '99,000원 연간취소2026-10-20 10:04pay-0',
+    ])
+    expect(within(items[0]!).getByRole('button', { name: '결제 ID 복사' })).toBeInTheDocument()
+  })
+
+  it('진행 중인 프로 회원을 정지하면 구독이 해지 예정으로 바뀐다고 창과 배너에 알린다', async () => {
+    // 회원이 목 결제로 구독한 상태. 관리자 화면도 같은 저장소를 읽고, 정지하면 목도 서버처럼 해지 예정으로 바꾼다
+    startMockSubscription(1, 'MONTHLY')
+    const user = userEvent.setup()
+    renderPage(1)
+    await user.click(await screen.findByRole('button', { name: '계정 정지' }))
+
+    const dialog = screen.getByRole('dialog', { name: "'코다리' 계정을 정지할까요?" })
+    expect(dialog).toHaveTextContent('프로 구독은 해지 예정으로 바뀌어 다음 결제가 나가지 않아요.')
+    await user.click(within(dialog).getByRole('button', { name: '정지하기' }))
+
+    expect(await screen.findByText('정지된 계정이에요')).toBeInTheDocument()
+    expect(
+      screen.getByText(/프로 구독은 해지 예정이라 다음 결제가 나가지 않아요/),
+    ).toBeInTheDocument()
+    expect(
+      await within(screen.getByRole('region', { name: '구독' })).findByText('해지 예정'),
+    ).toBeInTheDocument()
+  })
+
+  it('결과를 모르는 갱신 결제가 있으면 정지 창과 배너가 다음 결제가 안 나간다고 단정하지 않는다', async () => {
+    const user = userEvent.setup()
+    const base = await (await fetch('/api/admin/users/1')).json()
+    let suspendedAt: string | null = null
+    server.use(
+      http.get('*/api/admin/users/1', () =>
+        HttpResponse.json({
+          ...base,
+          suspendedAt,
+          subscription: {
+            ...activeYearly,
+            status: suspendedAt === null ? 'ACTIVE' : 'CANCEL_SCHEDULED',
+            paymentPending: true,
+          },
+        }),
+      ),
+      http.post('*/api/admin/users/1/suspend', () => {
+        suspendedAt = new Date().toISOString()
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    renderPage(1)
+    await user.click(await screen.findByRole('button', { name: '계정 정지' }))
+
+    const dialog = screen.getByRole('dialog', { name: "'코다리' 계정을 정지할까요?" })
+    expect(dialog).toHaveTextContent(
+      '프로 구독은 해지 예정으로 바뀌어요. 결과를 확인하고 있는 갱신 결제는 그대로라, 결제되면 그 기간까지 프로로 써요.',
+    )
+    expect(dialog).not.toHaveTextContent('다음 결제가 나가지 않아요')
+    await user.click(within(dialog).getByRole('button', { name: '정지하기' }))
+
+    expect(
+      await screen.findByText(/결과를 확인하고 있는 갱신 결제가 결제되면 그 기간까지 프로로 써요/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/다음 결제가 나가지 않아요/)).not.toBeInTheDocument()
+  })
+
+  it('무료 회원의 정지 창과 배너에는 구독 안내가 없다', async () => {
+    const user = userEvent.setup()
+    renderPage(1)
+    await user.click(await screen.findByRole('button', { name: '계정 정지' }))
+    const dialog = screen.getByRole('dialog', { name: "'코다리' 계정을 정지할까요?" })
+    expect(dialog).not.toHaveTextContent('프로 구독')
+    await user.click(within(dialog).getByRole('button', { name: '정지하기' }))
+    expect(await screen.findByText('정지된 계정이에요')).toBeInTheDocument()
+    expect(screen.queryByText(/프로 구독은 해지 예정/)).not.toBeInTheDocument()
   })
 
   it('없는 회원이면 목록으로 돌아갈 길을 준다', async () => {
