@@ -33,7 +33,11 @@ function formatPaidAt(iso: string) {
  */
 export function SubscriptionSummary({ user }: { user: AdminUserDetail }) {
   const s = user.subscription
-  const status = SUBSCRIPTION_STATUS[s.status]
+  // 구독 시작 결제의 결과를 모르면 아직 무료다(계약 `paymentPending`). 결제 시도가 없던 것처럼 보이지 않게 MY-06과 같이 알린다
+  const starting = s.paymentPending && s.plan === 'FREE'
+  const status = starting
+    ? ({ label: '결제 확인 중', tone: 'info' } as const)
+    : SUBSCRIPTION_STATUS[s.status]
   return (
     <section aria-labelledby="member-subscription" className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
@@ -43,6 +47,9 @@ export function SubscriptionSummary({ user }: { user: AdminUserDetail }) {
         <Badge tone={status.tone}>{status.label}</Badge>
       </div>
       <p className="m-0 text-xl font-bold">{planName(s)}</p>
+      {starting ? (
+        <p className="text-muted-foreground m-0 text-sm">결제가 확인되면 프로로 바뀌어요.</p>
+      ) : null}
       {user.subscriptionStartedAt !== null || s.currentPeriodEnd !== null ? (
         <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm">
           {user.subscriptionStartedAt !== null ? (

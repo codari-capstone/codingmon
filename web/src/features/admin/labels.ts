@@ -20,6 +20,25 @@ export function planName({ plan, status, cycle }: Subscription) {
     : '무료'
 }
 
+// 정지(ADM-16)할 때 서버(Subscriptions.onSuspend)는 구독 상태만 해지 예정으로 바꾸고, 이미 보낸 갱신 결제는 그대로 둔다.
+// 그래서 결과를 모르는 갱신 결제가 있으면 '다음 결제가 나가지 않는다'고 단정하지 않는다(MY-06 해지 창과 같다)
+
+/** 정지 확인 창에 덧붙일 구독 안내. 진행 중인 구독만 바뀐다 */
+export function suspendNote(s: Subscription) {
+  if (s.status !== 'ACTIVE') return ''
+  return s.paymentPending
+    ? ' 프로 구독은 해지 예정으로 바뀌어요. 결과를 확인하고 있는 갱신 결제는 그대로라, 결제되면 그 기간까지 프로로 써요.'
+    : ' 프로 구독은 해지 예정으로 바뀌어 다음 결제가 나가지 않아요.'
+}
+
+/** 정지 배너에 덧붙일 구독 안내. 정지 전에 회원이 해지해 둔 경우도 있어 '바뀌어'라고 하지 않는다 */
+export function suspendedNote(s: Subscription) {
+  if (s.status !== 'CANCEL_SCHEDULED') return ''
+  return s.paymentPending
+    ? ' 프로 구독은 해지 예정이에요. 결과를 확인하고 있는 갱신 결제가 결제되면 그 기간까지 프로로 써요.'
+    : ' 프로 구독은 해지 예정이라 다음 결제가 나가지 않아요.'
+}
+
 /** 구독 상태 배지 (ADM-15). 구독 화면(MY-06)과 같은 말이다 */
 export const SUBSCRIPTION_STATUS: Record<
   Subscription['status'],

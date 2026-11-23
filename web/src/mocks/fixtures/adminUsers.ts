@@ -1,12 +1,14 @@
 import type { AdminSolvedProblem, AdminUserDetail, AdminUserSubmission } from '@/api/types'
 import { problemHistories, submissionsOf } from './history'
-import { freeSubscription } from './subscriptions'
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
 
-/** 목이 들고 있는 회원. 오늘 AI 사용량(`aiQuota`)은 응답할 때 붙인다 */
-export type MockAdminUser = Omit<AdminUserDetail, 'aiQuota'>
+/**
+ * 목이 들고 있는 회원. 오늘 AI 사용량(`aiQuota`)과 구독(`subscription`)은 응답할 때 붙인다.
+ * 구독은 목 결제가 쓰는 저장소(subscriptions.ts)에서 읽는다
+ */
+export type MockAdminUser = Omit<AdminUserDetail, 'aiQuota' | 'subscription'>
 
 type Seed = [
   nickname: string,
@@ -60,8 +62,7 @@ export function seedAdminUsers(now = Date.now()): MockAdminUser[] {
       createdAt: id <= 4 ? null : new Date(now - (SEEDS.length - index) * DAY).toISOString(),
       suspendedAt: suspension ? new Date(now - suspension.hoursAgo * HOUR).toISOString() : null,
       suspensionReason: suspension?.reason ?? null,
-      // 구독 칸(ADM-14·15)은 아직 화면이 없다. 모두 구독한 적 없는 무료 회원으로 둔다
-      subscription: freeSubscription(id),
+      // 결제 기록은 없다. 구독은 응답할 때 subscriptions.ts에서 읽는다(처음에는 모두 구독한 적 없음)
       subscriptionStartedAt: null,
       refundAmount: null,
       payments: [],

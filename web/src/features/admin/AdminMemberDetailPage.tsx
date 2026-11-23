@@ -28,7 +28,7 @@ import {
   adminUserSubmissionsQuery,
   WITHDRAW_AFTER_MS,
 } from './adminUserQuery'
-import { formatJoinedOn } from './labels'
+import { formatJoinedOn, suspendedNote } from './labels'
 import { MemberActions } from './MemberActions'
 import { MemberSubmissions } from './MemberSubmissions'
 import { PaymentHistory, SubscriptionSummary } from './MemberSubscription'
@@ -140,9 +140,7 @@ export function Component() {
           {withdrawable ? '24시간이 지나 강제 탈퇴할 수 있어요. ' : ''}
           로그인과 토큰 갱신이 막혀 있어요.
           {/* 정지하면 서버가 프로 구독을 해지 예정으로 바꾼다. 풀어도 되돌리지 않는다(ADM-16) */}
-          {user.subscription.plan === 'PRO'
-            ? ' 프로 구독은 해지 예정으로 바뀌어 다음 결제가 나가지 않아요.'
-            : ''}
+          {suspendedNote(user.subscription)}
           {user.suspensionReason ? (
             <span className="mt-1 block break-keep whitespace-pre-wrap [overflow-wrap:anywhere]">
               사유: {user.suspensionReason}
