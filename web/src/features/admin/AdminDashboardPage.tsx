@@ -8,6 +8,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { Button } from '@/components/ui/button'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
+import { cn } from '@/lib/utils'
 import { adminReportListQuery, unresolvedReportCountQuery } from './adminReportQuery'
 import { paymentNeedsCancelCountQuery } from './adminUserQuery'
 import { ReportTable } from './ReportTable'
@@ -37,11 +38,27 @@ export function Component() {
   const queries = [unresolved, received, inProgress, recent, needsCancel]
   const failure = queries.find((query) => query.error)?.error ?? null
 
-  // 세션이 끊겼으면 캐시에서 지워 로그인 화면으로 보낸다(신고 목록과 같은 처리)
+  // 세션이 끊겼으면 캐시에서 지워 로그인 화면으로 보낸다(신고 목록과 같은 처리).
+  // 보여 주는 오류는 첫 번째지만 401은 모두 본다. 다른 조회가 500이어도 놓치지 않게(회원 상세와 같다)
   const queryClient = useQueryClient()
   useEffect(() => {
-    forgetSessionIfUnauthorized(queryClient, failure)
-  }, [queryClient, failure])
+    for (const each of [
+      unresolved.error,
+      received.error,
+      inProgress.error,
+      recent.error,
+      needsCancel.error,
+    ]) {
+      forgetSessionIfUnauthorized(queryClient, each)
+    }
+  }, [
+    queryClient,
+    unresolved.error,
+    received.error,
+    inProgress.error,
+    recent.error,
+    needsCancel.error,
+  ])
 
   return (
     <section className="flex flex-col gap-8">
@@ -57,10 +74,13 @@ export function Component() {
         />
       ) : null}
 
+      {/* 결제 수를 받기 전에는 자리만 잡고 감춘다. 받은 뒤 카드가 끼어들며 신고 버튼이 옮겨지지 않게 */}
       <div
-        className={
-          needsCancel.data ? 'grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' : undefined
-        }
+        data-testid="dashboard-cards"
+        className={cn(
+          needsCancel.data && 'grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]',
+          needsCancel.isPending && 'invisible',
+        )}
       >
         <section
           aria-label="처리할 신고"

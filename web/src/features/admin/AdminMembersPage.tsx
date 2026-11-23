@@ -78,9 +78,17 @@ export function Component() {
   // 대시보드의 '취소·확인이 필요한 결제' 카드가 주소로 넘긴다(ADM-12)
   const [searchParams, setSearchParams] = useSearchParams()
   const needsCancel = searchParams.get('paymentNeedsCancel') === 'true'
+  // ×뿐 아니라 헤더 링크·뒤로 가기로 주소만 바뀌어도 1페이지로 간다. 렌더 중에 맞춰 옛 페이지로 한 번 더 받지 않는다
+  const [shownNeedsCancel, setShownNeedsCancel] = useState(needsCancel)
+  if (shownNeedsCancel !== needsCancel) {
+    setShownNeedsCancel(needsCancel)
+    setParams((prev) => ({ ...prev, page: 1 }))
+  }
 
   const { data, isPending, isFetching, error, refetch } = useQuery({
     ...adminUserListQuery({ ...params, paymentNeedsCancel: needsCancel }),
+    // 포트원 콘솔에서 처리하고 돌아오면 대상 회원을 새로 받는다(대시보드 카드 수와 같다)
+    refetchOnWindowFocus: needsCancel,
     // 탭·검색·페이지를 바꾸는 동안 이전 표를 둔다(문제 관리 목록과 같은 선택).
     // 필터가 바뀔 때는 두지 않는다. 걸러지지 않은 회원에 '취소·확인 필요'가 붙어 보인다
     placeholderData: (previous, previousQuery) =>
@@ -151,7 +159,6 @@ export function Component() {
                 onClick={() => {
                   // 기록을 쌓지 않는다. 쌓으면 뒤로 가기로 필터만 돌아오고 페이지 상태는 남아 어긋난다
                   setSearchParams({}, { replace: true })
-                  setParams((prev) => ({ ...prev, page: 1 }))
                 }}
               >
                 <X aria-hidden className="size-4" />
@@ -258,7 +265,14 @@ export function Component() {
                           )}
                         >
                           {/* 진행 중이면 다음 결제일, 해지 예정이면 프로가 끝나는 날. 그 밖에는 null이라 '—'(계약) */}
-                          {formatJoinedOn(user.subscription.currentPeriodEnd)}
+                          <span className="flex items-center gap-1.5 whitespace-nowrap">
+                            {formatJoinedOn(user.subscription.currentPeriodEnd)}
+                            {/* 결과를 모르는 갱신 결제가 있으면 그 결제가 됐을 때의 날짜다. 보여 주기만 하는 값(계약) */}
+                            {user.subscription.paymentPending &&
+                            user.subscription.currentPeriodEnd !== null ? (
+                              <Badge tone="info">확정 전</Badge>
+                            ) : null}
+                          </span>
                         </TableCell>
                         <TableCell>
                           {/* 관리자는 정지할 수 없어 늘 정상이다(계약) */}
@@ -281,7 +295,8 @@ export function Component() {
             {data && !error && !isPending && data.content.length > 0 ? (
               <p className="text-muted-foreground text-sm">
                 가입일이 &apos;—&apos;인 회원은 가입일 기록을 시작하기 전에 가입한 회원이에요.
-                마감일은 진행 중이면 다음 결제일, 해지 예정이면 프로가 끝나는 날이에요.
+                마감일은 진행 중이면 다음 결제일, 해지 예정이면 프로가 끝나는 날이에요. &apos;확정
+                전&apos;은 결과를 모르는 갱신 결제가 됐을 때의 날짜예요.
               </p>
             ) : (
               <span />

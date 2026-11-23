@@ -46,6 +46,8 @@ export function paymentNeedsCancelCountQuery() {
   const query = { paymentNeedsCancel: true, size: 1 }
   return queryOptions({
     queryKey: [ADMIN_USERS_KEY, 'needs-cancel-count'] as const,
+    // 카드가 포트원 콘솔로 보낸다. 거기서 처리하고 돌아오면 수를 새로 받는다(회원 상세와 같다)
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const result = await api.GET('/api/admin/users', { params: { query } })
       if (result.data === undefined) fail(result)

@@ -103,7 +103,37 @@ describe('AdminDashboardPage (ADM-12)', () => {
     expect(asked?.get('size')).toBe('1')
   })
 
-  it('취소가 필요한 결제가 없으면 카드를 보이지 않는다', async () => {
+  it('신고 수가 500이어도 결제 수가 401이면 세션을 버린다', async () => {
+    server.use(
+      http.get('*/api/admin/reports', () =>
+        HttpResponse.json({ status: 500, title: 'Server Error' }, { status: 500 }),
+      ),
+      http.get('*/api/admin/users', () => HttpResponse.json({ status: 401 }, { status: 401 })),
+    )
+    const client = renderPage()
+
+    // retry: 1이라 오류가 1초 뒤에 온다
+    await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull(), { timeout: 3000 })
+  })
+
+  it('결제 수를 받기 전에는 카드 줄을 감춰, 카드가 끼어들며 신고 버튼이 옮겨지지 않게 한다', async () => {
+    server.use(
+      http.get('*/api/admin/users', () =>
+        HttpResponse.json({
+          content: [],
+          totalElements: 1,
+          counts: { all: 1, active: 1, suspended: 0 },
+        }),
+      ),
+    )
+    renderPage()
+
+    expect(screen.getByTestId('dashboard-cards')).toHaveClass('invisible')
+    await screen.findByRole('region', { name: '취소·확인이 필요한 결제' })
+    expect(screen.getByTestId('dashboard-cards')).not.toHaveClass('invisible')
+  })
+
+  it('취소·확인이 필요한 결제가 없으면 카드를 보이지 않는다', async () => {
     // 목 회원은 결제 기록이 없어 0명이다. 응답을 받아 그린 뒤에 확인한다
     const client = renderPage()
 

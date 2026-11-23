@@ -161,8 +161,9 @@ describe('AdminMembersPage (ADM-14)', () => {
               ...sub({ plan: 'PRO', status: 'CANCEL_SCHEDULED', cycle: 'MONTHLY' }),
               currentPeriodEnd: '2026-11-30T03:00:00Z',
             }),
+            // 결과를 모르는 갱신 결제가 있으면 마감일은 그 결제가 됐을 때의 날짜라 '확정 전'을 붙인다
             member(2, {
-              ...sub({ plan: 'PRO', status: 'ACTIVE', cycle: 'YEARLY' }),
+              ...sub({ plan: 'PRO', status: 'ACTIVE', cycle: 'YEARLY', paymentPending: true }),
               currentPeriodEnd: '2027-09-14T03:00:00Z',
             }),
             member(1, sub({})),
@@ -179,7 +180,7 @@ describe('AdminMembersPage (ADM-14)', () => {
       'ID닉네임이메일가입일요금제마감일상태',
       '4회회원4m4@example.com—프로 월간결제 실패—정상',
       '3회회원3m3@example.com—프로 월간해지 예정2026-11-30정상',
-      '2회회원2m2@example.com—프로 연간2027-09-14정상',
+      '2회회원2m2@example.com—프로 연간2027-09-14확정 전정상',
       '1회회원1m1@example.com—무료—정상',
     ])
     expect(screen.getByText(/마감일은 진행 중이면 다음 결제일/)).toBeInTheDocument()
@@ -218,6 +219,35 @@ describe('AdminMembersPage (ADM-14)', () => {
     // 뒤로 가면 필터 목록이 아니라 들어온 대시보드로 간다
     await router.navigate(-1)
     expect(await screen.findByText('대시보드 화면')).toBeInTheDocument()
+  })
+
+  it('헤더 링크·뒤로 가기로 주소의 필터만 바뀌어도 1페이지로 간다', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get('*/api/admin/users', ({ request }) => {
+        const query = new URL(request.url).searchParams
+        if (query.get('paymentNeedsCancel') !== 'true') return undefined
+        // 대상은 1명이라 1페이지에만 있다
+        return HttpResponse.json({
+          content: query.get('page') === '0' ? [needsCancelMember] : [],
+          totalElements: 1,
+          counts: { all: 1, active: 1, suspended: 0 },
+        })
+      }),
+    )
+    const router = renderPage('/admin/members?paymentNeedsCancel=true')
+    expect(await firstCells()).toEqual(['3'])
+
+    // 헤더의 '회원' 링크처럼 같은 화면에서 주소만 바꾼다
+    await router.navigate('/admin/members')
+    expect(await screen.findByRole('tab', { name: '전체24' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '2페이지' }))
+    expect(await screen.findByText('king@example.com')).toBeInTheDocument()
+
+    await router.navigate(-1)
+    expect(await screen.findByText('취소·확인이 필요한 결제만')).toBeInTheDocument()
+    expect(await firstCells()).toEqual(['3'])
+    expect(screen.queryByText('이 페이지에는 회원이 없어요')).not.toBeInTheDocument()
   })
 
   it('대상 회원은 있는데 고른 탭에만 없으면 탭 기준으로 안내한다', async () => {
