@@ -22,7 +22,7 @@ import { ReportProblem } from './ReportProblem'
 import { RunButton, SampleRun } from './SampleRun'
 import { useSampleRun } from './sampleRunQuery'
 import { Samples } from './Samples'
-import { forgetProblemDrafts, readSavedCode, storeSavedCode } from './savedCode'
+import { forgetProblemDrafts, readDraftCode, readSavedCode, storeSavedCode } from './savedCode'
 import { askedLanguage, retriedSubmission } from './solvePath'
 import { problemDetailQuery } from './solveQuery'
 import { StarterCodeButton } from './StarterCodeButton'
@@ -118,7 +118,7 @@ function Workspace({
   // 언어별로 따로 들고 있는다. C++로 갔다 돌아왔을 때 Python 코드가 그대로 있어야 한다.
   // [다시 풀기]로 왔으면 그 제출 코드로 시작한다. 이미 고친 저장본이 있으면 그쪽이 더 새 코드다.
   const [codeByLanguage, setCodeByLanguage] = useState<Partial<Record<Language, string>>>(() =>
-    retried && readSavedCode(user?.id, problem.id, retried.language) === null
+    retried && readDraftCode(user?.id, problem.id, retried.language) === null
       ? { [retried.language]: retried.code }
       : {},
   )
@@ -324,13 +324,14 @@ function SolveProblem({ problemId }: { problemId: number }) {
   const { user } = useAuth()
   const userId = user?.id
   const { state } = useLocation()
-  const retry = retriedSubmission(state, userId)
+  // 처음 들어올 때 한 번만 읽는다. 언어를 바꾸면 주소가 state 없이 바뀌어, 매번 읽으면 조회가 꺼진 채 로딩에 갇힌다
+  const [retry] = useState(() => retriedSubmission(state, userId))
   const [needsSubmission] = useState(
-    () => retry !== null && readSavedCode(userId, problemId, retry.language) === null,
+    () => retry !== null && readDraftCode(userId, problemId, retry.language) === null,
   )
   const submission = useQuery({
     ...submissionResultQuery(retry?.submissionId ?? 0),
-    enabled: needsSubmission && retry !== null,
+    enabled: needsSubmission,
   })
 
   const queryClient = useQueryClient()

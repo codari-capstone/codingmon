@@ -1,8 +1,16 @@
-import { SESSION_CHANNEL } from '@/api/session'
 import type { Language, SubmissionResult } from '@/api/types'
 
 /** 이 기능이 쓰는 모든 키의 앞머리. 로그아웃이 이걸로 골라 지운다. */
 const PREFIX = 'solve:'
+
+/**
+ * 로그아웃·탈퇴로 저장본을 지웠다고 다른 탭에 알리는 통로.
+ *
+ * 세션 종료 알림과 따로 둔다. 비밀번호 변경도 세션을 끝내지만 같은 사람이 바로 다시 로그인하므로
+ * 풀이 코드를 지우지 않는다(PasswordForm 주석).
+ */
+const clearChannel =
+  typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('codingmon-saved-code')
 
 /**
  * 사용자·문제·언어별 임시 저장 키 (SOLVE-11).
@@ -28,6 +36,25 @@ function heldKey(userId: number, problemId: number, language: Language): string 
   return `${HELD_PREFIX}${userId}:${problemId}:${language}`
 }
 
+/** 제출 번호는 접수된 뒤에 안다. 코드가 같은 다른 제출의 판정으로 지우지 않으려고 함께 둔다. */
+interface HeldCode {
+  code: string
+  submissionId: number | null
+}
+
+function readHeld(key: string): HeldCode | null {
+  const raw = sessionStorage.getItem(key)
+  if (raw === null) return null
+  try {
+    const held = JSON.parse(raw) as Partial<HeldCode> | null
+    return typeof held?.code === 'string'
+      ? { code: held.code, submissionId: held.submissionId ?? null }
+      : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * 저장된 코드. 없으면 null.
  *
@@ -46,8 +73,23 @@ export function readSavedCode(
   try {
     return (
       sessionStorage.getItem(savedCodeKey(userId, problemId, language)) ??
-      sessionStorage.getItem(heldKey(userId, problemId, language))
+      readHeld(heldKey(userId, problemId, language))?.code ??
+      null
     )
+  } catch {
+    return null
+  }
+}
+
+/** 사용자가 쓰던 코드만. [다시 풀기]가 고른 제출보다 먼저 여는 것은 이쪽뿐이다. */
+export function readDraftCode(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+): string | null {
+  if (userId === undefined) return null
+  try {
+    return sessionStorage.getItem(savedCodeKey(userId, problemId, language))
   } catch {
     return null
   }
@@ -70,7 +112,7 @@ export function storeSavedCode(
 }
 
 /**
- * 판정이 난 코드의 저장본을 지운다. 판정이 난 제출은 제출 기록에서 코드를 볼 수 있다.
+ * 판정이 난 코드의 작성 중 저장본을 지운다. 판정이 난 제출은 제출 기록에서 코드를 볼 수 있다.
  *
  * 저장본이 낸 코드와 같을 때만 지운다. 채점을 기다리는 사이 더 친 글자는 제출 기록에 없어서
  * 지우면 되찾을 수 없다. 같은 이유로 다른 언어의 저장본도 건드리지 않는다.
@@ -83,12 +125,8 @@ export function forgetSubmittedCode(
 ): void {
   if (userId === undefined) return
   try {
-    for (const key of [
-      savedCodeKey(userId, problemId, language),
-      heldKey(userId, problemId, language),
-    ]) {
-      if (sessionStorage.getItem(key) === submitted) sessionStorage.removeItem(key)
-    }
+    const key = savedCodeKey(userId, problemId, language)
+    if (sessionStorage.getItem(key) === submitted) sessionStorage.removeItem(key)
   } catch {
     // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
   }
@@ -111,10 +149,11 @@ export function keepUntilJudged(
   const key = heldKey(userId, problemId, language)
   try {
     const before = sessionStorage.getItem(key)
-    sessionStorage.setItem(key, code)
+    const held = JSON.stringify({ code, submissionId: null } satisfies HeldCode)
+    sessionStorage.setItem(key, held)
     return () => {
       try {
-        if (sessionStorage.getItem(key) !== code) return
+        if (sessionStorage.getItem(key) !== held) return
         if (before === null) sessionStorage.removeItem(key)
         else sessionStorage.setItem(key, before)
       } catch {
@@ -126,13 +165,46 @@ export function keepUntilJudged(
   }
 }
 
-/** 판정이 났으면 그 코드의 저장본을 지운다. 채점 중과 채점 불가는 남긴다. */
+/** 접수된 제출의 번호를 판정 대기 코드에 적는다. 그사이 다른 코드를 보냈으면 그대로 둔다. */
+export function markHeldSubmission(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+  code: string,
+  submissionId: number,
+): void {
+  if (userId === undefined) return
+  try {
+    const key = heldKey(userId, problemId, language)
+    const held = readHeld(key)
+    if (held?.code === code && held.submissionId === null) {
+      sessionStorage.setItem(key, JSON.stringify({ code, submissionId } satisfies HeldCode))
+      // 같은 코드의 작성 중 사본을 없앤다. 남으면 '쓰던 코드'로 보여 [다시 풀기]가 고른 제출을 가린다
+      forgetSubmittedCode(userId, problemId, language, code)
+    }
+  } catch {
+    // 저장이 막힌 브라우저에는 잡아 둔 코드도 없다.
+  }
+}
+
+/**
+ * 판정이 났으면 그 코드의 저장본을 지운다. 채점 중과 채점 불가는 남긴다.
+ *
+ * 판정 대기 코드는 **그 제출의 판정으로만** 지운다. 코드만 비교하면 기록에서 연 옛 제출이 같은
+ * 코드로 다시 낸 새 제출의 사본을 지운다.
+ */
 export function forgetJudgedCode(
   userId: number | undefined,
-  result: Pick<SubmissionResult, 'status' | 'problemId' | 'language' | 'sourceCode'>,
+  result: Pick<SubmissionResult, 'id' | 'status' | 'problemId' | 'language' | 'sourceCode'>,
 ): void {
-  if (result.status === 'COMPLETED' && typeof result.sourceCode === 'string') {
-    forgetSubmittedCode(userId, result.problemId, result.language, result.sourceCode)
+  if (result.status !== 'COMPLETED' || typeof result.sourceCode !== 'string') return
+  forgetSubmittedCode(userId, result.problemId, result.language, result.sourceCode)
+  if (userId === undefined) return
+  try {
+    const key = heldKey(userId, result.problemId, result.language)
+    if (readHeld(key)?.submissionId === result.id) sessionStorage.removeItem(key)
+  } catch {
+    // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
   }
 }
 
@@ -144,8 +216,14 @@ export function forgetJudgedCode(
  * 코드가 디스크에 남아 있으면 그 약속이 사실이 아니게 된다.
  *
  * localStorage도 함께 지운다. 예전 버전이 그쪽에 저장해 둔 코드가 디스크에 남아 있을 수 있다.
+ * 저장소가 탭마다 따로라 다른 탭에도 지우라고 알린다.
  */
 export function clearSavedCode(): void {
+  clearThisTab()
+  clearChannel?.postMessage('clear')
+}
+
+function clearThisTab(): void {
   try {
     removeKeys(sessionStorage, PREFIX)
     removeKeys(localStorage, PREFIX)
@@ -193,14 +271,14 @@ export function settleSavedCodeOnLoad(navigationType: string | undefined, pathna
  * 앱이 시작될 때 한 번 부른다(main.tsx).
  *
  * 저장소가 탭마다 따로라, 다른 탭의 로그아웃·탈퇴 알림을 받아 이 탭의 코드도 지운다(MY-04).
+ * 받은 탭은 다시 알리지 않는다(서로 알리면 고리가 된다).
  */
 export function startSavedCodeSync(): void {
   const entry = performance.getEntriesByType('navigation')[0] as
     PerformanceNavigationTiming | undefined
   settleSavedCodeOnLoad(entry?.type, window.location.pathname)
-  if (typeof BroadcastChannel === 'undefined') return
-  new BroadcastChannel(SESSION_CHANNEL).addEventListener('message', (event: MessageEvent) => {
-    if (event.data === 'ended') clearSavedCode()
+  clearChannel?.addEventListener('message', (event: MessageEvent) => {
+    if (event.data === 'clear') clearThisTab()
   })
 }
 

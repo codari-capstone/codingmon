@@ -2,14 +2,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   clearSavedCode,
+  forgetJudgedCode,
   forgetProblemDrafts,
   forgetSubmittedCode,
   keepUntilJudged,
+  markHeldSubmission,
+  readDraftCode,
   readSavedCode,
   savedCodeKey,
   settleSavedCodeOnLoad,
   storeSavedCode,
 } from './savedCode'
+
+const judged = (id: number) => ({
+  id,
+  status: 'COMPLETED' as const,
+  problemId: 1,
+  language: 'PYTHON' as const,
+  sourceCode: 'print(1)',
+})
 
 describe('savedCode', () => {
   afterEach(() => {
@@ -102,12 +113,60 @@ describe('savedCode', () => {
 
   it('판정 대기 코드는 작성 중 코드를 지워도 남고, 판정이 나면 지워진다', () => {
     keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+    markHeldSubmission(5, 1, 'PYTHON', 'print(1)', 7)
 
     forgetProblemDrafts(5, 1)
     expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
 
-    forgetSubmittedCode(5, 1, 'PYTHON', 'print(1)')
+    forgetJudgedCode(5, judged(7))
     expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+  })
+
+  it('코드가 같아도 다른 제출의 판정으로는 판정 대기 코드를 지우지 않는다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+    markHeldSubmission(5, 1, 'PYTHON', 'print(1)', 8)
+
+    forgetJudgedCode(5, judged(7))
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
+  })
+
+  it('접수 전 판정 대기 코드는 어떤 판정으로도 지우지 않는다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+
+    forgetJudgedCode(5, judged(7))
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
+  })
+
+  it('그사이 다른 코드를 보냈으면 앞 제출의 번호를 적지 않는다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', '새 코드')
+
+    markHeldSubmission(5, 1, 'PYTHON', '앞 코드', 7)
+    forgetJudgedCode(5, { ...judged(7), sourceCode: '새 코드' })
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('새 코드')
+  })
+
+  it('접수되면 같은 코드의 작성 중 사본만 없애고, 더 고친 코드는 남긴다', () => {
+    storeSavedCode(5, 1, 'PYTHON', 'print(1)')
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+    markHeldSubmission(5, 1, 'PYTHON', 'print(1)', 7)
+    expect(readDraftCode(5, 1, 'PYTHON')).toBeNull()
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('print(1)')
+
+    storeSavedCode(5, 2, 'PYTHON', '더 고친 코드')
+    keepUntilJudged(5, 2, 'PYTHON', 'print(2)')
+    markHeldSubmission(5, 2, 'PYTHON', 'print(2)', 8)
+    expect(readDraftCode(5, 2, 'PYTHON')).toBe('더 고친 코드')
+  })
+
+  it('작성 중 코드만 읽을 때는 판정 대기 코드를 돌려주지 않는다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', 'print(1)')
+    expect(readDraftCode(5, 1, 'PYTHON')).toBeNull()
+
+    storeSavedCode(5, 1, 'PYTHON', '작성 중')
+    expect(readDraftCode(5, 1, 'PYTHON')).toBe('작성 중')
   })
 
   it('접수가 실패하면 판정 대기 자리를 이전 값으로 되돌린다', () => {

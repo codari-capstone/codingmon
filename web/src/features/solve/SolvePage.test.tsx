@@ -379,6 +379,29 @@ describe('SolvePage', () => {
       expect(readSavedCode(USER.id, 1, 'PYTHON')).toBe('# 채점 중인 코드')
     })
 
+    it('다시 풀기로 연 뒤 언어를 바꿔도 로딩에 갇히지 않는다', async () => {
+      const user = userEvent.setup()
+      serveSubmission('# 제출한 코드')
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      await editorHas('# 제출한 코드')
+
+      await user.click(screen.getByRole('radio', { name: 'C++' }))
+      await editorHas('ios::sync_with_stdio(false);')
+
+      await user.click(screen.getByRole('radio', { name: 'Python' }))
+      await editorHas('# 제출한 코드')
+    })
+
+    it('다른 제출의 판정 대기 코드보다 다시 풀기로 고른 제출을 연다', async () => {
+      keepUntilJudged(USER.id, 1, 'PYTHON', '# 채점 중인 다른 제출')
+      serveSubmission('# 고른 제출')
+      renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await editorHas('# 고른 제출')
+    })
+
     it('제출 코드 조회가 401이면 세션을 버린다', async () => {
       server.use(
         http.get('*/api/submissions/:id', () =>

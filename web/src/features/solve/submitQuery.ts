@@ -6,7 +6,7 @@ import { fail } from '@/api/fail'
 import type { Language } from '@/api/types'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
-import { keepUntilJudged } from './savedCode'
+import { keepUntilJudged, markHeldSubmission } from './savedCode'
 import { holdRetryState } from './solvePath'
 
 export interface SubmitInput {
@@ -67,8 +67,9 @@ export function useSubmit(onAccepted: () => void) {
       releaseCode: keepUntilJudged(user?.id, input.problemId, input.language, input.sourceCode),
       restoreRetry: holdRetryState(),
     }),
-    onSuccess: (id) => {
+    onSuccess: (id, input) => {
       onAccepted()
+      markHeldSubmission(user?.id, input.problemId, input.language, input.sourceCode, id)
       // 판정과 관계없이 접수된 제출로 그날이 이어진다(STREAK). 상단 바 칩은 마운트된 채라 직접 알린다
       void queryClient.invalidateQueries({ queryKey: ['streak'] })
       void navigate(`/submissions/${id}`)

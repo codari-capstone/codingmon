@@ -141,12 +141,9 @@ export function announceLogin(): void {
   channel?.postMessage('started')
 }
 
-/** 다른 탭에 로그인·로그아웃을 알리는 통로의 이름 */
-export const SESSION_CHANNEL = 'codingmon-session'
-
 /** 다른 탭에 로그인·로그아웃을 알리는 통로. 지원하지 않는 브라우저에서는 null. */
 const channel =
-  typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(SESSION_CHANNEL)
+  typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('codingmon-session')
 
 /**
  * 세션을 끝낸다 (COM-03).
