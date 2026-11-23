@@ -78,11 +78,14 @@ function Header({
 function Workspace({
   problem,
   retried,
+  skipHeldLanguage,
   onAccepted,
 }: {
   problem: ProblemDetailView
   /** [다시 풀기]로 넘겨받은 제출의 코드 */
   retried: { language: Language; code: string } | null
+  /** [다시 풀기]의 제출을 못 받은 언어. 이 언어의 판정 대기 코드는 다른 제출의 것이라 열지 않는다. */
+  skipHeldLanguage: Language | null
   /** 제출이 접수됐다. 이 뒤의 이동은 '작성하다 떠남'이 아니다. */
   onAccepted: () => void
 }) {
@@ -124,6 +127,8 @@ function Workspace({
   )
   // 밖에서 코드를 갈아끼운 횟수. 에디터 key에 들어간다 — 아래 CodeEditor 주석.
   const [generation, setGeneration] = useState(0)
+  // 첫 화면의 판단을 고정한다. 나중에 조회가 성공해도 쓰던 에디터의 시작점이 바뀌면 안 된다
+  const [draftOnlyLanguage] = useState(skipHeldLanguage)
 
   /**
    * 지금 언어. 고른 것이 지원 목록에 없으면 첫 언어로 돌아간다.
@@ -152,9 +157,11 @@ function Workspace({
   const opening = useMemo(
     () =>
       language && current
-        ? (readSavedCode(user?.id, problem.id, language) ?? current.starterCode)
+        ? ((language === draftOnlyLanguage
+            ? readDraftCode(user?.id, problem.id, language)
+            : readSavedCode(user?.id, problem.id, language)) ?? current.starterCode)
         : '',
-    [user?.id, problem.id, language, current],
+    [user?.id, problem.id, language, current, draftOnlyLanguage],
   )
 
   const code = language ? (codeByLanguage[language] ?? opening) : ''
@@ -394,6 +401,7 @@ function SolveProblem({ problemId }: { problemId: number }) {
       key={data.id}
       problem={data}
       retried={retried}
+      skipHeldLanguage={needsSubmission && !retried ? (retry?.language ?? null) : null}
       onAccepted={() => {
         accepted.current = true
       }}

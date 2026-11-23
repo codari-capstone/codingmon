@@ -232,11 +232,19 @@ function clearThisTab(): void {
   }
 }
 
-/** 풀이 화면을 떠날 때 그 문제의 작성 중 코드를 모든 언어에서 지운다 (SOLVE-11). */
+/**
+ * 풀이 화면을 떠날 때 그 문제의 작성 중 코드를 모든 언어에서 지운다 (SOLVE-11).
+ *
+ * 접수 응답을 기다리는 언어는 남긴다. 접수가 실패하면 서버에도 없어 이 사본이 유일하다.
+ */
 export function forgetProblemDrafts(userId: number | undefined, problemId: number): void {
   if (userId === undefined) return
   try {
-    removeKeys(sessionStorage, `${PREFIX}${userId}:${problemId}:`)
+    removeKeys(
+      sessionStorage,
+      `${PREFIX}${userId}:${problemId}:`,
+      (key) => readHeld(`${HELD_PREFIX}${key.slice(PREFIX.length)}`)?.submissionId !== null,
+    )
   } catch {
     // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
   }
@@ -248,6 +256,7 @@ export function forgetProblemDrafts(userId: number | undefined, problemId: numbe
  * 주소창으로 옮기면 React cleanup이 돌지 않으므로 다음 문서가 '화면을 떠남'을 대신 처리한다.
  * 새로고침과 뒤로 가기는 그대로 두고, GitHub 로그인 복귀는 세션이 끊겨 다녀온 길이라 남긴다.
  * 예전 버전의 localStorage 저장본은 새로고침일 때만 옮기고 어느 경우든 지운다.
+ * 번호 없는 판정 대기 코드는 응답을 받을 탭이 사라진 것이라 작성 중 코드로 돌린다.
  */
 export function settleSavedCodeOnLoad(navigationType: string | undefined, pathname: string): void {
   try {
@@ -262,6 +271,7 @@ export function settleSavedCodeOnLoad(navigationType: string | undefined, pathna
     if (navigationType === 'navigate' && pathname !== '/login/github') {
       removeKeys(sessionStorage, PREFIX, (key) => !key.startsWith(HELD_PREFIX))
     }
+    releaseUnansweredHeld()
   } catch {
     // 저장소를 못 읽는 브라우저에는 정리할 것도 없다.
   }
@@ -280,6 +290,18 @@ export function startSavedCodeSync(): void {
   clearChannel?.addEventListener('message', (event: MessageEvent) => {
     if (event.data === 'clear') clearThisTab()
   })
+}
+
+/** 제출 번호를 영영 못 받는 판정 대기 코드를 작성 중 코드로 돌린다. 더 새로 쓴 코드가 있으면 그쪽을 둔다. */
+function releaseUnansweredHeld(): void {
+  for (const key of Object.keys(sessionStorage)) {
+    if (!key.startsWith(HELD_PREFIX)) continue
+    const held = readHeld(key)
+    if (held?.submissionId !== null) continue
+    const draftKey = PREFIX + key.slice(HELD_PREFIX.length)
+    if (sessionStorage.getItem(draftKey) === null) sessionStorage.setItem(draftKey, held.code)
+    sessionStorage.removeItem(key)
+  }
 }
 
 /** 지우기 전에 키를 다 모은다. 지우면서 순회하면 인덱스가 밀려 건너뛰는 키가 생긴다. */

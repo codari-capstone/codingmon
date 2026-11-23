@@ -178,9 +178,45 @@ describe('savedCode', () => {
     expect(readSavedCode(5, 1, 'PYTHON')).toBe('이전 제출')
   })
 
+  it('접수 응답을 기다리는 언어의 작성 중 코드는 화면을 떠나도 남긴다', () => {
+    storeSavedCode(5, 1, 'PYTHON', '응답 대기')
+    storeSavedCode(5, 1, 'CPP', '다른 언어')
+    const release = keepUntilJudged(5, 1, 'PYTHON', '응답 대기')
+
+    forgetProblemDrafts(5, 1)
+    release()
+
+    expect(readSavedCode(5, 1, 'PYTHON')).toBe('응답 대기')
+    expect(readSavedCode(5, 1, 'CPP')).toBeNull()
+  })
+
+  it('응답 전에 새로고침한 코드는 작성 중 코드가 되어 떠나면 지워진다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', '응답 못 받음')
+
+    settleSavedCodeOnLoad('reload', '/problems/1')
+    expect(readDraftCode(5, 1, 'PYTHON')).toBe('응답 못 받음')
+
+    forgetProblemDrafts(5, 1)
+    expect(readSavedCode(5, 1, 'PYTHON')).toBeNull()
+  })
+
+  it('응답 전에 새로고침해도 더 새로 쓴 코드와 번호 있는 판정 대기 코드는 그대로다', () => {
+    keepUntilJudged(5, 1, 'PYTHON', '보낸 코드')
+    storeSavedCode(5, 1, 'PYTHON', '더 고친 코드')
+    keepUntilJudged(5, 2, 'PYTHON', '접수된 코드')
+    markHeldSubmission(5, 2, 'PYTHON', '접수된 코드', 7)
+
+    settleSavedCodeOnLoad('reload', '/problems/1')
+
+    expect(readDraftCode(5, 1, 'PYTHON')).toBe('더 고친 코드')
+    expect(readDraftCode(5, 2, 'PYTHON')).toBeNull()
+    expect(readSavedCode(5, 2, 'PYTHON')).toBe('접수된 코드')
+  })
+
   it('주소창 이동으로 문서를 새로 열면 작성 중 코드만 지운다', () => {
     storeSavedCode(5, 1, 'PYTHON', '작성 중')
     keepUntilJudged(5, 2, 'PYTHON', '판정 대기')
+    markHeldSubmission(5, 2, 'PYTHON', '판정 대기', 7)
 
     settleSavedCodeOnLoad('navigate', '/problems')
 
