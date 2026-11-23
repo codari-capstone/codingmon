@@ -22,7 +22,14 @@ import { ReportProblem } from './ReportProblem'
 import { RunButton, SampleRun } from './SampleRun'
 import { useSampleRun } from './sampleRunQuery'
 import { Samples } from './Samples'
-import { forgetProblemDrafts, readDraftCode, readSavedCode, storeSavedCode } from './savedCode'
+import {
+  forgetProblemDrafts,
+  readDraftCode,
+  readMissedRetryCode,
+  readSavedCode,
+  sendingHeldKeys,
+  storeSavedCode,
+} from './savedCode'
 import { askedLanguage, retriedSubmission } from './solvePath'
 import { problemDetailQuery } from './solveQuery'
 import { StarterCodeButton } from './StarterCodeButton'
@@ -78,11 +85,14 @@ function Header({
 function Workspace({
   problem,
   retried,
+  missedRetry,
   onAccepted,
 }: {
   problem: ProblemDetailView
   /** [다시 풀기]로 넘겨받은 제출의 코드 */
   retried: { language: Language; code: string } | null
+  /** 코드를 받지 못한 [다시 풀기] 제출. 이 언어에서는 다른 제출의 판정 대기 코드를 열지 않는다. */
+  missedRetry: { language: Language; submissionId: number } | null
   /** 제출이 접수됐다. 이 뒤의 이동은 '작성하다 떠남'이 아니다. */
   onAccepted: () => void
 }) {
@@ -124,6 +134,8 @@ function Workspace({
   )
   // 밖에서 코드를 갈아끼운 횟수. 에디터 key에 들어간다 — 아래 CodeEditor 주석.
   const [generation, setGeneration] = useState(0)
+  // 첫 화면의 판단을 고정한다. 나중에 조회가 성공해도 쓰던 에디터의 시작점이 바뀌면 안 된다
+  const [missed] = useState(missedRetry)
 
   /**
    * 지금 언어. 고른 것이 지원 목록에 없으면 첫 언어로 돌아간다.
@@ -152,9 +164,11 @@ function Workspace({
   const opening = useMemo(
     () =>
       language && current
-        ? (readSavedCode(user?.id, problem.id, language) ?? current.starterCode)
+        ? ((language === missed?.language
+            ? readMissedRetryCode(user?.id, problem.id, language, missed.submissionId)
+            : readSavedCode(user?.id, problem.id, language)) ?? current.starterCode)
         : '',
-    [user?.id, problem.id, language, current],
+    [user?.id, problem.id, language, current, missed],
   )
 
   const code = language ? (codeByLanguage[language] ?? opening) : ''
@@ -354,9 +368,11 @@ function SolveProblem({ problemId }: { problemId: number }) {
   useEffect(() => {
     window.clearTimeout(leaving.current)
     return () => {
+      // 떠나는 순간에 읽는다. 타이머 전에 접수 실패가 오면 대기 표시가 사라져 코드를 지우게 된다
+      const sendingAtLeave = sendingHeldKeys()
       leaving.current = window.setTimeout(() => {
         if (!accepted.current && queryClient.getQueryData(ME_QUERY_KEY)) {
-          forgetProblemDrafts(userId, problemId)
+          forgetProblemDrafts(userId, problemId, sendingAtLeave)
         }
       }, 0)
     }
@@ -394,6 +410,7 @@ function SolveProblem({ problemId }: { problemId: number }) {
       key={data.id}
       problem={data}
       retried={retried}
+      missedRetry={needsSubmission && !retried ? retry : null}
       onAccepted={() => {
         accepted.current = true
       }}

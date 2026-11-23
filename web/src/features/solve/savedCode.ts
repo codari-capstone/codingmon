@@ -42,6 +42,21 @@ interface HeldCode {
   submissionId: number | null
 }
 
+/**
+ * 이 문서에서 접수 응답을 기다리는 판정 대기 키.
+ *
+ * 메모리에 둔다. 문서가 바뀌면 응답을 받을 곳이 없으므로, 저장소에 번호 없이 남은 코드는
+ * 여기 없으면 '응답을 영영 못 받는 코드'다.
+ */
+const sending = new Set<string>()
+
+/** 문서가 내려가는 중이다. 이때 끊긴 요청은 접수 실패가 아니라 응답을 못 받은 것이다. */
+let documentLeaving = false
+
+function isSending(key: string): boolean {
+  return sending.has(key) && readHeld(key)?.submissionId === null
+}
+
 function readHeld(key: string): HeldCode | null {
   const raw = sessionStorage.getItem(key)
   if (raw === null) return null
@@ -95,6 +110,26 @@ export function readDraftCode(
   }
 }
 
+/**
+ * [다시 풀기]의 제출을 받지 못했을 때 열 코드. 쓰던 코드, 없으면 **그 제출의** 판정 대기 코드다.
+ * 다른 제출의 판정 대기 코드를 고른 제출인 것처럼 열지 않는다.
+ */
+export function readMissedRetryCode(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+  submissionId: number,
+): string | null {
+  const draft = readDraftCode(userId, problemId, language)
+  if (draft !== null || userId === undefined) return draft
+  try {
+    const held = readHeld(heldKey(userId, problemId, language))
+    return held?.submissionId === submissionId ? held.code : null
+  } catch {
+    return null
+  }
+}
+
 export function storeSavedCode(
   userId: number | undefined,
   problemId: number,
@@ -138,6 +173,10 @@ export function forgetSubmittedCode(
  * 채점 불가로 끝난 제출은 제출 기록에 나오지 않아(계약 getMyProblemHistory) 여기 없으면 되찾을
  * 길이 없다. 응답 전에 새로고침해도 남도록 보내기 전에 쓴다. 작성 중 코드와 자리가 달라,
  * 풀이 화면을 다시 열었다 나가도 지워지지 않는다.
+ *
+ * 접수가 실패하면 그 코드는 서버에도 없으므로 작성 중 코드로 돌린다. 손대지 않은 [다시 풀기]
+ * 코드는 작성 중 자리에 없어서, 돌리지 않으면 화면을 떠난 뒤 되찾을 곳이 없다. 로그아웃으로
+ * 판정 대기 자리가 비었으면 아무것도 되살리지 않는다.
  */
 export function keepUntilJudged(
   userId: number | undefined,
@@ -151,11 +190,17 @@ export function keepUntilJudged(
     const before = sessionStorage.getItem(key)
     const held = JSON.stringify({ code, submissionId: null } satisfies HeldCode)
     sessionStorage.setItem(key, held)
+    sending.add(key)
     return () => {
+      // 작성 중 코드로 돌리면 주소창 이동의 다음 문서가 지운다. 판정 대기 자리에 그대로 둔다
+      if (documentLeaving) return
       try {
         if (sessionStorage.getItem(key) !== held) return
+        sending.delete(key)
         if (before === null) sessionStorage.removeItem(key)
         else sessionStorage.setItem(key, before)
+        const draftKey = savedCodeKey(userId, problemId, language)
+        if (sessionStorage.getItem(draftKey) === null) sessionStorage.setItem(draftKey, code)
       } catch {
         // 저장소를 못 쓰는 브라우저에는 되돌릴 것도 없다.
       }
@@ -178,6 +223,7 @@ export function markHeldSubmission(
     const key = heldKey(userId, problemId, language)
     const held = readHeld(key)
     if (held?.code === code && held.submissionId === null) {
+      sending.delete(key)
       sessionStorage.setItem(key, JSON.stringify({ code, submissionId } satisfies HeldCode))
       // 같은 코드의 작성 중 사본을 없앤다. 남으면 '쓰던 코드'로 보여 [다시 풀기]가 고른 제출을 가린다
       forgetSubmittedCode(userId, problemId, language, code)
@@ -191,7 +237,8 @@ export function markHeldSubmission(
  * 판정이 났으면 그 코드의 저장본을 지운다. 채점 중과 채점 불가는 남긴다.
  *
  * 판정 대기 코드는 **그 제출의 판정으로만** 지운다. 코드만 비교하면 기록에서 연 옛 제출이 같은
- * 코드로 다시 낸 새 제출의 사본을 지운다.
+ * 코드로 다시 낸 새 제출의 사본을 지운다. 응답을 영영 못 받아 번호가 없는 코드만 코드로 비교한다.
+ * 같은 코드가 판정됐으니 제출 기록에서 되찾을 수 있다.
  */
 export function forgetJudgedCode(
   userId: number | undefined,
@@ -202,7 +249,10 @@ export function forgetJudgedCode(
   if (userId === undefined) return
   try {
     const key = heldKey(userId, result.problemId, result.language)
-    if (readHeld(key)?.submissionId === result.id) sessionStorage.removeItem(key)
+    const held = readHeld(key)
+    const unanswered =
+      held?.submissionId === null && held.code === result.sourceCode && !isSending(key)
+    if (held?.submissionId === result.id || unanswered) sessionStorage.removeItem(key)
   } catch {
     // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
   }
@@ -232,13 +282,45 @@ function clearThisTab(): void {
   }
 }
 
-/** 풀이 화면을 떠날 때 그 문제의 작성 중 코드를 모든 언어에서 지운다 (SOLVE-11). */
-export function forgetProblemDrafts(userId: number | undefined, problemId: number): void {
+/**
+ * 풀이 화면을 떠날 때 그 문제의 작성 중 코드를 모든 언어에서 지운다 (SOLVE-11).
+ *
+ * 접수 응답을 기다리는 언어는 남긴다. 접수가 실패하면 서버에도 없어 이 사본이 유일하다.
+ * 응답을 영영 못 받는 판정 대기 코드는 작성 중 코드처럼 함께 지운다. 안 지우면 판정이 나도
+ * 문제를 열 때마다 그 코드가 열린다.
+ *
+ * `keep`은 화면을 떠난 순간의 `sendingHeldKeys()`다. 지우기가 한 박자 늦어, 그사이 실패 응답이
+ * 와서 대기 표시가 사라져도 그 코드를 지우지 않는다.
+ */
+export function forgetProblemDrafts(
+  userId: number | undefined,
+  problemId: number,
+  keep: ReadonlySet<string> = sendingHeldKeys(),
+): void {
   if (userId === undefined) return
+  const scope = `${userId}:${problemId}:`
   try {
-    removeKeys(sessionStorage, `${PREFIX}${userId}:${problemId}:`)
+    removeKeys(
+      sessionStorage,
+      `${PREFIX}${scope}`,
+      (key) => !keep.has(`${HELD_PREFIX}${key.slice(PREFIX.length)}`),
+    )
+    removeKeys(
+      sessionStorage,
+      `${HELD_PREFIX}${scope}`,
+      (key) => readHeld(key)?.submissionId === null && !keep.has(key) && !isSending(key),
+    )
   } catch {
     // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
+  }
+}
+
+/** 지금 접수 응답을 기다리는 판정 대기 키들. */
+export function sendingHeldKeys(): ReadonlySet<string> {
+  try {
+    return new Set([...sending].filter(isSending))
+  } catch {
+    return new Set()
   }
 }
 
@@ -248,6 +330,7 @@ export function forgetProblemDrafts(userId: number | undefined, problemId: numbe
  * 주소창으로 옮기면 React cleanup이 돌지 않으므로 다음 문서가 '화면을 떠남'을 대신 처리한다.
  * 새로고침과 뒤로 가기는 그대로 두고, GitHub 로그인 복귀는 세션이 끊겨 다녀온 길이라 남긴다.
  * 예전 버전의 localStorage 저장본은 새로고침일 때만 옮기고 어느 경우든 지운다.
+ * 판정 대기 코드는 여기서 건드리지 않는다. 응답을 못 받은 코드도 다시 열어 볼 때까지 남긴다.
  */
 export function settleSavedCodeOnLoad(navigationType: string | undefined, pathname: string): void {
   try {
@@ -262,6 +345,7 @@ export function settleSavedCodeOnLoad(navigationType: string | undefined, pathna
     if (navigationType === 'navigate' && pathname !== '/login/github') {
       removeKeys(sessionStorage, PREFIX, (key) => !key.startsWith(HELD_PREFIX))
     }
+    sending.clear()
   } catch {
     // 저장소를 못 읽는 브라우저에는 정리할 것도 없다.
   }
@@ -279,6 +363,13 @@ export function startSavedCodeSync(): void {
   settleSavedCodeOnLoad(entry?.type, window.location.pathname)
   clearChannel?.addEventListener('message', (event: MessageEvent) => {
     if (event.data === 'clear') clearThisTab()
+  })
+  window.addEventListener('pagehide', () => {
+    documentLeaving = true
+  })
+  // 뒤로 가기 캐시에서 살아 돌아온 문서는 다시 정상 동작한다
+  window.addEventListener('pageshow', () => {
+    documentLeaving = false
   })
 }
 
