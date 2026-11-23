@@ -1,7 +1,9 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
+import type { Subscription } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
@@ -19,6 +21,8 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
+import { CYCLE_NAME } from '@/features/pricing/plans'
+import { fromBillingCycle } from '@/features/subscription/subscriptionQuery'
 import { cn } from '@/lib/utils'
 import { ADMIN_PAGE_SIZE } from './adminProblemQuery'
 import { adminUserListQuery, type AdminUserFilter } from './adminUserQuery'
@@ -33,6 +37,31 @@ const FILTERS = [
   { value: 'SUSPENDED', label: '정지', count: 'suspended' },
 ] as const satisfies readonly { value: AdminUserFilter; label: string; count: string }[]
 
+/**
+ * 요금제 칸 (ADM-14). 결제 실패는 계약상 `plan: FREE`라 '무료 [결제 실패]'다.
+ * shortcut: 목록 응답에 회원별 `needsCancel`이 없어 '취소 필요'는 그 필터로 들어왔을 때만 단다. 계약에 값이 생기면 그걸 쓴다
+ */
+function PlanCell({
+  subscription: { plan, status, cycle },
+  needsCancel,
+}: {
+  subscription: Subscription
+  needsCancel: boolean
+}) {
+  return (
+    <span className="flex items-center gap-1.5 whitespace-nowrap">
+      {plan === 'PRO' && cycle ? (
+        <b>프로 {CYCLE_NAME[fromBillingCycle(cycle)]}</b>
+      ) : (
+        <span className="text-muted-foreground">무료</span>
+      )}
+      {status === 'CANCEL_SCHEDULED' ? <Badge tone="warning">해지 예정</Badge> : null}
+      {status === 'PAYMENT_FAILED' ? <Badge tone="danger">결제 실패</Badge> : null}
+      {needsCancel ? <Badge tone="danger">취소 필요</Badge> : null}
+    </span>
+  )
+}
+
 /** 관리자 회원 목록 (ADM-14). 최근 가입순이다 */
 export function Component() {
   const [draft, setDraft] = useState('')
@@ -43,9 +72,12 @@ export function Component() {
     page: 1,
   })
   const { filter, keyword, page } = params
+  // 대시보드의 '취소가 필요한 결제' 카드가 주소로 넘긴다(ADM-12)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const needsCancel = searchParams.get('paymentNeedsCancel') === 'true'
 
   const { data, isPending, isFetching, error, refetch } = useQuery({
-    ...adminUserListQuery(params),
+    ...adminUserListQuery({ ...params, paymentNeedsCancel: needsCancel }),
     // 탭·검색·페이지를 바꾸는 동안 이전 표를 둔다(문제 관리 목록과 같은 선택)
     placeholderData: keepPreviousData,
   })
@@ -101,6 +133,23 @@ export function Component() {
               </TabsTrigger>
             ))}
           </TabsList>
+          {needsCancel ? (
+            <span className="bg-destructive-soft text-destructive-text mr-auto inline-flex h-8 items-center gap-1 rounded-full pr-1 pl-3 text-sm font-semibold">
+              취소가 필요한 결제만
+              {data ? <span className="tabular-nums"> · {data.counts.all}명</span> : null}
+              <button
+                type="button"
+                aria-label="취소가 필요한 결제 필터 지우기"
+                className="hover:bg-destructive/10 grid size-6 place-items-center rounded-full"
+                onClick={() => {
+                  setSearchParams({})
+                  setParams((prev) => ({ ...prev, page: 1 }))
+                }}
+              >
+                <X aria-hidden className="size-4" />
+              </button>
+            </span>
+          ) : null}
           <SearchInput
             aria-label="이메일 · 닉네임 · ID로 검색"
             placeholder="이메일 · 닉네임 · ID로 검색"
@@ -129,6 +178,8 @@ export function Component() {
                     title="조건에 맞는 회원이 없어요"
                     description="검색어를 바꿔 보세요."
                   />
+                ) : needsCancel ? (
+                  <EmptyState title="취소가 필요한 결제가 있는 회원이 없어요" />
                 ) : (
                   <EmptyState
                     title={filter === 'SUSPENDED' ? '정지된 회원이 없어요' : '아직 회원이 없어요'}
@@ -141,13 +192,15 @@ export function Component() {
                 className={cn('bg-card rounded-lg border px-3 py-2', isFetching && 'opacity-60')}
               >
                 {/* 좁은 화면에서는 열을 짜내지 않고 표 안에서 가로로 민다(문제 목록과 같다) */}
-                <Table className="min-w-[640px]">
+                <Table className="min-w-[880px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-16">ID</TableHead>
                       <TableHead>닉네임</TableHead>
                       <TableHead>이메일</TableHead>
                       <TableHead className="w-32">가입일</TableHead>
+                      <TableHead>요금제</TableHead>
+                      <TableHead className="w-32">마감일</TableHead>
                       <TableHead className="w-20">상태</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -185,6 +238,18 @@ export function Component() {
                           {formatJoinedOn(user.createdAt)}
                         </TableCell>
                         <TableCell>
+                          <PlanCell subscription={user.subscription} needsCancel={needsCancel} />
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            'tabular-nums',
+                            user.subscription.currentPeriodEnd === null && 'text-muted-foreground',
+                          )}
+                        >
+                          {/* 진행 중이면 다음 결제일, 해지 예정이면 프로가 끝나는 날. 그 밖에는 null이라 '—'(계약) */}
+                          {formatJoinedOn(user.subscription.currentPeriodEnd)}
+                        </TableCell>
+                        <TableCell>
                           {/* 관리자는 정지할 수 없어 늘 정상이다(계약) */}
                           {user.suspendedAt === null ? (
                             <Badge tone="success">정상</Badge>
@@ -205,6 +270,7 @@ export function Component() {
             {data && !error && !isPending && data.content.length > 0 ? (
               <p className="text-muted-foreground text-sm">
                 가입일이 &apos;—&apos;인 회원은 가입일 기록을 시작하기 전에 가입한 회원이에요.
+                마감일은 진행 중이면 다음 결제일, 해지 예정이면 프로가 끝나는 날이에요.
               </p>
             ) : (
               <span />

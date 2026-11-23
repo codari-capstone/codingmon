@@ -1,20 +1,23 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
 
+import type { Subscription } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
+import { server } from '@/mocks/server'
 import { Component as AdminMembersPage } from './AdminMembersPage'
 
 // 닉네임 칸 글은 아바타의 첫 글자가 앞에 붙는다(코코린이).
 // 시드 회원 24명: 정지 2(3 코딩왕·8 밤샘코더), 관리자 2번, 가입일 없음 1~4, GitHub 6·10·16 (fixtures/adminUsers)
-function renderPage() {
+function renderPage(entry = '/admin/members') {
   const client = createQueryClient()
   client.setQueryData(ME_QUERY_KEY, { id: 2, nickname: '관리자', role: 'ADMIN' })
   const router = createMemoryRouter([{ path: '/admin/members', Component: AdminMembersPage }], {
-    initialEntries: ['/admin/members'],
+    initialEntries: [entry],
   })
   render(
     <QueryClientProvider client={client}>
@@ -41,7 +44,7 @@ describe('AdminMembersPage (ADM-14)', () => {
     expect(await firstCells()).toHaveLength(20)
     expect(tabTexts()).toEqual(['전체24', '정상22', '정지2'])
     const rows = screen.getAllByRole('row')
-    expect(rows[1]).toHaveTextContent(/^24코코린이newbie@example\.com\d{4}-\d{2}-\d{2}정상$/)
+    expect(rows[1]).toHaveTextContent(/^24코코린이newbie@example\.com\d{4}-\d{2}-\d{2}무료—정상$/)
     // GitHub로 가입한 회원은 이메일 대신 '(GitHub)'
     expect(rows[9]).toHaveTextContent(/^16큐큐대기열\(GitHub\)/)
     // 아바타는 장식이다. 이름 옆이라 그림으로도 읽히면 줄마다 이름이 두 번 들린다
@@ -61,10 +64,10 @@ describe('AdminMembersPage (ADM-14)', () => {
     expect(await screen.findByText('king@example.com')).toBeInTheDocument()
     const rows = screen.getAllByRole('row').slice(1)
     expect(rows.map((row) => row.textContent)).toEqual([
-      '4알알고펭algo.peng@example.com—정상',
-      '3코코딩왕king@example.com—정지',
-      '2관관리자관리자admin@codari.test—정상',
-      '1코코다리user@codari.test—정상',
+      '4알알고펭algo.peng@example.com—무료—정상',
+      '3코코딩왕king@example.com—무료—정지',
+      '2관관리자관리자admin@codari.test—무료—정상',
+      '1코코다리user@codari.test—무료—정상',
     ])
   })
 
@@ -102,6 +105,106 @@ describe('AdminMembersPage (ADM-14)', () => {
     expect(await screen.findByText('조건에 맞는 회원이 없어요')).toBeInTheDocument()
     // 가리킬 '—'가 없으니 가입일 안내도 달지 않는다(#316 리뷰)
     expect(screen.queryByText(/가입일이 '—'인 회원은/)).not.toBeInTheDocument()
+  })
+
+  it('요금제는 플랜·주기와 해지 예정·결제 실패 배지로, 마감일은 이번 기간 끝나는 날로 보인다', async () => {
+    const sub = (s: Partial<Subscription>): Subscription => ({
+      plan: 'FREE',
+      status: 'NONE',
+      cycle: null,
+      nextCycle: null,
+      currentPeriodEnd: null,
+      customerId: null,
+      paymentPending: false,
+      ...s,
+    })
+    const member = (id: number, subscription: Subscription) => ({
+      id,
+      nickname: `회원${id}`,
+      email: `m${id}@example.com`,
+      role: 'USER',
+      createdAt: null,
+      suspendedAt: null,
+      subscription,
+    })
+    server.use(
+      http.get('*/api/admin/users', () =>
+        HttpResponse.json({
+          content: [
+            member(4, sub({ status: 'PAYMENT_FAILED', cycle: 'MONTHLY' })),
+            member(3, {
+              ...sub({ plan: 'PRO', status: 'CANCEL_SCHEDULED', cycle: 'MONTHLY' }),
+              currentPeriodEnd: '2026-11-30T03:00:00Z',
+            }),
+            member(2, {
+              ...sub({ plan: 'PRO', status: 'ACTIVE', cycle: 'YEARLY' }),
+              currentPeriodEnd: '2027-09-14T03:00:00Z',
+            }),
+            member(1, sub({})),
+          ],
+          totalElements: 4,
+          counts: { all: 4, active: 4, suspended: 0 },
+        }),
+      ),
+    )
+    renderPage()
+
+    await firstCells()
+    expect(screen.getAllByRole('row').map((row) => row.textContent)).toEqual([
+      'ID닉네임이메일가입일요금제마감일상태',
+      '4회회원4m4@example.com—무료결제 실패—정상',
+      '3회회원3m3@example.com—프로 월간해지 예정2026-11-30정상',
+      '2회회원2m2@example.com—프로 연간2027-09-14정상',
+      '1회회원1m1@example.com—무료—정상',
+    ])
+    expect(screen.getByText(/마감일은 진행 중이면 다음 결제일/)).toBeInTheDocument()
+  })
+
+  it('대시보드 카드에서 들어오면 취소가 필요한 결제가 있는 회원만 보이고, ×로 필터를 지운다', async () => {
+    const user = userEvent.setup()
+    const asked: (string | null)[] = []
+    server.use(
+      http.get('*/api/admin/users', ({ request }) => {
+        const needsCancel = new URL(request.url).searchParams.get('paymentNeedsCancel')
+        asked.push(needsCancel)
+        if (needsCancel !== 'true') return undefined
+        return HttpResponse.json({
+          content: [
+            {
+              id: 3,
+              nickname: '코딩왕',
+              email: 'king@example.com',
+              role: 'USER',
+              createdAt: null,
+              suspendedAt: null,
+              subscription: {
+                plan: 'PRO',
+                status: 'ACTIVE',
+                cycle: 'YEARLY',
+                nextCycle: null,
+                currentPeriodEnd: '2027-10-20T03:00:00Z',
+                customerId: null,
+                paymentPending: false,
+              },
+            },
+          ],
+          totalElements: 1,
+          counts: { all: 1, active: 1, suspended: 0 },
+        })
+      }),
+    )
+    renderPage('/admin/members?paymentNeedsCancel=true')
+
+    expect(await firstCells()).toEqual(['3'])
+    expect(asked[0]).toBe('true')
+    expect(screen.getByText('취소가 필요한 결제만')).toHaveTextContent('취소가 필요한 결제만 · 1명')
+    expect(screen.getAllByRole('row')[1]).toHaveTextContent('프로 연간취소 필요')
+
+    await user.click(screen.getByRole('button', { name: '취소가 필요한 결제 필터 지우기' }))
+    expect(await screen.findByRole('tab', { name: '전체24' })).toBeInTheDocument()
+    expect(asked.at(-1)).toBeNull()
+    expect(screen.queryByText(/취소가 필요한 결제만/)).not.toBeInTheDocument()
+    expect(screen.queryByText('취소 필요')).not.toBeInTheDocument()
   })
 
   it('가입일 안내는 표가 있을 때만 단다', async () => {

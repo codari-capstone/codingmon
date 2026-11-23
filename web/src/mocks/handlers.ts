@@ -952,6 +952,8 @@ export const handlers: RequestHandler[] = [
       return badRequest(`status는 ACTIVE·SUSPENDED, page는 0 이상, size는 1~${MAX_PAGE_SIZE}이다`)
     }
     const keyword = query.get('keyword')?.trim().toLowerCase() ?? ''
+    // 서버처럼 탭 개수에도 반영한다(AdminUserRepository.list)
+    const needsCancel = query.get('paymentNeedsCancel') === 'true'
     const found = mockAdminUsers
       .filter(
         (user) =>
@@ -960,6 +962,7 @@ export const handlers: RequestHandler[] = [
           (user.email?.toLowerCase().includes(keyword) ?? false) ||
           (/^\d+$/.test(keyword) && user.id === Number(keyword)),
       )
+      .filter((user) => !needsCancel || user.payments.some((payment) => payment.needsCancel))
       .reverse()
     const suspended = found.filter((user) => user.suspendedAt !== null)
     const matched =

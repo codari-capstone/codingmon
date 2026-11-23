@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -9,6 +9,7 @@ import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { server } from '@/mocks/server'
 import { Component as AdminDashboardPage } from './AdminDashboardPage'
+import { paymentNeedsCancelCountQuery } from './adminUserQuery'
 
 // 시드 신고 21개: 접수 4 · 확인 중 3 · … (fixtures/reports). 최신은 21번
 function renderPage() {
@@ -22,6 +23,7 @@ function renderPage() {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+  return client
 }
 
 describe('AdminDashboardPage (ADM-12)', () => {
@@ -75,6 +77,40 @@ describe('AdminDashboardPage (ADM-12)', () => {
     await user.click(retry)
     expect(await screen.findByText('접수 4건 · 확인 중 3건')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument()
+  })
+
+  it('취소가 필요한 결제가 있는 회원 수를 카드로 보이고, 누르면 그 회원만 걸러 본다', async () => {
+    let asked: URLSearchParams | undefined
+    server.use(
+      http.get('*/api/admin/users', ({ request }) => {
+        asked = new URL(request.url).searchParams
+        return HttpResponse.json({
+          content: [],
+          totalElements: 2,
+          counts: { all: 2, active: 2, suspended: 0 },
+        })
+      }),
+    )
+    renderPage()
+
+    const card = await screen.findByRole('region', { name: '취소가 필요한 결제' })
+    expect(within(card).getByText('2')).toBeInTheDocument()
+    expect(within(card).getByRole('link')).toHaveAttribute(
+      'href',
+      '/admin/members?paymentNeedsCancel=true',
+    )
+    expect(asked?.get('paymentNeedsCancel')).toBe('true')
+    expect(asked?.get('size')).toBe('1')
+  })
+
+  it('취소가 필요한 결제가 없으면 카드를 보이지 않는다', async () => {
+    // 목 회원은 결제 기록이 없어 0명이다. 응답을 받아 그린 뒤에 확인한다
+    const client = renderPage()
+
+    await waitFor(() =>
+      expect(client.getQueryData(paymentNeedsCancelCountQuery().queryKey)).toBe(0),
+    )
+    expect(screen.queryByRole('region', { name: '취소가 필요한 결제' })).not.toBeInTheDocument()
   })
 
   it('신고가 없으면 빈 안내를 보인다', async () => {
