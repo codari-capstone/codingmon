@@ -17,6 +17,7 @@ import {
   markHeldSubmission,
   readDraftCode,
   readSavedCode,
+  settleSavedCodeOnLoad,
   storeSavedCode,
 } from './savedCode'
 import { Component as SolvePage } from './SolvePage'
@@ -121,6 +122,8 @@ function asWide() {
 describe('SolvePage', () => {
   // 앞 테스트의 unmount가 건 '화면을 떠남' 지우기가 이 테스트의 저장본을 지우지 않게 먼저 흘려보낸다
   beforeEach(async () => {
+    // 응답 대기 표시는 메모리에 있어 저장소를 비워도 남는다. 새 문서처럼 비운다
+    settleSavedCodeOnLoad(undefined, '/')
     await new Promise((resolve) => setTimeout(resolve, 0))
     sessionStorage.clear()
   })
@@ -446,9 +449,26 @@ describe('SolvePage', () => {
       const mutation = lastClient.getMutationCache().getAll()[0]
       failNow()
       await waitFor(() => expect(mutation?.state.status).toBe('error'))
+      expect(readDraftCode(USER.id, 1, 'PYTHON')).toBeNull()
 
-      // 판정 대기 사본으로 통과하지 않게 작성 중 자리를 직접 본다
-      expect(readDraftCode(USER.id, 1, 'PYTHON')).toContain('# 접수 안 된 코드')
+      // 다시 열면 그 코드가 보이고, 그때 작성 중 코드가 된다
+      await act(() => lastRouter.navigate('/problems/1'))
+      await editorHas('# 접수 안 된 코드')
+      await waitFor(() =>
+        expect(readDraftCode(USER.id, 1, 'PYTHON')).toContain('# 접수 안 된 코드'),
+      )
+    })
+
+    it('응답을 못 받은 코드를 열지 않은 언어로 보고 떠나도 지우지 않는다', async () => {
+      keepUntilJudged(USER.id, 1, 'CPP', '// 못 본 코드')
+      settleSavedCodeOnLoad('reload', '/problems/1')
+      renderSolve('/problems/1?language=PYTHON')
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+      await act(() => lastRouter.navigate('/submissions/9'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(readSavedCode(USER.id, 1, 'CPP')).toBe('// 못 본 코드')
     })
 
     it('다시 풀기의 제출을 못 받아도 그 제출의 판정 대기 코드는 연다', async () => {

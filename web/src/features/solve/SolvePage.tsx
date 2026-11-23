@@ -23,11 +23,11 @@ import { RunButton, SampleRun } from './SampleRun'
 import { useSampleRun } from './sampleRunQuery'
 import { Samples } from './Samples'
 import {
+  claimUnansweredCode,
   forgetProblemDrafts,
   readDraftCode,
   readMissedRetryCode,
   readSavedCode,
-  sendingHeldKeys,
   storeSavedCode,
 } from './savedCode'
 import { askedLanguage, retriedSubmission } from './solvePath'
@@ -172,6 +172,15 @@ function Workspace({
   )
 
   const code = language ? (codeByLanguage[language] ?? opening) : ''
+
+  // 응답을 못 받은 코드는 실제로 열린 언어만 작성 중 코드로 옮긴다. 안 본 코드는 떠나도 지우지 않는다
+  const openedFromStorage =
+    language !== undefined &&
+    language !== missed?.language &&
+    codeByLanguage[language] === undefined
+  useEffect(() => {
+    if (openedFromStorage) claimUnansweredCode(user?.id, problem.id, language)
+  }, [openedFromStorage, user?.id, problem.id, language])
 
   const editor =
     language && current ? (
@@ -368,11 +377,9 @@ function SolveProblem({ problemId }: { problemId: number }) {
   useEffect(() => {
     window.clearTimeout(leaving.current)
     return () => {
-      // 떠나는 순간에 읽는다. 타이머 전에 접수 실패가 오면 대기 표시가 사라져 코드를 지우게 된다
-      const sendingAtLeave = sendingHeldKeys()
       leaving.current = window.setTimeout(() => {
         if (!accepted.current && queryClient.getQueryData(ME_QUERY_KEY)) {
-          forgetProblemDrafts(userId, problemId, sendingAtLeave)
+          forgetProblemDrafts(userId, problemId)
         }
       }, 0)
     }

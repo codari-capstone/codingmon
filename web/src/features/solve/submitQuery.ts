@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router'
 
 import { api } from '@/api/client'
@@ -54,6 +55,14 @@ export function useSubmit(onAccepted: () => void) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { user } = useAuth()
+  // 실패 응답이 왔을 때 사용자가 아직 이 화면에 있는지. 떠났으면 실패를 못 봤으니 코드를 따로 둔다
+  const onScreen = useRef(true)
+  useEffect(() => {
+    onScreen.current = true
+    return () => {
+      onScreen.current = false
+    }
+  }, [])
 
   return useMutation({
     // 축하 창(BadgeCelebrator)이 이 키로 이번 세션에 낸 제출 번호를 읽어 채점을 지켜본다
@@ -77,7 +86,7 @@ export function useSubmit(onAccepted: () => void) {
     // 세션이 끊겼으면 로그인 화면으로 보낸다(session.ts). 쓰던 코드는 이 탭의 저장소에
     // 남아 있어(SOLVE-11) 다시 로그인하면 그대로 열린다.
     onError: (error, _input, context) => {
-      context?.releaseCode()
+      context?.releaseCode(!onScreen.current)
       context?.restoreRetry()
       forgetSessionIfUnauthorized(queryClient, error)
     },

@@ -40,21 +40,29 @@ function heldKey(userId: number, problemId: number, language: Language): string 
 interface HeldCode {
   code: string
   submissionId: number | null
+  /** 이 코드를 보내기 전에 자리에 있던 값. 번호 없는 코드가 치워지면 되돌린다. */
+  before?: string | null
 }
 
 /**
- * 이 문서에서 접수 응답을 기다리는 판정 대기 키.
+ * 이 문서에서 접수 응답을 기다리는 요청 수(판정 대기 키별).
  *
  * 메모리에 둔다. 문서가 바뀌면 응답을 받을 곳이 없으므로, 저장소에 번호 없이 남은 코드는
- * 여기 없으면 '응답을 영영 못 받는 코드'다.
+ * 여기 없으면 '응답을 영영 못 받는 코드'다. 앱 안에서 떠났다 돌아와 같은 언어로 또 낼 수 있어 센다.
  */
-const sending = new Set<string>()
+const sending = new Map<string, number>()
 
 /** 문서가 내려가는 중이다. 이때 끊긴 요청은 접수 실패가 아니라 응답을 못 받은 것이다. */
 let documentLeaving = false
 
 function isSending(key: string): boolean {
-  return sending.has(key) && readHeld(key)?.submissionId === null
+  return (sending.get(key) ?? 0) > 0 && readHeld(key)?.submissionId === null
+}
+
+function settleRequest(key: string): void {
+  const left = (sending.get(key) ?? 0) - 1
+  if (left > 0) sending.set(key, left)
+  else sending.delete(key)
 }
 
 function readHeld(key: string): HeldCode | null {
@@ -63,11 +71,17 @@ function readHeld(key: string): HeldCode | null {
   try {
     const held = JSON.parse(raw) as Partial<HeldCode> | null
     return typeof held?.code === 'string'
-      ? { code: held.code, submissionId: held.submissionId ?? null }
+      ? { code: held.code, submissionId: held.submissionId ?? null, before: held.before ?? null }
       : null
   } catch {
     return null
   }
+}
+
+/** 판정 대기 코드를 치우고 그 앞에 있던 값을 되돌린다. */
+function dropHeld(key: string, held: HeldCode): void {
+  if (held.before) sessionStorage.setItem(key, held.before)
+  else sessionStorage.removeItem(key)
 }
 
 /**
@@ -174,29 +188,29 @@ export function forgetSubmittedCode(
  * 길이 없다. 응답 전에 새로고침해도 남도록 보내기 전에 쓴다. 작성 중 코드와 자리가 달라,
  * 풀이 화면을 다시 열었다 나가도 지워지지 않는다.
  *
- * 접수가 실패하면 그 코드는 서버에도 없으므로 작성 중 코드로 돌린다. 손대지 않은 [다시 풀기]
- * 코드는 작성 중 자리에 없어서, 돌리지 않으면 화면을 떠난 뒤 되찾을 곳이 없다. 로그아웃으로
- * 판정 대기 자리가 비었으면 아무것도 되살리지 않는다.
+ * 접수가 실패하면 그 코드는 서버에도 없다. 화면에 있으면 작성 중 코드로 돌린다. 손대지 않은
+ * [다시 풀기] 코드는 작성 중 자리에 없어서, 돌리지 않으면 되찾을 곳이 없다. 이미 떠났으면
+ * (`left`) 작성 중 코드는 주소창 이동에 지워지므로, 다시 열어 볼 때까지 이 자리에 둔다
+ * (`claimUnansweredCode`). 로그아웃으로 자리가 비었으면 아무것도 되살리지 않는다.
  */
 export function keepUntilJudged(
   userId: number | undefined,
   problemId: number,
   language: Language,
   code: string,
-): () => void {
+): (left?: boolean) => void {
   if (userId === undefined) return () => {}
   const key = heldKey(userId, problemId, language)
   try {
     const before = sessionStorage.getItem(key)
-    const held = JSON.stringify({ code, submissionId: null } satisfies HeldCode)
+    const held = JSON.stringify({ code, submissionId: null, before } satisfies HeldCode)
     sessionStorage.setItem(key, held)
-    sending.add(key)
-    return () => {
-      // 작성 중 코드로 돌리면 주소창 이동의 다음 문서가 지운다. 판정 대기 자리에 그대로 둔다
-      if (documentLeaving) return
+    sending.set(key, (sending.get(key) ?? 0) + 1)
+    return (left = false) => {
+      settleRequest(key)
+      if (left || documentLeaving) return
       try {
         if (sessionStorage.getItem(key) !== held) return
-        sending.delete(key)
         if (before === null) sessionStorage.removeItem(key)
         else sessionStorage.setItem(key, before)
         const draftKey = savedCodeKey(userId, problemId, language)
@@ -221,9 +235,9 @@ export function markHeldSubmission(
   if (userId === undefined) return
   try {
     const key = heldKey(userId, problemId, language)
+    settleRequest(key)
     const held = readHeld(key)
     if (held?.code === code && held.submissionId === null) {
-      sending.delete(key)
       sessionStorage.setItem(key, JSON.stringify({ code, submissionId } satisfies HeldCode))
       // 같은 코드의 작성 중 사본을 없앤다. 남으면 '쓰던 코드'로 보여 [다시 풀기]가 고른 제출을 가린다
       forgetSubmittedCode(userId, problemId, language, code)
@@ -252,9 +266,33 @@ export function forgetJudgedCode(
     const held = readHeld(key)
     const unanswered =
       held?.submissionId === null && held.code === result.sourceCode && !isSending(key)
-    if (held?.submissionId === result.id || unanswered) sessionStorage.removeItem(key)
+    if (held && (held.submissionId === result.id || unanswered)) dropHeld(key, held)
   } catch {
     // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
+  }
+}
+
+/**
+ * 응답을 영영 못 받은 코드를 화면에 열었으면 작성 중 코드로 옮긴다.
+ *
+ * 열어 본 뒤로는 쓰던 코드와 같아서 떠나면 지워진다. 열어 보기 전에는 유일한 사본일 수 있어
+ * 어떤 정리로도 지우지 않는다. 더 새로 쓴 작성 중 코드가 있으면 그쪽을 둔다.
+ */
+export function claimUnansweredCode(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+): void {
+  if (userId === undefined) return
+  try {
+    const key = heldKey(userId, problemId, language)
+    const held = readHeld(key)
+    if (held?.submissionId !== null || isSending(key)) return
+    const draftKey = savedCodeKey(userId, problemId, language)
+    if (sessionStorage.getItem(draftKey) === null) sessionStorage.setItem(draftKey, held.code)
+    dropHeld(key, held)
+  } catch {
+    // 저장소를 못 쓰는 브라우저에는 옮길 것도 없다.
   }
 }
 
@@ -285,42 +323,14 @@ function clearThisTab(): void {
 /**
  * 풀이 화면을 떠날 때 그 문제의 작성 중 코드를 모든 언어에서 지운다 (SOLVE-11).
  *
- * 접수 응답을 기다리는 언어는 남긴다. 접수가 실패하면 서버에도 없어 이 사본이 유일하다.
- * 응답을 영영 못 받는 판정 대기 코드는 작성 중 코드처럼 함께 지운다. 안 지우면 판정이 나도
- * 문제를 열 때마다 그 코드가 열린다.
- *
- * `keep`은 화면을 떠난 순간의 `sendingHeldKeys()`다. 지우기가 한 박자 늦어, 그사이 실패 응답이
- * 와서 대기 표시가 사라져도 그 코드를 지우지 않는다.
+ * 보낸 코드는 판정 대기 자리에 따로 있어 여기서 지워지지 않는다.
  */
-export function forgetProblemDrafts(
-  userId: number | undefined,
-  problemId: number,
-  keep: ReadonlySet<string> = sendingHeldKeys(),
-): void {
+export function forgetProblemDrafts(userId: number | undefined, problemId: number): void {
   if (userId === undefined) return
-  const scope = `${userId}:${problemId}:`
   try {
-    removeKeys(
-      sessionStorage,
-      `${PREFIX}${scope}`,
-      (key) => !keep.has(`${HELD_PREFIX}${key.slice(PREFIX.length)}`),
-    )
-    removeKeys(
-      sessionStorage,
-      `${HELD_PREFIX}${scope}`,
-      (key) => readHeld(key)?.submissionId === null && !keep.has(key) && !isSending(key),
-    )
+    removeKeys(sessionStorage, `${PREFIX}${userId}:${problemId}:`)
   } catch {
     // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
-  }
-}
-
-/** 지금 접수 응답을 기다리는 판정 대기 키들. */
-export function sendingHeldKeys(): ReadonlySet<string> {
-  try {
-    return new Set([...sending].filter(isSending))
-  } catch {
-    return new Set()
   }
 }
 
