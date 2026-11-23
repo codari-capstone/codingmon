@@ -24,10 +24,11 @@ import { useSampleRun } from './sampleRunQuery'
 import { Samples } from './Samples'
 import {
   forgetProblemDrafts,
+  openCodeView,
   readDraftCode,
   readMissedRetryCode,
   readSavedCode,
-  showOpenCode,
+  showViewedCode,
   storeSavedCode,
 } from './savedCode'
 import { askedLanguage, retriedSubmission } from './solvePath'
@@ -178,7 +179,11 @@ function Workspace({
   const editorVisible = wide || tab === 'editor'
   useEffect(() => {
     if (!language || !editorVisible) return undefined
-    return showOpenCode(user?.id, problem.id, language, code)
+    return openCodeView(user?.id, problem.id, language)
+  }, [editorVisible, user?.id, problem.id, language])
+  // 위 effect 뒤에 돌아야 한다. 입력마다 화면을 새로 열면 이 화면에서 본 요청을 잊는다
+  useEffect(() => {
+    if (language && editorVisible) showViewedCode(code)
   }, [editorVisible, user?.id, problem.id, language, code])
 
   const editor =

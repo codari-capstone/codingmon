@@ -55,11 +55,35 @@ let requestCount = 0
 /** 문서가 내려가는 중이다. 이때 끊긴 요청은 접수 실패가 아니라 응답을 못 받은 것이다. */
 let documentLeaving = false
 
-/** 지금 화면에 보이는 에디터의 코드. 숨겨진 탭은 보이는 것이 아니다. */
-let onScreen: { key: string; code: string } | null = null
+/**
+ * 지금 화면에 보이는 에디터. 숨겨진 탭은 보이는 것이 아니다.
+ *
+ * `seen`은 **이 화면에서** 사용자가 본 요청이다. 떠났다 돌아오면 새로 센다. 같은 문제의 작성 중
+ * 코드가 있어도 그것이 이 요청을 고친 코드라는 보장은 없다.
+ */
+let onScreen: { key: string; draftKey: string; code: string | null; seen: Set<string> } | null =
+  null
 
 function isUnanswered(held: HeldCode): boolean {
   return held.submissionId === null && !(held.token && sending.has(held.token))
+}
+
+/** 응답을 못 받은 코드 중 이 화면에서 본 것을 작성 중 코드로 넘긴다. 그 뒤로는 떠나면 지워진다. */
+function settleSeenCode(): void {
+  if (onScreen?.code == null) return
+  const { key, draftKey, code, seen } = onScreen
+  try {
+    const list = readHeld(key)
+    const kept = list.filter(
+      (held) =>
+        !isUnanswered(held) || !(held.code === code || (held.token && seen.has(held.token))),
+    )
+    if (kept.length === list.length) return
+    if (sessionStorage.getItem(draftKey) === null) sessionStorage.setItem(draftKey, code)
+    writeHeld(key, kept)
+  } catch {
+    // 저장소를 못 쓰는 브라우저에는 옮길 것도 없다.
+  }
 }
 
 function readHeld(key: string): HeldCode[] {
@@ -181,119 +205,105 @@ export function forgetSubmittedCode(
   }
 }
 
+/** 보낸 요청 하나의 결과를 알린다. 코드가 같은 다른 요청과 섞이지 않게 요청에 묶여 있다. */
+export interface HeldRequest {
+  /** 접수됐다. 번호를 적고, 그보다 앞서 접수된 항목을 치운다. 못 본 코드는 남긴다. */
+  accept: (submissionId: number) => void
+  /** 접수되지 않았다. */
+  release: () => void
+}
+
+const NO_REQUEST: HeldRequest = { accept: () => {}, release: () => {} }
+
 /**
- * 보내는 코드를 판정이 날 때까지 잡아 두고, 접수가 실패하면 되돌릴 함수를 준다.
+ * 보내는 코드를 판정이 날 때까지 잡아 둔다.
  *
  * 채점 불가로 끝난 제출은 제출 기록에 나오지 않아(계약 getMyProblemHistory) 여기 없으면 되찾을
  * 길이 없다. 응답 전에 새로고침해도 남도록 보내기 전에 쓴다. 작성 중 코드와 자리가 달라,
  * 풀이 화면을 다시 열었다 나가도 지워지지 않는다.
  *
- * 접수가 실패하면 그 코드는 서버에도 없다. 그 코드나 더 고친 코드가 화면에 있으면 작성 중
- * 코드로 넘긴다. 아니면 사용자가 실패를 못 본 것이라, 다시 열어 볼 때까지 이 자리에 둔다
- * (`showOpenCode`). 로그아웃으로 목록이 비었으면 아무것도 되살리지 않는다.
+ * 접수가 실패하면 그 코드는 서버에도 없다. 이 화면에서 본 코드면 작성 중 코드로 넘기고, 아니면
+ * 사용자가 실패를 못 본 것이라 다시 열어 볼 때까지 이 자리에 둔다(`showViewedCode`).
  */
 export function keepUntilJudged(
   userId: number | undefined,
   problemId: number,
   language: Language,
   code: string,
-): () => void {
-  if (userId === undefined) return () => {}
+): HeldRequest {
+  if (userId === undefined) return NO_REQUEST
   const key = heldKey(userId, problemId, language)
   try {
     const token = `${Date.now()}-${++requestCount}`
     writeHeld(key, [...readHeld(key), { token, code, submissionId: null }])
     sending.add(token)
-    return () => {
-      sending.delete(token)
-      if (documentLeaving || onScreen?.key !== key) return
-      try {
-        const list = readHeld(key)
-        if (!list.some((held) => held.token === token)) return
-        const draftKey = savedCodeKey(userId, problemId, language)
-        const draft = sessionStorage.getItem(draftKey)
-        // [다시 풀기]로 다른 코드를 보고 있으면 이 코드는 아직 못 본 것이다
-        if (draft === null && onScreen.code !== code) return
-        if (draft === null) sessionStorage.setItem(draftKey, code)
-        writeHeld(
-          key,
-          list.filter((held) => held.token !== token),
-        )
-      } catch {
-        // 저장소를 못 쓰는 브라우저에는 되돌릴 것도 없다.
-      }
+    if (onScreen?.key === key && onScreen.code === code) onScreen.seen.add(token)
+    return {
+      accept: (submissionId) => {
+        sending.delete(token)
+        try {
+          const list = readHeld(key)
+          const index = list.findIndex((held) => held.token === token)
+          if (index < 0) return
+          writeHeld(
+            key,
+            list.flatMap((held, i) => {
+              if (i === index) return [{ code, submissionId }]
+              return i < index && held.submissionId !== null ? [] : [held]
+            }),
+          )
+          // 같은 코드의 작성 중 사본을 없앤다. 남으면 '쓰던 코드'로 보여 [다시 풀기]가 고른 제출을 가린다
+          forgetSubmittedCode(userId, problemId, language, code)
+        } catch {
+          // 저장이 막힌 브라우저에는 잡아 둔 코드도 없다.
+        }
+      },
+      release: () => {
+        sending.delete(token)
+        if (!documentLeaving) settleSeenCode()
+      },
     }
   } catch {
-    return () => {}
+    return NO_REQUEST
   }
 }
 
-/**
- * 에디터가 이 코드를 화면에 보여 주는 동안 부른다. 돌려준 함수로 끝낸다.
- *
- * 응답을 못 받은 코드가 실제로 보이면 작성 중 코드로 옮긴다. 그 뒤로는 쓰던 코드와 같아서
- * 떠나면 지워진다. 보이기 전에는 유일한 사본일 수 있어 어떤 정리로도 지우지 않는다.
- */
-export function showOpenCode(
+/** 에디터가 화면에 보이기 시작할 때 부른다. 돌려준 함수로 끝낸다. */
+export function openCodeView(
   userId: number | undefined,
   problemId: number,
   language: Language,
-  code: string,
 ): () => void {
   if (userId === undefined) return () => {}
-  const key = heldKey(userId, problemId, language)
-  const shown = { key, code }
-  onScreen = shown
-  try {
-    const list = readHeld(key)
-    const latest = list.at(-1)
-    if (latest && isUnanswered(latest) && latest.code === code) {
-      const draftKey = savedCodeKey(userId, problemId, language)
-      if (sessionStorage.getItem(draftKey) === null) sessionStorage.setItem(draftKey, code)
-      writeHeld(key, list.slice(0, -1))
-    }
-  } catch {
-    // 저장소를 못 쓰는 브라우저에는 옮길 것도 없다.
+  const view = {
+    key: heldKey(userId, problemId, language),
+    draftKey: savedCodeKey(userId, problemId, language),
+    code: null,
+    seen: new Set<string>(),
   }
+  onScreen = view
   return () => {
-    if (onScreen === shown) onScreen = null
+    if (onScreen === view) onScreen = null
   }
 }
 
 /**
- * 접수된 제출의 번호를 그 요청의 항목에 적는다.
+ * 보이는 에디터의 코드가 정해지거나 바뀔 때 부른다.
  *
- * 그보다 앞서 접수된 항목은 치운다. 응답을 못 받은 항목은 아직 못 본 코드일 수 있어 남긴다.
+ * 응답을 못 받은 코드가 실제로 보이면 작성 중 코드로 옮긴다. 보이기 전에는 유일한 사본일 수 있어
+ * 어떤 정리로도 지우지 않는다. 응답을 기다리는 같은 코드는 본 것으로 적어 둔다.
  */
-export function markHeldSubmission(
-  userId: number | undefined,
-  problemId: number,
-  language: Language,
-  code: string,
-  submissionId: number,
-): void {
-  if (userId === undefined) return
+export function showViewedCode(code: string): void {
+  if (!onScreen) return
+  onScreen.code = code
   try {
-    const key = heldKey(userId, problemId, language)
-    const list = readHeld(key)
-    const index = list.findLastIndex(
-      (held) => held.code === code && held.token !== undefined && sending.has(held.token),
-    )
-    const entry = list[index]
-    if (!entry?.token) return
-    sending.delete(entry.token)
-    writeHeld(
-      key,
-      list.flatMap((held, i) => {
-        if (i === index) return [{ code, submissionId }]
-        return i < index && held.submissionId !== null ? [] : [held]
-      }),
-    )
-    // 같은 코드의 작성 중 사본을 없앤다. 남으면 '쓰던 코드'로 보여 [다시 풀기]가 고른 제출을 가린다
-    forgetSubmittedCode(userId, problemId, language, code)
+    for (const held of readHeld(onScreen.key)) {
+      if (held.token && held.code === code && sending.has(held.token)) onScreen.seen.add(held.token)
+    }
   } catch {
-    // 저장이 막힌 브라우저에는 잡아 둔 코드도 없다.
+    // 저장소를 못 읽는 브라우저에는 적을 것도 없다.
   }
+  settleSeenCode()
 }
 
 /**
@@ -410,6 +420,8 @@ export function startSavedCodeSync(): void {
   // 뒤로 가기 캐시에서 살아 돌아온 문서는 다시 정상 동작한다
   window.addEventListener('pageshow', () => {
     documentLeaving = false
+    // React는 다시 마운트되지 않는다. 내려가 있는 동안 실패한 요청을 여기서 정리한다
+    settleSeenCode()
   })
 }
 

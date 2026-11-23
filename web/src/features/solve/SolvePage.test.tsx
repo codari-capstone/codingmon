@@ -14,7 +14,6 @@ import { server } from '@/mocks/server'
 import { EDITOR_DEFAULTS, updateEditorSettings } from './editorSettings'
 import {
   keepUntilJudged,
-  markHeldSubmission,
   readDraftCode,
   readSavedCode,
   settleSavedCodeOnLoad,
@@ -495,8 +494,7 @@ describe('SolvePage', () => {
     })
 
     it('다시 풀기의 제출을 못 받아도 그 제출의 판정 대기 코드는 연다', async () => {
-      keepUntilJudged(USER.id, 1, 'PYTHON', '# 채점 불가 제출')
-      markHeldSubmission(USER.id, 1, 'PYTHON', '# 채점 불가 제출', 7)
+      keepUntilJudged(USER.id, 1, 'PYTHON', '# 채점 불가 제출').accept(7)
       server.use(
         http.get('*/api/submissions/:id', () =>
           HttpResponse.json({ status: 404, title: 'Not Found' }, { status: 404 }),
