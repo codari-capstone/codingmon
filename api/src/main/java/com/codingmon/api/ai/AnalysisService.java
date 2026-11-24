@@ -88,6 +88,10 @@ class AnalysisService {
         if (stored.blocked()) {
             throw ApiErrors.error(HttpStatus.CONFLICT, "ANALYSIS_BLOCKED", "이 분석은 보여 줄 수 없어요");
         }
+        // 요금제가 여는 단계까지만 새로 연다(PRICE-04). 프로일 때 이미 연 단계는 아래에서 그대로 돌려준다.
+        if (level > stored.revealedHintLevel() && level > quota.status(userId).maxHintLevel()) {
+            throw ApiErrors.error(HttpStatus.FORBIDDEN, "HINT_PLAN_REQUIRED", "2·3단계 힌트는 프로에서 열 수 있어요");
+        }
         if (level > stored.revealedHintLevel() + 1) {
             throw ApiErrors.error(HttpStatus.CONFLICT, "HINT_LEVEL_SKIPPED", "앞 단계 힌트를 먼저 열어 주세요");
         }

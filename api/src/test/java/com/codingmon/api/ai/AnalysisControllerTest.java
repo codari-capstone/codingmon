@@ -145,6 +145,10 @@ class AnalysisControllerTest {
                 .param("versionId", versionId).query(Long.class).single();
         jdbc.sql("insert into user_problem_stats (user_id, problem_id, attempt_count) values (:userId, :problemId, 1)")
                 .param("userId", userId).param("problemId", problemId).update();
+        // 힌트 2·3단계는 프로만 연다(PRICE-04). 이 테스트들은 힌트 단계 자체를 보므로 프로로 둔다.
+        jdbc.sql("insert into subscriptions (user_id, status, cycle, billing_key, anchor_at, months, current_period_end)"
+                + " values (:userId, 'ACTIVE', 'MONTHLY', 'test-key', now(), 1, now() + interval '1 month')")
+                .param("userId", userId).update();
     }
 
     @AfterEach

@@ -73,6 +73,12 @@ public class Subscriptions {
                 periodEnd, paymentPending, customerId);
     }
 
+    // AI 하루 한도와 힌트 단계(PRICE-04)를 나누는 요금제. 구독 조회와 같은 판단이다.
+    public Plan plan(long userId) {
+        return snapshot.execute(status -> PaymentResolver.isPro(
+                PaymentResolver.effective(repo.findSub(userId), repo.findPending(userId), Instant.now())) ? Plan.PRO : Plan.FREE);
+    }
+
     // 관리자 회원 목록·상세용. 고객 ID를 만들지 않는다(없으면 null).
     public View adminView(long userId) {
         return view(userId, repo.findCustomerId(userId).orElse(null));
