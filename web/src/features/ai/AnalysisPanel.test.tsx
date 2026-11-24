@@ -9,6 +9,7 @@ import type { SubmissionAnalysis } from '@/api/types'
 import { createQueryClient, POLL_INTERVAL_MS } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { Component as SubmissionResultPage } from '@/features/result/SubmissionResultPage'
+import { freeSubscription } from '@/mocks/fixtures/subscriptions'
 import { resetSubmissions } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 import { FAILING_INTERVAL_MS, submissionResultQuery } from '@/features/result/resultQuery'
@@ -180,6 +181,59 @@ describe('AnalysisPanel', () => {
       expect(await screen.findByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
       expect(screen.getByText('틀렸습니다')).toBeInTheDocument()
+    })
+
+    describe('한도를 다 쓴 무료 사용자에게 요금제 안내 (AI-06, #321)', () => {
+      function subscription(plan: 'FREE' | 'PRO') {
+        server.use(
+          http.get('*/api/users/me/subscription', () =>
+            HttpResponse.json({
+              ...freeSubscription(USER.id),
+              ...(plan === 'PRO' && { plan, status: 'ACTIVE', cycle: 'MONTHLY' }),
+            }),
+          ),
+        )
+      }
+
+      it('무료면 요금제 화면으로 가는 링크를 보인다', async () => {
+        quotaLeft(0)
+        subscription('FREE')
+        renderResult(WRONG)
+
+        expect(await screen.findByRole('link', { name: '요금제 보기' })).toHaveAttribute(
+          'href',
+          '/pricing',
+        )
+        expect(screen.getByText(/프로는 하루 30회까지 쓸 수 있어요/)).toBeInTheDocument()
+      })
+
+      it('프로면 보이지 않는다', async () => {
+        quotaLeft(0)
+        subscription('PRO')
+        renderResult(WRONG)
+
+        await screen.findByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)
+        await waitFor(() =>
+          expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument(),
+        )
+        expect(screen.queryByRole('link', { name: '요금제 보기' })).not.toBeInTheDocument()
+      })
+
+      it('남은 횟수가 있으면 구독을 묻지 않는다', async () => {
+        let asked = 0
+        quotaLeft(5)
+        server.use(
+          http.get('*/api/users/me/subscription', () => {
+            asked += 1
+            return HttpResponse.json(freeSubscription(USER.id))
+          }),
+        )
+        renderResult(WRONG)
+
+        await screen.findByText('오늘 남은 AI 분석·리뷰 5 / 20회')
+        expect(screen.queryByRole('link', { name: '요금제 보기' })).not.toBeInTheDocument()
+        expect(asked).toBe(0)
+      })
     })
 
     it('누른 뒤 한도 초과(429)를 받으면 버튼을 끄고 안내를 한 번만 보인다', async () => {

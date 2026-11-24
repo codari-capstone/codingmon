@@ -1,9 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { Link } from 'react-router'
 
 import type { SubmissionAnalysis } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { problemCode, problemMessage } from '@/features/auth/problemCode'
+import { AI_DAILY } from '@/features/pricing/plans'
+import { belongsToSubscription, subscriptionQuery } from '@/features/subscription/subscriptionQuery'
 import { AI_QUOTA_QUERY_KEY, aiQuotaQuery } from './analysisQuery'
 
 /** 분석·리뷰가 같은 모양으로 주는 상태 (계약 `SubmissionAnalysis`·`SubmissionCodeReview`). */
@@ -57,6 +60,13 @@ export function AiRequest({
     quota !== undefined &&
     Date.parse(result.createdAt) >= Date.parse(quota.resetsAt) - DAY_MS
   const outOfQuota = quota?.remaining === 0 && !abandonedToday
+  // 다 썼을 때만 구독을 묻는다. 무료면 요금제를 안내한다(AI-06). 못 읽으면 안내하지 않는다
+  const { data: subscription } = useQuery({
+    ...subscriptionQuery(),
+    enabled: canRequest && outOfQuota,
+  })
+  const showUpgrade =
+    canRequest && outOfQuota && subscription !== undefined && !belongsToSubscription(subscription)
   const exhausted = quota
     ? `오늘 AI 분석·리뷰 ${quota.limit}회를 다 썼어요. ${RESETS_AT.format(new Date(quota.resetsAt))}에 다시 쓸 수 있어요.`
     : ''
@@ -117,6 +127,14 @@ export function AiRequest({
             : quota.limit === null
               ? '관리자는 AI 분석·리뷰를 한도 없이 써요' // #343. remaining도 null이라 outOfQuota가 되지 않는다
               : `오늘 남은 AI 분석·리뷰 ${quota.remaining} / ${quota.limit}회`}
+        </p>
+      ) : null}
+      {showUpgrade ? (
+        <p className={invite ? 'text-inverse-muted text-sm' : 'text-muted-foreground text-sm'}>
+          프로는 하루 {AI_DAILY.pro}회까지 쓸 수 있어요.{' '}
+          <Button asChild variant="link" className={invite ? 'text-inverse-foreground' : undefined}>
+            <Link to="/pricing">요금제 보기</Link>
+          </Button>
         </p>
       ) : null}
     </>
