@@ -31,7 +31,7 @@ const BY_TYPE: Record<string, UserMessage> = {
   },
   '/problems/ai-quota-exceeded': {
     title: '오늘 AI 분석을 다 썼습니다',
-    description: '하루 20회까지 쓸 수 있습니다. 채점 결과와 쉬운 설명은 그대로 볼 수 있습니다.',
+    description: '내일 다시 쓸 수 있습니다. 채점 결과와 쉬운 설명은 그대로 볼 수 있습니다.',
     retryable: false,
   },
   '/problems/ai-unavailable': {

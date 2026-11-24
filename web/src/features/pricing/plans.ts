@@ -1,7 +1,7 @@
 import type { IconName } from '@/components/ui/icon'
 
 // 가격·한도의 근거는 #331 '가격 근거'(#323 비용 계산)다. 사용자가 늘어 다시 계산하면 여기만 고친다.
-// 플랜별 한도는 #321에서 서버에 적용하기 전까지 화면의 안내일 뿐이다(PRICE 절 끝).
+// AI 한도와 힌트 단계는 서버가 플랜별로 나눈다(PRICE-04). 학습 기록 기간은 나누지 않고 문구로만 둔다(#321).
 
 export type Cycle = 'monthly' | 'yearly'
 

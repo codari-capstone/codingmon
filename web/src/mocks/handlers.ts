@@ -299,14 +299,14 @@ export function resetLearningReport(): void {
   mockReportGeneratedAt = null
 }
 
-/** 하루 AI 분석·리뷰 한도 (AI-01). 계약의 `AiQuota.limit` 설명과 같은 값이다. */
-const AI_DAILY_LIMIT = 20
+/** 요금제별 하루 AI 분석·리뷰 한도 (AI-01, PRICE-04). 계약의 `AiQuota.limit` 설명과 같은 값이다. */
+const AI_DAILY_LIMIT = { FREE: 3, PRO: 30 } as const
 
 /**
  * 오늘 남은 AI 횟수 (AI-01). 하루는 UTC 날짜다(계약). 목은 사용자를 나누지 않고 오늘 만든 분석 수를 센다 —
  * 분석 목이 세션을 보지 않는 것과 같다. 한도를 넘는 429는 화면 작업에서 필요할 때 더한다.
  */
-function mockQuota(now = new Date(), admin = false): AiQuota {
+function mockQuota(now = new Date(), admin = false, plan: AiQuota['plan'] = 'FREE'): AiQuota {
   const today = now.toISOString().slice(0, 10)
   // 분석과 리뷰는 한도를 함께 쓴다(계약 `AiQuota`)
   const created = [...[...mockAnalyses.values()].map((a) => a.createdAt), ...mockReviews.values()]
@@ -315,16 +315,21 @@ function mockQuota(now = new Date(), admin = false): AiQuota {
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
   ).toISOString()
   // 관리자는 하루 한도가 없다(#343)
-  if (admin) return { limit: null, used, remaining: null, resetsAt }
-  return { limit: AI_DAILY_LIMIT, used, remaining: Math.max(0, AI_DAILY_LIMIT - used), resetsAt }
+  if (admin) return { plan, limit: null, used, remaining: null, resetsAt }
+  const limit = AI_DAILY_LIMIT[plan]
+  return { plan, limit, used, remaining: Math.max(0, limit - used), resetsAt }
 }
 
-/** 요청한 사용자의 오늘 횟수. 관리자면 한도가 없다(#343). 응답의 quota가 화면의 횟수 캐시를 덮으므로 모든 응답이 이것을 쓴다 */
+/** 요청한 사용자의 오늘 횟수. 한도는 요금제로 나누고(PRICE-04) 관리자면 한도가 없다(#343). 응답의 quota가 화면의 횟수 캐시를 덮으므로 모든 응답이 이것을 쓴다 */
 function requestQuota(request: Request): AiQuota {
   const id = userIdFromToken(bearer(request))
   const account = mockAccounts.find((item) => item.user.id === id)
-  return mockQuota(new Date(), account?.user.role === 'ADMIN')
+  const plan = id === null ? 'FREE' : subscriptionFor(id).plan
+  return mockQuota(new Date(), account?.user.role === 'ADMIN', plan)
 }
+
+/** 열 수 있는 가장 높은 힌트 단계 (계약 `maxHintLevel`). 무료 1, 프로와 관리자(한도 없음) 3 */
+const maxHintLevel = (quota: AiQuota) => (quota.plan === 'PRO' || quota.limit === null ? 3 : 1)
 
 /** 분석 응답. 내용은 AI_FEATURES 5절의 역방향 피라미드 예시다. 힌트는 연 단계까지만 준다(계약). */
 function analysisView(
@@ -343,6 +348,7 @@ function analysisView(
       facts: [],
       guesses: [],
       revealedHintLevel: 0,
+      maxHintLevel: maxHintLevel(quota),
       hints: [],
       completedAt: null,
     }
@@ -351,6 +357,7 @@ function analysisView(
     ...base,
     status: 'COMPLETED',
     revealedHintLevel: revealed,
+    maxHintLevel: maxHintLevel(quota),
     hints: MOCK_HINTS.slice(0, revealed),
     summary: '별 개수가 줄마다 줄어야 하는데 늘어나고 있어요.',
     suspectLines: [2],
@@ -990,7 +997,11 @@ export const handlers: RequestHandler[] = [
       ...found.user,
       // 목 결제(POST /api/users/me/subscription)가 쓰는 같은 저장소에서 읽는다. 사본을 두면 둘이 어긋난다
       subscription: subscriptionFor(found.user.id),
-      aiQuota: mockQuota(new Date(), found.user.role === 'ADMIN'),
+      aiQuota: mockQuota(
+        new Date(),
+        found.user.role === 'ADMIN',
+        subscriptionFor(found.user.id).plan,
+      ),
     })
   }),
 
@@ -2045,11 +2056,15 @@ export const handlers: RequestHandler[] = [
     }
     const found = mockAnalyses.get(id)
     if (!found) return problem(404, 'ANALYSIS_NOT_FOUND', 'AI 분석을 찾을 수 없어요')
+    const quota = requestQuota(request)
+    if (level > found.revealed && level > maxHintLevel(quota)) {
+      return problem(403, 'HINT_PLAN_REQUIRED', '2·3단계 힌트는 프로에서 열 수 있어요')
+    }
     if (level > found.revealed + 1) {
       return problem(409, 'HINT_LEVEL_SKIPPED', '앞 단계 힌트를 먼저 열어 주세요')
     }
     found.revealed = Math.max(found.revealed, level)
-    return HttpResponse.json(analysisView(id, found, requestQuota(request)))
+    return HttpResponse.json(analysisView(id, found, quota))
   }),
 
   /**

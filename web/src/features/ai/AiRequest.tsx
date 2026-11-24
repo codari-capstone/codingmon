@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { Link } from 'react-router'
 
 import type { SubmissionAnalysis } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { problemCode, problemMessage } from '@/features/auth/problemCode'
+import { AI_DAILY } from '@/features/pricing/plans'
 import { AI_QUOTA_QUERY_KEY, aiQuotaQuery } from './analysisQuery'
 
 /** 분석·리뷰가 같은 모양으로 주는 상태 (계약 `SubmissionAnalysis`·`SubmissionCodeReview`). */
@@ -118,6 +120,12 @@ export function AiRequest({
               ? '관리자는 AI 분석·리뷰를 한도 없이 써요' // #343. remaining도 null이라 outOfQuota가 되지 않는다
               : `오늘 남은 AI 분석·리뷰 ${quota.remaining} / ${quota.limit}회`}
         </p>
+      ) : null}
+      {/* 한도를 다 쓴 무료 사용자에게만 요금제로 가는 길을 보인다(AI-06). 다시 요청할 수 있는 경우(abandonedToday)에는 보이지 않는다 */}
+      {canRequest && outOfQuota && quota?.plan === 'FREE' ? (
+        <Button asChild variant="soft" className="min-h-11 self-start">
+          <Link to="/pricing">{`프로 시작하기 · 하루 ${AI_DAILY.pro}회`}</Link>
+        </Button>
       ) : null}
     </>
   )

@@ -53,15 +53,22 @@ function analysis(over: Partial<SubmissionAnalysis> = {}): SubmissionAnalysis {
     facts: ['확인된 사실'],
     guesses: ['짐작한 원인'],
     revealedHintLevel: 0,
+    maxHintLevel: 3,
     hints: [],
     createdAt: '2026-11-07T00:00:00Z',
     completedAt: '2026-11-07T00:00:05Z',
-    quota: { limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' },
+    quota: { plan: 'PRO', limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' },
     ...over,
   }
 }
 
-const QUOTA = { limit: 20, used: 0, remaining: 20, resetsAt: '2026-11-08T00:00:00Z' }
+const QUOTA = {
+  plan: 'PRO' as const,
+  limit: 20,
+  used: 0,
+  remaining: 20,
+  resetsAt: '2026-11-08T00:00:00Z',
+}
 
 /** 오늘 남은 횟수를 정해 둔다. 목의 조회는 토큰을 보는데 이 테스트는 토큰 없이 그린다. */
 function quotaLeft(remaining: number) {

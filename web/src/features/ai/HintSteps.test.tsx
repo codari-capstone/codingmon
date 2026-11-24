@@ -3,13 +3,16 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
+import { setAccessToken } from '@/api/session'
 import type { SubmissionAnalysis } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { Component as SubmissionResultPage } from '@/features/result/SubmissionResultPage'
+import { removeMockSubscription, startMockSubscription } from '@/mocks/fixtures/subscriptions'
+import { mockAccessToken } from '@/mocks/fixtures/users'
 import { resetSubmissions } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 
@@ -43,7 +46,16 @@ async function analyzed() {
 const step = (name: string) => screen.findByRole('button', { name: `${name} 보기` })
 
 describe('HintSteps', () => {
-  afterEach(() => resetSubmissions())
+  // 힌트 2·3단계는 프로만 연다(PRICE-04)
+  beforeEach(() => {
+    setAccessToken(mockAccessToken(1))
+    startMockSubscription(1, 'MONTHLY')
+  })
+  afterEach(() => {
+    removeMockSubscription(1)
+    setAccessToken(null)
+    resetSubmissions()
+  })
 
   it('다음 단계 하나만 열 수 있고, 열면 그다음 단계로 넘어간다 (AI-04)', async () => {
     const user = userEvent.setup()
@@ -190,9 +202,10 @@ function analysisAt(level: number): SubmissionAnalysis {
     facts: [],
     guesses: [],
     revealedHintLevel: level,
+    maxHintLevel: 3,
     hints: ['힌트 1', '힌트 2', '힌트 3'].slice(0, level),
     createdAt: '2026-11-07T00:00:00Z',
     completedAt: '2026-11-07T00:00:05Z',
-    quota: { limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' },
+    quota: { plan: 'PRO', limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' },
   }
 }

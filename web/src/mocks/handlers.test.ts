@@ -1,11 +1,13 @@
 import { http, HttpResponse } from 'msw'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
+import { setAccessToken } from '@/api/session'
 import type { ProblemListQuery, ProblemPage } from '@/api/types'
 import { MOCK_CODE, resetEmailCodes } from './fixtures/emailCodes'
 import { kstYear } from './fixtures/activity'
 import { conceptTags, problems } from './fixtures/problems'
+import { removeMockSubscription, startMockSubscription } from './fixtures/subscriptions'
 import { mockAccessToken, mockAccounts } from './fixtures/users'
 import {
   reportsSent,
@@ -1048,6 +1050,16 @@ describe('AI 오답 분석 목', () => {
   })
 
   describe('힌트 열기', () => {
+    // 힌트 2·3단계는 프로만 연다(PRICE-04)
+    beforeEach(() => {
+      setAccessToken(mockAccessToken(1))
+      startMockSubscription(1, 'MONTHLY')
+    })
+    afterEach(() => {
+      removeMockSubscription(1)
+      setAccessToken(null)
+    })
+
     const open = (level: number) =>
       api.POST('/api/submissions/{id}/analysis/hints', { ...path, body: { level } })
 

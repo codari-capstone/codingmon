@@ -45,6 +45,8 @@ export function HintSteps({
   const hints = analysis.hints.slice(0, HINT_STEPS.length)
   const revealed = hints.length
   const next = revealed + 1
+  // 요금제가 여는 단계까지 열었다(무료는 1단계, PRICE-04). 프로일 때 연 힌트는 그대로 보이고 다음 단계만 막힌다
+  const locked = revealed < HINT_STEPS.length && revealed >= analysis.maxHintLevel
 
   const [justOpened, setJustOpened] = useState<number | null>(null)
   const openedRef = useRef<HTMLParagraphElement>(null)
@@ -85,7 +87,11 @@ export function HintSteps({
       ) : null}
 
       {/* 다음 단계 하나만 누를 수 있다. 그 뒤 단계는 위 단계 표시가 보여 준다 */}
-      {next <= HINT_STEPS.length ? (
+      {locked ? (
+        <Button asChild variant="soft" fullWidth className="min-h-11" aria-describedby="hint-order">
+          <Link to="/pricing">프로 시작하기</Link>
+        </Button>
+      ) : next <= HINT_STEPS.length ? (
         <Button
           type="button"
           variant="soft"
@@ -101,7 +107,9 @@ export function HintSteps({
 
       {revealed < HINT_STEPS.length ? (
         <p id="hint-order" className="text-muted-foreground text-[13px]">
-          힌트는 앞 단계부터 하나씩 열 수 있어요. 연 단계는 기록에 남아요.
+          {locked
+            ? '2·3단계 힌트는 프로에서 열 수 있어요.'
+            : '힌트는 앞 단계부터 하나씩 열 수 있어요. 연 단계는 기록에 남아요.'}
         </p>
       ) : (
         // 3단계가 마지막이다(AI_FEATURES 4절). 정답 코드 보기는 없다.

@@ -72,9 +72,9 @@ describe('AdminMemberDetailPage (ADM-15·16)', () => {
     expect(screen.getByText('— (기록 전 가입)')).toBeInTheDocument()
     expect(screen.getByRole('progressbar', { name: 'AI 분석·리뷰' })).toHaveAttribute(
       'aria-valuemax',
-      '20',
+      '3',
     )
-    expect(screen.getByText(/하루 한도 20회 · 오전 9시에 다시 채워져요/)).toBeInTheDocument()
+    expect(screen.getByText(/하루 한도 3회 · 오전 9시에 다시 채워져요/)).toBeInTheDocument()
 
     const solved = screen.getByRole('region', { name: '푼 문제' })
     expect(await within(solved).findByText('12개')).toBeInTheDocument()
