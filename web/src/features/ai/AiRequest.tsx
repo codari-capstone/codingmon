@@ -6,7 +6,6 @@ import type { SubmissionAnalysis } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { problemCode, problemMessage } from '@/features/auth/problemCode'
 import { AI_DAILY } from '@/features/pricing/plans'
-import { belongsToSubscription, subscriptionQuery } from '@/features/subscription/subscriptionQuery'
 import { AI_QUOTA_QUERY_KEY, aiQuotaQuery } from './analysisQuery'
 
 /** 분석·리뷰가 같은 모양으로 주는 상태 (계약 `SubmissionAnalysis`·`SubmissionCodeReview`). */
@@ -60,13 +59,9 @@ export function AiRequest({
     quota !== undefined &&
     Date.parse(result.createdAt) >= Date.parse(quota.resetsAt) - DAY_MS
   const outOfQuota = quota?.remaining === 0 && !abandonedToday
-  // 다 썼을 때만 구독을 묻는다. 무료면 요금제를 안내한다(AI-06). 못 읽으면 안내하지 않는다
-  const { data: subscription } = useQuery({
-    ...subscriptionQuery(),
-    enabled: canRequest && outOfQuota,
-  })
-  const showUpgrade =
-    canRequest && outOfQuota && subscription !== undefined && !belongsToSubscription(subscription)
+  // 서버가 준 한도가 무료 플랜의 것일 때만 요금제를 안내한다(AI-06). 구독을 따로 묻지 않아 옛 캐시·401에
+  // 흔들리지 않고, 서버가 플랜별 한도를 적용하기 전(모두 20회)에는 지켜지지 않는 '프로 30회'를 약속하지 않는다(#369 리뷰)
+  const showUpgrade = canRequest && outOfQuota && quota?.limit === AI_DAILY.free
   const exhausted = quota
     ? `오늘 AI 분석·리뷰 ${quota.limit}회를 다 썼어요. ${RESETS_AT.format(new Date(quota.resetsAt))}에 다시 쓸 수 있어요.`
     : ''
