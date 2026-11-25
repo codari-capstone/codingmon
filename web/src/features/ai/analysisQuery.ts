@@ -164,7 +164,10 @@ export function useRevealHint(submissionId: number) {
     },
     onError: (error) => {
       forgetSessionIfUnauthorized(queryClient, error)
-      if ((error as { status?: number }).status === 409) {
+      // 409(단계가 어긋남)와 403(그 사이 무료가 되어 요금제가 열지 않음)은 화면의 분석이 낡은 것이다.
+      // 다시 받으면 지금 단계와 maxHintLevel(잠금 안내)이 맞춰진다(PRICE-04)
+      const status = (error as { status?: number }).status
+      if (status === 409 || status === 403) {
         void queryClient.invalidateQueries({ queryKey: analysisQueryKey(submissionId) })
       }
     },

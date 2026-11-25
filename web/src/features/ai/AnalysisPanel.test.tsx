@@ -574,6 +574,46 @@ describe('AnalysisPanel', () => {
       expect(await screen.findByRole('button', { name: '다시 시도' })).toBeDisabled()
     })
 
+    it('버려진 분석을 다시 요청해 서버가 한도로 거절하면(429) 알리고 버튼을 끈다 (#371 리뷰)', async () => {
+      // 프로를 시작하기 전에 만든 분석은 프로 횟수에 없어 다시 요청하면 새 1회다. 화면은 구독 시작 시각을 모른다
+      const user = userEvent.setup()
+      const exhausted = { ...QUOTA, plan: 'PRO' as const, limit: 30, used: 30, remaining: 0 }
+      server.use(
+        http.get('*/api/users/me/ai-quota', () => HttpResponse.json(exhausted)),
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            {
+              status: 429,
+              code: 'AI_DAILY_LIMIT_EXCEEDED',
+              detail: '오늘 쓸 수 있는 AI 분석·리뷰 30회를 모두 썼어요.',
+              quota: exhausted,
+            },
+            { status: 429 },
+          ),
+        ),
+      )
+      stored(
+        analysis({
+          status: 'FAILED',
+          failureReason: 'UNAVAILABLE',
+          summary: null,
+          suspectLines: [],
+          facts: [],
+          guesses: [],
+          completedAt: null,
+          quota: exhausted,
+        }),
+      )
+      renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: '다시 시도' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /오늘 AI 분석·리뷰 30회를 다 썼어요/,
+      )
+      expect(screen.getByRole('button', { name: '다시 시도' })).toBeDisabled()
+    })
+
     it('대기열이 차서 시작하지 못했으면 그 이유를 알린다', async () => {
       stored(
         analysis({

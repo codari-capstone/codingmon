@@ -1049,8 +1049,13 @@ describe('AI 오답 분석 목', () => {
   })
 
   describe('힌트 열기', () => {
-    const open = (level: number) =>
-      api.POST('/api/submissions/{id}/analysis/hints', { ...path, body: { level } })
+    afterEach(() => resetSubscriptions())
+    // 토큰이 없으면 무료다. 프로는 코다리(1)로 구독을 시작하고 토큰을 붙인다(PRICE-04)
+    const asCodari = { headers: { Authorization: `Bearer ${mockAccessToken(1)}` } }
+    const open = (level: number, init = {}) =>
+      api.POST('/api/submissions/{id}/analysis/hints', { ...path, ...init, body: { level } })
+    const openAsPro = (level: number) => open(level, asCodari)
+    const pro = () => startMockSubscription(1, 'MONTHLY')
 
     it('다음 단계만 열고 연 단계까지만 힌트를 준다', async () => {
       await api.POST('/api/submissions/{id}/analysis', path)
@@ -1061,21 +1066,52 @@ describe('AI 오답 분석 목', () => {
     })
 
     it('건너뛰면 409 HINT_LEVEL_SKIPPED다', async () => {
+      pro()
       await api.POST('/api/submissions/{id}/analysis', path)
-      const res = await open(2)
+      const res = await openAsPro(2)
 
       expect(res.response.status).toBe(409)
       expect(code(res)).toBe('HINT_LEVEL_SKIPPED')
     })
 
     it('이미 연 단계를 다시 보내면 바뀌지 않고 200이다', async () => {
+      pro()
       await api.POST('/api/submissions/{id}/analysis', path)
-      await open(1)
-      await open(2)
-      const again = await open(1)
+      await openAsPro(1)
+      await openAsPro(2)
+      const again = await openAsPro(1)
 
       expect(again.response.status).toBe(200)
       expect(again.data?.revealedHintLevel).toBe(2)
+    })
+
+    it('무료는 1단계까지만 연다. 2단계는 403 HINT_PLAN_REQUIRED이고 응답의 maxHintLevel은 1이다', async () => {
+      await api.POST('/api/submissions/{id}/analysis', path)
+      const first = await open(1)
+      const second = await open(2)
+
+      expect(first.data?.maxHintLevel).toBe(1)
+      expect(second.response.status).toBe(403)
+      expect(code(second)).toBe('HINT_PLAN_REQUIRED')
+    })
+
+    it('요금제 검사는 건너뛰기보다 먼저이고, 이미 연 단계는 무료가 된 뒤에도 200이다 (계약의 검사 순서)', async () => {
+      pro()
+      await api.POST('/api/submissions/{id}/analysis', path)
+      await openAsPro(1)
+      await openAsPro(2)
+      resetSubscriptions()
+
+      const opened = await openAsPro(2)
+      const skipped = await openAsPro(3)
+
+      expect(opened.response.status).toBe(200)
+      expect(opened.data?.maxHintLevel).toBe(1)
+      expect(code(skipped)).toBe('HINT_PLAN_REQUIRED')
+      // 무료가 1단계도 열기 전에 3단계를 보내도 건너뛰기(409)가 아니라 요금제(403)다
+      resetSubmissions()
+      await api.POST('/api/submissions/{id}/analysis', path)
+      expect(code(await open(3))).toBe('HINT_PLAN_REQUIRED')
     })
 
     it('분석이 없으면 404, level이 1~3이 아니면 code 없는 400이다', async () => {

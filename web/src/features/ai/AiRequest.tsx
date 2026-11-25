@@ -66,7 +66,10 @@ export function AiRequest({
     result.completedAt === null &&
     quota !== undefined &&
     Date.parse(result.createdAt) >= Date.parse(quota.resetsAt) - DAY_MS
-  const outOfQuota = quota?.remaining === 0 && !abandonedToday
+  const limitError = request.isError && problemCode(request.error) === 'AI_DAILY_LIMIT_EXCEEDED'
+  // 버려진 결과의 예외는 서버가 429로 거절하면 끝난다. 프로를 시작하기 전에 만든 결과는 프로 횟수에 없어
+  // 다시 요청하면 새 1회로 센다(계약 `AiQuota`, #371 리뷰). 화면은 구독 시작 시각을 몰라 서버 답을 따른다
+  const outOfQuota = quota?.remaining === 0 && (!abandonedToday || limitError)
   // 한도를 정한 요금제가 무료일 때만 요금제를 안내한다(AI-06). 서버가 같은 응답에 실어 주므로 구독을 따로
   // 묻지 않고, 한도 숫자로 요금제를 짐작하지 않는다. plan을 주기 전 서버에서는 안내하지 않는다(#369 리뷰)
   const showUpgrade = canRequest && outOfQuota && quota?.plan === 'FREE'
@@ -76,7 +79,6 @@ export function AiRequest({
   // 누른 뒤 한도 초과를 받았으면 그 안내를 alert로 읽힌다. 아래 줄은 live region이 아니라 소리 없이 바뀐다.
   // 오류 코드와 지금 한도를 함께 본다. 코드만 보면 한도가 풀린 뒤에도 '다 썼어요'가 남고(#298 리뷰),
   // remaining만 보면 네트워크 오류 뒤 다시 받은 0 때문에 다른 실패가 '다 썼어요'로 바뀐다(#272 리뷰)
-  const limitError = request.isError && problemCode(request.error) === 'AI_DAILY_LIMIT_EXCEEDED'
   const limitHit = limitError && outOfQuota
   // 한도가 풀렸으면 지난 429는 더 알릴 것이 없다
   const showError = request.isError && !(limitError && !outOfQuota)

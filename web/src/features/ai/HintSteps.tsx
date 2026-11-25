@@ -45,6 +45,8 @@ export function HintSteps({
   const hints = analysis.hints.slice(0, HINT_STEPS.length)
   const revealed = hints.length
   const next = revealed + 1
+  // 요금제가 다음 단계를 열지 않는다(PRICE-04). 프로일 때 연 단계가 이 값보다 높아도 그대로 보인다(계약 `maxHintLevel`)
+  const planLocked = next <= HINT_STEPS.length && next > analysis.maxHintLevel
 
   const [justOpened, setJustOpened] = useState<number | null>(null)
   const openedRef = useRef<HTMLParagraphElement>(null)
@@ -85,7 +87,14 @@ export function HintSteps({
       ) : null}
 
       {/* 다음 단계 하나만 누를 수 있다. 그 뒤 단계는 위 단계 표시가 보여 준다 */}
-      {next <= HINT_STEPS.length ? (
+      {planLocked ? (
+        <div className="bg-muted flex flex-wrap items-center justify-between gap-3 rounded-lg px-4 py-3">
+          <p className="text-sm break-keep">다음 단계 힌트는 프로에서 열 수 있어요</p>
+          <Button asChild variant="soft" size="sm" className="min-h-11">
+            <Link to="/pricing">프로 시작하기</Link>
+          </Button>
+        </div>
+      ) : next <= HINT_STEPS.length ? (
         <Button
           type="button"
           variant="soft"
@@ -111,7 +120,8 @@ export function HintSteps({
         </p>
       )}
 
-      {reveal.isError ? (
+      {/* 잠금 안내가 403의 뜻을 대신한다 */}
+      {reveal.isError && !planLocked ? (
         <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(reveal.error)}
         </p>

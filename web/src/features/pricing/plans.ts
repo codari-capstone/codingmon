@@ -1,7 +1,7 @@
 import type { IconName } from '@/components/ui/icon'
 
 // 가격·한도의 근거는 #331 '가격 근거'(#323 비용 계산)다. 사용자가 늘어 다시 계산하면 여기만 고친다.
-// 플랜별 한도는 #321에서 서버에 적용하기 전까지 화면의 안내일 뿐이다(PRICE 절 끝).
+// 플랜별 한도는 서버가 나눈다(PRICE-04, 서버 설정 `LLM_DAILY_LIMIT_FREE`·`_PRO`). 서버 값을 바꾸면 여기 안내도 함께 고친다.
 
 export type Cycle = 'monthly' | 'yearly'
 

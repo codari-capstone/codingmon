@@ -10,6 +10,9 @@ import type { SubmissionAnalysis } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { Component as SubmissionResultPage } from '@/features/result/SubmissionResultPage'
+import { setAccessToken } from '@/api/session'
+import { resetSubscriptions, startMockSubscription } from '@/mocks/fixtures/subscriptions'
+import { mockAccessToken } from '@/mocks/fixtures/users'
 import { resetSubmissions } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 
@@ -42,11 +45,22 @@ async function analyzed() {
 
 const step = (name: string) => screen.findByRole('button', { name: `${name} 보기` })
 
+/** 프로로 로그인한 요청으로 만든다. 무료(토큰 없음)는 1단계까지만 연다(PRICE-04, 목도 계약대로 403) */
+function asPro() {
+  setAccessToken(mockAccessToken(USER.id))
+  startMockSubscription(USER.id, 'MONTHLY')
+}
+
 describe('HintSteps', () => {
-  afterEach(() => resetSubmissions())
+  afterEach(() => {
+    resetSubmissions()
+    resetSubscriptions()
+    setAccessToken(null)
+  })
 
   it('다음 단계 하나만 열 수 있고, 열면 그다음 단계로 넘어간다 (AI-04)', async () => {
     const user = userEvent.setup()
+    asPro()
     await analyzed()
     renderResult()
 
@@ -76,6 +90,7 @@ describe('HintSteps', () => {
 
   it('세 단계를 다 열면 마지막 안내를 띄운다', async () => {
     const user = userEvent.setup()
+    asPro()
     await analyzed()
     renderResult()
 
@@ -88,6 +103,7 @@ describe('HintSteps', () => {
   })
 
   it('저장된 단계까지 열린 채로 다시 열린다', async () => {
+    asPro()
     await analyzed()
     await api.POST('/api/submissions/{id}/analysis/hints', {
       params: { path: { id: WRONG } },
@@ -168,6 +184,72 @@ describe('HintSteps', () => {
     expect(gets).toBe(2)
   })
 
+  describe('요금제 잠금 (AI-04, PRICE-04)', () => {
+    const lock = () => screen.findByText('다음 단계 힌트는 프로에서 열 수 있어요')
+
+    it('무료는 1단계를 열면 다음 단계 버튼 자리에 프로 안내를 보인다', async () => {
+      const user = userEvent.setup()
+      await analyzed()
+      renderResult()
+
+      await user.click(await step('1단계 관찰'))
+
+      expect(await lock()).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: '프로 시작하기' })).toHaveAttribute(
+        'href',
+        '/pricing',
+      )
+      expect(screen.queryByRole('button', { name: '2단계 방향 보기' })).not.toBeInTheDocument()
+    })
+
+    it('프로일 때 연 힌트는 무료가 된 뒤에도 보이고, 다음 단계 자리에 같은 안내를 보인다', async () => {
+      server.use(
+        http.get('*/api/submissions/:id/analysis', () => HttpResponse.json(analysisAt(2, 1))),
+      )
+      renderResult()
+
+      expect(await lock()).toBeInTheDocument()
+      expect(screen.getByText('힌트 1')).toBeInTheDocument()
+      expect(screen.getByText('힌트 2')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '3단계 원리 보기' })).not.toBeInTheDocument()
+    })
+
+    it('세 단계를 다 열었으면 안내를 보이지 않는다', async () => {
+      server.use(
+        http.get('*/api/submissions/:id/analysis', () => HttpResponse.json(analysisAt(3, 1))),
+      )
+      renderResult()
+
+      expect(await screen.findByText(/3단계가 마지막 힌트예요/)).toBeInTheDocument()
+      expect(screen.queryByText('다음 단계 힌트는 프로에서 열 수 있어요')).not.toBeInTheDocument()
+    })
+
+    it('프로가 끝난 뒤 낡은 화면에서 누르면(403) 분석을 다시 받아 안내로 바꾼다', async () => {
+      const user = userEvent.setup()
+      let gets = 0
+      server.use(
+        http.get('*/api/submissions/:id/analysis', () => {
+          gets++
+          return HttpResponse.json(analysisAt(1, gets === 1 ? 3 : 1))
+        }),
+        http.post('*/api/submissions/:id/analysis/hints', () =>
+          HttpResponse.json(
+            { status: 403, code: 'HINT_PLAN_REQUIRED', detail: '프로에서 열 수 있어요' },
+            { status: 403 },
+          ),
+        ),
+      )
+      renderResult()
+
+      await user.click(await step('2단계 방향'))
+
+      expect(await lock()).toBeInTheDocument()
+      expect(gets).toBe(2)
+      // 안내가 403의 뜻을 대신하므로 오류 문구를 겹쳐 띄우지 않는다
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+  })
+
   it('코드 고치러 가기는 다시 풀기와 같은 주소다', async () => {
     await analyzed()
     renderResult()
@@ -179,12 +261,15 @@ describe('HintSteps', () => {
   })
 })
 
-function analysisAt(level: number): SubmissionAnalysis {
+function analysisAt(
+  level: number,
+  maxHintLevel: SubmissionAnalysis['maxHintLevel'] = 3,
+): SubmissionAnalysis {
   return {
     submissionId: WRONG,
     status: 'COMPLETED',
     failureReason: null,
-    maxHintLevel: 3,
+    maxHintLevel,
     blocked: false,
     summary: '요약',
     suspectLines: [],
