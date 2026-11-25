@@ -59,9 +59,9 @@ export function AiRequest({
     quota !== undefined &&
     Date.parse(result.createdAt) >= Date.parse(quota.resetsAt) - DAY_MS
   const outOfQuota = quota?.remaining === 0 && !abandonedToday
-  // 서버가 준 한도가 무료 플랜의 것일 때만 요금제를 안내한다(AI-06). 구독을 따로 묻지 않아 옛 캐시·401에
-  // 흔들리지 않고, 서버가 플랜별 한도를 적용하기 전(모두 20회)에는 지켜지지 않는 '프로 30회'를 약속하지 않는다(#369 리뷰)
-  const showUpgrade = canRequest && outOfQuota && quota?.limit === AI_DAILY.free
+  // 한도를 정한 요금제가 무료일 때만 요금제를 안내한다(AI-06). 서버가 같은 응답에 실어 주므로 구독을 따로
+  // 묻지 않고, 한도 숫자로 요금제를 짐작하지 않는다. plan을 주기 전 서버에서는 안내하지 않는다(#369 리뷰)
+  const showUpgrade = canRequest && outOfQuota && quota?.plan === 'FREE'
   const exhausted = quota
     ? `오늘 AI 분석·리뷰 ${quota.limit}회를 다 썼어요. ${RESETS_AT.format(new Date(quota.resetsAt))}에 다시 쓸 수 있어요.`
     : ''

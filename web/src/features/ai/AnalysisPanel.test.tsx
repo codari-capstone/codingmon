@@ -56,12 +56,18 @@ function analysis(over: Partial<SubmissionAnalysis> = {}): SubmissionAnalysis {
     hints: [],
     createdAt: '2026-11-07T00:00:00Z',
     completedAt: '2026-11-07T00:00:05Z',
-    quota: { limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' },
+    quota: { plan: 'FREE', limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' },
     ...over,
   }
 }
 
-const QUOTA = { limit: 20, used: 0, remaining: 20, resetsAt: '2026-11-08T00:00:00Z' }
+const QUOTA = {
+  plan: 'FREE' as const,
+  limit: 20,
+  used: 0,
+  remaining: 20,
+  resetsAt: '2026-11-08T00:00:00Z',
+}
 
 /** 오늘 남은 횟수를 정해 둔다. 목의 조회는 토큰을 보는데 이 테스트는 토큰 없이 그린다. */
 function quotaLeft(remaining: number) {
@@ -183,17 +189,17 @@ describe('AnalysisPanel', () => {
     })
 
     describe('한도를 다 쓴 무료 사용자에게 요금제 안내 (AI-06, #321)', () => {
-      // 무료인지는 서버가 준 한도로 안다(무료 3회, 프로 30회). 안내와 '다 썼어요'는 같은 응답으로 함께 그려진다
-      function quota(limit: number, remaining: number) {
+      // 무료인지는 서버가 한도와 함께 주는 plan으로 안다. 안내와 '다 썼어요'는 같은 응답으로 함께 그려진다
+      function quota(plan: 'FREE' | 'PRO' | undefined, limit: number, remaining: number) {
         server.use(
           http.get('*/api/users/me/ai-quota', () =>
-            HttpResponse.json({ ...QUOTA, limit, used: limit - remaining, remaining }),
+            HttpResponse.json({ ...QUOTA, plan, limit, used: limit - remaining, remaining }),
           ),
         )
       }
 
-      it('무료 한도(3회)를 다 썼으면 요금제 화면으로 가는 링크를 보인다', async () => {
-        quota(3, 0)
+      it('무료 한도를 다 썼으면 요금제 화면으로 가는 링크를 보인다', async () => {
+        quota('FREE', 3, 0)
         renderResult(WRONG)
 
         expect(await screen.findByRole('link', { name: '요금제 보기' })).toHaveAttribute(
@@ -203,24 +209,33 @@ describe('AnalysisPanel', () => {
         expect(screen.getByText(/프로는 하루 30회까지 쓸 수 있어요/)).toBeInTheDocument()
       })
 
-      it('프로 한도(30회)를 다 썼으면 보이지 않는다', async () => {
-        quota(30, 0)
+      it('프로 한도를 다 썼으면 보이지 않는다', async () => {
+        quota('PRO', 30, 0)
         renderResult(WRONG)
 
         await screen.findByText(/오늘 AI 분석·리뷰 30회를 다 썼어요/)
         expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
       })
 
-      it('서버가 플랜별 한도를 적용하기 전(모두 20회)에는 보이지 않는다 (#369 리뷰)', async () => {
-        quota(20, 0)
+      it('프로의 한도가 무료와 같은 숫자여도 보이지 않는다 (#369 리뷰)', async () => {
+        // 서버 전역 한도를 3으로 낮추면 프로도 3이다. 숫자로 요금제를 짐작하면 프로에게 안내가 뜬다
+        quota('PRO', 3, 0)
         renderResult(WRONG)
 
-        await screen.findByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)
+        await screen.findByText(/오늘 AI 분석·리뷰 3회를 다 썼어요/)
+        expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
+      })
+
+      it('plan을 주기 전 서버의 응답이면 보이지 않는다', async () => {
+        quota(undefined, 3, 0)
+        renderResult(WRONG)
+
+        await screen.findByText(/오늘 AI 분석·리뷰 3회를 다 썼어요/)
         expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
       })
 
       it('무료 한도가 남았으면 보이지 않는다', async () => {
-        quota(3, 1)
+        quota('FREE', 3, 1)
         renderResult(WRONG)
 
         await screen.findByText('오늘 남은 AI 분석·리뷰 1 / 3회')

@@ -16,7 +16,13 @@ import { server } from '@/mocks/server'
 const ACCEPTED = 11
 const WRONG = 23
 
-const QUOTA = { limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' }
+const QUOTA = {
+  plan: 'FREE' as const,
+  limit: 20,
+  used: 1,
+  remaining: 19,
+  resetsAt: '2026-11-08T00:00:00Z',
+}
 
 function renderResult(id: number) {
   const client = createQueryClient()

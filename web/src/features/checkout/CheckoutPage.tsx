@@ -8,6 +8,7 @@ import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Icon } from '@/components/ui/icon'
+import { AI_QUOTA_QUERY_KEY } from '@/features/ai/analysisQuery'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { CycleToggle } from '@/features/pricing/CycleToggle'
 import { PRO_PLAN, proCharge, won, YEARLY_FREE_MONTHS, type Cycle } from '@/features/pricing/plans'
@@ -109,6 +110,9 @@ export function Component() {
       await queryClient.cancelQueries({ queryKey: SUBSCRIPTION_KEY })
       queryClient.setQueryData(SUBSCRIPTION_KEY, started)
     },
+    // 결과가 어떻든 요금제가 바뀌었을 수 있고, AI 한도는 요금제로 정해진다(#321). 결과 화면으로
+    // 돌아가면 새로 받게 버린다. 30초 캐시가 남으면 결제한 사용자에게 무료 한도와 요금제 안내가 남는다(#369 리뷰)
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: AI_QUOTA_QUERY_KEY }),
     onError: async (error) => {
       let result = classifyFailure(error)
       if (result === 'signedOut') return forgetSessionIfUnauthorized(queryClient, error)

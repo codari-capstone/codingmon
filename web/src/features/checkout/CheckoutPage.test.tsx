@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Subscription } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
+import { AI_QUOTA_QUERY_KEY } from '@/features/ai/analysisQuery'
 import { freeSubscription } from '@/mocks/fixtures/subscriptions'
 import { server } from '@/mocks/server'
 import { saveDraft } from './checkoutDraft'
@@ -54,12 +55,13 @@ function renderCheckout({
     ],
     { initialEntries: [url] },
   )
+  const client = createQueryClient()
   render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
-  return { router, sent }
+  return { router, sent, client }
 }
 
 const payButton = () => screen.getByRole('button', { name: /결제하기|결제 중/ })
@@ -194,6 +196,27 @@ describe('CheckoutPage 결제 결과 (PAY-02)', () => {
     await user.click(payButton())
     return { user, ...rendered }
   }
+
+  it('결제가 끝나면 AI 한도를 다시 받게 한다 (#369 리뷰)', async () => {
+    // 한도는 요금제로 정해진다(#321). 결과 화면에 30초 캐시가 남으면 결제한 사용자에게 무료 한도가 보인다
+    vi.mocked(requestBillingKey).mockResolvedValue({ billingKey: 'billing-1' })
+    const user = userEvent.setup()
+    const { client } = renderCheckout()
+    client.setQueryData(AI_QUOTA_QUERY_KEY, {
+      plan: 'FREE',
+      limit: 3,
+      used: 3,
+      remaining: 0,
+      resetsAt: '2026-11-08T00:00:00Z',
+    })
+    await agreeAll(user)
+    expect(client.getQueryState(AI_QUOTA_QUERY_KEY)?.isInvalidated).toBe(false)
+
+    await user.click(payButton())
+
+    await screen.findByRole('heading', { name: '프로 구독이 시작됐어요' })
+    await waitFor(() => expect(client.getQueryState(AI_QUOTA_QUERY_KEY)?.isInvalidated).toBe(true))
+  })
 
   it('성공: 플랜과 다음 결제일, 문제 풀러 가기·내 구독 보기', async () => {
     await payWith(() => HttpResponse.json(ACTIVE, { status: 201 }))
