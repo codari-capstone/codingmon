@@ -22,8 +22,8 @@ export const HINT_LEVELS = 3
 export const hintPlanLocked = (a: SubmissionAnalysis) =>
   a.revealedHintLevel < HINT_LEVELS && a.revealedHintLevel + 1 > a.maxHintLevel
 
-const refetchWhileLocked = (query: { state: { data: SubmissionAnalysis | null | undefined } }) =>
-  query.state.data && hintPlanLocked(query.state.data) ? ('always' as const) : false
+const lockedNow = (query: { state: { data: SubmissionAnalysis | null | undefined } }) =>
+  !!query.state.data && hintPlanLocked(query.state.data)
 
 /** 이만큼 지나도록 만드는 중이면 덜 자주 묻는다. 보통은 이 안에 끝난다. */
 const ANALYSIS_SLOW_AFTER_MS = 10_000
@@ -82,9 +82,10 @@ export function analysisQuery(submissionId: number) {
     },
     refetchInterval: (query) => analysisPollingInterval(query.state.error, query.state.data),
     // 잠금 안내가 버튼 자리를 차지해 서버에 다시 물을 길이 없다. 다른 탭에서 결제했을 수 있어
-    // 잠긴 동안에는 창에 돌아오거나 화면에 다시 들어오면 30초 안이어도 다시 받는다(#377 리뷰)
-    refetchOnWindowFocus: refetchWhileLocked,
-    refetchOnMount: refetchWhileLocked,
+    // 잠긴 동안에는 창에 돌아오거나 화면에 다시 들어오면 30초 안이어도 다시 받는다(#377 리뷰).
+    // 잠기지 않았으면 각 옵션의 기본값을 그대로 둔다: 포커스는 앱 기본값(false), 마운트는 낡았으면 다시 받기(true)
+    refetchOnWindowFocus: (query) => (lockedNow(query) ? 'always' : false),
+    refetchOnMount: (query) => (lockedNow(query) ? 'always' : true),
     retry: false,
   })
 }
@@ -96,8 +97,11 @@ export const AI_QUOTA_QUERY_KEY = ['ai-quota'] as const
  * 이 값을 옛 값으로 덮지 않게 먼저 취소한다(useRequestAnalysis의 분석 캐시와 같은 순서).
  */
 export async function adoptQuota(client: QueryClient, quota: AiQuota) {
+  // 끊은 조회가 이 값보다 뒤에 나간 것일 수 있다(결제 뒤 되돌린 한도). 끊었으면 넣은 뒤 다시 받아 서버 값으로 맞춘다(#377 리뷰)
+  const wasFetching = client.isFetching({ queryKey: AI_QUOTA_QUERY_KEY }) > 0
   await client.cancelQueries({ queryKey: AI_QUOTA_QUERY_KEY })
   client.setQueryData(AI_QUOTA_QUERY_KEY, quota)
+  if (wasFetching) void client.invalidateQueries({ queryKey: AI_QUOTA_QUERY_KEY })
 }
 
 /**
@@ -173,8 +177,13 @@ export function useRevealHint(submissionId: number) {
       return result.data
     },
     onSuccess: async (analysis) => {
-      await queryClient.cancelQueries({ queryKey: analysisQueryKey(submissionId) })
-      queryClient.setQueryData(analysisQueryKey(submissionId), analysis)
+      const key = analysisQueryKey(submissionId)
+      // 끊는 조회가 이 요청 뒤에 나간 것일 수 있다(결제가 끝나 무효화됨). 그대로 버리면 결제 전 요금제로
+      // 만든 이 응답(maxHintLevel·quota)이 남으므로, 끊었으면 넣은 뒤 다시 받는다(#377 리뷰)
+      const wasFetching = queryClient.isFetching({ queryKey: key }) > 0
+      await queryClient.cancelQueries({ queryKey: key })
+      queryClient.setQueryData(key, analysis)
+      if (wasFetching) void queryClient.invalidateQueries({ queryKey: key })
       void adoptQuota(queryClient, analysis.quota)
       void queryClient.invalidateQueries({ queryKey: ['learning-stats'] })
       void queryClient.invalidateQueries({ queryKey: ['problem-history'] })

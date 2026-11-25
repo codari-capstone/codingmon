@@ -1,4 +1,4 @@
-import { focusManager, QueryClientProvider } from '@tanstack/react-query'
+import { focusManager, QueryClientProvider, QueryObserver } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -15,6 +15,7 @@ import { resetSubscriptions, startMockSubscription } from '@/mocks/fixtures/subs
 import { mockAccessToken } from '@/mocks/fixtures/users'
 import { resetSubmissions } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
+import { analysisQuery } from './analysisQuery'
 
 const USER = { id: 1, nickname: '코다리', role: 'USER' } as const
 
@@ -282,6 +283,55 @@ describe('HintSteps', () => {
       expect(screen.getByText('다음 단계 힌트는 프로에서 열 수 있어요')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: '2단계 방향 보기' })).not.toBeInTheDocument()
       expect(screen.getByText('힌트 1')).toBeInTheDocument()
+    })
+
+    it('잠기지 않은 분석은 낡았으면 화면에 들어올 때 다시 받는다 (기본 동작, #377 리뷰)', async () => {
+      // 잠금 때문에 넣은 refetchOnMount가 잠기지 않은 분석에서 기본값(낡았으면 다시 받기)을 끄면 안 된다.
+      // 결과 화면을 그리면 안 된다 — 결과 화면의 같은 쿼리는 enabled가 나중에 켜지며 refetchOnMount와 상관없이
+      // 받는다. 처음부터 켜진 채 붙는 분석 패널과 같게 observer를 바로 붙인다
+      let gets = 0
+      server.use(
+        http.get('*/api/submissions/:id/analysis', () => {
+          gets++
+          return HttpResponse.json(analysisAt(2, 3))
+        }),
+      )
+      const client = createQueryClient()
+      client.setQueryData(['analysis', WRONG], analysisAt(1, 3), { updatedAt: Date.now() - 60_000 })
+
+      const unsubscribe = new QueryObserver(client, analysisQuery(WRONG)).subscribe(() => {})
+
+      await waitFor(() => expect(gets).toBe(1))
+      unsubscribe()
+    })
+
+    it('힌트 응답보다 뒤에 나간 분석 조회는 버리지 않고 다시 받는다 (#377 리뷰)', async () => {
+      // 무료로 힌트를 여는 중에 결제가 끝나 분석이 무효화됐다. 늦게 온 힌트 응답(무료)이 새 조회를 끊고 남으면 잠긴다
+      const user = userEvent.setup()
+      let releasePost!: () => void
+      const heldPost = new Promise<void>((resolve) => (releasePost = resolve))
+      let gets = 0
+      server.use(
+        http.get('*/api/submissions/:id/analysis', async () => {
+          gets++
+          if (gets === 1) return HttpResponse.json(analysisAt(0, 1))
+          if (gets === 2) await new Promise(() => {}) // 결제 뒤 나간 조회. 힌트 응답이 끊는다
+          return HttpResponse.json(analysisAt(1, 3))
+        }),
+        http.post('*/api/submissions/:id/analysis/hints', async () => {
+          await heldPost
+          return HttpResponse.json(analysisAt(1, 1))
+        }),
+      )
+      const client = renderResult()
+      await user.click(await step('1단계 관찰'))
+
+      void client.invalidateQueries({ queryKey: ['analysis'] })
+      await waitFor(() => expect(gets).toBe(2))
+      releasePost()
+
+      expect(await step('2단계 방향')).toBeEnabled()
+      expect(gets).toBe(3)
     })
 
     it('잠긴 결과에 30초 안에 다시 들어와도 분석을 다시 받는다 (#377 리뷰)', async () => {
