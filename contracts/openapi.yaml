@@ -1450,7 +1450,7 @@ paths:
         - 다음 단계(`revealedHintLevel + 1`)만 열 수 있다. 건너뛰면 409 `HINT_LEVEL_SKIPPED`다.
         - 요금제가 여는 단계(`maxHintLevel`, PRICE-04)까지만 열 수 있다. 무료 플랜이 2·3단계를 열려고 하면 403 `HINT_PLAN_REQUIRED`다.
           건너뛴 요청이어도 이 검사가 먼저다. 프로일 때 이미 연 단계는 무료가 된 뒤에도 그대로 주고, 다시 보내도 200이다.
-        - 검사 순서는 404 `ANALYSIS_NOT_FOUND`, 409 `ANALYSIS_NOT_READY`, 409 `ANALYSIS_BLOCKED`, 403 `HINT_PLAN_REQUIRED`, 409 `HINT_LEVEL_SKIPPED`다.
+        - 검사 순서는 404 `ANALYSIS_NOT_FOUND`, 409 `ANALYSIS_NOT_READY`, 409 `ANALYSIS_BLOCKED`, 이미 연 단계(`level` ≤ `revealedHintLevel`)면 200, 403 `HINT_PLAN_REQUIRED`, 409 `HINT_LEVEL_SKIPPED`다.
         - 이미 연 단계를 다시 보내면 바뀌지 않고 200이다. 버튼을 두 번 눌러도 한 단계만 열린다.
         - 정답을 맞히기 전에 연 힌트는 학습 통계의 평균 힌트 단계(`LearningStats`의 `averageHintLevel`)와
           제출 기록의 가장 높은 힌트 단계(`ProblemHistory`의 `maxRevealedHintLevel`)에 들어간다.
@@ -3682,9 +3682,11 @@ components:
         - 만들지 못한(`FAILED`) 결과는 세지 않는다. 그 결과를 다시 요청하면 그날 1회로 센다. 차단(`blocked`)된 결과는 1회로 센다.
         - 서버가 처리 중에 내려가 시간이 지나 `FAILED`로 보이는 결과(`SubmissionAnalysis`·`SubmissionCodeReview`의 `status`)는 예외로, 다시 요청하기 전까지 1회로 남는다.
           다시 요청해도 같은 결과라 1회 그대로다(한도를 다 썼어도 다시 요청할 수 있다).
-          단 프로가 되기 전에 만든 결과는 프로 횟수에 들어 있지 않으므로, 프로가 된 뒤 다시 요청하면 그때 1회로 센다(프로 한도를 다 썼으면 429).
+          단 지금 세는 구간에 들어 있지 않은 결과(프로의 구독을 시작한 시각 전에 만든 결과)는 다시 요청하면 그때 1회로 센다(프로 한도를 다 썼으면 429).
+          결제 시각과 확정 사이에 만든 결과는 이미 프로 횟수에 들어 있어 1회 그대로다.
         - 실패한 호출을 세지 않으므로 실제 AI 호출 수는 한도보다 많을 수 있다.
         - 관리자(`role = ADMIN`)는 하루 한도가 없다(#343). `limit`·`remaining`이 null이고, 쓴 횟수(`used`)는 센다.
+          구독이 없는 관리자의 `used`는 그날 쓴 것 전체이고, 구독이 있으면 프로처럼 이번 구독을 시작한 뒤의 횟수다.
           한 사용자가 동시에 만들 수 있는 결과 수 제한(`BUSY`)은 관리자에게도 그대로다.
       properties:
         plan:
