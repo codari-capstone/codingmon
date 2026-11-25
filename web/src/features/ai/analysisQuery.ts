@@ -12,6 +12,16 @@ export function analysisQueryKey(submissionId: number) {
   return ['analysis', submissionId] as const
 }
 
+/** 힌트 단계는 셋이다(AI_FEATURES 4절) */
+export const HINT_LEVELS = 3
+
+/**
+ * 요금제가 다음 힌트 단계를 열지 않는다(AI-04, PRICE-04). 프로일 때 연 단계가 `maxHintLevel`보다 높아도
+ * 그대로 보이고, 3단계를 다 열었으면 잠글 것이 없다(계약 `maxHintLevel`)
+ */
+export const hintPlanLocked = (a: SubmissionAnalysis) =>
+  a.revealedHintLevel < HINT_LEVELS && a.revealedHintLevel + 1 > a.maxHintLevel
+
 /** 이만큼 지나도록 만드는 중이면 덜 자주 묻는다. 보통은 이 안에 끝난다. */
 const ANALYSIS_SLOW_AFTER_MS = 10_000
 /** 이만큼 지나면 가장 뜸하게 묻는다. */
@@ -68,6 +78,10 @@ export function analysisQuery(submissionId: number) {
       fail(result)
     },
     refetchInterval: (query) => analysisPollingInterval(query.state.error, query.state.data),
+    // 잠금 안내가 버튼 자리를 차지해 서버에 다시 물을 길이 없다. 다른 탭에서 결제했을 수 있어
+    // 잠긴 동안에는 창에 돌아오면 다시 받는다(#377 리뷰)
+    refetchOnWindowFocus: (query) =>
+      query.state.data && hintPlanLocked(query.state.data) ? 'always' : false,
     retry: false,
   })
 }
@@ -162,13 +176,22 @@ export function useRevealHint(submissionId: number) {
       void queryClient.invalidateQueries({ queryKey: ['learning-stats'] })
       void queryClient.invalidateQueries({ queryKey: ['problem-history'] })
     },
-    onError: (error) => {
+    onError: async (error) => {
       forgetSessionIfUnauthorized(queryClient, error)
-      // 409(단계가 어긋남)와 403(그 사이 무료가 되어 요금제가 열지 않음)은 화면의 분석이 낡은 것이다.
-      // 다시 받으면 지금 단계와 maxHintLevel(잠금 안내)이 맞춰진다(PRICE-04)
+      const key = analysisQueryKey(submissionId)
+      // 403은 무료 플랜이 열지 않는 단계라는 뜻이다(계약). 다시 받기를 기다리지 않고 캐시에 바로 잠금을 들인다.
+      // 기다리면 그 사이 오류 문구가 뜨고, 다시 받기가 실패하면 버튼이 살아나 403을 되풀이한다(#377 리뷰).
+      // 오류 상태가 화면에 닿기 전에 끝나도록 기다린다(onError가 끝나야 mutation이 오류가 된다)
+      if (problemCode(error) === 'HINT_PLAN_REQUIRED') {
+        await queryClient.cancelQueries({ queryKey: key })
+        queryClient.setQueryData<SubmissionAnalysis | null>(key, (old) =>
+          old ? { ...old, maxHintLevel: 1 } : old,
+        )
+      }
+      // 409(단계가 어긋남)와 403은 화면의 분석이 낡은 것이다. 다시 받아 지금 단계와 요금제에 맞춘다
       const status = (error as { status?: number }).status
       if (status === 409 || status === 403) {
-        void queryClient.invalidateQueries({ queryKey: analysisQueryKey(submissionId) })
+        void queryClient.invalidateQueries({ queryKey: key })
       }
     },
   })

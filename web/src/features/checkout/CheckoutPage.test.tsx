@@ -218,6 +218,21 @@ describe('CheckoutPage 결제 결과 (PAY-02)', () => {
     await waitFor(() => expect(client.getQueryData(AI_QUOTA_QUERY_KEY)).toBeUndefined())
   })
 
+  it('결제가 끝나면 분석 캐시를 무효화해 힌트 단계를 다시 받게 한다 (#377 리뷰)', async () => {
+    // 힌트 단계(maxHintLevel)도 요금제로 정해진다. 남으면 프로가 된 사용자에게 잠금 안내가 남는다
+    vi.mocked(requestBillingKey).mockResolvedValue({ billingKey: 'billing-1' })
+    const user = userEvent.setup()
+    const { client } = renderCheckout()
+    client.setQueryData(['analysis', 23], { revealedHintLevel: 1, maxHintLevel: 1 })
+    await agreeAll(user)
+    expect(client.getQueryState(['analysis', 23])?.isInvalidated).toBe(false)
+
+    await user.click(payButton())
+
+    await screen.findByRole('heading', { name: '프로 구독이 시작됐어요' })
+    await waitFor(() => expect(client.getQueryState(['analysis', 23])?.isInvalidated).toBe(true))
+  })
+
   it('결제가 끝날 때 한도를 보는 화면이 떠 있으면 바로 다시 받는다 (#369 리뷰)', async () => {
     // 결제 응답 전에 뒤로 가 결과 화면이 떠 있는 경우다. 지우기만 하면 그 화면은 옛 무료 한도를 붙잡고 있다
     const PRO = { plan: 'PRO', limit: 30, used: 0, remaining: 30, resetsAt: '2026-11-08T00:00:00Z' }

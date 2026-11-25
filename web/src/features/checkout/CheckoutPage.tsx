@@ -112,7 +112,12 @@ export function Component() {
     },
     // 결과가 어떻든 요금제가 바뀌었을 수 있고, AI 한도는 요금제로 정해진다(#321). 무효화만 하면 결과 화면이
     // 다시 받는 동안(실패하면 계속) 옛 무료 한도와 요금제 안내를 그리므로 처음 상태로 되돌린다. 결과 화면이 떠 있으면(응답 전에 뒤로 감) 바로 다시 받는다(#369 리뷰)
-    onSettled: () => queryClient.resetQueries({ queryKey: AI_QUOTA_QUERY_KEY }),
+    // 힌트 단계(분석의 maxHintLevel)도 요금제로 정해진다. 분석은 무효화만 한다 — 다시 받는 동안 연 힌트를
+    // 스켈레톤으로 가리지 않고, 낡은 값이 남아도 잠금 안내일 뿐 잘못 열리지 않는다(서버가 403으로 막음, #377 리뷰)
+    onSettled: () => {
+      void queryClient.resetQueries({ queryKey: AI_QUOTA_QUERY_KEY })
+      void queryClient.invalidateQueries({ queryKey: ['analysis'] })
+    },
     onError: async (error) => {
       let result = classifyFailure(error)
       if (result === 'signedOut') return forgetSessionIfUnauthorized(queryClient, error)

@@ -5,9 +5,9 @@ import type { SubmissionAnalysis } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { HintBox } from '@/components/ui/hint-box'
 import { Stepper } from '@/components/ui/stepper'
-import { problemMessage } from '@/features/auth/problemCode'
+import { problemCode, problemMessage } from '@/features/auth/problemCode'
 import type { RetryState } from '@/features/solve/solvePath'
-import { useRevealHint } from './analysisQuery'
+import { hintPlanLocked, useRevealHint } from './analysisQuery'
 
 /** 단계 이름 (AI_FEATURES 4절). 순서가 곧 단계다. 힌트 상자와 버튼에 쓴다 */
 const HINT_STEPS = ['관찰', '방향', '원리'] as const
@@ -45,14 +45,20 @@ export function HintSteps({
   const hints = analysis.hints.slice(0, HINT_STEPS.length)
   const revealed = hints.length
   const next = revealed + 1
-  // 요금제가 다음 단계를 열지 않는다(PRICE-04). 프로일 때 연 단계가 이 값보다 높아도 그대로 보인다(계약 `maxHintLevel`)
-  const planLocked = next <= HINT_STEPS.length && next > analysis.maxHintLevel
+  const planLocked = hintPlanLocked(analysis)
 
   const [justOpened, setJustOpened] = useState<number | null>(null)
   const openedRef = useRef<HTMLParagraphElement>(null)
   useEffect(() => {
     if (justOpened !== null && justOpened <= revealed) openedRef.current?.focus()
   }, [justOpened, revealed])
+
+  // 누른 버튼이 403으로 잠금 안내로 바뀌면 포커스가 body로 떨어진다. 안내로 옮겨 무슨 일인지 읽게 한다(#377 리뷰)
+  const [lockedByClick, setLockedByClick] = useState(false)
+  const lockRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    if (lockedByClick && planLocked) lockRef.current?.focus()
+  }, [lockedByClick, planLocked])
 
   return (
     <section aria-labelledby="hints-heading" className="flex flex-col gap-3">
@@ -89,7 +95,9 @@ export function HintSteps({
       {/* 다음 단계 하나만 누를 수 있다. 그 뒤 단계는 위 단계 표시가 보여 준다 */}
       {planLocked ? (
         <div className="bg-muted flex flex-wrap items-center justify-between gap-3 rounded-lg px-4 py-3">
-          <p className="text-sm break-keep">다음 단계 힌트는 프로에서 열 수 있어요</p>
+          <p ref={lockRef} tabIndex={-1} className="text-sm break-keep outline-none">
+            다음 단계 힌트는 프로에서 열 수 있어요
+          </p>
           <Button asChild variant="soft" size="sm" className="min-h-11">
             <Link to="/pricing">프로 시작하기</Link>
           </Button>
@@ -102,7 +110,12 @@ export function HintSteps({
           className="min-h-11"
           disabled={reveal.isPending}
           aria-describedby="hint-order"
-          onClick={() => reveal.mutate(next, { onSuccess: () => setJustOpened(next) })}
+          onClick={() =>
+            reveal.mutate(next, {
+              onSuccess: () => setJustOpened(next),
+              onError: (error) => setLockedByClick(problemCode(error) === 'HINT_PLAN_REQUIRED'),
+            })
+          }
         >
           {`${next}단계 ${HINT_STEPS[next - 1]} 보기`}
         </Button>

@@ -1,5 +1,5 @@
-import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { focusManager, QueryClientProvider } from '@tanstack/react-query'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -56,6 +56,7 @@ describe('HintSteps', () => {
     resetSubmissions()
     resetSubscriptions()
     setAccessToken(null)
+    focusManager.setFocused(undefined)
   })
 
   it('다음 단계 하나만 열 수 있고, 열면 그다음 단계로 넘어간다 (AI-04)', async () => {
@@ -247,6 +248,59 @@ describe('HintSteps', () => {
       expect(gets).toBe(2)
       // 안내가 403의 뜻을 대신하므로 오류 문구를 겹쳐 띄우지 않는다
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      // 누른 버튼이 사라졌으니 포커스를 안내로 옮긴다(#377 리뷰)
+      await waitFor(() =>
+        expect(screen.getByText('다음 단계 힌트는 프로에서 열 수 있어요')).toHaveFocus(),
+      )
+    })
+
+    it('403 뒤 분석을 다시 받지 못해도 잠금을 유지한다 (#377 리뷰)', async () => {
+      // 다시 받기만 기다리면 실패했을 때 캐시의 maxHintLevel 3이 남아 버튼이 살아나고 403을 되풀이한다
+      const user = userEvent.setup()
+      let gets = 0
+      server.use(
+        http.get('*/api/submissions/:id/analysis', () => {
+          gets++
+          return gets === 1
+            ? HttpResponse.json(analysisAt(1, 3))
+            : new HttpResponse(null, { status: 500 })
+        }),
+        http.post('*/api/submissions/:id/analysis/hints', () =>
+          HttpResponse.json(
+            { status: 403, code: 'HINT_PLAN_REQUIRED', detail: '프로에서 열 수 있어요' },
+            { status: 403 },
+          ),
+        ),
+      )
+      renderResult()
+
+      await user.click(await step('2단계 방향'))
+
+      expect(await lock()).toBeInTheDocument()
+      await waitFor(() => expect(gets).toBe(2))
+      expect(screen.getByText('다음 단계 힌트는 프로에서 열 수 있어요')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '2단계 방향 보기' })).not.toBeInTheDocument()
+      expect(screen.getByText('힌트 1')).toBeInTheDocument()
+    })
+
+    it('잠긴 채로 다른 탭에서 결제하고 돌아오면 분석을 다시 받아 다음 단계를 연다 (#377 리뷰)', async () => {
+      let maxHintLevel: SubmissionAnalysis['maxHintLevel'] = 1
+      server.use(
+        http.get('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(analysisAt(1, maxHintLevel)),
+        ),
+      )
+      renderResult()
+      await lock()
+
+      maxHintLevel = 3
+      act(() => {
+        focusManager.setFocused(false)
+        focusManager.setFocused(true)
+      })
+
+      expect(await step('2단계 방향')).toBeEnabled()
+      expect(screen.queryByText('다음 단계 힌트는 프로에서 열 수 있어요')).not.toBeInTheDocument()
     })
   })
 
