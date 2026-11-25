@@ -83,8 +83,9 @@ public class AiQuotaService {
             Supplier<AiReviewRepository.Abandoned> abandoned, Supplier<Optional<AiReviewRepository.Claim>> claim) {
         // 요금제는 요청이 들어온 시점 기준이다. 잠금을 기다리는 동안 결제되거나 구독이 끝나도 이 요청에는 반영하지 않는다.
         // 프로는 이번 구독을 시작한 뒤에 쓴 것만 센다. 결제한 날 무료로 쓴 횟수와 상관없이 프로 한도로 시작한다.
-        Instant proSince = subscriptions.proSince(userId).orElse(null);
-        Plan plan = proSince == null ? Plan.FREE : Plan.PRO;
+        Optional<Instant> subscribed = subscriptions.proSince(userId);
+        Plan plan = plan(subscribed);
+        Instant proSince = subscribed.orElse(null);
         int limit = limit(plan);
         return transactions.execute(status -> {
             if (!reviews.lockSubmission(userId, submissionId)) {
