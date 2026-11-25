@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Subscription } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
-import { AI_QUOTA_QUERY_KEY, aiQuotaQuery } from '@/features/ai/analysisQuery'
+import { AI_QUOTA_QUERY_KEY, aiQuotaQuery, analysisQuery } from '@/features/ai/analysisQuery'
 import { freeSubscription } from '@/mocks/fixtures/subscriptions'
 import { server } from '@/mocks/server'
 import { saveDraft } from './checkoutDraft'
@@ -231,6 +231,58 @@ describe('CheckoutPage 결제 결과 (PAY-02)', () => {
 
     await screen.findByRole('heading', { name: '프로 구독이 시작됐어요' })
     await waitFor(() => expect(client.getQueryState(['analysis', 23])?.isInvalidated).toBe(true))
+  })
+
+  it('결제 전에 나간 첫 분석 조회는 끊고 결제 뒤에 새로 받는다 (#377 리뷰)', async () => {
+    // 결제 중에 뒤로 가 처음 연 결과 화면이다. 무효화만 하면 데이터 없는 첫 조회의 결제 전(무료) 응답을 그대로 쓴다
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    const levels: number[] = []
+    server.use(
+      http.get('*/api/submissions/:id/analysis', async () => {
+        const first = levels.length === 0
+        levels.push(first ? 1 : 3)
+        if (first) await held
+        return HttpResponse.json({
+          submissionId: 23,
+          status: 'COMPLETED',
+          failureReason: null,
+          blocked: false,
+          maxHintLevel: first ? 1 : 3,
+          summary: '요약',
+          suspectLines: [],
+          facts: [],
+          guesses: [],
+          revealedHintLevel: 1,
+          hints: ['힌트 1'],
+          createdAt: '2026-11-07T00:00:00Z',
+          completedAt: '2026-11-07T00:00:05Z',
+          quota: {
+            plan: first ? 'FREE' : 'PRO',
+            limit: 30,
+            used: 0,
+            remaining: 30,
+            resetsAt: '2026-11-08T00:00:00Z',
+          },
+        })
+      }),
+    )
+    vi.mocked(requestBillingKey).mockResolvedValue({ billingKey: 'billing-1' })
+    const user = userEvent.setup()
+    const { client } = renderCheckout()
+    const unsubscribe = new QueryObserver(client, analysisQuery(23)).subscribe(() => {})
+    await waitFor(() => expect(levels).toHaveLength(1))
+    await agreeAll(user)
+
+    await user.click(payButton())
+    await screen.findByRole('heading', { name: '프로 구독이 시작됐어요' })
+    release()
+
+    await waitFor(() => expect(levels).toEqual([1, 3]))
+    await waitFor(() =>
+      expect(client.getQueryData<{ maxHintLevel: number }>(['analysis', 23])?.maxHintLevel).toBe(3),
+    )
+    unsubscribe()
   })
 
   it('결제가 끝날 때 한도를 보는 화면이 떠 있으면 바로 다시 받는다 (#369 리뷰)', async () => {

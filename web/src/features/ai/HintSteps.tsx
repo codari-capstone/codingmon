@@ -133,8 +133,8 @@ export function HintSteps({
         </p>
       )}
 
-      {/* 잠금 안내가 403의 뜻을 대신한다 */}
-      {reveal.isError && !planLocked ? (
+      {/* 잠금 안내가 403의 뜻을 대신한다. 잠금이 풀린 뒤(다른 탭에서 결제)에도 지난 403을 다시 띄우지 않는다(#377 리뷰) */}
+      {reveal.isError && !planLocked && problemCode(reveal.error) !== 'HINT_PLAN_REQUIRED' ? (
         <p role="alert" className="text-destructive-text text-sm">
           {problemMessage(reveal.error)}
         </p>

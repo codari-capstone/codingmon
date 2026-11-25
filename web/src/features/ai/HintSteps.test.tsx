@@ -21,8 +21,7 @@ const USER = { id: 1, nickname: '코다리', role: 'USER' } as const
 /** 목 fixture의 지난 제출 23: 2번 문제의 틀렸습니다, Python (mocks/fixtures/history.ts). */
 const WRONG = 23
 
-function renderResult() {
-  const client = createQueryClient()
+function renderResult(client = createQueryClient()) {
   client.setQueryData(ME_QUERY_KEY, USER)
   const router = createMemoryRouter(
     [{ path: '/submissions/:id', Component: SubmissionResultPage }],
@@ -272,15 +271,60 @@ describe('HintSteps', () => {
           ),
         ),
       )
-      renderResult()
+      const client = renderResult()
 
       await user.click(await step('2단계 방향'))
 
       expect(await lock()).toBeInTheDocument()
-      await waitFor(() => expect(gets).toBe(2))
+      // 핸들러가 불린 것만으로는 부족하다. 500을 받아 쿼리가 오류로 끝난 뒤에 본다(#377 리뷰)
+      await waitFor(() => expect(client.getQueryState(['analysis', WRONG])?.status).toBe('error'))
+      expect(gets).toBe(2)
       expect(screen.getByText('다음 단계 힌트는 프로에서 열 수 있어요')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: '2단계 방향 보기' })).not.toBeInTheDocument()
       expect(screen.getByText('힌트 1')).toBeInTheDocument()
+    })
+
+    it('잠긴 결과에 30초 안에 다시 들어와도 분석을 다시 받는다 (#377 리뷰)', async () => {
+      // 다른 화면에 있는 동안 다른 탭에서 결제했다. 캐시는 아직 fresh라 그냥 두면 GET을 보내지 않는다
+      const client = createQueryClient()
+      client.setQueryData(['analysis', WRONG], analysisAt(1, 1))
+      server.use(
+        http.get('*/api/submissions/:id/analysis', () => HttpResponse.json(analysisAt(1, 3))),
+      )
+      renderResult(client)
+
+      expect(await step('2단계 방향')).toBeEnabled()
+    })
+
+    it('403 뒤 다른 탭에서 결제해 잠금이 풀리면 지난 403 문구를 띄우지 않는다 (#377 리뷰)', async () => {
+      const user = userEvent.setup()
+      let maxHintLevel: SubmissionAnalysis['maxHintLevel'] = 3
+      server.use(
+        http.get('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(analysisAt(1, maxHintLevel)),
+        ),
+        http.post('*/api/submissions/:id/analysis/hints', () =>
+          HttpResponse.json(
+            { status: 403, code: 'HINT_PLAN_REQUIRED', detail: '프로에서 열 수 있어요' },
+            { status: 403 },
+          ),
+        ),
+      )
+      renderResult()
+      // 낡은 화면(3)에서 누른다. 서버는 이미 무료라 다시 받으면 1이다
+      await step('2단계 방향')
+      maxHintLevel = 1
+      await user.click(screen.getByRole('button', { name: '2단계 방향 보기' }))
+      await lock()
+
+      maxHintLevel = 3
+      act(() => {
+        focusManager.setFocused(false)
+        focusManager.setFocused(true)
+      })
+
+      expect(await step('2단계 방향')).toBeEnabled()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
 
     it('잠긴 채로 다른 탭에서 결제하고 돌아오면 분석을 다시 받아 다음 단계를 연다 (#377 리뷰)', async () => {

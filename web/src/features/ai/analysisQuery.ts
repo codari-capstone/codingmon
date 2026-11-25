@@ -22,6 +22,9 @@ export const HINT_LEVELS = 3
 export const hintPlanLocked = (a: SubmissionAnalysis) =>
   a.revealedHintLevel < HINT_LEVELS && a.revealedHintLevel + 1 > a.maxHintLevel
 
+const refetchWhileLocked = (query: { state: { data: SubmissionAnalysis | null | undefined } }) =>
+  query.state.data && hintPlanLocked(query.state.data) ? ('always' as const) : false
+
 /** 이만큼 지나도록 만드는 중이면 덜 자주 묻는다. 보통은 이 안에 끝난다. */
 const ANALYSIS_SLOW_AFTER_MS = 10_000
 /** 이만큼 지나면 가장 뜸하게 묻는다. */
@@ -79,9 +82,9 @@ export function analysisQuery(submissionId: number) {
     },
     refetchInterval: (query) => analysisPollingInterval(query.state.error, query.state.data),
     // 잠금 안내가 버튼 자리를 차지해 서버에 다시 물을 길이 없다. 다른 탭에서 결제했을 수 있어
-    // 잠긴 동안에는 창에 돌아오면 다시 받는다(#377 리뷰)
-    refetchOnWindowFocus: (query) =>
-      query.state.data && hintPlanLocked(query.state.data) ? 'always' : false,
+    // 잠긴 동안에는 창에 돌아오거나 화면에 다시 들어오면 30초 안이어도 다시 받는다(#377 리뷰)
+    refetchOnWindowFocus: refetchWhileLocked,
+    refetchOnMount: refetchWhileLocked,
     retry: false,
   })
 }
