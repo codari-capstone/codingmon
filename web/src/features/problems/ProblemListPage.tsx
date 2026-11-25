@@ -6,6 +6,8 @@ import { Link, useLocation, useSearchParams } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { Button } from '@/components/ui/button'
+import { Icon } from '@/components/ui/icon'
 import { SearchInput } from '@/components/ui/search-input'
 import { useAuth } from '@/features/auth/useAuth'
 import { StreakCard } from '@/features/streak/StreakCard'
@@ -66,6 +68,9 @@ export function Component() {
   })
 
   const [draft, setDraft] = useState(params.keyword)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  // 접혀 있어도 왜 결과가 줄었는지 보이도록 [필터] 버튼에 건 개수를 단다
+  const filterCount = params.difficulty.length + params.tag.length + params.status.length
   // 내가 URL에 쓴 값을 기억한다. 이게 없으면 아래 두 effect가 서로를 되돌린다.
   const lastWritten = useRef(params.keyword)
 
@@ -177,13 +182,42 @@ export function Component() {
       <StreakCard />
 
       {/*
+        필터가 표 위로 쌓이면 세로로 길게 펼쳐져 표가 한참 밀린다. 그 폭에서는 [필터] 버튼만 두고
+        누르면 편다(#375). 864px = 필터 232 + 간격 24 + 표 560 + 본문 좌우 여백 48.
+        아래 flex-basis를 바꾸면 함께 바꾼다
+      */}
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="self-start min-[864px]:hidden"
+        aria-expanded={filtersOpen}
+        aria-controls="problem-filters"
+        onClick={() => setFiltersOpen((open) => !open)}
+      >
+        필터{filterCount > 0 ? ` ${filterCount}` : ''}
+        <Icon
+          name="chevron-down"
+          size={16}
+          className={cn('transition-transform', filtersOpen && 'rotate-180')}
+        />
+      </Button>
+
+      {/*
         필터와 표는 flex-wrap으로 나란히 둔다. 표에 flex-[999]를 줘서 좁아지면 필터가
         먼저 밀려 위로 쌓인다 (UX-05). 그래서 필터를 sticky나 100vh로 두지 않는다.
         필터 폭은 묶지 않는다. 나란히 있을 때는 표가 남는 폭을 거의 다 가져가고, 위로 쌓이면
         다른 카드처럼 한 줄을 채운다. 최대 폭을 두면 모바일에서 혼자 좁았다(#341)
       */}
       <div className="flex flex-wrap items-start gap-6">
-        <aside aria-label="필터" className="bg-card min-w-0 flex-[1_1_232px] rounded-lg border p-6">
+        <aside
+          id="problem-filters"
+          aria-label="필터"
+          className={cn(
+            'bg-card min-w-0 flex-[1_1_232px] rounded-lg border p-6',
+            !filtersOpen && 'max-[864px]:hidden',
+          )}
+        >
           <ProblemFilters />
         </aside>
 

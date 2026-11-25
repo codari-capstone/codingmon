@@ -339,7 +339,7 @@ function Hero({ signedIn }: { signedIn: boolean | undefined }) {
           <h1 className="text-inverse-foreground m-0 text-[36px] leading-[1.15] font-bold tracking-[-0.03em] sm:text-[44px] lg:text-[56px]">
             틀린 이유까지
             <br />
-            알려 주는 코딩 연습장
+            알려 주는 코딩 멘토
           </h1>
           <p className="text-inverse-muted m-0 max-w-[520px] text-[17px] leading-[1.7] lg:text-[19px]">
             문제를 풀고 제출하면 채점에서 끝나지 않아요. 어느 줄에서, 왜 틀렸는지 AI가 짚어 주고,
