@@ -110,9 +110,9 @@ export function Component() {
       await queryClient.cancelQueries({ queryKey: SUBSCRIPTION_KEY })
       queryClient.setQueryData(SUBSCRIPTION_KEY, started)
     },
-    // 결과가 어떻든 요금제가 바뀌었을 수 있고, AI 한도는 요금제로 정해진다(#321). 결과 화면으로
-    // 돌아가면 새로 받게 버린다. 30초 캐시가 남으면 결제한 사용자에게 무료 한도와 요금제 안내가 남는다(#369 리뷰)
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: AI_QUOTA_QUERY_KEY }),
+    // 결과가 어떻든 요금제가 바뀌었을 수 있고, AI 한도는 요금제로 정해진다(#321). 무효화만 하면 결과 화면이
+    // 다시 받는 동안(실패하면 계속) 옛 무료 한도와 요금제 안내를 그리므로 지운다(#369 리뷰). 결제 화면은 한도를 보지 않는다
+    onSettled: () => queryClient.removeQueries({ queryKey: AI_QUOTA_QUERY_KEY }),
     onError: async (error) => {
       let result = classifyFailure(error)
       if (result === 'signedOut') return forgetSessionIfUnauthorized(queryClient, error)

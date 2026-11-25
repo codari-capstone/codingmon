@@ -1,5 +1,5 @@
-import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { focusManager, QueryClientProvider } from '@tanstack/react-query'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -189,6 +189,8 @@ describe('AnalysisPanel', () => {
     })
 
     describe('한도를 다 쓴 무료 사용자에게 요금제 안내 (AI-06, #321)', () => {
+      afterEach(() => focusManager.setFocused(undefined))
+
       // 무료인지는 서버가 한도와 함께 주는 plan으로 안다. 안내와 '다 썼어요'는 같은 응답으로 함께 그려진다
       function quota(plan: 'FREE' | 'PRO' | undefined, limit: number, remaining: number) {
         server.use(
@@ -240,6 +242,44 @@ describe('AnalysisPanel', () => {
 
         await screen.findByText('오늘 남은 AI 분석·리뷰 1 / 3회')
         expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
+      })
+
+      it('다 쓴 채로 다른 탭에서 결제하고 돌아오면 한도를 다시 받는다 (#369 리뷰)', async () => {
+        // 앱은 창 포커스에 다시 받지 않는다(queryClient). 다 썼으면 버튼이 꺼져 429로 바로잡을 수도 없다
+        quota('FREE', 3, 0)
+        renderResult(WRONG)
+        await screen.findByRole('link', { name: '요금제 보기' })
+
+        quota('PRO', 30, 30)
+        act(() => {
+          focusManager.setFocused(false)
+          focusManager.setFocused(true)
+        })
+
+        expect(await screen.findByText('오늘 남은 AI 분석·리뷰 30 / 30회')).toBeInTheDocument()
+        expect(screen.queryByRole('link', { name: '요금제 보기' })).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled()
+      })
+
+      it('남은 횟수가 있으면 돌아와도 다시 받지 않는다', async () => {
+        let asked = 0
+        server.use(
+          http.get('*/api/users/me/ai-quota', () => {
+            asked += 1
+            return HttpResponse.json({ ...QUOTA, plan: 'FREE', limit: 3, used: 1, remaining: 2 })
+          }),
+        )
+        renderResult(WRONG)
+        await screen.findByText('오늘 남은 AI 분석·리뷰 2 / 3회')
+        const before = asked
+
+        act(() => {
+          focusManager.setFocused(false)
+          focusManager.setFocused(true)
+        })
+
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(asked).toBe(before)
       })
     })
 

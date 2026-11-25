@@ -197,8 +197,8 @@ describe('CheckoutPage 결제 결과 (PAY-02)', () => {
     return { user, ...rendered }
   }
 
-  it('결제가 끝나면 AI 한도를 다시 받게 한다 (#369 리뷰)', async () => {
-    // 한도는 요금제로 정해진다(#321). 결과 화면에 30초 캐시가 남으면 결제한 사용자에게 무료 한도가 보인다
+  it('결제가 끝나면 AI 한도 캐시를 지운다 (#369 리뷰)', async () => {
+    // 한도는 요금제로 정해진다(#321). 무효화만 하면 결과 화면이 다시 받는 동안 옛 무료 한도를 그린다
     vi.mocked(requestBillingKey).mockResolvedValue({ billingKey: 'billing-1' })
     const user = userEvent.setup()
     const { client } = renderCheckout()
@@ -210,12 +210,12 @@ describe('CheckoutPage 결제 결과 (PAY-02)', () => {
       resetsAt: '2026-11-08T00:00:00Z',
     })
     await agreeAll(user)
-    expect(client.getQueryState(AI_QUOTA_QUERY_KEY)?.isInvalidated).toBe(false)
+    expect(client.getQueryData(AI_QUOTA_QUERY_KEY)).toBeDefined()
 
     await user.click(payButton())
 
     await screen.findByRole('heading', { name: '프로 구독이 시작됐어요' })
-    await waitFor(() => expect(client.getQueryState(AI_QUOTA_QUERY_KEY)?.isInvalidated).toBe(true))
+    await waitFor(() => expect(client.getQueryData(AI_QUOTA_QUERY_KEY)).toBeUndefined())
   })
 
   it('성공: 플랜과 다음 결제일, 문제 풀러 가기·내 구독 보기', async () => {

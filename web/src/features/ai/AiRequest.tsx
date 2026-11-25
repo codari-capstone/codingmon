@@ -51,7 +51,15 @@ export function AiRequest({
   /** 처음 누르는 버튼 이름. 실패한 뒤에는 '다시 시도'다 */
   label: string
 }) {
-  const { data: quota, dataUpdatedAt, errorUpdatedAt } = useQuery(aiQuotaQuery())
+  const {
+    data: quota,
+    dataUpdatedAt,
+    errorUpdatedAt,
+  } = useQuery({
+    ...aiQuotaQuery(),
+    // 다 썼으면 버튼이 꺼져 429로 바로잡을 길이 없다. 다른 탭에서 결제했을 수 있어 돌아오면 30초 안이어도 다시 받는다(#369 리뷰)
+    refetchOnWindowFocus: (query) => (query.state.data?.remaining === 0 ? 'always' : false),
+  })
 
   const abandonedToday =
     result?.status === 'FAILED' &&
