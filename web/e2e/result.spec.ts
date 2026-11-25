@@ -100,6 +100,8 @@ test.describe('제출 결과 화면', () => {
       // 힌트도 모델이 만든 글이다. 1단계 힌트에도 긴 토큰이 있다(handlers.ts).
       await page.getByRole('button', { name: '1단계 관찰 보기' }).click()
       await expect(page.getByText(/한 줄이 길어집니다/)).toBeVisible()
+      // 무료 계정이라 다음 단계 자리에 프로 안내가 온다(AI-04). 아래 넘침 검사가 이 줄까지 잰다
+      await expect(page.getByText('다음 단계 힌트는 프로에서 열 수 있어요')).toBeVisible()
 
       const sizes = await page.evaluate(() => {
         const panel = document.querySelector('section[aria-labelledby="analysis-heading"]')

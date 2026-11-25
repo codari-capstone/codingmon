@@ -330,6 +330,10 @@ function requestQuota(request: Request): AiQuota {
   return mockQuota(id, account?.user.role === 'ADMIN')
 }
 
+/** 열 수 있는 가장 높은 힌트 단계(계약 `maxHintLevel`, PRICE-04). 무료 1, 프로 3. 관리자는 늘 PRO다 */
+const maxHintLevelFor = (quota: AiQuota): SubmissionAnalysis['maxHintLevel'] =>
+  quota.plan === 'PRO' ? 3 : 1
+
 /** 분석 응답. 내용은 AI_FEATURES 5절의 역방향 피라미드 예시다. 힌트는 연 단계까지만 준다(계약). */
 function analysisView(
   submissionId: number,
@@ -337,9 +341,7 @@ function analysisView(
   quota: AiQuota,
   pending = false,
 ): SubmissionAnalysis {
-  // 열 수 있는 힌트 단계는 요금제로 정한다(계약 `maxHintLevel`, PRICE-04). shortcut: 목의 힌트 열기는 아직
-  // 이 값으로 막지 않는다(서버는 403 `HINT_PLAN_REQUIRED`), 힌트 화면이 이 값을 읽을 때 함께 막는다
-  const maxHintLevel: SubmissionAnalysis['maxHintLevel'] = quota.plan === 'PRO' ? 3 : 1
+  const maxHintLevel = maxHintLevelFor(quota)
   const base = { submissionId, failureReason: null, blocked: false, createdAt, quota, maxHintLevel }
   if (pending) {
     return {
@@ -2052,11 +2054,18 @@ export const handlers: RequestHandler[] = [
     }
     const found = mockAnalyses.get(id)
     if (!found) return problem(404, 'ANALYSIS_NOT_FOUND', 'AI 분석을 찾을 수 없어요')
-    if (level > found.revealed + 1) {
-      return problem(409, 'HINT_LEVEL_SKIPPED', '앞 단계 힌트를 먼저 열어 주세요')
+    const quota = requestQuota(request)
+    // 검사 순서는 계약대로: 이미 연 단계면 200 → 요금제가 열지 않는 단계면 403 → 건너뛰면 409
+    if (level > found.revealed) {
+      if (level > maxHintLevelFor(quota)) {
+        return problem(403, 'HINT_PLAN_REQUIRED', '다음 단계 힌트는 프로에서 열 수 있어요')
+      }
+      if (level > found.revealed + 1) {
+        return problem(409, 'HINT_LEVEL_SKIPPED', '앞 단계 힌트를 먼저 열어 주세요')
+      }
     }
     found.revealed = Math.max(found.revealed, level)
-    return HttpResponse.json(analysisView(id, found, requestQuota(request)))
+    return HttpResponse.json(analysisView(id, found, quota))
   }),
 
   /**
