@@ -2,9 +2,11 @@ package com.codingmon.api.ai;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -134,15 +136,18 @@ class AiReviewRepository {
     // 사용자의 채점 제출에 오늘 만들어졌거나 오늘 다시 시작한 FAILED가 아닌 행 수(database-schema.md). 분석과 리뷰를 합친다.
     // 버려진 PENDING도 센다. 다시 시작해도 같은 행이라 1회 그대로다. 하루는 UTC 날짜이고, 시각은 DB 시계로만 잰다.
     // '1 day'는 세션 시간대(pgjdbc가 JVM 기본 시간대로 맞춘다)의 달력으로 더해져 DST 전환일에 23·25시간이 되므로 24시간을 더한다.
-    Usage usedToday(long userId) {
+    // since가 있으면(프로 구독을 시작한 시각) 그 뒤의 행만 센다. 오늘 무료로 쓴 횟수를 프로 한도에서 빼지 않는다(PRICE-04).
+    Usage usedToday(long userId, Instant since) {
         return jdbc.sql("select (select count(*) from ai_reviews r join submissions s on s.id = r.submission_id"
                 + "   where s.user_id = :userId and s.submission_kind = 'SUBMIT' and r.status <> 'FAILED'"
-                + "     and r.created_at >= t.day and r.created_at < t.day + interval '24 hours') as used,"
+                + "     and r.created_at >= greatest(t.day, coalesce(cast(:since as timestamptz), t.day))"
+                + "     and r.created_at < t.day + interval '24 hours') as used,"
                 + " t.day + interval '24 hours' as resets_at,"
                 // 역할은 토큰이 아니라 DB에서 읽는다. 관리자 회원 상세는 요청한 사람이 아닌 다른 회원을 묻는다.
                 + " coalesce((select u.role = 'ADMIN' from users u where u.id = :userId), false) as admin"
                 + " from (select date_trunc('day', now(), 'UTC') as day) t")
                 .param("userId", userId)
+                .param("since", since == null ? null : since.atOffset(ZoneOffset.UTC), Types.TIMESTAMP_WITH_TIMEZONE)
                 .query((rs, n) -> new Usage(rs.getInt("used"), rs.getObject("resets_at", OffsetDateTime.class).toInstant(),
                         rs.getBoolean("admin")))
                 .single();

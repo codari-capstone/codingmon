@@ -52,7 +52,7 @@ import com.jayway.jsonpath.JsonPath;
 // 실제 PostgreSQL에서 AI 하루 한도(#80)를 확인한다. 한도를 3으로 줄여 돌린다. 모델은 가짜다.
 // 동시 요청은 서로 다른 연결로 경쟁해야 하므로 테스트를 트랜잭션으로 감싸지 않는다.
 // 가짜 모델이 바로 답하면 요청 응답이 PENDING(202)일지 이미 끝났을지(200) 정해지지 않으므로, 그런 요청은 상태를 기다린 뒤 본다.
-@SpringBootTest(properties = { "app.llm.pending-timeout=1s", "app.llm.daily-limit=3", "app.llm.user-concurrency=2" })
+@SpringBootTest(properties = { "app.llm.pending-timeout=1s", "app.llm.daily-limit-free=3", "app.llm.user-concurrency=2" })
 class AiQuotaIntegrationTest {
 
     private static final String RESULT_JSON = """
@@ -218,9 +218,8 @@ class AiQuotaIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.quota.used").value(1))
                 .andExpect(jsonPath("$.quota.limit").value(3));
-        for (int level = 1; level <= 3; level++) {
-            hint(id, level).andExpect(status().isOk()).andExpect(jsonPath("$.quota.used").value(1));
-        }
+        // 무료 플랜은 1단계까지만 연다(PRICE-04).
+        hint(id, 1).andExpect(status().isOk()).andExpect(jsonPath("$.quota.used").value(1));
         assertThat(quotaUsed()).isEqualTo(1);
         assertThat(llm.calls).hasValue(1);
     }
@@ -462,7 +461,7 @@ class AiQuotaIntegrationTest {
 
     @Test
     void 동시_진행_상한이_1보다_작으면_만들지_못한다() {
-        assertThatThrownBy(() -> new AiQuotaService(reviews, transactionManager, 3, 0))
+        assertThatThrownBy(() -> new AiQuotaService(reviews, null, transactionManager, 3, 30, 0))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

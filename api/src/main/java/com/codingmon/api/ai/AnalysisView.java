@@ -8,7 +8,7 @@ import java.util.List;
 // quota는 응답할 때의 오늘 남은 횟수다(AI-01).
 record AnalysisView(long submissionId, AiReviewRepository.Status status, AiReviewRepository.FailureReason failureReason,
         boolean blocked, String summary,
-        List<Integer> suspectLines, List<String> facts, List<String> guesses, int revealedHintLevel, List<String> hints,
+        List<Integer> suspectLines, List<String> facts, List<String> guesses, int revealedHintLevel, int maxHintLevel, List<String> hints,
         Instant createdAt, Instant completedAt, AiQuota quota) {
 
     // result가 null이면 내용 없이 상태만 담는다(끝나지 않았거나 실패했거나 차단됐다).
@@ -16,11 +16,11 @@ record AnalysisView(long submissionId, AiReviewRepository.Status status, AiRevie
         if (result == null) {
             return new AnalysisView(stored.submissionId(), stored.status(), stored.failureReason(), blocked, null,
                     List.of(), List.of(),
-                    List.of(), stored.revealedHintLevel(), List.of(), stored.createdAt(), stored.completedAt(), quota);
+                    List.of(), stored.revealedHintLevel(), quota.maxHintLevel(), List.of(), stored.createdAt(), stored.completedAt(), quota);
         }
         List<String> hints = List.of(result.hints().observation(), result.hints().direction(), result.hints().principle());
         return new AnalysisView(stored.submissionId(), stored.status(), null, false, result.summary(), result.suspectLines(),
-                result.facts(), result.guesses(), stored.revealedHintLevel(),
+                result.facts(), result.guesses(), stored.revealedHintLevel(), quota.maxHintLevel(),
                 hints.subList(0, stored.revealedHintLevel()), stored.createdAt(), stored.completedAt(), quota);
     }
 }

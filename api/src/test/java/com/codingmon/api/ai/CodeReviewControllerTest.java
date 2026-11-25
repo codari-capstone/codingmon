@@ -43,7 +43,7 @@ import org.springframework.web.context.WebApplicationContext;
 // 실제 PostgreSQL에서 AI 코드 리뷰(F3) 요청·저장·재사용, 정답 코드 검사, 분석과 합친 하루 한도를 API로 확인한다(#82). 모델은 가짜다.
 // 리뷰와 함께 저장하는 다음 개념(ai_review_next_concepts, #83)도 여기서 본다. 매칭 규칙은 ConceptTagMatcherTest가 본다.
 // 버려진 PENDING을 빨리 보려고 제한 시간을 1초로, 한도를 넘기기 쉽게 하루 한도를 3회로 둔다.
-@SpringBootTest(properties = { "app.llm.pending-timeout=1s", "app.llm.daily-limit=3" })
+@SpringBootTest(properties = { "app.llm.pending-timeout=1s", "app.llm.daily-limit-free=3" })
 class CodeReviewControllerTest {
 
     private static final String SOURCE = "n = int(input())\ntotal = 0\nfor i in range(1, n + 1):\n    total = total + i * i\n"
