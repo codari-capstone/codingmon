@@ -75,6 +75,7 @@ import {
 import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from './fixtures/users'
 import {
   changeMockSubscription,
+  proStartedAt,
   removeMockSubscription,
   startMockSubscription,
   subscriptionFor,
@@ -308,9 +309,11 @@ export function resetLearningReport(): void {
 function mockQuota(userId: number | null, admin: boolean, now = new Date()): AiQuota {
   const plan = userId === null ? 'FREE' : subscriptionFor(userId).plan
   const today = now.toISOString().slice(0, 10)
+  // 프로는 이번 구독을 시작한 뒤에 쓴 것만 센다. 결제한 날 무료로 쓴 횟수와 상관없이 30회로 시작한다(계약 `AiQuota`)
+  const since = plan === 'PRO' && userId !== null ? (proStartedAt(userId) ?? '') : ''
   // 분석과 리뷰는 한도를 함께 쓴다(계약 `AiQuota`)
   const created = [...[...mockAnalyses.values()].map((a) => a.createdAt), ...mockReviews.values()]
-  const used = created.filter((at) => at.slice(0, 10) === today).length
+  const used = created.filter((at) => at.slice(0, 10) === today && at >= since).length
   const resetsAt = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
   ).toISOString()
@@ -334,7 +337,10 @@ function analysisView(
   quota: AiQuota,
   pending = false,
 ): SubmissionAnalysis {
-  const base = { submissionId, failureReason: null, blocked: false, createdAt, quota }
+  // 열 수 있는 힌트 단계는 요금제로 정한다(계약 `maxHintLevel`, PRICE-04). shortcut: 목의 힌트 열기는 아직
+  // 이 값으로 막지 않는다(서버는 403 `HINT_PLAN_REQUIRED`), 힌트 화면이 이 값을 읽을 때 함께 막는다
+  const maxHintLevel: SubmissionAnalysis['maxHintLevel'] = quota.plan === 'PRO' ? 3 : 1
+  const base = { submissionId, failureReason: null, blocked: false, createdAt, quota, maxHintLevel }
   if (pending) {
     return {
       ...base,

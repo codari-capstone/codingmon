@@ -184,6 +184,7 @@ function analysisAt(level: number): SubmissionAnalysis {
     submissionId: WRONG,
     status: 'COMPLETED',
     failureReason: null,
+    maxHintLevel: 3,
     blocked: false,
     summary: '요약',
     suspectLines: [],

@@ -48,6 +48,7 @@ function analysis(over: Partial<SubmissionAnalysis> = {}): SubmissionAnalysis {
     status: 'COMPLETED',
     failureReason: null,
     blocked: false,
+    maxHintLevel: 3,
     summary: '요약 문장',
     suspectLines: [2],
     facts: ['확인된 사실'],
