@@ -54,6 +54,10 @@ jobs:
       - name: 빌드
         run: npm run build
 
+      # E2E는 vite preview로 돌아 nginx.conf를 거치지 않는다. 운영 이미지와 같은 nginx로 띄워 응답을 본다
+      - name: nginx 설정
+        run: bash scripts/check-nginx.sh
+
       - name: Playwright 브라우저 설치
         run: npx playwright install --with-deps chromium
 
