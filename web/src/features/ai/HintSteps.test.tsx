@@ -184,6 +184,7 @@ function analysisAt(level: number): SubmissionAnalysis {
     submissionId: WRONG,
     status: 'COMPLETED',
     failureReason: null,
+    maxHintLevel: 3,
     blocked: false,
     summary: '요약',
     suspectLines: [],
@@ -193,6 +194,6 @@ function analysisAt(level: number): SubmissionAnalysis {
     hints: ['힌트 1', '힌트 2', '힌트 3'].slice(0, level),
     createdAt: '2026-11-07T00:00:00Z',
     completedAt: '2026-11-07T00:00:05Z',
-    quota: { limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' },
+    quota: { plan: 'FREE', limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' },
   }
 }

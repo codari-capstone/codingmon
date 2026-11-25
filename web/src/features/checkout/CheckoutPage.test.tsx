@@ -1,4 +1,4 @@
-import { QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider, QueryObserver } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Subscription } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
+import { AI_QUOTA_QUERY_KEY, aiQuotaQuery } from '@/features/ai/analysisQuery'
 import { freeSubscription } from '@/mocks/fixtures/subscriptions'
 import { server } from '@/mocks/server'
 import { saveDraft } from './checkoutDraft'
@@ -54,12 +55,13 @@ function renderCheckout({
     ],
     { initialEntries: [url] },
   )
+  const client = createQueryClient()
   render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
-  return { router, sent }
+  return { router, sent, client }
 }
 
 const payButton = () => screen.getByRole('button', { name: /결제하기|결제 중/ })
@@ -194,6 +196,55 @@ describe('CheckoutPage 결제 결과 (PAY-02)', () => {
     await user.click(payButton())
     return { user, ...rendered }
   }
+
+  it('결제가 끝나면 AI 한도 캐시를 지운다 (#369 리뷰)', async () => {
+    // 한도는 요금제로 정해진다(#321). 무효화만 하면 결과 화면이 다시 받는 동안 옛 무료 한도를 그린다
+    vi.mocked(requestBillingKey).mockResolvedValue({ billingKey: 'billing-1' })
+    const user = userEvent.setup()
+    const { client } = renderCheckout()
+    client.setQueryData(AI_QUOTA_QUERY_KEY, {
+      plan: 'FREE',
+      limit: 3,
+      used: 3,
+      remaining: 0,
+      resetsAt: '2026-11-08T00:00:00Z',
+    })
+    await agreeAll(user)
+    expect(client.getQueryData(AI_QUOTA_QUERY_KEY)).toBeDefined()
+
+    await user.click(payButton())
+
+    await screen.findByRole('heading', { name: '프로 구독이 시작됐어요' })
+    await waitFor(() => expect(client.getQueryData(AI_QUOTA_QUERY_KEY)).toBeUndefined())
+  })
+
+  it('결제가 끝날 때 한도를 보는 화면이 떠 있으면 바로 다시 받는다 (#369 리뷰)', async () => {
+    // 결제 응답 전에 뒤로 가 결과 화면이 떠 있는 경우다. 지우기만 하면 그 화면은 옛 무료 한도를 붙잡고 있다
+    const PRO = { plan: 'PRO', limit: 30, used: 0, remaining: 30, resetsAt: '2026-11-08T00:00:00Z' }
+    server.use(http.get('*/api/users/me/ai-quota', () => HttpResponse.json(PRO)))
+    vi.mocked(requestBillingKey).mockResolvedValue({ billingKey: 'billing-1' })
+    const user = userEvent.setup()
+    const { client } = renderCheckout()
+    client.setQueryData(AI_QUOTA_QUERY_KEY, {
+      ...PRO,
+      plan: 'FREE',
+      limit: 3,
+      used: 3,
+      remaining: 0,
+    })
+    const seen: unknown[] = []
+    const unsubscribe = new QueryObserver(client, {
+      ...aiQuotaQuery(),
+      staleTime: Infinity,
+    }).subscribe((result) => seen.push(result.data))
+    await agreeAll(user)
+
+    await user.click(payButton())
+
+    await screen.findByRole('heading', { name: '프로 구독이 시작됐어요' })
+    await waitFor(() => expect(seen.at(-1)).toEqual(PRO))
+    unsubscribe()
+  })
 
   it('성공: 플랜과 다음 결제일, 문제 풀러 가기·내 구독 보기', async () => {
     await payWith(() => HttpResponse.json(ACTIVE, { status: 201 }))

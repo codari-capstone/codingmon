@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { Link } from 'react-router'
 
 import type { SubmissionAnalysis } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { problemCode, problemMessage } from '@/features/auth/problemCode'
+import { AI_DAILY } from '@/features/pricing/plans'
 import { AI_QUOTA_QUERY_KEY, aiQuotaQuery } from './analysisQuery'
 
 /** 분석·리뷰가 같은 모양으로 주는 상태 (계약 `SubmissionAnalysis`·`SubmissionCodeReview`). */
@@ -49,7 +51,15 @@ export function AiRequest({
   /** 처음 누르는 버튼 이름. 실패한 뒤에는 '다시 시도'다 */
   label: string
 }) {
-  const { data: quota, dataUpdatedAt, errorUpdatedAt } = useQuery(aiQuotaQuery())
+  const {
+    data: quota,
+    dataUpdatedAt,
+    errorUpdatedAt,
+  } = useQuery({
+    ...aiQuotaQuery(),
+    // 다 썼으면 버튼이 꺼져 429로 바로잡을 길이 없다. 다른 탭에서 결제했을 수 있어 돌아오면 30초 안이어도 다시 받는다(#369 리뷰)
+    refetchOnWindowFocus: (query) => (query.state.data?.remaining === 0 ? 'always' : false),
+  })
 
   const abandonedToday =
     result?.status === 'FAILED' &&
@@ -57,6 +67,9 @@ export function AiRequest({
     quota !== undefined &&
     Date.parse(result.createdAt) >= Date.parse(quota.resetsAt) - DAY_MS
   const outOfQuota = quota?.remaining === 0 && !abandonedToday
+  // 한도를 정한 요금제가 무료일 때만 요금제를 안내한다(AI-06). 서버가 같은 응답에 실어 주므로 구독을 따로
+  // 묻지 않고, 한도 숫자로 요금제를 짐작하지 않는다. plan을 주기 전 서버에서는 안내하지 않는다(#369 리뷰)
+  const showUpgrade = canRequest && outOfQuota && quota?.plan === 'FREE'
   const exhausted = quota
     ? `오늘 AI 분석·리뷰 ${quota.limit}회를 다 썼어요. ${RESETS_AT.format(new Date(quota.resetsAt))}에 다시 쓸 수 있어요.`
     : ''
@@ -117,6 +130,14 @@ export function AiRequest({
             : quota.limit === null
               ? '관리자는 AI 분석·리뷰를 한도 없이 써요' // #343. remaining도 null이라 outOfQuota가 되지 않는다
               : `오늘 남은 AI 분석·리뷰 ${quota.remaining} / ${quota.limit}회`}
+        </p>
+      ) : null}
+      {showUpgrade ? (
+        <p className={invite ? 'text-inverse-muted text-sm' : 'text-muted-foreground text-sm'}>
+          프로는 하루 {AI_DAILY.pro}회까지 쓸 수 있어요.{' '}
+          <Button asChild variant="link" className={invite ? 'text-inverse-foreground' : undefined}>
+            <Link to="/pricing">요금제 보기</Link>
+          </Button>
         </p>
       ) : null}
     </>

@@ -6,6 +6,7 @@ import type { ProblemListQuery, ProblemPage } from '@/api/types'
 import { MOCK_CODE, resetEmailCodes } from './fixtures/emailCodes'
 import { kstYear } from './fixtures/activity'
 import { conceptTags, problems } from './fixtures/problems'
+import { resetSubscriptions, startMockSubscription } from './fixtures/subscriptions'
 import { mockAccessToken, mockAccounts } from './fixtures/users'
 import {
   reportsSent,
@@ -1086,5 +1087,23 @@ describe('AI 오답 분석 목', () => {
       expect(outOfRange.response.status).toBe(400)
       expect(code(outOfRange)).toBeUndefined()
     })
+  })
+})
+
+describe('AI 한도 목 (#321)', () => {
+  afterEach(() => {
+    resetSubmissions()
+    resetSubscriptions()
+  })
+  const asCodari = { headers: { Authorization: `Bearer ${mockAccessToken(1)}` } }
+  const quota = async () => (await api.GET('/api/users/me/ai-quota', asCodari)).data
+
+  it('무료는 3회이고, 프로는 결제 전에 쓴 횟수와 상관없이 30회로 시작한다', async () => {
+    await api.POST('/api/submissions/{id}/analysis', { params: { path: { id: 23 } } })
+    expect(await quota()).toMatchObject({ plan: 'FREE', limit: 3, used: 1, remaining: 2 })
+
+    startMockSubscription(1, 'MONTHLY')
+
+    expect(await quota()).toMatchObject({ plan: 'PRO', limit: 30, used: 0, remaining: 30 })
   })
 })

@@ -1,5 +1,5 @@
-import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { focusManager, QueryClientProvider } from '@tanstack/react-query'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -48,6 +48,7 @@ function analysis(over: Partial<SubmissionAnalysis> = {}): SubmissionAnalysis {
     status: 'COMPLETED',
     failureReason: null,
     blocked: false,
+    maxHintLevel: 3,
     summary: '요약 문장',
     suspectLines: [2],
     facts: ['확인된 사실'],
@@ -56,12 +57,18 @@ function analysis(over: Partial<SubmissionAnalysis> = {}): SubmissionAnalysis {
     hints: [],
     createdAt: '2026-11-07T00:00:00Z',
     completedAt: '2026-11-07T00:00:05Z',
-    quota: { limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' },
+    quota: { plan: 'FREE', limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' },
     ...over,
   }
 }
 
-const QUOTA = { limit: 20, used: 0, remaining: 20, resetsAt: '2026-11-08T00:00:00Z' }
+const QUOTA = {
+  plan: 'FREE' as const,
+  limit: 20,
+  used: 0,
+  remaining: 20,
+  resetsAt: '2026-11-08T00:00:00Z',
+}
 
 /** 오늘 남은 횟수를 정해 둔다. 목의 조회는 토큰을 보는데 이 테스트는 토큰 없이 그린다. */
 function quotaLeft(remaining: number) {
@@ -180,6 +187,101 @@ describe('AnalysisPanel', () => {
       expect(await screen.findByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
       expect(screen.getByText('틀렸습니다')).toBeInTheDocument()
+    })
+
+    describe('한도를 다 쓴 무료 사용자에게 요금제 안내 (AI-06, #321)', () => {
+      afterEach(() => focusManager.setFocused(undefined))
+
+      // 무료인지는 서버가 한도와 함께 주는 plan으로 안다. 안내와 '다 썼어요'는 같은 응답으로 함께 그려진다
+      function quota(plan: 'FREE' | 'PRO' | undefined, limit: number, remaining: number) {
+        server.use(
+          http.get('*/api/users/me/ai-quota', () =>
+            HttpResponse.json({ ...QUOTA, plan, limit, used: limit - remaining, remaining }),
+          ),
+        )
+      }
+
+      it('무료 한도를 다 썼으면 요금제 화면으로 가는 링크를 보인다', async () => {
+        quota('FREE', 3, 0)
+        renderResult(WRONG)
+
+        expect(await screen.findByRole('link', { name: '요금제 보기' })).toHaveAttribute(
+          'href',
+          '/pricing',
+        )
+        expect(screen.getByText(/프로는 하루 30회까지 쓸 수 있어요/)).toBeInTheDocument()
+      })
+
+      it('프로 한도를 다 썼으면 보이지 않는다', async () => {
+        quota('PRO', 30, 0)
+        renderResult(WRONG)
+
+        await screen.findByText(/오늘 AI 분석·리뷰 30회를 다 썼어요/)
+        expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
+      })
+
+      it('프로의 한도가 무료와 같은 숫자여도 보이지 않는다 (#369 리뷰)', async () => {
+        // 서버 전역 한도를 3으로 낮추면 프로도 3이다. 숫자로 요금제를 짐작하면 프로에게 안내가 뜬다
+        quota('PRO', 3, 0)
+        renderResult(WRONG)
+
+        await screen.findByText(/오늘 AI 분석·리뷰 3회를 다 썼어요/)
+        expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
+      })
+
+      it('plan을 주기 전 서버의 응답이면 보이지 않는다', async () => {
+        quota(undefined, 3, 0)
+        renderResult(WRONG)
+
+        await screen.findByText(/오늘 AI 분석·리뷰 3회를 다 썼어요/)
+        expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
+      })
+
+      it('무료 한도가 남았으면 보이지 않는다', async () => {
+        quota('FREE', 3, 1)
+        renderResult(WRONG)
+
+        await screen.findByText('오늘 남은 AI 분석·리뷰 1 / 3회')
+        expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
+      })
+
+      it('다 쓴 채로 다른 탭에서 결제하고 돌아오면 한도를 다시 받는다 (#369 리뷰)', async () => {
+        // 앱은 창 포커스에 다시 받지 않는다(queryClient). 다 썼으면 버튼이 꺼져 429로 바로잡을 수도 없다
+        quota('FREE', 3, 0)
+        renderResult(WRONG)
+        await screen.findByRole('link', { name: '요금제 보기' })
+
+        quota('PRO', 30, 30)
+        act(() => {
+          focusManager.setFocused(false)
+          focusManager.setFocused(true)
+        })
+
+        expect(await screen.findByText('오늘 남은 AI 분석·리뷰 30 / 30회')).toBeInTheDocument()
+        expect(screen.queryByRole('link', { name: '요금제 보기' })).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled()
+      })
+
+      it('남은 횟수가 있으면 돌아와도 다시 받지 않는다', async () => {
+        let asked = 0
+        server.use(
+          http.get('*/api/users/me/ai-quota', () => {
+            asked += 1
+            return HttpResponse.json({ ...QUOTA, plan: 'FREE', limit: 3, used: 1, remaining: 2 })
+          }),
+        )
+        renderResult(WRONG)
+        await screen.findByText('오늘 남은 AI 분석·리뷰 2 / 3회')
+        const before = asked
+
+        act(() => {
+          focusManager.setFocused(false)
+          focusManager.setFocused(true)
+        })
+
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(asked).toBe(before)
+      })
     })
 
     it('누른 뒤 한도 초과(429)를 받으면 버튼을 끄고 안내를 한 번만 보인다', async () => {

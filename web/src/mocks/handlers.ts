@@ -1,5 +1,6 @@
 import { http, HttpResponse, type RequestHandler } from 'msw'
 
+import { AI_DAILY } from '@/features/pricing/plans'
 import type {
   AdminReportDetail,
   AdminReportSummary,
@@ -74,6 +75,7 @@ import {
 import { mockAccessToken, mockAccounts, REFRESH_COOKIE, userIdFromToken } from './fixtures/users'
 import {
   changeMockSubscription,
+  proStartedAt,
   removeMockSubscription,
   startMockSubscription,
   subscriptionFor,
@@ -299,31 +301,33 @@ export function resetLearningReport(): void {
   mockReportGeneratedAt = null
 }
 
-/** 하루 AI 분석·리뷰 한도 (AI-01). 계약의 `AiQuota.limit` 설명과 같은 값이다. */
-const AI_DAILY_LIMIT = 20
-
 /**
  * 오늘 남은 AI 횟수 (AI-01). 하루는 UTC 날짜다(계약). 목은 사용자를 나누지 않고 오늘 만든 분석 수를 센다 —
  * 분석 목이 세션을 보지 않는 것과 같다. 한도를 넘는 429는 화면 작업에서 필요할 때 더한다.
+ * 한도는 목 구독의 요금제로 정한다(#321, 계약 `AiQuota.plan`). 로그인하지 않았으면 무료로 본다.
  */
-function mockQuota(now = new Date(), admin = false): AiQuota {
+function mockQuota(userId: number | null, admin: boolean, now = new Date()): AiQuota {
+  const plan = userId === null ? 'FREE' : subscriptionFor(userId).plan
   const today = now.toISOString().slice(0, 10)
+  // 프로는 이번 구독을 시작한 뒤에 쓴 것만 센다. 결제한 날 무료로 쓴 횟수와 상관없이 30회로 시작한다(계약 `AiQuota`)
+  const since = plan === 'PRO' && userId !== null ? (proStartedAt(userId) ?? '') : ''
   // 분석과 리뷰는 한도를 함께 쓴다(계약 `AiQuota`)
   const created = [...[...mockAnalyses.values()].map((a) => a.createdAt), ...mockReviews.values()]
-  const used = created.filter((at) => at.slice(0, 10) === today).length
+  const used = created.filter((at) => at.slice(0, 10) === today && at >= since).length
   const resetsAt = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
   ).toISOString()
-  // 관리자는 하루 한도가 없다(#343)
-  if (admin) return { limit: null, used, remaining: null, resetsAt }
-  return { limit: AI_DAILY_LIMIT, used, remaining: Math.max(0, AI_DAILY_LIMIT - used), resetsAt }
+  // 관리자는 하루 한도가 없고, 구독과 상관없이 늘 PRO다(#343, 계약 `AiQuota.plan`)
+  if (admin) return { plan: 'PRO', limit: null, used, remaining: null, resetsAt }
+  const limit = plan === 'PRO' ? AI_DAILY.pro : AI_DAILY.free
+  return { plan, limit, used, remaining: Math.max(0, limit - used), resetsAt }
 }
 
 /** 요청한 사용자의 오늘 횟수. 관리자면 한도가 없다(#343). 응답의 quota가 화면의 횟수 캐시를 덮으므로 모든 응답이 이것을 쓴다 */
 function requestQuota(request: Request): AiQuota {
   const id = userIdFromToken(bearer(request))
   const account = mockAccounts.find((item) => item.user.id === id)
-  return mockQuota(new Date(), account?.user.role === 'ADMIN')
+  return mockQuota(id, account?.user.role === 'ADMIN')
 }
 
 /** 분석 응답. 내용은 AI_FEATURES 5절의 역방향 피라미드 예시다. 힌트는 연 단계까지만 준다(계약). */
@@ -333,7 +337,10 @@ function analysisView(
   quota: AiQuota,
   pending = false,
 ): SubmissionAnalysis {
-  const base = { submissionId, failureReason: null, blocked: false, createdAt, quota }
+  // 열 수 있는 힌트 단계는 요금제로 정한다(계약 `maxHintLevel`, PRICE-04). shortcut: 목의 힌트 열기는 아직
+  // 이 값으로 막지 않는다(서버는 403 `HINT_PLAN_REQUIRED`), 힌트 화면이 이 값을 읽을 때 함께 막는다
+  const maxHintLevel: SubmissionAnalysis['maxHintLevel'] = quota.plan === 'PRO' ? 3 : 1
+  const base = { submissionId, failureReason: null, blocked: false, createdAt, quota, maxHintLevel }
   if (pending) {
     return {
       ...base,
@@ -990,7 +997,7 @@ export const handlers: RequestHandler[] = [
       ...found.user,
       // 목 결제(POST /api/users/me/subscription)가 쓰는 같은 저장소에서 읽는다. 사본을 두면 둘이 어긋난다
       subscription: subscriptionFor(found.user.id),
-      aiQuota: mockQuota(new Date(), found.user.role === 'ADMIN'),
+      aiQuota: mockQuota(found.user.id, found.user.role === 'ADMIN'),
     })
   }),
 
