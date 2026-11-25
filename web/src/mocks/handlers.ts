@@ -314,8 +314,8 @@ function mockQuota(userId: number | null, admin: boolean, now = new Date()): AiQ
   const resetsAt = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
   ).toISOString()
-  // 관리자는 하루 한도가 없다(#343)
-  if (admin) return { plan, limit: null, used, remaining: null, resetsAt }
+  // 관리자는 하루 한도가 없고, 구독과 상관없이 늘 PRO다(#343, 계약 `AiQuota.plan`)
+  if (admin) return { plan: 'PRO', limit: null, used, remaining: null, resetsAt }
   const limit = plan === 'PRO' ? AI_DAILY.pro : AI_DAILY.free
   return { plan, limit, used, remaining: Math.max(0, limit - used), resetsAt }
 }

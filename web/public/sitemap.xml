@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  검색에 내보낼 공개 화면만 둔다. 주소는 화면의 canonical과 같은 꼴(소문자, 끝 슬래시 없음)이다.
+  로그인·회원가입·비밀번호 찾기는 색인은 되지만 찾아 들어올 화면이 아니라 넣지 않는다.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://codingmon.tech/</loc>
+  </url>
+  <url>
+    <loc>https://codingmon.tech/problems</loc>
+  </url>
+  <url>
+    <loc>https://codingmon.tech/pricing</loc>
+  </url>
+  <url>
+    <loc>https://codingmon.tech/terms</loc>
+  </url>
+  <url>
+    <loc>https://codingmon.tech/privacy</loc>
+  </url>
+  <url>
+    <loc>https://codingmon.tech/refund</loc>
+  </url>
+</urlset>
