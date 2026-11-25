@@ -59,7 +59,7 @@ npm run dev:mock
 | `index.html` `<head>` | 공통 제목·설명·OG·아이콘·구조화 데이터, 네이버 서치어드바이저 소유 확인 메타. 화면별 제목·canonical·noindex는 `src/app/PageHead.tsx`가 단다 |
 | `public/robots.txt` | 사이트맵 주소. 운영에서는 Cloudflare가 관리형 규칙(학습용 AI 크롤러 차단, Content-Signal)을 이 파일 앞에 붙인다 |
 | `public/sitemap.xml` | 검색에 내보낼 공개 화면의 정식 주소 |
-| `nginx.conf` | `.txt`·`.xml`·아이콘·manifest 같은 정적 파일은 없으면 404로 답한다. `index.html`로 보내는 것은 화면 경로뿐이다 |
+| `nginx.conf` | `.txt`·`.xml`·아이콘·manifest 같은 정적 파일은 없으면 404로 답한다. `index.html`로 보내는 것은 화면 경로뿐이다. manifest는 `application/manifest+json`으로 내보낸다 |
 
 - 공개 화면을 새로 만들면 `sitemap.xml`에 canonical과 같은 꼴(소문자, 끝 슬래시 없음)로 넣는다. `e2e/seo.spec.ts`가 사이트맵 주소마다 canonical이 같고 noindex가 없는지 본다.
 - 로그인이 필요한 화면은 `robots.txt`로 막지 않는다. 막으면 크롤러가 화면을 읽지 못해 로그인 화면으로 돌려보내는 것과 noindex를 보지 못하고 주소만 색인할 수 있다.
