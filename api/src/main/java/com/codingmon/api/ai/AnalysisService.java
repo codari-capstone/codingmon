@@ -88,15 +88,20 @@ class AnalysisService {
         if (stored.blocked()) {
             throw ApiErrors.error(HttpStatus.CONFLICT, "ANALYSIS_BLOCKED", "이 분석은 보여 줄 수 없어요");
         }
+        // 요금제가 여는 단계까지만 새로 연다(PRICE-04). 프로일 때 이미 연 단계는 아래에서 그대로 돌려준다.
+        AiQuota today = quota.status(userId);
+        if (level > stored.revealedHintLevel() && level > today.maxHintLevel()) {
+            throw ApiErrors.error(HttpStatus.FORBIDDEN, "HINT_PLAN_REQUIRED", "다음 단계 힌트는 프로에서 열 수 있어요");
+        }
         if (level > stored.revealedHintLevel() + 1) {
             throw ApiErrors.error(HttpStatus.CONFLICT, "HINT_LEVEL_SKIPPED", "앞 단계 힌트를 먼저 열어 주세요");
         }
         if (level <= stored.revealedHintLevel()) {
-            return view(userId, stored);
+            return view(stored, today);
         }
         reviews.revealHint(stored.id(), level);
         stats.recordHintRevealed(submissionId, level);
-        return view(userId, stored.withRevealedHintLevel(level));
+        return view(stored.withRevealedHintLevel(level), today);
     }
 
     // 처리기에 넣을 요청. 입력과 정답 코드 검사·사실 검증 자료를 읽는다. 읽지 못하면 던지고, runner가 행을 FAILED로 바꾼다.
@@ -114,7 +119,10 @@ class AnalysisService {
 
     // 남은 횟수는 결과를 만든 날이 아니라 응답하는 지금 기준이다(contracts의 SubmissionAnalysis.quota).
     private AnalysisView view(long userId, AiReviewRepository.Stored stored) {
-        AiQuota today = quota.status(userId);
+        return view(stored, quota.status(userId));
+    }
+
+    private AnalysisView view(AiReviewRepository.Stored stored, AiQuota today) {
         if (stored.status() != AiReviewRepository.Status.COMPLETED || stored.blocked()) {
             return AnalysisView.of(stored, stored.blocked(), null, today);
         }

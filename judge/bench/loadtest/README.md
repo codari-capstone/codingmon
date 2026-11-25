@@ -45,7 +45,7 @@ docker compose up -d api
 
 - `LLM_QUEUE_CAPACITY`: 기본 20이면 처리 중 5 + 줄 20 = 25명을 넘는 요청이 바로 BUSY가 된다. 대기 시간을 재려고 늘린다.
 - `JUDGE_PENDING_LIMIT`: 100명이 예제 실행과 제출을 함께 내면 기본 100에 닿는다.
-- AI 하루 한도(`LLM_DAILY_LIMIT`, 계정당 20회)는 측정 1회에 계정당 1회만 쓰므로 그대로 둔다.
+- AI 하루 한도(`LLM_DAILY_LIMIT_FREE`, 무료 계정당 3회)는 측정 1회에 계정당 1회만 쓰므로 그대로 둔다.
 
 ### 4. 코드 묶음 (`pool.json`)
 

@@ -73,6 +73,16 @@ public class Subscriptions {
                 periodEnd, paymentPending, customerId);
     }
 
+    // AI 하루 한도와 힌트 단계(PRICE-04)를 나누는 요금제. 프로면 이번 구독을 시작한 시각, 무료면 비어 있다.
+    // 구독 한 행만 읽어 어느 트랜잭션에서 불러도 한 시점이다. 남은 결제는 보지 않는다.
+    // 구독 조회와 다른 경우는 하나다: 갱신 결제를 확인하는 중에 해지(정지)한 구독은
+    // 기간이 지나면 결제가 확정될 때까지 무료로 본다(조회는 그동안 프로로 보여 준다).
+    public Optional<Instant> proSince(long userId) {
+        Optional<Sub> sub = repo.findSub(userId);
+        return PaymentResolver.isPro(PaymentResolver.effective(sub, Optional.empty(), Instant.now()))
+                ? sub.map(Sub::anchorAt) : Optional.empty();
+    }
+
     // 관리자 회원 목록·상세용. 고객 ID를 만들지 않는다(없으면 null).
     public View adminView(long userId) {
         return view(userId, repo.findCustomerId(userId).orElse(null));
