@@ -49,3 +49,57 @@ test('공개 화면은 제목과 canonical, 로그인이 필요한 화면은 noi
   await expect(page).toHaveTitle('페이지를 찾을 수 없어요 | Codingmon')
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex')
 })
+
+test('robots.txt가 사이트맵을 알리고, 사이트맵에는 검색에 내보내는 화면의 정식 주소만 있다', async ({
+  page,
+  request,
+}) => {
+  const robots = await request.get('/robots.txt')
+  expect(robots.headers()['content-type']).toContain('text/plain')
+  // 주석 처리된 줄은 크롤러가 읽지 않는다
+  const directives = (await robots.text()).split('\n').map((line) => line.replace(/#.*/, '').trim())
+  expect(directives).toContain('Sitemap: https://codingmon.tech/sitemap.xml')
+
+  const sitemap = await request.get('/sitemap.xml')
+  expect(sitemap.headers()['content-type']).toContain('xml')
+  // 크롤러처럼 XML로 읽는다. 태그가 깨지면 parsererror가 생겨 null이 된다
+  const locs = await page.evaluate(
+    (xml) => {
+      const doc = new DOMParser().parseFromString(xml, 'application/xml')
+      if (doc.querySelector('parsererror')) return null
+      return Array.from(doc.querySelectorAll('urlset > url > loc'), (loc) =>
+        loc.textContent?.trim(),
+      )
+    },
+    await sitemap.text(),
+  )
+  expect(locs, '사이트맵 XML을 읽지 못했다').not.toBeNull()
+  expect(locs).toContain('https://codingmon.tech/')
+
+  // 사이트맵 주소가 화면의 canonical과 다르거나 noindex 화면이면 검색엔진이 사이트맵을 덜 믿는다.
+  // 로그인이 필요한 화면은 로그인 화면으로 돌려보내져 canonical이 달라지므로 여기서 걸린다
+  for (const loc of locs ?? []) {
+    if (!loc) throw new Error('빈 <loc>가 있다')
+    await page.goto(new URL(loc).pathname)
+    await expect(page.locator('link[rel="canonical"]'), loc).toHaveAttribute('href', loc)
+    await expect(page.locator('meta[name="robots"]'), loc).toHaveCount(0)
+  }
+})
+
+test('JS 없이 받은 HTML에 네이버 서치어드바이저 소유 확인 메타가 있다', async ({
+  page,
+  request,
+}) => {
+  // 서치어드바이저는 이 메타로 소유를 확인한다. 빠지거나 값이 바뀌면 확인이 풀린다.
+  // DOMParser는 스크립트를 돌리지 않고, 주석 안의 태그는 요소로 읽지 않는다
+  const html = await (await request.get('/')).text()
+  const token = await page.evaluate(
+    (source) =>
+      new DOMParser()
+        .parseFromString(source, 'text/html')
+        .querySelector('head meta[name="naver-site-verification"]')
+        ?.getAttribute('content') ?? null,
+    html,
+  )
+  expect(token).toBe('b0694971d1f72e51a0c2afd042ef743c70cd9df6')
+})

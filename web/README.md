@@ -51,3 +51,18 @@ npm run dev:mock
 - `npm run gen:api`는 `contracts/openapi.yaml`이 있어야 동작한다. 1주차 M1에서 명세를 확정한다.
 - `shadcn add <부품>` 뒤에는 `npm run format`을 돌린다. 생성 코드가 쌍따옴표를 쓴다.
 - `VITE_` 접두사가 붙은 환경 변수는 브라우저에서 누구나 볼 수 있다. 비밀값은 넣지 않는다.
+
+## 검색 노출
+
+| 파일 | 역할 |
+| --- | --- |
+| `index.html` `<head>` | 공통 제목·설명·OG·아이콘·구조화 데이터, 네이버 서치어드바이저 소유 확인 메타. 화면별 제목·canonical·noindex는 `src/app/PageHead.tsx`가 단다 |
+| `public/robots.txt` | 사이트맵 주소. 운영에서는 Cloudflare가 관리형 규칙(학습용 AI 크롤러 차단, Content-Signal)을 이 파일 앞에 붙인다 |
+| `public/sitemap.xml` | 검색에 내보낼 공개 화면의 정식 주소 |
+| `nginx.conf` | `.txt`·`.xml`·아이콘·manifest 같은 정적 파일은 없으면 404로 답한다. `index.html`로 보내는 것은 화면 경로뿐이다. manifest는 `application/manifest+json`으로 내보낸다 |
+
+- 공개 화면을 새로 만들면 `sitemap.xml`에 canonical과 같은 꼴(소문자, 끝 슬래시 없음)로 넣는다. `e2e/seo.spec.ts`가 사이트맵 주소마다 canonical이 같고 noindex가 없는지 본다.
+- E2E는 `vite preview`로 돌아 `nginx.conf`를 거치지 않는다. nginx 응답은 `scripts/check-nginx.sh`가 운영 이미지와 같은 nginx로 띄워 본다(web CI가 빌드 뒤에 돌린다. 로컬은 `npm run build && bash scripts/check-nginx.sh`, Docker 필요).
+- 로그인이 필요한 화면은 `robots.txt`로 막지 않는다. 막으면 크롤러가 화면을 읽지 못해 로그인 화면으로 돌려보내는 것과 noindex를 보지 못하고 주소만 색인할 수 있다.
+- 학습용 AI 크롤러는 Cloudflare 관리형 robots.txt로 막는다. 이 설정은 끄지 않고, 우리 `robots.txt`에서도 풀지 않는다.
+- 구글 서치콘솔은 도메인 속성으로, Cloudflare DNS의 `google-site-verification` TXT 레코드로 소유를 확인한다. 네이버 서치어드바이저는 `index.html`의 `naver-site-verification` 메타로 확인한다. 레코드나 메타를 지우면 확인이 풀린다. 두 곳 모두 `https://codingmon.tech/sitemap.xml`을 제출했다.
