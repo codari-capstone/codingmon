@@ -49,3 +49,25 @@ test('공개 화면은 제목과 canonical, 로그인이 필요한 화면은 noi
   await expect(page).toHaveTitle('페이지를 찾을 수 없어요 | Codingmon')
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex')
 })
+
+test('robots.txt가 사이트맵을 알리고, 사이트맵에는 검색에 내보내는 화면의 정식 주소만 있다', async ({
+  page,
+  request,
+}) => {
+  const robots = await request.get('/robots.txt')
+  expect(robots.headers()['content-type']).toContain('text/plain')
+  expect(await robots.text()).toContain('Sitemap: https://codingmon.tech/sitemap.xml')
+
+  const sitemap = await request.get('/sitemap.xml')
+  expect(sitemap.headers()['content-type']).toContain('xml')
+  const locs = [...(await sitemap.text()).matchAll(/<loc>(.+?)<\/loc>/g)].map((m) => m[1])
+  expect(locs).toContain('https://codingmon.tech/')
+
+  // 사이트맵 주소가 화면의 canonical과 다르거나 noindex 화면이면 검색엔진이 사이트맵을 덜 믿는다.
+  // 로그인이 필요한 화면은 로그인 화면으로 돌려보내져 canonical이 달라지므로 여기서 걸린다
+  for (const loc of locs) {
+    await page.goto(new URL(loc).pathname)
+    await expect(page.locator('link[rel="canonical"]'), loc).toHaveAttribute('href', loc)
+    await expect(page.locator('meta[name="robots"]'), loc).toHaveCount(0)
+  }
+})
