@@ -71,3 +71,9 @@ test('robots.txt가 사이트맵을 알리고, 사이트맵에는 검색에 내�
     await expect(page.locator('meta[name="robots"]'), loc).toHaveCount(0)
   }
 })
+
+test('JS 없이 받은 HTML에 네이버 서치어드바이저 소유 확인 메타가 있다', async ({ request }) => {
+  // 서치어드바이저는 이 메타로 소유를 확인한다. 빠지면 확인이 풀린다
+  const html = await (await request.get('/')).text()
+  expect(html).toMatch(/<meta name="naver-site-verification" content="[0-9a-f]{40}"/)
+})
