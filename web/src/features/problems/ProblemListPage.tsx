@@ -6,6 +6,7 @@ import { Link, useLocation, useSearchParams } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { Icon } from '@/components/ui/icon'
 import { SearchInput } from '@/components/ui/search-input'
 import { useAuth } from '@/features/auth/useAuth'
 import { StreakCard } from '@/features/streak/StreakCard'
@@ -66,6 +67,10 @@ export function Component() {
   })
 
   const [draft, setDraft] = useState(params.keyword)
+  // ?tag=dp처럼 필터를 걸고 들어오면 펴 둔다. 접혀 있으면 왜 결과가 줄었는지 보이지 않는다
+  const [filtersOpen, setFiltersOpen] = useState(
+    () => params.difficulty.length + params.tag.length + params.status.length > 0,
+  )
   // 내가 URL에 쓴 값을 기억한다. 이게 없으면 아래 두 effect가 서로를 되돌린다.
   const lastWritten = useRef(params.keyword)
 
@@ -183,8 +188,31 @@ export function Component() {
         다른 카드처럼 한 줄을 채운다. 최대 폭을 두면 모바일에서 혼자 좁았다(#341)
       */}
       <div className="flex flex-wrap items-start gap-6">
+        {/*
+          필터가 표 위로 쌓이면 세로로 길게 펼쳐져 표가 한참 밀린다. 그 폭에서는 접어 둔다(#375).
+          864px = 필터 232 + 간격 24 + 표 560 + 본문 좌우 여백 48. 위 flex-basis를 바꾸면 함께 바꾼다
+        */}
         <aside aria-label="필터" className="bg-card min-w-0 flex-[1_1_232px] rounded-lg border p-6">
-          <ProblemFilters />
+          <button
+            type="button"
+            className="text-foreground flex min-h-11 w-full items-center justify-between font-semibold min-[864px]:hidden"
+            aria-expanded={filtersOpen}
+            aria-controls="problem-filters"
+            onClick={() => setFiltersOpen((open) => !open)}
+          >
+            필터
+            <Icon
+              name="chevron-down"
+              size={16}
+              className={cn('transition-transform', filtersOpen && 'rotate-180')}
+            />
+          </button>
+          <div
+            id="problem-filters"
+            className={cn(filtersOpen ? 'mt-4 min-[864px]:mt-0' : 'max-[864px]:hidden')}
+          >
+            <ProblemFilters />
+          </div>
         </aside>
 
         <section aria-label="문제" className="flex min-w-0 flex-[999_1_560px] flex-col gap-6">

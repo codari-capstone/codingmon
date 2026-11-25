@@ -17,7 +17,7 @@ export function SiteFooter() {
       <div className="max-w-content mx-auto box-content grid gap-6 px-6 pt-12 pb-12 text-sm lg:grid-cols-[1fr_auto] lg:items-start lg:py-14">
         <div className="flex flex-col gap-3">
           <img src={wordmark} alt="Codingmon" width={117} height={32} className="block" />
-          <p className="text-muted-foreground m-0">틀린 이유까지 알려 주는 코딩 연습장.</p>
+          <p className="text-muted-foreground m-0">틀린 이유까지 알려 주는 코딩 멘토.</p>
         </div>
 
         {/* 메뉴와 약관 링크는 두 묶음이다. 사이에 세로선을 두고, 좁아서 묶음이 줄을 나눠 서면 선은 감춘다 */}
