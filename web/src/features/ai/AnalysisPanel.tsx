@@ -12,6 +12,7 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { isDeadEnd } from '@/features/result/resultQuery'
 import type { RetryState } from '@/features/solve/solvePath'
 import { AiRequest } from './AiRequest'
+import { AiResultSkeleton } from './AiResultSkeleton'
 import { failureText } from './failureText'
 import { analysisQuery, useRequestAnalysis } from './analysisQuery'
 import { suspectLines } from './countLines'
@@ -203,6 +204,7 @@ export function AnalysisPanel({
 
       {deadEnd ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
       {!deadEnd && !loaded ? <ListSkeleton rows={2} /> : null}
+      {loaded && working ? <AiResultSkeleton /> : null}
       {done ? (
         <>
           <Explanation analysis={data} sourceCode={sourceCode} />
