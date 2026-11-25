@@ -1,5 +1,6 @@
 package com.codingmon.api.ai;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -55,8 +56,13 @@ public class AiQuotaService {
 
     // 조회용. 잠그지 않는다. 관리자 회원 상세(AdminUserController)도 쓴다.
     public AiQuota status(long userId) {
-        Plan plan = subscriptions.plan(userId);
-        return AiQuota.of(plan, limit(plan), reviews.usedToday(userId));
+        Optional<Instant> proSince = subscriptions.proSince(userId);
+        Plan plan = plan(proSince);
+        return AiQuota.of(plan, limit(plan), reviews.usedToday(userId, proSince.orElse(null)));
+    }
+
+    private static Plan plan(Optional<Instant> proSince) {
+        return proSince.isPresent() ? Plan.PRO : Plan.FREE;
     }
 
     private int limit(Plan plan) {
@@ -75,8 +81,10 @@ public class AiQuotaService {
     // 버려진 행의 기준(abandoned)은 잠금을 잡은 뒤에 받는다. 미리 받으면 기다리는 동안 등록된 처리 중인 행을 모른다.
     Optional<AiReviewRepository.Claim> claimWithin(long userId, long submissionId,
             Supplier<AiReviewRepository.Abandoned> abandoned, Supplier<Optional<AiReviewRepository.Claim>> claim) {
-        // 요금제는 잠금 밖에서 읽는다. 구독이 이 요청 도중에 끝나는 경우는 한 번 더 프로 한도로 본다.
-        Plan plan = subscriptions.plan(userId);
+        // 요금제는 요청이 들어온 시점 기준이다. 잠금을 기다리는 동안 결제되거나 구독이 끝나도 이 요청에는 반영하지 않는다.
+        // 프로는 이번 구독을 시작한 뒤에 쓴 것만 센다. 결제한 날 무료로 쓴 횟수와 상관없이 프로 한도로 시작한다.
+        Instant proSince = subscriptions.proSince(userId).orElse(null);
+        Plan plan = proSince == null ? Plan.FREE : Plan.PRO;
         int limit = limit(plan);
         return transactions.execute(status -> {
             if (!reviews.lockSubmission(userId, submissionId)) {
@@ -84,10 +92,10 @@ public class AiQuotaService {
                 throw ApiErrors.error(HttpStatus.NOT_FOUND, "SUBMISSION_NOT_FOUND", "제출을 찾을 수 없어요");
             }
             reviews.lockUser(userId);
-            AiReviewRepository.Usage before = reviews.usedToday(userId);
+            AiReviewRepository.Usage before = reviews.usedToday(userId, proSince);
             Optional<AiReviewRepository.Claim> claimed = claim.get();
             if (claimed.isPresent()) {
-                int after = reviews.usedToday(userId).used();
+                int after = reviews.usedToday(userId, proSince).used();
                 if (!before.admin() && after > before.used() && after > limit) {
                     throw exceeded(plan, limit, before);
                 }
