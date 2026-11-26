@@ -134,6 +134,22 @@ describe('Tabs', () => {
     expect(screen.getByText('틀린 목록')).toBeInTheDocument()
   })
 
+  it('pill 변형에 asChild를 써도 알약이 그 요소 안 첫 자식으로 들어간다 (#379 리뷰)', () => {
+    render(
+      <Tabs defaultValue="a">
+        <TabsList variant="pill" aria-label="필터" asChild>
+          <ul>
+            <TabsTrigger value="a">가</TabsTrigger>
+          </ul>
+        </TabsList>
+      </Tabs>,
+    )
+    const list = screen.getByRole('tablist', { name: '필터' })
+    expect(list.tagName).toBe('UL')
+    expect(list.firstElementChild).toHaveAttribute('data-slot', 'sliding-pill')
+    expect(screen.getByRole('tab', { name: '가' })).toBeInTheDocument()
+  })
+
   it('pill 탭의 포커스는 알약 둥글기를 바꾸지 않는다 (#257 리뷰)', () => {
     render(
       <Tabs defaultValue="a">

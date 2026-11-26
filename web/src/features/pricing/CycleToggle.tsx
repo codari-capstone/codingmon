@@ -1,3 +1,4 @@
+import { SlidingPill } from '@/components/SlidingPill'
 import { cn } from '@/lib/utils'
 import { YEARLY_FREE_MONTHS, type Cycle } from './plans'
 
@@ -21,7 +22,16 @@ export function CycleToggle({
     { value: 'yearly', label: compact ? '연간' : '연간 결제' },
   ]
   return (
-    <div role="group" aria-label="결제 주기" className="bg-muted inline-flex rounded-full p-1">
+    <div
+      role="group"
+      aria-label="결제 주기"
+      className="bg-muted relative inline-flex rounded-full p-1"
+    >
+      {/* 고른 칸의 흰 면은 알약이 그린다. 바꾸면 미끄러진다. 버튼 밖이라 disabled 흐림을 받지 못해 같은 값을 준다(#379 리뷰) */}
+      <SlidingPill
+        activeSelector='[aria-pressed="true"]'
+        className={cn('shadow-card', disabled && 'opacity-60')}
+      />
       {options.map((o) => {
         const on = cycle === o.value
         return (
@@ -32,9 +42,9 @@ export function CycleToggle({
             disabled={disabled}
             onClick={() => onChange(o.value)}
             className={cn(
-              'focus-visible:outline-ring inline-flex cursor-pointer items-center gap-2 rounded-full border-0 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60',
+              'focus-visible:outline-ring relative inline-flex cursor-pointer items-center gap-2 rounded-full border-0 bg-transparent font-semibold transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60',
               compact ? 'h-9 px-4 text-sm' : 'h-10 px-5 text-[15px]',
-              on ? 'bg-card text-foreground shadow-card' : 'text-muted-foreground bg-transparent',
+              on ? 'text-foreground' : 'text-muted-foreground',
             )}
           >
             {o.label}

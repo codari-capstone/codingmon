@@ -1,7 +1,9 @@
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
-import { Tabs as TabsPrimitive } from 'radix-ui'
+import { Slot, Tabs as TabsPrimitive } from 'radix-ui'
+
+import { SlidingPill } from '@/components/SlidingPill'
 
 /**
  * 디자인 시스템 Tabs. line은 화면 안 구역 전환(문제 · 에디터), pill은 회색 트랙 위 흰 칩이
@@ -23,7 +25,7 @@ const tabsListVariants = cva('group/tabs-list flex items-center', {
       // 아래 선을 border 대신 안쪽 그림자로 그린다. border면 지금 탭의 밑줄을 그 선 위에 겹치려고
       // 1px 밖으로 내야 하고, overflow-x-auto 목록에서 그 1px가 세로 스크롤로 잡힌다(#257 리뷰)
       line: 'gap-6 shadow-[inset_0_-1px_0_var(--border)]',
-      pill: 'inline-flex w-max gap-1 self-start rounded-full bg-muted p-1',
+      pill: 'relative inline-flex w-max gap-1 self-start rounded-full bg-muted p-1',
     },
   },
   defaultVariants: { variant: 'line' },
@@ -32,6 +34,7 @@ const tabsListVariants = cva('group/tabs-list flex items-center', {
 function TabsList({
   className,
   variant = 'line',
+  children,
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.List> & VariantProps<typeof tabsListVariants>) {
   return (
@@ -40,7 +43,17 @@ function TabsList({
       data-variant={variant}
       className={cn(tabsListVariants({ variant }), className)}
       {...props}
-    />
+    >
+      {/* pill의 지금 탭 흰 칩은 알약이 그린다. 탭을 바꾸면 미끄러진다. 다크는 칩 면을 --border로 두고 그림자를 뺀다 */}
+      {variant === 'pill' ? (
+        <SlidingPill
+          activeSelector='[data-state="active"]'
+          className="shadow-[0_1px_2px_rgba(27,33,64,0.08),0_2px_8px_-2px_rgba(27,33,64,0.12)] dark:bg-border dark:shadow-none"
+        />
+      ) : null}
+      {/* asChild면 Slot이 자식 하나만 받는다. Slottable이 그 자식을 고르고 알약은 그 안 첫 자식으로 들어간다(#379 리뷰) */}
+      <Slot.Slottable>{children}</Slot.Slottable>
+    </TabsPrimitive.List>
   )
 }
 
@@ -58,8 +71,8 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
         // offset은 변형마다 group 쪽에만 준다. 바탕에 두면 group 변형보다 뒤에 나와 이긴다
         'group-data-[variant=line]/tabs-list:focus-visible:rounded-sm group-data-[variant=line]/tabs-list:focus-visible:-outline-offset-2 group-data-[variant=line]/tabs-list:h-12 group-data-[variant=line]/tabs-list:px-0.5 group-data-[variant=line]/tabs-list:data-active:font-bold group-data-[variant=line]/tabs-list:data-active:text-primary-text',
         'after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-t-[3px] after:bg-primary after:opacity-0 group-data-[variant=line]/tabs-list:data-active:after:opacity-100',
-        // pill: 높이 36px 알약, 지금 탭은 흰 칩. 다크는 칩 면을 --border로 두고 그림자를 뺀다
-        'group-data-[variant=pill]/tabs-list:focus-visible:outline-offset-2 group-data-[variant=pill]/tabs-list:h-9 group-data-[variant=pill]/tabs-list:rounded-full group-data-[variant=pill]/tabs-list:px-4 group-data-[variant=pill]/tabs-list:text-[14px] group-data-[variant=pill]/tabs-list:data-active:bg-card group-data-[variant=pill]/tabs-list:data-active:font-bold group-data-[variant=pill]/tabs-list:data-active:text-foreground group-data-[variant=pill]/tabs-list:data-active:shadow-[0_1px_2px_rgba(27,33,64,0.08),0_2px_8px_-2px_rgba(27,33,64,0.12)] dark:group-data-[variant=pill]/tabs-list:data-active:bg-border dark:group-data-[variant=pill]/tabs-list:data-active:shadow-none',
+        // pill: 높이 36px 알약, 지금 탭은 굵은 글자. 흰 칩은 TabsList의 SlidingPill이 그린다
+        'group-data-[variant=pill]/tabs-list:focus-visible:outline-offset-2 group-data-[variant=pill]/tabs-list:h-9 group-data-[variant=pill]/tabs-list:rounded-full group-data-[variant=pill]/tabs-list:px-4 group-data-[variant=pill]/tabs-list:text-[14px] group-data-[variant=pill]/tabs-list:data-active:font-bold group-data-[variant=pill]/tabs-list:data-active:text-foreground',
         className,
       )}
       {...props}
