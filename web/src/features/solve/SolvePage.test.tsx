@@ -920,6 +920,19 @@ describe('SolvePage', () => {
       expect(screen.queryByText('Python · 2초 · 256MB')).not.toBeInTheDocument()
     })
 
+    // 알약은 label의 data-checked를 따라간다. React는 checked를 속성으로 쓰지 않아 이 표시가 없으면 멈춘다
+    it('고른 언어 칸에만 알약 표시를 단다', async () => {
+      const user = userEvent.setup()
+      renderSolve()
+      await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+      const chip = (name: string) => screen.getByRole('radio', { name }).closest('label')
+
+      await user.click(screen.getByRole('radio', { name: 'C++' }))
+
+      expect(chip('C++')).toHaveAttribute('data-checked')
+      expect(chip('Python')).not.toHaveAttribute('data-checked')
+    })
+
     /**
      * 주소를 진실로 둔다. 첫 렌더에 한 번만 읽어 state로 옮기면, 화면에서 언어를 바꿔도
      * 주소는 그대로라 새로고침하면 쓰던 언어가 아닌 쪽이 열린다.

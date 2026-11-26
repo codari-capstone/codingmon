@@ -218,6 +218,38 @@ test('결제 주기를 바꾸면 알약이 고른 칸으로 미끄러진다', as
   expect(await cut(page)).toBe(false)
 })
 
+/** 풀이 화면 언어 칸. 칸은 라디오를 덮은 label이라 label을 잰다 */
+async function openLanguages(page: Page) {
+  await login(page)
+  await page.goto('/problems/1')
+  const group = page.getByRole('group', { name: '언어' })
+  const chip = (name: string) =>
+    group.locator('label').filter({ has: page.getByRole('radio', { name }) })
+  await expectPillOn(group, chip('Python'))
+  return { group, chip }
+}
+
+test('언어를 바꾸면 알약이 고른 칸으로 미끄러진다', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await watchPill(page)
+  const { group, chip } = await openLanguages(page)
+  expect(await slid(page)).toBe(false) // 처음에는 제자리에 바로 놓는다
+  await settled(page)
+
+  await page.getByRole('radio', { name: 'C++' }).click()
+  await expect.poll(() => slid(page)).toBe(true)
+  await expectPillOn(group, chip('C++'))
+  expect(await cut(page)).toBe(false)
+})
+
+test('애니메이션 줄이기면 언어 칸 알약과 글자색이 바로 바뀐다', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const { group, chip } = await openLanguages(page)
+  await expect(group.locator('[data-slot="sliding-pill"]')).toHaveCSS('transition-property', 'none')
+  for (const name of ['Python', 'C++'])
+    await expect(chip(name)).toHaveCSS('transition-property', 'none')
+})
+
 test('관리자 pill 탭을 바꾸면 알약이 지금 탭으로 미끄러진다', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await watchPill(page)

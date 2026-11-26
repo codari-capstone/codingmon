@@ -198,7 +198,7 @@ describe('AppHeader', () => {
       within(nav)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['대시보드', '문제', '회원', '신고', '태그'])
+    ).toEqual(['대시보드', '회원', '문제', '신고', '태그'])
   })
 
   it('관리자 화면에서는 관리자 메뉴로 바뀐다 (ADM-10)', () => {
@@ -220,20 +220,20 @@ describe('AppHeader', () => {
     const links = within(nav).getAllByRole('link')
     expect(links.map((link) => link.textContent)).toEqual([
       '대시보드',
-      '문제',
       '회원',
+      '문제',
       '신고',
       '태그',
     ])
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/admin/dashboard',
-      '/admin',
       '/admin/members',
+      '/admin',
       '/admin/reports',
       '/admin/tags',
     ])
     // 문제 수정 화면은 '문제'만 지금 화면이다
-    expect(links.filter((link) => link.hasAttribute('aria-current'))).toEqual([links[1]])
+    expect(links.filter((link) => link.hasAttribute('aria-current'))).toEqual([links[2]])
   })
 
   it('태그 화면에서는 태그만 지금 화면이다 — 문제(/admin)가 앞부분 일치로 같이 켜지지 않는다', () => {

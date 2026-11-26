@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * 분절형 탭의 흰 알약 (내 학습 탭·Tabs pill·결제 주기). 탭 줄의 첫 자식으로 두면 지금 칸 아래로 미끄러진다.
+ * 분절형 탭의 흰 알약 (내 학습 탭·Tabs pill·결제 주기·풀이 화면 언어 칸). 탭 줄 안 칸들 앞에 두면 지금 칸 아래로 미끄러진다.
  * 탭 줄은 `relative`, 칸은 `relative`여야 글자가 알약 위에 놓인다. 위아래 여백은 탭 줄의 p-1에 맞췄다.
  *
  * - 처음 그릴 때는 지금 칸에 바로 놓는다. `start`를 주면 그 칸에서 출발한다(화면이 바뀌어 새로 그려지는 내 학습 탭)

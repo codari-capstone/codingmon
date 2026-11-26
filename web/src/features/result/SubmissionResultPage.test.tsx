@@ -228,13 +228,13 @@ describe('SubmissionResultPage', () => {
   })
 
   describe('다음 행동 (RES-07)', () => {
-    it('정답이면 다음 문제와 AI 리뷰 패널을 둔다', async () => {
+    it('정답이면 문제 목록과 AI 리뷰 패널을 둔다', async () => {
       completed({ verdict: 'ACCEPTED' })
       renderResult()
       await screen.findByText('맞았습니다!!')
 
       // 추천 API가 없어 문제 목록으로 보낸다 (#44는 리포트 안의 서버 함수다)
-      expect(screen.getByRole('link', { name: '다음 문제' })).toHaveAttribute('href', '/problems')
+      expect(screen.getByRole('link', { name: '문제 목록' })).toHaveAttribute('href', '/problems')
       // AI 리뷰는 카드가 아니라 패널의 버튼이다 (AI 분석과 같다)
       // 리뷰를 불러오는 동안의 머리줄은 안내 카드로 바뀌며 새 요소가 된다. 마지막 상태인 버튼을 기다린다
       expect(await screen.findByRole('button', { name: 'AI 리뷰' })).toBeEnabled()
@@ -289,7 +289,7 @@ describe('SubmissionResultPage', () => {
 
       // 채점 중에 '다시 풀기'를 누르면 방금 보낸 제출의 결과를 못 보게 된다.
       expect(screen.queryByRole('link', { name: '다시 풀기' })).not.toBeInTheDocument()
-      expect(screen.queryByRole('link', { name: '다음 문제' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: '문제 목록' })).not.toBeInTheDocument()
     })
   })
 
