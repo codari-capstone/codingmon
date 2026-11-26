@@ -41,14 +41,26 @@ export function LearnNav() {
       pill.style.width = `${link.offsetWidth}px`
       pill.style.transform = `translateX(${link.offsetLeft}px)`
     }
-    pill.style.transition = 'none'
-    place(start)
-    void pill.offsetWidth // 출발 자리를 확정해야 다음 자리로 옮길 때 transition이 걸린다
-    pill.style.transition = ''
+    // 미끄러지지 않고 바로 놓는다. 자리를 확정해야(offsetWidth) 다음에 옮길 때 transition이 다시 걸린다
+    const jump = (link: HTMLElement) => {
+      pill.style.transition = 'none'
+      place(link)
+      void pill.offsetWidth
+      pill.style.transition = ''
+    }
+    jump(start)
     place(current)
-    // 웹 글꼴이 오거나 창 폭이 바뀌어 탭 폭이 달라져도 따라간다
-    const observer = new ResizeObserver(() => place(current))
-    links.forEach((link) => observer.observe(link))
+    // 웹 글꼴이 와서 탭 폭이 달라지면 바로 따라간다. 미끄러지면 탭을 옮긴 것처럼 보인다(#378 리뷰).
+    // 처음 observe할 때도 한 번 불리므로 폭이 실제로 바뀌었을 때만 옮긴다. 아니면 막 시작한 미끄러짐이 끊긴다
+    const widthsOf = () => Array.from(links, (link) => link.offsetWidth).join()
+    let widths = widthsOf()
+    const observer = new ResizeObserver(() => {
+      if (widthsOf() === widths) return
+      widths = widthsOf()
+      jump(current)
+    })
+    // 알약은 offsetWidth(border-box)로 놓으므로 같은 상자를 본다. 기본(content-box)은 여백만 바뀌면 알리지 않는다
+    links.forEach((link) => observer.observe(link, { box: 'border-box' }))
     return () => observer.disconnect()
   }, [pathname, from])
 

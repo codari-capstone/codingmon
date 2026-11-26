@@ -129,6 +129,8 @@ test('애니메이션 줄이기면 알약이 미끄러지지 않는다', async (
   await switchLearnTab(page)
   await page.waitForTimeout(500)
   expect(await slid(page)).toBe(false)
+  // 움직이지 않은 것만 보면 알약이 안 보이거나 떠난 탭에 남는 회귀를 놓친다(#378 리뷰)
+  await expectPillOnBadges(page)
 })
 
 test('탭을 옮긴 뒤 새로고침하면 알약이 다시 미끄러지지 않는다', async ({ page }) => {
@@ -139,6 +141,23 @@ test('탭을 옮긴 뒤 새로고침하면 알약이 다시 미끄러지지 않�
   await page.waitForTimeout(500)
   expect(await slid(page)).toBe(false)
   await expectPillOnBadges(page)
+})
+
+test('글꼴이 와서 탭 폭이 바뀌면 알약이 미끄러지지 않고 바로 따라간다', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await watchPill(page)
+  await login(page)
+  await page.goto('/me/badges')
+  await expectPillOnBadges(page)
+
+  // 웹 글꼴이 늦게 와서 앞 탭이 넓어진 것과 같다. [배지]가 오른쪽으로 밀린다(#378 리뷰)
+  await page.evaluate(() => {
+    ;(window as unknown as { pillSlid: boolean }).pillSlid = false
+    document.querySelector<HTMLElement>('nav[aria-label="내 학습 메뉴"] a')!.style.paddingInline =
+      '40px'
+  })
+  await expectPillOnBadges(page)
+  expect(await slid(page)).toBe(false)
 })
 
 test('대소문자만 다른 주소에서도 알약이 지금 탭에 놓인다', async ({ page }) => {
