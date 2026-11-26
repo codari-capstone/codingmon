@@ -192,6 +192,8 @@ function Workspace({
         <div className="bg-card flex flex-col gap-4 rounded-lg border p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <LanguagePicker
+              // 언어 목록이 바뀌면 새로 그린다. 새로 생긴 칸은 고른 표시를 단 채 들어와 알약이 따라가지 못한다
+              key={problem.languages.map(({ language }) => language).join()}
               languages={problem.languages}
               value={language}
               onChange={(next) => setChosen(next)}
