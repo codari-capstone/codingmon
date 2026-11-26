@@ -6,12 +6,12 @@ import codingmonFace from '@/assets/brand/codingmon_face.png'
 import studyingScene from '@/assets/scenes/studying.png'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import { Badge } from '@/components/ui/badge'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { isDeadEnd } from '@/features/result/resultQuery'
 import { cn } from '@/lib/utils'
 import { AiRequest } from './AiRequest'
-import { AiResultSkeleton } from './AiResultSkeleton'
 import { codeReviewQuery, useRequestCodeReview } from './codeReviewQuery'
 import { failureText } from './failureText'
 
@@ -181,7 +181,7 @@ export function CodeReviewPanel({ submissionId }: { submissionId: number }) {
 
       {deadEnd ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
       {!deadEnd && !loaded ? <ListSkeleton rows={2} /> : null}
-      {loaded && working ? <AiResultSkeleton /> : null}
+      {loaded && working ? <LoadingState inPanel /> : null}
       {done ? <Review review={data} /> : null}
       <AiRequest
         result={data ?? null}

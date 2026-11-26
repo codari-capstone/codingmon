@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, Outlet, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
 
@@ -92,7 +92,8 @@ describe('AppShell 바닥글 (#335)', () => {
     document.title = '마이페이지 | Codingmon'
     renderAt('/bleed-broken')
     await screen.findByRole('heading', { level: 1 })
-    expect(document.title).toBe(DEFAULT_TITLE)
+    // 제목은 그린 뒤 효과(useEffect)로 되돌린다. 오류 화면은 비동기로 그려져 h1이 먼저 보일 수 있다(CI에서 흔들렸다)
+    await waitFor(() => expect(document.title).toBe(DEFAULT_TITLE))
     expect(document.head.querySelector('meta[name="robots"]')).toBeNull()
   })
 })

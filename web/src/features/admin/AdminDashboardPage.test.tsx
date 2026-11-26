@@ -93,8 +93,8 @@ describe('AdminDashboardPage (ADM-12)', () => {
     )
     renderPage()
 
-    const card = await screen.findByRole('region', { name: '취소·확인이 필요한 결제' })
-    expect(within(card).getByText('2')).toBeInTheDocument()
+    const card = screen.getByRole('region', { name: '취소·확인이 필요한 결제' })
+    expect(await within(card).findByText('2')).toBeInTheDocument()
     expect(within(card).getByRole('link')).toHaveAttribute(
       'href',
       '/admin/members?paymentNeedsCancel=true',
@@ -129,20 +129,50 @@ describe('AdminDashboardPage (ADM-12)', () => {
     renderPage()
 
     expect(screen.getByTestId('dashboard-cards')).toHaveClass('invisible')
-    await screen.findByRole('region', { name: '취소·확인이 필요한 결제' })
+    // 받기 전에도 결제 카드가 자리를 잡는다. 받은 뒤 끼어들면 좁은 화면에서 아래 목록이 밀린다(#380 리뷰)
+    const card = screen.getByRole('region', { name: '취소·확인이 필요한 결제' })
+    expect(await within(card).findByText('1')).toBeInTheDocument()
     expect(screen.getByTestId('dashboard-cards')).not.toHaveClass('invisible')
   })
 
-  it('취소·확인이 필요한 결제가 없으면 카드를 보이지 않는다', async () => {
+  it('결제 수를 다시 받다 실패하면 지난 0을 처리할 결제 없음으로 보이지 않는다 (#380 리뷰)', async () => {
+    const client = renderPage()
+    const card = screen.getByRole('region', { name: '취소·확인이 필요한 결제' })
+    // 받기 전에도 같은 문구가 감춰진 줄에 있다. 캐시에 0이 든 것을 기다려야 '지난 0'을 시험한다(#380 리뷰)
+    await waitFor(() =>
+      expect(client.getQueryData(paymentNeedsCancelCountQuery().queryKey)).toBe(0),
+    )
+    expect(within(card).getByText('0')).toBeInTheDocument()
+
+    // 포트원 콘솔에 다녀와 창으로 돌아왔을 때(refetchOnWindowFocus) 다시 받기가 실패한 것과 같다
+    server.use(
+      http.get('*/api/admin/users', () =>
+        HttpResponse.json({ status: 500, title: 'Server Error' }, { status: 500 }),
+      ),
+    )
+    void client.refetchQueries({ queryKey: paymentNeedsCancelCountQuery().queryKey })
+
+    // retry: 1이라 오류가 1초 뒤에 온다
+    expect(
+      await within(card).findByText('결제 수를 확인하지 못했어요.', undefined, { timeout: 3000 }),
+    ).toBeInTheDocument()
+    expect(within(card).getByText('–')).toBeInTheDocument()
+    expect(within(card).queryByText('지금은 처리할 결제가 없어요.')).not.toBeInTheDocument()
+    // 캐시에는 지난 0이 그대로 있다. 그래도 보이지 않는 것이 이 테스트가 지키는 것이다
+    expect(client.getQueryData(paymentNeedsCancelCountQuery().queryKey)).toBe(0)
+  })
+
+  it('취소·확인이 필요한 결제가 없어도 0명 카드를 보이고, 갈 곳이 없어 링크는 두지 않는다', async () => {
     // 목 회원은 결제 기록이 없어 0명이다. 응답을 받아 그린 뒤에 확인한다
     const client = renderPage()
 
     await waitFor(() =>
       expect(client.getQueryData(paymentNeedsCancelCountQuery().queryKey)).toBe(0),
     )
-    expect(
-      screen.queryByRole('region', { name: '취소·확인이 필요한 결제' }),
-    ).not.toBeInTheDocument()
+    const card = screen.getByRole('region', { name: '취소·확인이 필요한 결제' })
+    expect(within(card).getByText('0')).toBeInTheDocument()
+    expect(within(card).getByText('지금은 처리할 결제가 없어요.')).toBeInTheDocument()
+    expect(within(card).queryByRole('link')).not.toBeInTheDocument()
   })
 
   it('신고가 없으면 빈 안내를 보인다', async () => {

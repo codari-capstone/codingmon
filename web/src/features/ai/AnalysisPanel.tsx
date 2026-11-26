@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import type { SubmissionAnalysis } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
+import { LoadingState } from '@/components/LoadingState'
 import codingmonFace from '@/assets/brand/codingmon_face.png'
 import thinkingScene from '@/assets/scenes/thinking.png'
 import { Badge } from '@/components/ui/badge'
@@ -12,7 +13,6 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { isDeadEnd } from '@/features/result/resultQuery'
 import type { RetryState } from '@/features/solve/solvePath'
 import { AiRequest } from './AiRequest'
-import { AiResultSkeleton } from './AiResultSkeleton'
 import { failureText } from './failureText'
 import { analysisQuery, useRequestAnalysis } from './analysisQuery'
 import { suspectLines } from './countLines'
@@ -204,7 +204,7 @@ export function AnalysisPanel({
 
       {deadEnd ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
       {!deadEnd && !loaded ? <ListSkeleton rows={2} /> : null}
-      {loaded && working ? <AiResultSkeleton /> : null}
+      {loaded && working ? <LoadingState inPanel /> : null}
       {done ? (
         <>
           <Explanation analysis={data} sourceCode={sourceCode} />
