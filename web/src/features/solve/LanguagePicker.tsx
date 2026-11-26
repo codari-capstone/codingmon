@@ -1,4 +1,5 @@
 import type { Language, ProblemDetailView } from '@/api/types'
+import { SlidingPill } from '@/components/SlidingPill'
 import { LANGUAGE_LABEL } from './labels'
 
 /**
@@ -21,12 +22,15 @@ export function LanguagePicker({
   onChange: (next: Language) => void
 }) {
   return (
-    <fieldset className="bg-muted m-0 inline-flex gap-1 rounded-full border-0 p-1">
+    <fieldset className="bg-muted relative m-0 inline-flex gap-1 rounded-full border-0 p-1">
       <legend className="sr-only">언어</legend>
+      {/* 고른 칸의 흰 면은 알약이 그린다. React는 checked를 속성(attribute)으로 쓰지 않아 알약이 볼 표시를 label에 단다 */}
+      <SlidingPill activeSelector="[data-checked]" className="shadow-card" />
       {languages.map(({ language }) => (
         <label
           key={language}
-          className="text-muted-foreground hover:text-foreground has-checked:bg-card has-checked:text-foreground has-checked:shadow-card has-focus-visible:outline-ring relative inline-flex min-h-11 cursor-pointer items-center rounded-full px-4 text-[15px] font-semibold transition-colors has-focus-visible:outline-2 has-focus-visible:outline-offset-2 forced-colors:has-checked:outline-2"
+          data-checked={language === value || undefined}
+          className="text-muted-foreground hover:text-foreground has-checked:text-foreground has-focus-visible:outline-ring relative inline-flex min-h-11 cursor-pointer items-center rounded-full px-4 text-[15px] font-semibold transition-colors has-focus-visible:outline-2 has-focus-visible:outline-offset-2 forced-colors:has-checked:outline-2"
         >
           <input
             type="radio"

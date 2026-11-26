@@ -29,9 +29,9 @@ const ADMIN_ENTRY = { to: '/admin/dashboard', label: '관리자' }
  */
 const ADMIN_MENU: MenuItem[] = [
   { to: '/admin/dashboard', label: '대시보드' },
+  { to: '/admin/members', label: '회원' },
   // 문제 관리는 /admin 자체다. 앞부분 일치로 두면 /admin/tags에서도 켜진다
   { to: '/admin', label: '문제', end: true, also: '/admin/problems' },
-  { to: '/admin/members', label: '회원' },
   { to: '/admin/reports', label: '신고' },
   { to: '/admin/tags', label: '태그' },
 ]
