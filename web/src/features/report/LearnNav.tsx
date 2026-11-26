@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import { NavLink, useLocation } from 'react-router'
+import { matchPath, NavLink, useLocation, useNavigationType } from 'react-router'
 
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
@@ -20,7 +20,9 @@ interface LearnNavState {
 /** 내 학습 탭: 학습 리포트 · 배지 (BADGE-02). 오답 노트는 만들지 않기로 했다(#248 댓글). */
 export function LearnNav() {
   const { pathname, state } = useLocation()
-  const from = (state as LearnNavState | null)?.learnTabFrom
+  // 탭을 눌러 넘어왔을 때(PUSH)만 미끄러진다. 새로고침·뒤로 가기(POP)는 history에 남은 state를 다시 읽는다(#378 리뷰)
+  const from =
+    useNavigationType() === 'PUSH' ? (state as LearnNavState | null)?.learnTabFrom : undefined
   const navRef = useRef<HTMLElement>(null)
   const pillRef = useRef<HTMLSpanElement>(null)
 
@@ -29,10 +31,12 @@ export function LearnNav() {
   useLayoutEffect(() => {
     const nav = navRef.current
     const pill = pillRef.current
-    const links = nav?.querySelectorAll('a')
-    const current = links?.[TABS.findIndex((tab) => tab.to === pathname)]
-    if (!links || !pill || !current) return
-    const start = links[TABS.findIndex((tab) => tab.to === from)] ?? current
+    // 지금 탭은 NavLink의 판정을 그대로 쓴다. 주소를 문자열로 비교하면 대소문자만 다른 주소에서 어긋난다(#378 리뷰)
+    const current = nav?.querySelector<HTMLElement>('a[aria-current="page"]')
+    if (!nav || !pill || !current) return
+    const links = nav.querySelectorAll('a')
+    const start =
+      (from !== undefined && links[TABS.findIndex((tab) => matchPath(tab.to, from))]) || current
     const place = (link: HTMLElement) => {
       pill.style.width = `${link.offsetWidth}px`
       pill.style.transform = `translateX(${link.offsetLeft}px)`
