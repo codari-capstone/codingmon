@@ -199,8 +199,7 @@ export const router = createBrowserRouter([
                 Component: RequireAdmin,
                 children: [
                   {
-                    // 문제 관리를 /admin 자체에 둔다. 관리자 첫 화면이라 리다이렉트를
-                    // 둘 이유가 없고, AppHeader의 /admin 링크도 그대로 쓴다.
+                    // 문제 관리를 /admin 자체에 둔다. 상단 바의 관리자 입구는 대시보드로 간다(AppHeader ADMIN_ENTRY)
                     path: 'admin',
                     children: [
                       {
@@ -209,7 +208,7 @@ export const router = createBrowserRouter([
                         handle: { title: '문제 관리' } satisfies PageHandle,
                       },
                       // 대시보드·회원 목록 (ADM-12·14, #228). 대시보드를 index로 올리지 않는다 —
-                      // /admin 링크·e2e가 문제 목록을 가리킨다
+                      // '문제 관리로' 링크·e2e가 /admin을 문제 목록으로 쓴다
                       {
                         path: 'dashboard',
                         lazy: () => import('@/features/admin/AdminDashboardPage'),

@@ -185,7 +185,7 @@ describe('AppHeader', () => {
     })
     renderHeader()
 
-    expect(screen.getByRole('link', { name: '관리자' })).toHaveAttribute('href', '/admin')
+    expect(screen.getByRole('link', { name: '관리자' })).toHaveAttribute('href', '/admin/dashboard')
   })
 
   it('관리자 화면에서 세션을 모르는 동안에도 관리자 메뉴를 둔다', () => {

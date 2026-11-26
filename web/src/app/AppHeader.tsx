@@ -20,8 +20,8 @@ import { cn } from '@/lib/utils'
 import { StreakChip } from '@/features/streak/StreakChip'
 import { MENU, type MenuItem } from './menu'
 
-/** 학습자 화면에서 ADMIN에게만 더 보이는 입구 (COM-05). */
-const ADMIN_ENTRY = { to: '/admin', label: '관리자' }
+/** 학습자 화면에서 ADMIN에게만 더 보이는 입구 (COM-05). 관리자 첫 화면은 대시보드다 */
+const ADMIN_ENTRY = { to: '/admin/dashboard', label: '관리자' }
 
 /**
  * 관리자 화면(/admin 아래)의 메뉴 (ADM-10). 디자인은 대시보드·문제·회원·신고(숫자)·태그다.

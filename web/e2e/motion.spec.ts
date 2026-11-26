@@ -68,3 +68,103 @@ test('끄면 기기가 동작 줄이기여도 움직임을 그대로 둔다', as
   await page.getByRole('switch', { name: /애니메이션 줄이기/ }).uncheck({ force: true })
   expect(await trackTransition(page)).not.toBe('none')
 })
+
+/**
+ * 내 학습 탭(LearnNav)의 알약. 탭마다 다른 화면이라 탭 줄이 새로 그려지는데, 떠난 탭에서 지금 탭으로 미끄러져야 한다.
+ * 알약이 움직이기 시작했는지(transitionrun)와 멈춘 자리가 지금 탭인지를 본다.
+ */
+async function watchPill(page: Page) {
+  // 문서마다 다시 건다. 새로고침한 뒤에도 움직였는지 볼 수 있다
+  await page.addInitScript(() => {
+    const w = window as unknown as { pillSlid: boolean }
+    w.pillSlid = false
+    document.addEventListener('transitionrun', (event) => {
+      const target = event.target as Element
+      if (target.closest('nav[aria-label="내 학습 메뉴"]') && event.propertyName === 'transform')
+        w.pillSlid = true
+    })
+  })
+}
+
+async function switchLearnTab(page: Page) {
+  await watchPill(page)
+  await login(page)
+  await page.goto('/me/report')
+  const nav = page.getByRole('navigation', { name: '내 학습 메뉴' })
+  await expect(nav.getByRole('link', { name: '학습 리포트' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  await nav.getByRole('link', { name: '배지' }).click()
+  const badges = nav.getByRole('link', { name: '배지' })
+  await expect(badges).toHaveAttribute('aria-current', 'page')
+  return { nav, badges }
+}
+
+const slid = (page: Page) =>
+  page.evaluate(() => (window as unknown as { pillSlid: boolean }).pillSlid)
+
+/** 알약이 [배지] 위에 놓일 때까지 기다린다. 알약은 정수 offset으로 놓여 소수점 boundingBox와 1px 안쪽 차이가 난다(#378 리뷰) */
+async function expectPillOnBadges(page: Page) {
+  const nav = page.getByRole('navigation', { name: '내 학습 메뉴' })
+  const pill = nav.locator('span[aria-hidden="true"]').first()
+  const badges = nav.getByRole('link', { name: '배지' })
+  await expect
+    .poll(async () => {
+      const [a, b] = [await pill.boundingBox(), await badges.boundingBox()]
+      return a && b ? Math.max(Math.abs(a.x - b.x), Math.abs(a.width - b.width)) : Infinity
+    })
+    .toBeLessThanOrEqual(1)
+}
+
+test('내 학습 탭을 옮기면 알약이 지금 탭으로 미끄러진다', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await switchLearnTab(page)
+  await expect.poll(() => slid(page)).toBe(true)
+  await expectPillOnBadges(page)
+})
+
+test('애니메이션 줄이기면 알약이 미끄러지지 않는다', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await switchLearnTab(page)
+  await page.waitForTimeout(500)
+  expect(await slid(page)).toBe(false)
+  // 움직이지 않은 것만 보면 알약이 안 보이거나 떠난 탭에 남는 회귀를 놓친다(#378 리뷰)
+  await expectPillOnBadges(page)
+})
+
+test('탭을 옮긴 뒤 새로고침하면 알약이 다시 미끄러지지 않는다', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  const { badges } = await switchLearnTab(page)
+  await page.reload()
+  await expect(badges).toHaveAttribute('aria-current', 'page')
+  await page.waitForTimeout(500)
+  expect(await slid(page)).toBe(false)
+  await expectPillOnBadges(page)
+})
+
+test('글꼴이 와서 탭 폭이 바뀌면 알약이 미끄러지지 않고 바로 따라간다', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await watchPill(page)
+  await login(page)
+  await page.goto('/me/badges')
+  await expectPillOnBadges(page)
+
+  // 웹 글꼴이 늦게 와서 앞 탭이 넓어진 것과 같다. [배지]가 오른쪽으로 밀린다(#378 리뷰)
+  await page.evaluate(() => {
+    ;(window as unknown as { pillSlid: boolean }).pillSlid = false
+    document.querySelector<HTMLElement>('nav[aria-label="내 학습 메뉴"] a')!.style.paddingInline =
+      '40px'
+  })
+  await expectPillOnBadges(page)
+  expect(await slid(page)).toBe(false)
+})
+
+test('대소문자만 다른 주소에서도 알약이 지금 탭에 놓인다', async ({ page }) => {
+  await login(page)
+  await page.goto('/me/Badges')
+  await expect(
+    page.getByRole('navigation', { name: '내 학습 메뉴' }).getByRole('link', { name: '배지' }),
+  ).toHaveAttribute('aria-current', 'page')
+  await expectPillOnBadges(page)
+})

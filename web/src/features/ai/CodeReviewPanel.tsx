@@ -11,6 +11,7 @@ import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { isDeadEnd } from '@/features/result/resultQuery'
 import { cn } from '@/lib/utils'
 import { AiRequest } from './AiRequest'
+import { AiResultSkeleton } from './AiResultSkeleton'
 import { codeReviewQuery, useRequestCodeReview } from './codeReviewQuery'
 import { failureText } from './failureText'
 
@@ -180,6 +181,7 @@ export function CodeReviewPanel({ submissionId }: { submissionId: number }) {
 
       {deadEnd ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
       {!deadEnd && !loaded ? <ListSkeleton rows={2} /> : null}
+      {loaded && working ? <AiResultSkeleton /> : null}
       {done ? <Review review={data} /> : null}
       <AiRequest
         result={data ?? null}
