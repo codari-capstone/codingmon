@@ -46,7 +46,7 @@ export function LearnNav() {
           className={({ isActive }) =>
             cn(
               TAB,
-              'transition-colors focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2',
+              'transition-colors motion-reduce:transition-none focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2',
               isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             )
           }

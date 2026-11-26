@@ -149,6 +149,20 @@ test('애니메이션 줄이기면 알약이 미끄러지지 않는다', async (
   expect(await slid(page)).toBe(false)
   // 움직이지 않은 것만 보면 알약이 안 보이거나 떠난 탭에 남는 회귀를 놓친다(#378 리뷰)
   await expectPillOnBadges(page)
+  // 글자색도 바로 바뀐다(#379 리뷰)
+  await expect(
+    page.getByRole('navigation', { name: '내 학습 메뉴' }).getByRole('link', { name: '배지' }),
+  ).toHaveCSS('transition-property', 'none')
+})
+
+test('애니메이션 줄이기면 결제 주기 알약과 글자색이 바로 바뀐다', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/pricing')
+  const group = page.getByRole('group', { name: '결제 주기' })
+  await expect(group.locator('[data-slot="sliding-pill"]')).toHaveCSS('transition-property', 'none')
+  // 알약만 바로 놓이고 글자색은 서서히 바뀌면 한 토글 안에서 어긋난다(#379 리뷰)
+  for (const button of await group.getByRole('button').all())
+    await expect(button).toHaveCSS('transition-property', 'none')
 })
 
 test('탭을 옮긴 뒤 새로고침하면 알약이 다시 미끄러지지 않는다', async ({ page }) => {

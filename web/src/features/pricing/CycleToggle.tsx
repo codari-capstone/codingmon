@@ -42,7 +42,7 @@ export function CycleToggle({
             disabled={disabled}
             onClick={() => onChange(o.value)}
             className={cn(
-              'focus-visible:outline-ring relative inline-flex cursor-pointer items-center gap-2 rounded-full border-0 bg-transparent font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60',
+              'focus-visible:outline-ring relative inline-flex cursor-pointer items-center gap-2 rounded-full border-0 bg-transparent font-semibold transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60',
               compact ? 'h-9 px-4 text-sm' : 'h-10 px-5 text-[15px]',
               on ? 'text-foreground' : 'text-muted-foreground',
             )}
