@@ -92,11 +92,15 @@ describe('CodeReviewPanel (AI-05)', () => {
 
     // 목은 요청에 PENDING을 주고 다음 조회에 끝낸다 (handlers.ts)
     expect(await screen.findByText('AI가 코드를 리뷰하고 있어요…')).toBeInTheDocument()
-    expect(screen.getByTestId('ai-result-skeleton')).toBeInTheDocument()
+    // 기다리는 동안 달리는 펭귄. 안내는 패널의 status 문구가 하므로 낭독기에는 숨긴다
+    expect(document.querySelector('[data-slot="loading-state"]')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    )
     expect(
       await screen.findByText(/필요한 일만 하는 깔끔한 풀이예요/, undefined, { timeout: 3000 }),
     ).toBeInTheDocument()
-    expect(screen.queryByTestId('ai-result-skeleton')).not.toBeInTheDocument()
+    expect(document.querySelector('[data-slot="loading-state"]')).not.toBeInTheDocument()
     // 시간·의도한 시간. 공간은 목이 넘침 검사용 긴 값을 준다(handlers.ts)
     expect(screen.getAllByText('O(1)')).toHaveLength(2)
     expect(screen.getByText('의도한 만큼 빨라요')).toBeInTheDocument()

@@ -110,14 +110,18 @@ describe('AnalysisPanel', () => {
 
       // 목은 요청에 PENDING을 주고 다음 조회에 끝낸다 (handlers.ts).
       expect(await screen.findByText('AI가 분석하고 있어요…')).toBeInTheDocument()
-      expect(screen.getByTestId('ai-result-skeleton')).toBeInTheDocument()
+      // 기다리는 동안 달리는 펭귄. 안내는 패널의 status 문구가 하므로 낭독기에는 숨긴다
+      expect(document.querySelector('[data-slot="loading-state"]')).toHaveAttribute(
+        'aria-hidden',
+        'true',
+      )
       expect(screen.queryByRole('button', { name: 'AI 분석' })).not.toBeInTheDocument()
       expect(
         await screen.findByText('별 개수가 줄마다 줄어야 하는데 늘어나고 있어요.', undefined, {
           timeout: 3000,
         }),
       ).toBeInTheDocument()
-      expect(screen.queryByTestId('ai-result-skeleton')).not.toBeInTheDocument()
+      expect(document.querySelector('[data-slot="loading-state"]')).not.toBeInTheDocument()
       // 끝난 분석은 다시 만들지 않는다(계약). 누를 것이 없다.
       expect(screen.queryByRole('button', { name: /AI 분석|다시 시도/ })).not.toBeInTheDocument()
     })

@@ -133,16 +133,17 @@ describe('AdminDashboardPage (ADM-12)', () => {
     expect(screen.getByTestId('dashboard-cards')).not.toHaveClass('invisible')
   })
 
-  it('취소·확인이 필요한 결제가 없으면 카드를 보이지 않는다', async () => {
+  it('취소·확인이 필요한 결제가 없어도 0명 카드를 보이고, 갈 곳이 없어 링크는 두지 않는다', async () => {
     // 목 회원은 결제 기록이 없어 0명이다. 응답을 받아 그린 뒤에 확인한다
     const client = renderPage()
 
     await waitFor(() =>
       expect(client.getQueryData(paymentNeedsCancelCountQuery().queryKey)).toBe(0),
     )
-    expect(
-      screen.queryByRole('region', { name: '취소·확인이 필요한 결제' }),
-    ).not.toBeInTheDocument()
+    const card = screen.getByRole('region', { name: '취소·확인이 필요한 결제' })
+    expect(within(card).getByText('0')).toBeInTheDocument()
+    expect(within(card).getByText('지금은 처리할 결제가 없어요.')).toBeInTheDocument()
+    expect(within(card).queryByRole('link')).not.toBeInTheDocument()
   })
 
   it('신고가 없으면 빈 안내를 보인다', async () => {

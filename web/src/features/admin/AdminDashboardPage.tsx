@@ -78,7 +78,7 @@ export function Component() {
       <div
         data-testid="dashboard-cards"
         className={cn(
-          needsCancel.data && 'grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]',
+          needsCancel.data !== undefined && 'grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]',
           needsCancel.isPending && 'invisible',
         )}
       >
@@ -106,8 +106,8 @@ export function Component() {
           </Button>
         </section>
 
-        {/* 1건 이상일 때만 보인다. 0건이면 신고 카드가 전체 폭을 쓴다 */}
-        {needsCancel.data ? (
+        {/* 0명이어도 보인다. 1명 이상이면 빨간 테두리로 대상 회원 목록에 보내고, 0명이면 갈 곳이 없어 링크를 두지 않는다 */}
+        {needsCancel.data === undefined ? null : needsCancel.data > 0 ? (
           <section aria-label="취소·확인이 필요한 결제">
             <Link
               to="/admin/members?paymentNeedsCancel=true"
@@ -132,7 +132,23 @@ export function Component() {
               </span>
             </Link>
           </section>
-        ) : null}
+        ) : (
+          <section
+            aria-label="취소·확인이 필요한 결제"
+            className="bg-card flex h-full flex-col gap-1 rounded-lg border p-6 sm:p-8"
+          >
+            <span className="text-muted-foreground flex items-center gap-2 text-sm font-semibold">
+              <CreditCard aria-hidden className="size-4" />
+              취소·확인이 필요한 결제
+            </span>
+            <span className="text-foreground mt-2 text-sm">결제가 있는 회원</span>
+            <span className="text-foreground">
+              <b className="text-3xl tabular-nums">0</b>
+              <span className="ml-1 text-lg">명</span>
+            </span>
+            <span className="text-muted-foreground mt-2 text-sm">지금은 처리할 결제가 없어요.</span>
+          </section>
+        )}
       </div>
 
       <section aria-labelledby="recent-reports" className="flex flex-col gap-4">
