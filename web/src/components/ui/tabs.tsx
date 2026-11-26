@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
-import { Tabs as TabsPrimitive } from 'radix-ui'
+import { Slot, Tabs as TabsPrimitive } from 'radix-ui'
 
 import { SlidingPill } from '@/components/SlidingPill'
 
@@ -51,7 +51,8 @@ function TabsList({
           className="shadow-[0_1px_2px_rgba(27,33,64,0.08),0_2px_8px_-2px_rgba(27,33,64,0.12)] dark:bg-border dark:shadow-none"
         />
       ) : null}
-      {children}
+      {/* asChild면 Slot이 자식 하나만 받는다. Slottable이 그 자식을 고르고 알약은 그 안 첫 자식으로 들어간다(#379 리뷰) */}
+      <Slot.Slottable>{children}</Slot.Slottable>
     </TabsPrimitive.List>
   )
 }

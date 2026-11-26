@@ -77,15 +77,29 @@ test('끄면 기기가 동작 줄이기여도 움직임을 그대로 둔다', as
 async function watchPill(page: Page) {
   // 문서마다 다시 건다. 새로고침한 뒤에도 움직였는지 볼 수 있다
   await page.addInitScript(() => {
-    const w = window as unknown as { pillSlid: boolean }
+    const w = window as unknown as { pillSlid: boolean; pillCut: boolean }
     w.pillSlid = false
+    w.pillCut = false
+    const isPill = (event: TransitionEvent) =>
+      (event.target as Element).matches('[data-slot="sliding-pill"]') &&
+      event.propertyName === 'transform'
     document.addEventListener('transitionrun', (event) => {
-      const target = event.target as Element
-      if (target.matches('[data-slot="sliding-pill"]') && event.propertyName === 'transform')
-        w.pillSlid = true
+      if (isPill(event)) w.pillSlid = true
+    })
+    // 시작한 뒤 바로 놓기로 끊겨도 transitionrun은 이미 났다. 끝까지 미끄러졌는지는 이것으로 본다(#379 리뷰)
+    document.addEventListener('transitioncancel', (event) => {
+      if (isPill(event)) w.pillCut = true
     })
   })
 }
+
+const cut = (page: Page) => page.evaluate(() => (window as unknown as { pillCut: boolean }).pillCut)
+
+/**
+ * 웹 글꼴이 다 올 때까지 기다린다. 미끄러지는 도중에 글꼴이 오면 칸 폭이 바뀌어 알약이 의도대로 바로 놓이고,
+ * 그것이 끊김(pillCut)으로 잡힌다. 여러 테스트를 함께 돌려 느릴 때 그랬다
+ */
+const settled = (page: Page) => page.evaluate(async () => void (await document.fonts.ready))
 
 /** 알약이 그 칸 위에 놓일 때까지 기다린다. 알약은 정수 offset으로 놓여 소수점 boundingBox와 1px 안쪽 차이가 난다(#378 리뷰) */
 async function expectPillOn(row: Locator, item: Locator) {
@@ -180,12 +194,14 @@ test('결제 주기를 바꾸면 알약이 고른 칸으로 미끄러진다', as
   const group = page.getByRole('group', { name: '결제 주기' })
   await expectPillOn(group, group.getByRole('button', { name: '월간 결제' }))
   expect(await slid(page)).toBe(false) // 처음에는 제자리에 바로 놓는다
+  await settled(page)
 
   const yearly = group.getByRole('button', { name: /연간 결제/ })
   await yearly.click()
   await expect(yearly).toHaveAttribute('aria-pressed', 'true')
   await expect.poll(() => slid(page)).toBe(true)
   await expectPillOn(group, yearly)
+  expect(await cut(page)).toBe(false)
 })
 
 test('관리자 pill 탭을 바꾸면 알약이 지금 탭으로 미끄러진다', async ({ page }) => {
@@ -194,11 +210,15 @@ test('관리자 pill 탭을 바꾸면 알약이 지금 탭으로 미끄러진다
   await login(page, ADMIN)
   await page.goto('/admin/members')
   const list = page.getByRole('tablist', { name: '회원 상태' })
-  await expectPillOn(list, list.getByRole('tab', { name: /전체/ }))
+  // 탭 옆 회원 수가 오면 칸 폭이 바뀐다. 온 뒤에 누른다
+  await expectPillOn(list, list.getByRole('tab', { name: /전체 \d+/ }))
+  await settled(page)
 
   const suspended = list.getByRole('tab', { name: /정지/ })
   await suspended.click()
   await expect(suspended).toHaveAttribute('aria-selected', 'true')
   await expect.poll(() => slid(page)).toBe(true)
   await expectPillOn(list, suspended)
+  // 지금 탭만 굵은 글자라 고르면서 칸 폭이 바뀐다. 그래도 미끄러짐이 끊기지 않아야 한다
+  expect(await cut(page)).toBe(false)
 })

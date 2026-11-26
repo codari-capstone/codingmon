@@ -27,8 +27,11 @@ export function CycleToggle({
       aria-label="결제 주기"
       className="bg-muted relative inline-flex rounded-full p-1"
     >
-      {/* 고른 칸의 흰 면은 알약이 그린다. 바꾸면 미끄러진다 */}
-      <SlidingPill activeSelector='[aria-pressed="true"]' className="shadow-card" />
+      {/* 고른 칸의 흰 면은 알약이 그린다. 바꾸면 미끄러진다. 버튼 밖이라 disabled 흐림을 받지 못해 같은 값을 준다(#379 리뷰) */}
+      <SlidingPill
+        activeSelector='[aria-pressed="true"]'
+        className={cn('shadow-card', disabled && 'opacity-60')}
+      />
       {options.map((o) => {
         const on = cycle === o.value
         return (

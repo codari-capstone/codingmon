@@ -75,6 +75,9 @@ export function SlidingPill({
       const from = current
       current = next
       if (next) (from ? place : jump)(next)
+      // 지금 칸만 굵은 글자인 탭은 고르면서 칸 폭도 바뀐다. 기준을 다시 잡지 않으면 ResizeObserver가 그 차이를 보고
+      // 막 시작한 미끄러짐을 바로 놓기로 끊는다(#379 리뷰)
+      widths = widthsOf()
     })
     select.observe(row, { subtree: true, attributes: true })
 
