@@ -1,6 +1,6 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
-import { login } from './login.js'
+import { ADMIN, login } from './login.js'
 
 /**
  * 애니메이션 줄이기 (UX-08). index.css의 motion-reduce 변형이 화면 설정(<html data-motion>)과
@@ -70,8 +70,9 @@ test('끄면 기기가 동작 줄이기여도 움직임을 그대로 둔다', as
 })
 
 /**
- * 내 학습 탭(LearnNav)의 알약. 탭마다 다른 화면이라 탭 줄이 새로 그려지는데, 떠난 탭에서 지금 탭으로 미끄러져야 한다.
- * 알약이 움직이기 시작했는지(transitionrun)와 멈춘 자리가 지금 탭인지를 본다.
+ * 분절형 탭의 알약(SlidingPill). 내 학습 탭·결제 주기·관리자 pill 탭이 함께 쓴다.
+ * 알약이 움직이기 시작했는지(transitionrun)와 멈춘 자리가 지금 칸인지를 본다.
+ * 내 학습 탭은 탭마다 다른 화면이라 탭 줄이 새로 그려지는데, 떠난 탭에서 지금 탭으로 미끄러져야 한다.
  */
 async function watchPill(page: Page) {
   // 문서마다 다시 건다. 새로고침한 뒤에도 움직였는지 볼 수 있다
@@ -80,10 +81,21 @@ async function watchPill(page: Page) {
     w.pillSlid = false
     document.addEventListener('transitionrun', (event) => {
       const target = event.target as Element
-      if (target.closest('nav[aria-label="내 학습 메뉴"]') && event.propertyName === 'transform')
+      if (target.matches('[data-slot="sliding-pill"]') && event.propertyName === 'transform')
         w.pillSlid = true
     })
   })
+}
+
+/** 알약이 그 칸 위에 놓일 때까지 기다린다. 알약은 정수 offset으로 놓여 소수점 boundingBox와 1px 안쪽 차이가 난다(#378 리뷰) */
+async function expectPillOn(row: Locator, item: Locator) {
+  const pill = row.locator('[data-slot="sliding-pill"]')
+  await expect
+    .poll(async () => {
+      const [a, b] = [await pill.boundingBox(), await item.boundingBox()]
+      return a && b ? Math.max(Math.abs(a.x - b.x), Math.abs(a.width - b.width)) : Infinity
+    })
+    .toBeLessThanOrEqual(1)
 }
 
 async function switchLearnTab(page: Page) {
@@ -104,17 +116,9 @@ async function switchLearnTab(page: Page) {
 const slid = (page: Page) =>
   page.evaluate(() => (window as unknown as { pillSlid: boolean }).pillSlid)
 
-/** 알약이 [배지] 위에 놓일 때까지 기다린다. 알약은 정수 offset으로 놓여 소수점 boundingBox와 1px 안쪽 차이가 난다(#378 리뷰) */
 async function expectPillOnBadges(page: Page) {
   const nav = page.getByRole('navigation', { name: '내 학습 메뉴' })
-  const pill = nav.locator('span[aria-hidden="true"]').first()
-  const badges = nav.getByRole('link', { name: '배지' })
-  await expect
-    .poll(async () => {
-      const [a, b] = [await pill.boundingBox(), await badges.boundingBox()]
-      return a && b ? Math.max(Math.abs(a.x - b.x), Math.abs(a.width - b.width)) : Infinity
-    })
-    .toBeLessThanOrEqual(1)
+  await expectPillOn(nav, nav.getByRole('link', { name: '배지' }))
 }
 
 test('내 학습 탭을 옮기면 알약이 지금 탭으로 미끄러진다', async ({ page }) => {
@@ -167,4 +171,34 @@ test('대소문자만 다른 주소에서도 알약이 지금 탭에 놓인다',
     page.getByRole('navigation', { name: '내 학습 메뉴' }).getByRole('link', { name: '배지' }),
   ).toHaveAttribute('aria-current', 'page')
   await expectPillOnBadges(page)
+})
+
+test('결제 주기를 바꾸면 알약이 고른 칸으로 미끄러진다', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await watchPill(page)
+  await page.goto('/pricing')
+  const group = page.getByRole('group', { name: '결제 주기' })
+  await expectPillOn(group, group.getByRole('button', { name: '월간 결제' }))
+  expect(await slid(page)).toBe(false) // 처음에는 제자리에 바로 놓는다
+
+  const yearly = group.getByRole('button', { name: /연간 결제/ })
+  await yearly.click()
+  await expect(yearly).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(() => slid(page)).toBe(true)
+  await expectPillOn(group, yearly)
+})
+
+test('관리자 pill 탭을 바꾸면 알약이 지금 탭으로 미끄러진다', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await watchPill(page)
+  await login(page, ADMIN)
+  await page.goto('/admin/members')
+  const list = page.getByRole('tablist', { name: '회원 상태' })
+  await expectPillOn(list, list.getByRole('tab', { name: /전체/ }))
+
+  const suspended = list.getByRole('tab', { name: /정지/ })
+  await suspended.click()
+  await expect(suspended).toHaveAttribute('aria-selected', 'true')
+  await expect.poll(() => slid(page)).toBe(true)
+  await expectPillOn(list, suspended)
 })
