@@ -138,7 +138,11 @@ describe('AdminDashboardPage (ADM-12)', () => {
   it('결제 수를 다시 받다 실패하면 지난 0을 처리할 결제 없음으로 보이지 않는다 (#380 리뷰)', async () => {
     const client = renderPage()
     const card = screen.getByRole('region', { name: '취소·확인이 필요한 결제' })
-    expect(await within(card).findByText('지금은 처리할 결제가 없어요.')).toBeInTheDocument()
+    // 받기 전에도 같은 문구가 감춰진 줄에 있다. 캐시에 0이 든 것을 기다려야 '지난 0'을 시험한다(#380 리뷰)
+    await waitFor(() =>
+      expect(client.getQueryData(paymentNeedsCancelCountQuery().queryKey)).toBe(0),
+    )
+    expect(within(card).getByText('0')).toBeInTheDocument()
 
     // 포트원 콘솔에 다녀와 창으로 돌아왔을 때(refetchOnWindowFocus) 다시 받기가 실패한 것과 같다
     server.use(
@@ -154,6 +158,8 @@ describe('AdminDashboardPage (ADM-12)', () => {
     ).toBeInTheDocument()
     expect(within(card).getByText('–')).toBeInTheDocument()
     expect(within(card).queryByText('지금은 처리할 결제가 없어요.')).not.toBeInTheDocument()
+    // 캐시에는 지난 0이 그대로 있다. 그래도 보이지 않는 것이 이 테스트가 지키는 것이다
+    expect(client.getQueryData(paymentNeedsCancelCountQuery().queryKey)).toBe(0)
   })
 
   it('취소·확인이 필요한 결제가 없어도 0명 카드를 보이고, 갈 곳이 없어 링크는 두지 않는다', async () => {
