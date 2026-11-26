@@ -37,7 +37,8 @@ export function LoadingState({ label = '불러오는 중…', inPanel = false }:
         inPanel ? 'py-4' : 'px-6 py-12',
       )}
     >
-      {/* 장식이다. 무엇을 하는지는 아래 글자가 알린다. 558×418 원본이라 2배 화면에서도 선명하다 */}
+      {/* 장식이다. 무엇을 하는지는 아래 글자가, inPanel이면 패널의 status 문구가 알린다(여기에 다시 두면 두 번 읽힌다).
+          558×418 원본이라 2배 화면에서도 선명하다 */}
       <img
         src={running}
         alt=""
