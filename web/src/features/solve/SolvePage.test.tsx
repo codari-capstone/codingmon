@@ -1,13 +1,15 @@
-import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
+import type { SubmissionAnalysis } from '@/api/types'
+import { focusManager, QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { StrictMode } from 'react'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { createBrowserRouter, createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/app/queryClient'
 import { ThemeProvider } from '@/app/ThemeProvider'
+import { analysisQueryKey } from '@/features/ai/analysisQuery'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { problemDetails } from '@/mocks/fixtures/problemDetails'
 import { server } from '@/mocks/server'
@@ -20,7 +22,7 @@ import {
   storeSavedCode,
 } from './savedCode'
 import { Component as SolvePage } from './SolvePage'
-import { holdRetryState, retryState } from './solvePath'
+import { holdRetryState, retriedSubmission, retryState } from './solvePath'
 import { problemDetailQuery } from './solveQuery'
 
 /**
@@ -1215,5 +1217,363 @@ describe('SolvePage', () => {
       expect(screen.getByRole('heading', { name: '예제' })).toBeInTheDocument()
       expect(screen.getByRole('textbox', { name: '코드 편집기' })).toBeInTheDocument()
     })
+  })
+})
+
+describe('풀이 화면 AI 힌트', () => {
+  beforeEach(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    sessionStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    sessionStorage.clear()
+  })
+
+  const HINTS = [
+    '예제 1을 넣고 실행해 보세요.',
+    '가장 큰 값을 기억해 보세요.',
+    '최댓값 갱신 원리예요.',
+  ]
+
+  /** 제출 7의 끝난 분석. 연 단계까지만 힌트가 온다(계약) */
+  function analysisOf(
+    revealed: number,
+    over: Partial<SubmissionAnalysis> = {},
+  ): SubmissionAnalysis {
+    return {
+      submissionId: 7,
+      status: 'COMPLETED',
+      failureReason: null,
+      blocked: false,
+      summary: '가장 큰 값을 기억하는 부분이 없어요.',
+      suspectLines: [2],
+      facts: [],
+      guesses: [],
+      revealedHintLevel: revealed,
+      hints: HINTS.slice(0, revealed),
+      maxHintLevel: 3,
+      quota: { plan: 'PRO', limit: 30, used: 1, remaining: 29, resetsAt: '2026-10-25T00:00:00Z' },
+      createdAt: '2026-10-24T05:00:05Z',
+      completedAt: '2026-10-24T05:00:09Z',
+      ...over,
+    }
+  }
+
+  function serveAnalysis(analysis: SubmissionAnalysis | null) {
+    let current = analysis
+    server.use(
+      http.get('*/api/submissions/:id/analysis', () =>
+        current
+          ? HttpResponse.json(current)
+          : HttpResponse.json(
+              { status: 404, code: 'ANALYSIS_NOT_FOUND', title: 'Not Found' },
+              { status: 404 },
+            ),
+      ),
+      http.post('*/api/submissions/:id/analysis/hints', () => {
+        if (!current) return HttpResponse.json({ status: 404 }, { status: 404 })
+        const level = current.revealedHintLevel + 1
+        current = { ...current, revealedHintLevel: level, hints: HINTS.slice(0, level) }
+        return HttpResponse.json(current)
+      }),
+    )
+  }
+
+  const CODE = 'n = int(input())\nprint(n)\n'
+  const retried = () =>
+    renderSolve({ pathname: '/problems/1', state: retryState(USER.id, 7, 'PYTHON') })
+
+  it('넓은 화면은 지문 위에 연 힌트와 의심 줄을 보여 준다', async () => {
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(2))
+    retried()
+
+    const panel = await screen.findByRole('region', { name: /AI 힌트/ })
+    expect(panel).toHaveTextContent('2단계까지 열었어요')
+    expect(panel).toHaveTextContent('제출 #7에서 연 힌트예요')
+    expect(panel).toHaveTextContent('의심되는 줄 · 2번')
+    expect(panel).toHaveTextContent(HINTS[0]!)
+    expect(panel).toHaveTextContent(HINTS[1]!)
+    expect(panel).not.toHaveTextContent(HINTS[2]!)
+    expect(screen.getByRole('link', { name: /분석 전체 보기/ })).toHaveAttribute(
+      'href',
+      '/submissions/7',
+    )
+    // 이미 고치는 자리다
+    expect(screen.queryByRole('link', { name: '코드 고치러 가기' })).not.toBeInTheDocument()
+    expect(screen.getByText(/노란 줄은 AI가 의심한 줄이에요/)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(document.querySelector('.cm-suspect-line')).toHaveTextContent('print(n)'),
+    )
+  })
+
+  it('분석 전체 보기는 새 탭으로 연다 — 떠나면 고치던 코드가 지워진다', async () => {
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    retried()
+
+    expect(await screen.findByRole('link', { name: /분석 전체 보기/ })).toHaveAttribute(
+      'target',
+      '_blank',
+    )
+  })
+
+  it('다른 줄을 고치고 에디터가 새로 켜져도 남은 의심 줄을 다시 칠한다', async () => {
+    const user = userEvent.setup()
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    retried()
+    await waitFor(() =>
+      expect(document.querySelector('.cm-suspect-line')).toHaveTextContent('print(n)'),
+    )
+
+    // 1번 줄(의심 줄 아님)을 고친다. 처음 열린 제출 코드와 달라진다
+    await user.click(screen.getByRole('textbox', { name: '코드 편집기' }))
+    await user.keyboard('{Control>}{Home}{/Control}# 고침')
+    // 언어를 바꿨다 돌아오면 에디터가 새로 켜진다
+    await user.click(screen.getByRole('radio', { name: 'C++' }))
+    await user.click(screen.getByRole('radio', { name: 'Python' }))
+
+    await waitFor(() =>
+      expect(document.querySelector('.cm-suspect-line')).toHaveTextContent('print(n)'),
+    )
+    expect(screen.getByText(/노란 줄은 AI가 의심한 줄이에요/)).toBeInTheDocument()
+  })
+
+  it('시작 코드를 불러오면 의심 줄 표시와 안내를 지운다', async () => {
+    const user = userEvent.setup()
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    retried()
+    await waitFor(() => expect(document.querySelector('.cm-suspect-line')).not.toBeNull())
+
+    await user.click(screen.getByRole('button', { name: '시작 코드 불러오기' }))
+    await user.click(await screen.findByRole('button', { name: '불러오기' }))
+
+    await waitFor(() => expect(document.querySelector('.cm-suspect-line')).toBeNull())
+    expect(screen.queryByText(/노란 줄은 AI가 의심한 줄이에요/)).not.toBeInTheDocument()
+  })
+
+  it('패널에서 다음 단계 힌트를 연다', async () => {
+    const user = userEvent.setup()
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    retried()
+
+    await user.click(await screen.findByRole('button', { name: '2단계 방향 보기' }))
+
+    expect(await screen.findByText(HINTS[1]!)).toHaveFocus()
+    expect(screen.getByRole('region', { name: /AI 힌트/ })).toHaveTextContent('2단계까지 열었어요')
+  })
+
+  it('연 힌트가 없어도 요약과 1단계 열기를 보여 준다', async () => {
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(0))
+    retried()
+
+    const panel = await screen.findByRole('region', { name: /AI 힌트/ })
+    expect(panel).not.toHaveTextContent('단계까지 열었어요')
+    expect(panel).toHaveTextContent('가장 큰 값을 기억하는 부분이 없어요.')
+    expect(screen.getByRole('button', { name: '1단계 관찰 보기' })).toBeInTheDocument()
+  })
+
+  it('접으면 머리만 남고 새로고침해도 접혀 있다', async () => {
+    const user = userEvent.setup()
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    retried()
+
+    await user.click(await screen.findByRole('button', { name: /접기/ }))
+    expect(screen.getByRole('button', { name: /펼치기/ })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText(HINTS[0]!)).not.toBeVisible()
+
+    await reloadPage()
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    retried()
+    expect(await screen.findByRole('button', { name: /펼치기/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+  })
+
+  it('좁은 화면은 힌트 탭이 먼저 열린다', async () => {
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(2))
+    retried()
+
+    const tab = await screen.findByRole('tab', { name: /힌트/ })
+    expect(tab).toHaveAccessibleName('힌트, 연 힌트 2개')
+    expect(tab).toHaveAttribute('data-state', 'active')
+    expect(screen.getByText(HINTS[1]!)).toBeInTheDocument()
+  })
+
+  it.each([
+    ['분석을 받지 않음', null],
+    ['분석 실패', analysisOf(0, { status: 'FAILED', failureReason: 'UNAVAILABLE' })],
+    ['정답 코드가 섞여 숨긴 분석', analysisOf(1, { blocked: true })],
+  ])('%s이면 힌트를 보여 주지 않는다', async (_, analysis) => {
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysis as SubmissionAnalysis | null)
+    retried()
+    await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+    // 분석 응답이 도착할 때까지 기다린다. 제목·안내는 분석과 따로 떠서, 그것만 기다리면 늦게 뜬 패널을 놓친다
+    await waitFor(() =>
+      expect(lastClient.getQueryState(analysisQueryKey(7))?.status).not.toBe('pending'),
+    )
+
+    expect(screen.queryByRole('region', { name: /AI 힌트/ })).not.toBeInTheDocument()
+  })
+
+  it('무료 플랜 잠금의 [프로 시작하기]는 새 탭으로 연다 — 떠나면 고치던 코드가 지워진다', async () => {
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1, { maxHintLevel: 1 }))
+    retried()
+
+    expect(await screen.findByRole('link', { name: /프로 시작하기/ })).toHaveAttribute(
+      'target',
+      '_blank',
+    )
+  })
+
+  it('지원 언어가 비어 있어도 화면이 깨지지 않는다', async () => {
+    server.use(
+      http.get('*/api/problems/1', () =>
+        HttpResponse.json({ ...problemDetails[0], languages: [] }),
+      ),
+    )
+    renderSolve()
+
+    expect(await screen.findByRole('heading', { level: 1, name: '두 수의 합' })).toBeInTheDocument()
+  })
+
+  it('언어를 바꿔도 방문 기록의 [다시 풀기] 정보가 남아, 새로고침해도 힌트가 보인다', async () => {
+    const user = userEvent.setup()
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    // 실제 브라우저 기록을 쓰는 라우터다. holdRetryState처럼 window.history의 state를 본다.
+    // 전역 기록을 바꾸므로 실패해도 되돌리고 라우터를 내린다 — 남으면 뒤 테스트가 이 retry로 열린다
+    const before = { state: window.history.state as unknown, url: window.location.href }
+    window.history.replaceState(
+      { usr: retryState(USER.id, 7, 'PYTHON'), key: 'r', idx: 0 },
+      '',
+      '/problems/1',
+    )
+    const router = createBrowserRouter([{ path: '/problems/:id', Component: SolvePage }])
+    try {
+      const client = createQueryClient()
+      client.setQueryData(ME_QUERY_KEY, USER)
+      render(
+        <ThemeProvider>
+          <QueryClientProvider client={client}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        </ThemeProvider>,
+      )
+      await screen.findByRole('region', { name: /AI 힌트/ })
+
+      await user.click(screen.getByRole('radio', { name: 'C++' }))
+      await user.click(screen.getByRole('radio', { name: 'Python' }))
+
+      // 새로고침은 이 기록 항목을 다시 읽는다
+      expect(retriedSubmission(window.history.state?.usr, USER.id)).toEqual(
+        retryState(USER.id, 7, 'PYTHON')?.retry,
+      )
+    } finally {
+      cleanup()
+      router.dispose()
+      window.history.replaceState(before.state, '', before.url)
+    }
+  })
+
+  it('위에 줄을 넣거나 그 줄을 고치면 패널 배지도 에디터의 노란 줄을 따른다', async () => {
+    const user = userEvent.setup()
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    retried()
+    const panel = await screen.findByRole('region', { name: /AI 힌트/ })
+    await waitFor(() => expect(panel).toHaveTextContent('의심되는 줄 · 2번'))
+
+    // 맨 앞에 줄을 넣는다. 의심 줄 print(n)이 3번으로 내려간다
+    await user.click(screen.getByRole('textbox', { name: '코드 편집기' }))
+    await user.keyboard('{Control>}{Home}{/Control}{Enter}')
+    await waitFor(() => expect(panel).toHaveTextContent('의심되는 줄 · 3번'))
+
+    // 그 줄을 고치면 배지도 사라진다
+    await user.keyboard('{Control>}{End}{/Control}{ArrowUp}{End} # 고침')
+    await waitFor(() => expect(panel).not.toHaveTextContent('의심되는 줄'))
+  })
+
+  it('힌트를 기다리는 사이 다른 곳으로 옮겼으면 포커스를 뺏지 않는다', async () => {
+    const user = userEvent.setup()
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    // 응답을 붙잡아 두었다가 에디터로 옮긴 뒤 보낸다
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.post('*/api/submissions/:id/analysis/hints', async () => {
+        await held
+        return HttpResponse.json(analysisOf(2))
+      }),
+    )
+    retried()
+
+    await user.click(await screen.findByRole('button', { name: '2단계 방향 보기' }))
+    const editor = screen.getByRole('textbox', { name: '코드 편집기' })
+    await user.click(editor)
+    release()
+
+    expect(await screen.findByText(HINTS[1]!)).not.toHaveFocus()
+    expect(editor).toHaveFocus()
+  })
+
+  it('창에 돌아오면 분석을 다시 받는다 — 새 탭에서 연 힌트를 맞춘다', async () => {
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    retried()
+    await screen.findByRole('button', { name: '2단계 방향 보기' })
+
+    // 다른 탭(분석 전체 보기)에서 2단계를 열었다
+    serveAnalysis(analysisOf(2))
+    act(() => {
+      focusManager.setFocused(false)
+      focusManager.setFocused(true)
+    })
+
+    expect(await screen.findByText(HINTS[1]!)).toBeInTheDocument()
+    focusManager.setFocused(undefined)
+  })
+
+  it('[다시 풀기]로 오지 않았으면 분석을 묻지 않는다', async () => {
+    let asked = 0
+    server.use(
+      http.get('*/api/submissions/:id/analysis', () => {
+        asked++
+        return HttpResponse.json({ status: 404 }, { status: 404 })
+      }),
+    )
+    asWide()
+    renderSolve()
+    await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
+
+    expect(screen.queryByRole('region', { name: /AI 힌트/ })).not.toBeInTheDocument()
+    expect(asked).toBe(0)
   })
 })

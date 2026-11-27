@@ -51,6 +51,20 @@ function Evidence({ kind, items }: { kind: '실행 결과' | '코드 분석'; it
   )
 }
 
+/**
+ * 의심 줄 배지 (AI-03). 결과 화면과 풀이 화면(SolveHints)이 같은 모양·문구를 쓴다. 줄이 많으면
+ * 좁은 화면에서 넘치지 않게 줄바꿈한다. 줄이 없으면 그리지 않는다.
+ */
+export function SuspectLinesBadge({ lines }: { lines: number[] }) {
+  if (lines.length === 0) return null
+  return (
+    <Badge
+      tone="danger"
+      className="h-auto min-h-[26px] max-w-full py-1 whitespace-normal"
+    >{`의심되는 줄 · ${lines.map((line) => `${line}번`).join(', ')}`}</Badge>
+  )
+}
+
 /** 원인 설명 (AI-03). 줄 번호를 거르는 규칙은 `suspectLines` 주석. */
 function Explanation({
   analysis,
@@ -69,12 +83,7 @@ function Explanation({
               {analysis.summary}
             </p>
           ) : null}
-          {lines.length > 0 ? (
-            <Badge
-              tone="danger"
-              className="h-auto min-h-[26px] py-1 whitespace-normal"
-            >{`의심되는 줄 · ${lines.map((line) => `${line}번`).join(', ')}`}</Badge>
-          ) : null}
+          <SuspectLinesBadge lines={lines} />
         </div>
       ) : null}
       {analysis.facts.length + analysis.guesses.length > 0 ? (
