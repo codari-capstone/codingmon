@@ -2,11 +2,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams, useSearchParams } from 'react-router'
 
-import type { Language, ProblemDetailView } from '@/api/types'
+import type { Language, ProblemDetailView, SubmissionAnalysis } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
 import { LoadingState } from '@/components/LoadingState'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { analysisQuery } from '@/features/ai/analysisQuery'
+import { suspectLines } from '@/features/ai/countLines'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { useAuth } from '@/features/auth/useAuth'
@@ -35,6 +37,7 @@ import { askedLanguage, retriedSubmission } from './solvePath'
 import { problemDetailQuery } from './solveQuery'
 import { StarterCodeButton } from './StarterCodeButton'
 import { useSubmit } from './submitQuery'
+import { SolveHints } from './SolveHints'
 import { SubmitButton, SubmitError } from './SubmitButton'
 import { Statement } from './Statement'
 import { useWideLayout } from './useWideLayout'
@@ -87,6 +90,7 @@ function Workspace({
   problem,
   retried,
   missedRetry,
+  analysis,
   onAccepted,
 }: {
   problem: ProblemDetailView
@@ -94,6 +98,8 @@ function Workspace({
   retried: { language: Language; code: string } | null
   /** 코드를 받지 못한 [다시 풀기] 제출. 이 언어에서는 다른 제출의 판정 대기 코드를 열지 않는다. */
   missedRetry: { language: Language; submissionId: number } | null
+  /** [다시 풀기]로 온 제출의 끝난 분석. 없거나 보여 줄 수 없으면 null */
+  analysis: SubmissionAnalysis | null
   /** 제출이 접수됐다. 이 뒤의 이동은 '작성하다 떠남'이 아니다. */
   onAccepted: () => void
 }) {
@@ -174,8 +180,25 @@ function Workspace({
 
   const code = language ? (codeByLanguage[language] ?? opening) : ''
 
-  // 좁은 화면의 에디터는 지문 탭 뒤에 숨은 채 마운트돼 있다. 보이는 동안만 '본 코드'로 친다
-  const [tab, setTab] = useState('statement')
+  /**
+   * 의심 줄은 제출한 코드의 줄 번호다. 그래서 제출 코드를 받았을 때만 거르고(저장본이 열리면 줄이 다르다),
+   * 처음 칠하는 것은 그 코드가 손대지 않은 채 열려 있을 때뿐이다.
+   *
+   * 칠한 뒤로는 에디터가 알려 준 남은 줄(`left`)이 기준이다. 고친 줄은 에디터가 지우고 남은 줄은 코드를
+   * 따라 움직이므로, 화면 폭이 바뀌거나 언어를 바꿨다 돌아와 에디터가 새로 켜져도 그 줄을 다시 칠한다.
+   */
+  const lines = analysis && retried ? suspectLines(analysis.suspectLines, retried.code) : []
+  const [left, setLeft] = useState<number[] | null>(null)
+  const marked =
+    language !== retried?.language ? [] : (left ?? (code === retried.code ? lines : []))
+
+  // 좁은 화면의 에디터는 지문 탭 뒤에 숨은 채 마운트돼 있다. 보이는 동안만 '본 코드'로 친다.
+  // 고르기 전에는 힌트가 있으면 힌트 탭이 먼저다. 분석이 늦게 와도 그때 힌트 탭으로 열린다
+  const [pickedTab, setTab] = useState<string | null>(null)
+  const tab =
+    pickedTab === 'hints' && !analysis
+      ? 'statement'
+      : (pickedTab ?? (analysis ? 'hints' : 'statement'))
   const editorVisible = wide || tab === 'editor'
   useEffect(() => {
     if (!language || !editorVisible) return undefined
@@ -204,6 +227,8 @@ function Workspace({
                 // 저장도 함께 지운다. 안 하면 새로고침에 방금 버린 코드가 돌아온다.
                 storeSavedCode(user?.id, problem.id, language, current.starterCode)
                 setGeneration((it) => it + 1)
+                // 다른 코드다. 제출 코드의 줄 번호를 칠하면 엉뚱한 줄이 노래진다
+                if (language === retried?.language) setLeft([])
               }}
             />
           </div>
@@ -225,6 +250,8 @@ function Workspace({
             key={`${language}:${generation}`}
             language={language}
             value={code}
+            suspectLines={marked}
+            onSuspectLinesChange={setLeft}
             onChange={(next) => {
               setCodeByLanguage((prev) => ({ ...prev, [language]: next }))
               // shortcut: 입력마다 저장한다. 코드가 수십 KB로 커져 입력이 버벅이면
@@ -237,9 +264,17 @@ function Workspace({
           파란 버튼은 이 영역에 제출 하나다. 좁은 폭(sm 미만)은 128px 둘이 카드에 들어가지 않아 반씩 나눈다.
         */}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {problem.samples.length > 0 ? (
+            {/* 노란 줄 안내는 칠한 줄이 있을 때만, 실행 안내는 돌릴 예제가 있을 때만 */}
+            {marked.length > 0 || problem.samples.length > 0 ? (
               <p className="text-muted-foreground text-sm">
-                실행은 공개 예제로만 돌려요. 시도 횟수에 들어가지 않아요.
+                {[
+                  marked.length > 0 ? '노란 줄은 AI가 의심한 줄이에요.' : '',
+                  problem.samples.length > 0
+                    ? '실행은 공개 예제로만 돌려요. 시도 횟수에 들어가지 않아요.'
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               </p>
             ) : null}
             <div className="grid w-full auto-cols-fr grid-flow-col gap-2.5 sm:ml-auto sm:w-auto sm:auto-cols-[128px]">
@@ -281,7 +316,13 @@ function Workspace({
         // 지문:에디터 = 2:3. 코드는 가로로 길어지고 지문은 글이라 좁아도 읽힌다(#327).
         // 분할이 막 켜지는 1024px 부근은 2:3이면 지문 속 예제 칸이 너무 좁아 xl부터만 쓴다(#330 리뷰)
         <div className="grid grid-cols-2 items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          {statement}
+          {/* 힌트는 지문 위다. 에디터는 오른쪽에 그대로라 힌트를 보며 고친다(모달은 코드를 가린다) */}
+          <div className="flex min-w-0 flex-col gap-5">
+            {analysis ? (
+              <SolveHints problemId={problem.id} analysis={analysis} lines={lines} collapsible />
+            ) : null}
+            {statement}
+          </div>
           {/*
             에디터 칸을 화면에 붙여 둔다. 지문은 에디터보다 훨씬 길어서(측정: 1280px
             화면에서 지문 1271px, 에디터 칸 492px) 지문을 읽으려고 내리면 에디터가
@@ -312,8 +353,30 @@ function Workspace({
             <TabsTrigger value="editor" className="min-h-11">
               코드 작성
             </TabsTrigger>
+            {analysis ? (
+              <TabsTrigger
+                value="hints"
+                className="min-h-11 gap-1.5"
+                // 숫자만 읽히면 무엇의 개수인지 모른다
+                aria-label={
+                  analysis.hints.length > 0 ? `힌트, 연 힌트 ${analysis.hints.length}개` : undefined
+                }
+              >
+                힌트
+                {analysis.hints.length > 0 ? (
+                  <span className="bg-primary/15 inline-flex size-5 items-center justify-center rounded-full text-xs">
+                    {analysis.hints.length}
+                  </span>
+                ) : null}
+              </TabsTrigger>
+            ) : null}
           </TabsList>
           <TabsContent value="statement">{statement}</TabsContent>
+          {analysis ? (
+            <TabsContent value="hints">
+              <SolveHints problemId={problem.id} analysis={analysis} lines={lines} />
+            </TabsContent>
+          ) : null}
           {/*
             forceMount가 있어야 에디터가 탭을 옮겨도 살아 있다 — 없으면 Radix가 비활성
             패널을 언마운트해서 undo 이력·커서·스크롤이 매번 사라진다. forceMount를 켜면
@@ -361,10 +424,16 @@ function SolveProblem({ problemId }: { problemId: number }) {
     enabled: needsSubmission,
   })
 
+  // 그 제출의 AI 분석. 결과 화면과 같은 쿼리라 막 보고 온 분석은 캐시에서 바로 뜬다. 에디터는 기다리지 않는다
+  const analysis = useQuery({ ...analysisQuery(retry?.submissionId ?? 0), enabled: retry !== null })
+
   const queryClient = useQueryClient()
   useEffect(() => {
     forgetSessionIfUnauthorized(queryClient, submission.error)
   }, [queryClient, submission.error])
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, analysis.error)
+  }, [queryClient, analysis.error])
 
   /**
    * 화면을 떠나면 작성 중 코드를 지운다 (SOLVE-11).
@@ -412,6 +481,14 @@ function SolveProblem({ problemId }: { problemId: number }) {
     typeof submitted.sourceCode === 'string'
       ? { language: submitted.language, code: submitted.sourceCode }
       : null
+  // 보여 줄 수 있는 끝난 분석만. 제출을 받았다면 이 문제의 것인지도 본다(위 retried와 같은 이유)
+  const analyzed = retry ? analysis.data : null
+  const shownAnalysis =
+    analyzed?.status === 'COMPLETED' &&
+    !analyzed.blocked &&
+    (submitted === undefined || submitted.problemId === data.id)
+      ? analyzed
+      : null
 
   // key로 문제를 묶는다. 캐시가 있어 isPending을 거치지 않고 다른 문제로 넘어가면 같은
   // 인스턴스가 재사용돼, 이전 문제의 codeByLanguage가 새 문제의 저장본보다 우선하고
@@ -422,6 +499,7 @@ function SolveProblem({ problemId }: { problemId: number }) {
       problem={data}
       retried={retried}
       missedRetry={needsSubmission && !retried ? retry : null}
+      analysis={shownAnalysis}
       onAccepted={() => {
         accepted.current = true
       }}

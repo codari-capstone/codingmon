@@ -35,8 +35,8 @@ export function HintSteps({
 }: {
   submissionId: number
   analysis: SubmissionAnalysis
-  /** 다시 풀기와 같은 주소 (solvePath) */
-  retryPath: string
+  /** 다시 풀기와 같은 주소 (solvePath). 풀이 화면은 이미 고치는 자리라 넘기지 않는다 */
+  retryPath?: string
   /** 풀이 화면에 넘길 제출 번호. 힌트를 보고 그 코드를 고치러 간다. */
   retryState?: RetryState
 }) {
@@ -141,11 +141,13 @@ export function HintSteps({
       ) : null}
 
       {/* 패널의 주 동작이다. 힌트를 보고 고치러 가는 것이 이 화면의 마지막 걸음이다 */}
-      <Button asChild size="lg" fullWidth className="mt-2">
-        <Link to={retryPath} state={retryState}>
-          코드 고치러 가기
-        </Link>
-      </Button>
+      {retryPath ? (
+        <Button asChild size="lg" fullWidth className="mt-2">
+          <Link to={retryPath} state={retryState}>
+            코드 고치러 가기
+          </Link>
+        </Button>
+      ) : null}
     </section>
   )
 }

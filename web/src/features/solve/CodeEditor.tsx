@@ -1,11 +1,12 @@
 import { cpp } from '@codemirror/lang-cpp'
 import { python } from '@codemirror/lang-python'
-import CodeMirror, { EditorView } from '@uiw/react-codemirror'
-import { useMemo } from 'react'
+import CodeMirror, { EditorView, type ViewUpdate } from '@uiw/react-codemirror'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { Language } from '@/api/types'
 import { useTheme } from '@/app/useTheme'
 import { useEditorSettings } from './editorSettings'
+import { markedLines, markSuspectLines, suspectHighlight } from './suspectHighlight'
 
 /** 언어별 문법. 줄 번호·자동 들여쓰기·괄호 짝은 basicSetup 기본값이 준다 (SOLVE-05). */
 const SYNTAX = { PYTHON: python, CPP: cpp } satisfies Record<Language, unknown>
@@ -23,6 +24,8 @@ export function CodeEditor({
   label = '코드 편집기',
   readOnly = false,
   minHeight = '24rem',
+  suspectLines,
+  onSuspectLinesChange,
 }: {
   language: Language
   value: string
@@ -42,8 +45,26 @@ export function CodeEditor({
   readOnly?: boolean
   /** 화면 설정의 미리 보기처럼 짧게 둘 때만 바꾼다 */
   minHeight?: string
+  /**
+   * AI가 의심한 줄(1부터). 값이 들어올 때와 에디터가 새로 켜질 때 칠한다. 고친 줄은 에디터가 스스로
+   * 지우고(suspectHighlight) 남은 줄을 `onSuspectLinesChange`로 알린다 — 그 값을 다시 넘기면
+   * 화면 폭이 바뀌어 에디터가 새로 켜져도 남은 표시가 그대로다.
+   */
+  suspectLines?: number[]
+  onSuspectLinesChange?: (lines: number[]) => void
 }) {
   const { theme } = useTheme()
+  const [view, setView] = useState<EditorView>()
+  // 내용으로 비교한다. 분석이 다시 오면(힌트를 열면) 같은 줄인데 배열이 새로 와서 다시 칠하게 된다
+  const suspectKey = suspectLines?.join(',') ?? ''
+  useEffect(() => {
+    if (view && suspectKey)
+      view.dispatch({ effects: markSuspectLines.of(suspectKey.split(',').map(Number)) })
+  }, [view, suspectKey])
+  const reportSuspectLines = (update: ViewUpdate) => {
+    const after = markedLines(update.state)
+    if (after.join(',') !== markedLines(update.startState).join(',')) onSuspectLinesChange?.(after)
+  }
   // 화면 설정(UX-07). 바꾸면 열려 있는 에디터에도 바로 적용된다
   const settings = useEditorSettings()
 
@@ -53,6 +74,7 @@ export function CodeEditor({
   const extensions = useMemo(
     () => [
       SYNTAX[language](),
+      suspectHighlight,
       EditorView.contentAttributes.of({ 'aria-label': label }),
       ...(settings.lineWrapping ? [EditorView.lineWrapping] : []),
     ],
@@ -75,6 +97,8 @@ export function CodeEditor({
       onChange={onChange}
       theme={theme}
       extensions={extensions}
+      onCreateEditor={setView}
+      onUpdate={reportSuspectLines}
       basicSetup={basicSetup}
       readOnly={readOnly}
       minHeight={minHeight}
