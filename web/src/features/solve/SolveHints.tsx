@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 
 import type { SubmissionAnalysis } from '@/api/types'
 import codingmonFace from '@/assets/brand/codingmon_face.png'
-import { Badge } from '@/components/ui/badge'
+import { SuspectLinesBadge } from '@/features/ai/AnalysisPanel'
 import { HintSteps } from '@/features/ai/HintSteps'
 import { cn } from '@/lib/utils'
 
@@ -96,11 +96,10 @@ export function SolveHints({
       <div id={`${id}-body`} hidden={collapsed} className="flex flex-col gap-4">
         {analysis.summary !== null || lines.length > 0 ? (
           <div className="bg-muted flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-4 py-3">
-            {lines.length > 0 ? (
-              <Badge tone="danger">{`의심되는 줄 · ${lines.map((line) => `${line}번`).join(', ')}`}</Badge>
-            ) : null}
+            <SuspectLinesBadge lines={lines} />
             {analysis.summary !== null ? (
-              <p className="text-body-foreground min-w-0 flex-1 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
+              // basis를 주어 좁으면 배지 아래 줄로 내려간다. basis 0이면 몇 픽셀 폭에 글자 단위로 쪼개진다
+              <p className="text-body-foreground min-w-0 flex-[1_1_14rem] text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
                 {analysis.summary}
               </p>
             ) : null}

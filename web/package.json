@@ -47,6 +47,7 @@
     "katex": "$katex"
   },
   "devDependencies": {
+    "@codemirror/commands": "^6.11.2",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",

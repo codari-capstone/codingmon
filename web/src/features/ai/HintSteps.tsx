@@ -35,7 +35,10 @@ export function HintSteps({
 }: {
   submissionId: number
   analysis: SubmissionAnalysis
-  /** 다시 풀기와 같은 주소 (solvePath). 풀이 화면은 이미 고치는 자리라 넘기지 않는다 */
+  /**
+   * 다시 풀기와 같은 주소 (solvePath). 풀이 화면은 이미 고치는 자리라 넘기지 않는다 — 없으면
+   * [코드 고치러 가기]를 그리지 않고, 화면을 떠나는 링크는 새 탭으로 연다.
+   */
   retryPath?: string
   /** 풀이 화면에 넘길 제출 번호. 힌트를 보고 그 코드를 고치러 간다. */
   retryState?: RetryState
@@ -99,7 +102,14 @@ export function HintSteps({
             다음 단계 힌트는 프로에서 열 수 있어요
           </p>
           <Button asChild variant="soft" size="sm" className="min-h-11">
-            <Link to="/pricing">프로 시작하기</Link>
+            {retryPath ? (
+              <Link to="/pricing">프로 시작하기</Link>
+            ) : (
+              // 풀이 화면이다. 떠나면 고치던 코드를 지우므로(SOLVE-11) 새 탭으로 연다
+              <Link to="/pricing" target="_blank" rel="noreferrer">
+                프로 시작하기<span className="sr-only"> (새 탭)</span>
+              </Link>
+            )}
           </Button>
         </div>
       ) : next <= HINT_STEPS.length ? (

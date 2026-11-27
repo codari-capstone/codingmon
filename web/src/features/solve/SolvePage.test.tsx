@@ -4,11 +4,12 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { StrictMode } from 'react'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { createBrowserRouter, createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/app/queryClient'
 import { ThemeProvider } from '@/app/ThemeProvider'
+import { analysisQueryKey } from '@/features/ai/analysisQuery'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { problemDetails } from '@/mocks/fixtures/problemDetails'
 import { server } from '@/mocks/server'
@@ -21,7 +22,7 @@ import {
   storeSavedCode,
 } from './savedCode'
 import { Component as SolvePage } from './SolvePage'
-import { holdRetryState, retryState } from './solvePath'
+import { holdRetryState, retriedSubmission, retryState } from './solvePath'
 import { problemDetailQuery } from './solveQuery'
 
 /**
@@ -1427,9 +1428,68 @@ describe('풀이 화면 AI 힌트', () => {
     serveAnalysis(analysis as SubmissionAnalysis | null)
     retried()
     await screen.findByRole('heading', { level: 1, name: '두 수의 합' })
-    await waitFor(() => expect(screen.getByText(/실행은 공개 예제로만/)).toBeInTheDocument())
+    // 분석 응답이 도착할 때까지 기다린다. 제목·안내는 분석과 따로 떠서, 그것만 기다리면 늦게 뜬 패널을 놓친다
+    await waitFor(() =>
+      expect(lastClient.getQueryState(analysisQueryKey(7))?.status).not.toBe('pending'),
+    )
 
     expect(screen.queryByRole('region', { name: /AI 힌트/ })).not.toBeInTheDocument()
+  })
+
+  it('무료 플랜 잠금의 [프로 시작하기]는 새 탭으로 연다 — 떠나면 고치던 코드가 지워진다', async () => {
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1, { maxHintLevel: 1 }))
+    retried()
+
+    expect(await screen.findByRole('link', { name: /프로 시작하기/ })).toHaveAttribute(
+      'target',
+      '_blank',
+    )
+  })
+
+  it('지원 언어가 비어 있어도 화면이 깨지지 않는다', async () => {
+    server.use(
+      http.get('*/api/problems/1', () =>
+        HttpResponse.json({ ...problemDetails[0], languages: [] }),
+      ),
+    )
+    renderSolve()
+
+    expect(await screen.findByRole('heading', { level: 1, name: '두 수의 합' })).toBeInTheDocument()
+  })
+
+  it('언어를 바꿔도 방문 기록의 [다시 풀기] 정보가 남아, 새로고침해도 힌트가 보인다', async () => {
+    const user = userEvent.setup()
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    // 실제 브라우저 기록을 쓰는 라우터다. holdRetryState처럼 window.history의 state를 본다
+    window.history.replaceState(
+      { usr: retryState(USER.id, 7, 'PYTHON'), key: 'r', idx: 0 },
+      '',
+      '/problems/1',
+    )
+    const router = createBrowserRouter([{ path: '/problems/:id', Component: SolvePage }])
+    const client = createQueryClient()
+    client.setQueryData(ME_QUERY_KEY, USER)
+    render(
+      <ThemeProvider>
+        <QueryClientProvider client={client}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </ThemeProvider>,
+    )
+    await screen.findByRole('region', { name: /AI 힌트/ })
+
+    await user.click(screen.getByRole('radio', { name: 'C++' }))
+    await user.click(screen.getByRole('radio', { name: 'Python' }))
+
+    // 새로고침은 이 기록 항목을 다시 읽는다
+    expect(retriedSubmission(window.history.state?.usr, USER.id)).toEqual(
+      retryState(USER.id, 7, 'PYTHON')?.retry,
+    )
+    router.dispose()
   })
 
   it('[다시 풀기]로 오지 않았으면 분석을 묻지 않는다', async () => {

@@ -130,7 +130,14 @@ function Workspace({
         next_.set('language', next)
         return next_
       },
-      { replace: true, preventScrollReset: true },
+      {
+        replace: true,
+        preventScrollReset: true,
+        // 방문 기록의 state([다시 풀기]의 제출 번호)를 그대로 둔다. 없애면 언어를 바꾼 뒤 새로고침할 때만
+        // 힌트 패널이 사라진다. 라우터의 location.state가 아니라 기록에서 읽는다 — 제출할 때
+        // holdRetryState가 기록만 비우므로, 그 사이 언어를 바꿔도 비운 것을 되살리지 않는다
+        state: (window.history.state as { usr?: unknown } | null)?.usr,
+      },
     )
   // 언어별로 따로 들고 있는다. C++로 갔다 돌아왔을 때 Python 코드가 그대로 있어야 한다.
   // [다시 풀기]로 왔으면 그 제출 코드로 시작한다. 이미 고친 저장본이 있으면 그쪽이 더 새 코드다.
@@ -189,8 +196,9 @@ function Workspace({
    */
   const lines = analysis && retried ? suspectLines(analysis.suspectLines, retried.code) : []
   const [left, setLeft] = useState<number[] | null>(null)
+  // retried부터 본다. 지원 언어가 비면 language도 undefined라 언어 비교만으로는 retried가 없는 경우를 못 거른다
   const marked =
-    language !== retried?.language ? [] : (left ?? (code === retried.code ? lines : []))
+    !retried || language !== retried.language ? [] : (left ?? (code === retried.code ? lines : []))
 
   // 좁은 화면의 에디터는 지문 탭 뒤에 숨은 채 마운트돼 있다. 보이는 동안만 '본 코드'로 친다.
   // 고르기 전에는 힌트가 있으면 힌트 탭이 먼저다. 분석이 늦게 와도 그때 힌트 탭으로 열린다

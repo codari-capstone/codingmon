@@ -21,7 +21,7 @@ const gutterMark = new (class extends GutterMarker {
 /**
  * AI가 의심한 줄의 노란 표시.
  *
- * 코드를 고치면 표시가 줄을 따라간다(위에 줄을 넣어도 같은 코드에 남는다). 그 줄 자체를 고치면 그 줄
+ * 코드를 고치면 표시가 줄을 따라간다(위에 줄을 넣어도 같은 코드에 남는다). 그 줄 글자가 바뀌면 그 줄
  * 표시만 지운다 — 고치기 시작한 줄을 계속 의심이라고 칠하면 틀린 말이 된다.
  */
 export const suspectField = StateField.define<DecorationSet>({
@@ -38,26 +38,20 @@ export const suspectField = StateField.define<DecorationSet>({
       )
     }
     if (!tr.docChanged || marks.size === 0) return marks
-    const changed: [number, number, boolean][] = []
-    tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) =>
-      changed.push([fromA, toA, inserted.lines > 1]),
-    )
-    const touched = (from: number) => {
-      const line = tr.startState.doc.lineAt(from)
-      return changed.some(
-        ([a, b, newline]) =>
-          a <= line.to &&
-          b >= line.from &&
-          // 바로 위 줄을 통째로 지우는 것(끝이 이 줄 시작)은 이 줄을 고친 것이 아니다
-          !(a < b && b === line.from) &&
-          // 줄 맨 앞에서 Enter로 위에 줄을 넣는 것도 아니다. 표시는 아래로 밀린 그 코드를 따라간다
-          !(a === b && a === line.from && newline),
-      )
-    }
-    // marks.map을 쓰지 않는다. 줄 표시는 바로 앞 글자가 지워지면 함께 사라져서, 위 줄을 지우면 이 줄 표시도 없어진다
+    /*
+      편집 종류를 하나씩 가려내지 않고 **줄의 코드가 그대로인지**만 본다. 코드가 시작하는 자리(들여쓰기 뒤)를
+      뒤쪽(assoc 1)으로 옮긴 곳의 줄이 편집 전과 같은 코드면 남기고, 다르면 고친 것으로 보고 지운다.
+      앞뒤 공백은 보지 않는다 — Enter가 들여쓰기를 다시 맞추는 것은 코드를 고친 것이 아니다.
+      - 위에 줄 넣기·지우기, 줄 앞·끝에서 Enter: 같은 코드라 따라간다
+      - 줄 안에 입력, 줄 앞 Backspace로 위 줄과 합침, 줄 앞에 여러 줄 붙여넣기: 코드가 달라져 지운다
+      marks.map을 쓰지 않는다. 줄 표시는 바로 앞 글자가 지워지면 함께 사라져서 위 줄을 지우면 이 표시도 없어진다.
+    */
     const kept: number[] = []
     for (const it = marks.iter(); it.value; it.next()) {
-      if (!touched(it.from)) kept.push(tr.state.doc.lineAt(tr.changes.mapPos(it.from, 1)).from)
+      const before = tr.startState.doc.lineAt(it.from)
+      const codeStart = before.from + (before.text.length - before.text.trimStart().length)
+      const after = tr.state.doc.lineAt(tr.changes.mapPos(codeStart, 1))
+      if (after.text.trim() === before.text.trim()) kept.push(after.from)
     }
     return Decoration.set(
       [...new Set(kept)].map((from) => lineMark.range(from)),
