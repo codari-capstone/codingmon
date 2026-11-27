@@ -196,9 +196,13 @@ function Workspace({
    */
   const lines = analysis && retried ? suspectLines(analysis.suspectLines, retried.code) : []
   const [left, setLeft] = useState<number[] | null>(null)
+  // 지금 남은 의심 줄. 패널 배지도 이것을 보여 준다 — 제출 기준 번호를 그대로 두면 위에 줄을 넣거나 그 줄을
+  // 고쳤을 때 에디터의 노란 줄과 배지가 어긋난다. 다른 언어를 보는 동안에도 그 언어 코드 기준으로 남는다
+  const remaining = !retried
+    ? []
+    : (left ?? (codeByLanguage[retried.language] === retried.code ? lines : []))
   // retried부터 본다. 지원 언어가 비면 language도 undefined라 언어 비교만으로는 retried가 없는 경우를 못 거른다
-  const marked =
-    !retried || language !== retried.language ? [] : (left ?? (code === retried.code ? lines : []))
+  const marked = retried && language === retried.language ? remaining : []
 
   // 좁은 화면의 에디터는 지문 탭 뒤에 숨은 채 마운트돼 있다. 보이는 동안만 '본 코드'로 친다.
   // 고르기 전에는 힌트가 있으면 힌트 탭이 먼저다. 분석이 늦게 와도 그때 힌트 탭으로 열린다
@@ -327,7 +331,12 @@ function Workspace({
           {/* 힌트는 지문 위다. 에디터는 오른쪽에 그대로라 힌트를 보며 고친다(모달은 코드를 가린다) */}
           <div className="flex min-w-0 flex-col gap-5">
             {analysis ? (
-              <SolveHints problemId={problem.id} analysis={analysis} lines={lines} collapsible />
+              <SolveHints
+                problemId={problem.id}
+                analysis={analysis}
+                lines={remaining}
+                collapsible
+              />
             ) : null}
             {statement}
           </div>
@@ -382,7 +391,7 @@ function Workspace({
           <TabsContent value="statement">{statement}</TabsContent>
           {analysis ? (
             <TabsContent value="hints">
-              <SolveHints problemId={problem.id} analysis={analysis} lines={lines} />
+              <SolveHints problemId={problem.id} analysis={analysis} lines={remaining} />
             </TabsContent>
           ) : null}
           {/*
@@ -422,7 +431,9 @@ function SolveProblem({ problemId }: { problemId: number }) {
   const { user } = useAuth()
   const userId = user?.id
   const { state } = useLocation()
-  // 처음 들어올 때 한 번만 읽는다. 언어를 바꾸면 주소가 state 없이 바뀌어, 매번 읽으면 조회가 꺼진 채 로딩에 갇힌다
+  // 처음 들어올 때 한 번만 읽는다. 제출할 때 holdRetryState가 방문 기록의 state를 비우는데, 매번 읽으면
+  // 그 순간 retry가 사라져 조회가 꺼진 채 로딩에 갇히거나, 제출 중에 바꾼 언어로 비운 것이 되살아난다
+  // (언어를 바꿔도 기록의 state는 그대로 넘긴다 — Workspace의 setChosen)
   const [retry] = useState(() => retriedSubmission(state, userId))
   const [needsSubmission] = useState(
     () => retry !== null && readDraftCode(userId, problemId, retry.language) === null,
@@ -433,7 +444,13 @@ function SolveProblem({ problemId }: { problemId: number }) {
   })
 
   // 그 제출의 AI 분석. 결과 화면과 같은 쿼리라 막 보고 온 분석은 캐시에서 바로 뜬다. 에디터는 기다리지 않는다
-  const analysis = useQuery({ ...analysisQuery(retry?.submissionId ?? 0), enabled: retry !== null })
+  // 창에 돌아오면 다시 받는다. [분석 전체 보기]는 새 탭이라 거기서 연 힌트가 이 탭 캐시에 없다 — 그대로 두면
+  // 이미 연 단계의 버튼이 남고, 누르면 오류 문구를 거쳐서야 맞춰진다
+  const analysis = useQuery({
+    ...analysisQuery(retry?.submissionId ?? 0),
+    enabled: retry !== null,
+    refetchOnWindowFocus: 'always',
+  })
 
   const queryClient = useQueryClient()
   useEffect(() => {

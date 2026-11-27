@@ -1,7 +1,7 @@
 import { cpp } from '@codemirror/lang-cpp'
 import { python } from '@codemirror/lang-python'
 import CodeMirror, { EditorView, type ViewUpdate } from '@uiw/react-codemirror'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { Language } from '@/api/types'
 import { useTheme } from '@/app/useTheme'
@@ -61,10 +61,15 @@ export function CodeEditor({
     if (view && suspectKey)
       view.dispatch({ effects: markSuspectLines.of(suspectKey.split(',').map(Number)) })
   }, [view, suspectKey])
-  const reportSuspectLines = (update: ViewUpdate) => {
-    const after = markedLines(update.state)
-    if (after.join(',') !== markedLines(update.startState).join(',')) onSuspectLinesChange?.(after)
-  }
+  // 고정한다. @uiw는 onUpdate가 바뀌면 확장을 다시 설정한다 — 렌더마다 새 함수면 글자를 칠 때마다다
+  const reportSuspectLines = useCallback(
+    (update: ViewUpdate) => {
+      const after = markedLines(update.state)
+      if (after.join(',') !== markedLines(update.startState).join(','))
+        onSuspectLinesChange?.(after)
+    },
+    [onSuspectLinesChange],
+  )
   // 화면 설정(UX-07). 바꾸면 열려 있는 에디터에도 바로 적용된다
   const settings = useEditorSettings()
 

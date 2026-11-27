@@ -1,4 +1,4 @@
-import { insertNewlineAndIndent } from '@codemirror/commands'
+import { history, insertNewlineAndIndent, undo } from '@codemirror/commands'
 import { python } from '@codemirror/lang-python'
 import { EditorSelection, EditorState, type StateCommand } from '@uiw/react-codemirror'
 import { describe, expect, it } from 'vitest'
@@ -8,7 +8,7 @@ import { markedLines, markSuspectLines, suspectHighlight } from './suspectHighli
 const CODE = 'n = int(input())\nfor i in range(n):\n    print(i)\nprint(n)'
 
 function start(lines: number[], doc = CODE) {
-  const state = EditorState.create({ doc, extensions: [python(), suspectHighlight] })
+  const state = EditorState.create({ doc, extensions: [python(), history(), suspectHighlight] })
   return state.update({ effects: markSuspectLines.of(lines) }).state
 }
 
@@ -73,5 +73,37 @@ describe('suspectHighlight', () => {
     }).state
     expect(next.doc.line(5).text).toBe('y = print(n)')
     expect(markedLines(next)).toEqual([])
+  })
+
+  it('같은 줄에서 들여쓰기만 바꿔도 고친 것이다 — Python에서는 그것이 고침이다', () => {
+    const state = start([3])
+    const from = state.doc.line(3).from
+    const next = state.update({ changes: { from, to: from + 4 } }).state
+    expect(next.doc.line(3).text).toBe('print(i)')
+    expect(markedLines(next)).toEqual([])
+  })
+
+  it('의심 줄을 통째로 지우면 뒤의 같은 코드 줄로 옮겨 가지 않는다', () => {
+    const state = start([2], 'int main() {\n    }\n}')
+    const line2 = state.doc.line(2)
+    const next = state.update({ changes: { from: line2.from, to: line2.to + 1 } }).state
+    expect(next.doc.toString()).toBe('int main() {\n}')
+    expect(markedLines(next)).toEqual([])
+  })
+
+  it('되돌리기로 코드를 되돌리면 지운 표시도 돌아온다', () => {
+    const state = start([4])
+    const typed = state.update({ changes: { from: state.doc.line(4).to, insert: 'x' } }).state
+    expect(markedLines(typed)).toEqual([])
+
+    let undone = typed
+    undo({ state: typed, dispatch: (tr) => (undone = tr.state) })
+    expect(undone.doc.toString()).toBe(CODE)
+    expect(markedLines(undone)).toEqual([4])
+  })
+
+  it('처음 칠한 것은 되돌리기 기록에 남지 않는다', () => {
+    const state = start([4])
+    expect(undo({ state, dispatch: () => {} })).toBe(false)
   })
 })

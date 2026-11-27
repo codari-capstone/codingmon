@@ -18,6 +18,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.2",
     "@codemirror/lang-cpp": "^6.0.3",
     "@codemirror/lang-python": "^6.2.1",
     "@hookform/resolvers": "^5.9.1",
@@ -47,7 +48,6 @@
     "katex": "$katex"
   },
   "devDependencies": {
-    "@codemirror/commands": "^6.11.2",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",

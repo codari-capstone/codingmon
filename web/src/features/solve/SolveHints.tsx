@@ -43,7 +43,7 @@ export function SolveHints({
 }: {
   problemId: number
   analysis: SubmissionAnalysis
-  /** 제출 코드에서 거른 의심 줄(suspectLines). 제출 코드를 받지 않았으면 비어 있다 */
+  /** 에디터에 지금 남은 의심 줄(고친 줄은 빠지고 밀린 줄은 따라간다). 제출 코드를 받지 않았으면 비어 있다 */
   lines: number[]
   collapsible?: boolean
 }) {

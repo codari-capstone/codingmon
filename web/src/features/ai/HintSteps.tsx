@@ -50,17 +50,28 @@ export function HintSteps({
   const next = revealed + 1
   const planLocked = hintPlanLocked(analysis)
 
+  /*
+    응답을 기다리는 사이 다른 곳으로 옮겼으면 포커스를 뺏지 않는다. 풀이 화면은 바로 옆에 에디터가 있어,
+    누르고 에디터로 돌아가 치던 글자가 힌트 문단으로 사라진다. 누른 버튼에 그대로 있거나, 버튼이 비활성·사라져
+    body로 떨어졌을 때만 옮긴다.
+  */
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const focusUnlessMoved = (target: HTMLElement | null) => {
+    const active = document.activeElement
+    if (active === null || active === document.body || active === buttonRef.current) target?.focus()
+  }
+
   const [justOpened, setJustOpened] = useState<number | null>(null)
   const openedRef = useRef<HTMLParagraphElement>(null)
   useEffect(() => {
-    if (justOpened !== null && justOpened <= revealed) openedRef.current?.focus()
+    if (justOpened !== null && justOpened <= revealed) focusUnlessMoved(openedRef.current)
   }, [justOpened, revealed])
 
   // 누른 버튼이 403으로 잠금 안내로 바뀌면 포커스가 body로 떨어진다. 안내로 옮겨 무슨 일인지 읽게 한다(#377 리뷰)
   const [lockedByClick, setLockedByClick] = useState(false)
   const lockRef = useRef<HTMLParagraphElement>(null)
   useEffect(() => {
-    if (lockedByClick && planLocked) lockRef.current?.focus()
+    if (lockedByClick && planLocked) focusUnlessMoved(lockRef.current)
   }, [lockedByClick, planLocked])
 
   return (
@@ -118,6 +129,7 @@ export function HintSteps({
           variant="soft"
           fullWidth
           className="min-h-11"
+          ref={buttonRef}
           disabled={reveal.isPending}
           aria-describedby="hint-order"
           onClick={() =>

@@ -1,5 +1,5 @@
 import type { SubmissionAnalysis } from '@/api/types'
-import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
+import { focusManager, QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -1464,32 +1464,101 @@ describe('풀이 화면 AI 힌트', () => {
     asWide()
     serveSubmission(CODE)
     serveAnalysis(analysisOf(1))
-    // 실제 브라우저 기록을 쓰는 라우터다. holdRetryState처럼 window.history의 state를 본다
+    // 실제 브라우저 기록을 쓰는 라우터다. holdRetryState처럼 window.history의 state를 본다.
+    // 전역 기록을 바꾸므로 실패해도 되돌리고 라우터를 내린다 — 남으면 뒤 테스트가 이 retry로 열린다
+    const before = { state: window.history.state as unknown, url: window.location.href }
     window.history.replaceState(
       { usr: retryState(USER.id, 7, 'PYTHON'), key: 'r', idx: 0 },
       '',
       '/problems/1',
     )
     const router = createBrowserRouter([{ path: '/problems/:id', Component: SolvePage }])
-    const client = createQueryClient()
-    client.setQueryData(ME_QUERY_KEY, USER)
-    render(
-      <ThemeProvider>
-        <QueryClientProvider client={client}>
-          <RouterProvider router={router} />
-        </QueryClientProvider>
-      </ThemeProvider>,
-    )
-    await screen.findByRole('region', { name: /AI 힌트/ })
+    try {
+      const client = createQueryClient()
+      client.setQueryData(ME_QUERY_KEY, USER)
+      render(
+        <ThemeProvider>
+          <QueryClientProvider client={client}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        </ThemeProvider>,
+      )
+      await screen.findByRole('region', { name: /AI 힌트/ })
 
-    await user.click(screen.getByRole('radio', { name: 'C++' }))
-    await user.click(screen.getByRole('radio', { name: 'Python' }))
+      await user.click(screen.getByRole('radio', { name: 'C++' }))
+      await user.click(screen.getByRole('radio', { name: 'Python' }))
 
-    // 새로고침은 이 기록 항목을 다시 읽는다
-    expect(retriedSubmission(window.history.state?.usr, USER.id)).toEqual(
-      retryState(USER.id, 7, 'PYTHON')?.retry,
+      // 새로고침은 이 기록 항목을 다시 읽는다
+      expect(retriedSubmission(window.history.state?.usr, USER.id)).toEqual(
+        retryState(USER.id, 7, 'PYTHON')?.retry,
+      )
+    } finally {
+      cleanup()
+      router.dispose()
+      window.history.replaceState(before.state, '', before.url)
+    }
+  })
+
+  it('위에 줄을 넣거나 그 줄을 고치면 패널 배지도 에디터의 노란 줄을 따른다', async () => {
+    const user = userEvent.setup()
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    retried()
+    const panel = await screen.findByRole('region', { name: /AI 힌트/ })
+    await waitFor(() => expect(panel).toHaveTextContent('의심되는 줄 · 2번'))
+
+    // 맨 앞에 줄을 넣는다. 의심 줄 print(n)이 3번으로 내려간다
+    await user.click(screen.getByRole('textbox', { name: '코드 편집기' }))
+    await user.keyboard('{Control>}{Home}{/Control}{Enter}')
+    await waitFor(() => expect(panel).toHaveTextContent('의심되는 줄 · 3번'))
+
+    // 그 줄을 고치면 배지도 사라진다
+    await user.keyboard('{Control>}{End}{/Control}{ArrowUp}{End} # 고침')
+    await waitFor(() => expect(panel).not.toHaveTextContent('의심되는 줄'))
+  })
+
+  it('힌트를 기다리는 사이 다른 곳으로 옮겼으면 포커스를 뺏지 않는다', async () => {
+    const user = userEvent.setup()
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    // 응답을 붙잡아 두었다가 에디터로 옮긴 뒤 보낸다
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.post('*/api/submissions/:id/analysis/hints', async () => {
+        await held
+        return HttpResponse.json(analysisOf(2))
+      }),
     )
-    router.dispose()
+    retried()
+
+    await user.click(await screen.findByRole('button', { name: '2단계 방향 보기' }))
+    const editor = screen.getByRole('textbox', { name: '코드 편집기' })
+    await user.click(editor)
+    release()
+
+    expect(await screen.findByText(HINTS[1]!)).not.toHaveFocus()
+    expect(editor).toHaveFocus()
+  })
+
+  it('창에 돌아오면 분석을 다시 받는다 — 새 탭에서 연 힌트를 맞춘다', async () => {
+    asWide()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    retried()
+    await screen.findByRole('button', { name: '2단계 방향 보기' })
+
+    // 다른 탭(분석 전체 보기)에서 2단계를 열었다
+    serveAnalysis(analysisOf(2))
+    act(() => {
+      focusManager.setFocused(false)
+      focusManager.setFocused(true)
+    })
+
+    expect(await screen.findByText(HINTS[1]!)).toBeInTheDocument()
+    focusManager.setFocused(undefined)
   })
 
   it('[다시 풀기]로 오지 않았으면 분석을 묻지 않는다', async () => {
