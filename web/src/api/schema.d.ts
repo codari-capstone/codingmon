@@ -1115,6 +1115,8 @@ export interface paths {
         /**
          * 관리자 문제 목록·검색 (ADM-01)
          * @description 공개 전·비공개 문제까지 모두 준다. 번호 오름차순이다.
+         *     `unpublishedCount`는 공개 중인 버전이 없는 문제 수다(작성 중·검증 중·비공개. `publishedVersionNo`가 null인 문제). `keyword`를 반영한다.
+         *     공개된 버전 위에서 고치는 중인 문제는 학습자에게 보이므로 세지 않는다. 대시보드(ADM-12)는 `size=1`로 불러 이 수만 쓴다.
          *     목록의 상태 표시(작성 중·검증 중·공개·공개 중 수정·비공개)는 화면이 `latestStatus`와 `publishedVersionNo`로 정한다.
          *     예: `latestStatus`가 `DRAFT`이고 `publishedVersionNo`가 2면 "공개 v2 · 수정 중".
          */
@@ -4396,6 +4398,11 @@ export interface operations {
                         content: components["schemas"]["AdminProblemSummary"][];
                         /** Format: int64 */
                         totalElements: number;
+                        /**
+                         * Format: int64
+                         * @description 공개 중인 버전이 없는 문제 수. `keyword`를 반영한다
+                         */
+                        unpublishedCount: number;
                     };
                 };
             };
