@@ -42,7 +42,7 @@ import com.codingmon.api.problem.AdminProblemRepository.SaveResult;
 import com.codingmon.api.problem.AdminProblemRepository.Saved;
 import com.codingmon.api.problem.AdminProblemRepository.Solution;
 import com.codingmon.api.problem.AdminProblemRepository.SolutionInput;
-import com.codingmon.api.problem.AdminProblemRepository.Summary;
+import com.codingmon.api.problem.AdminProblemRepository.SummaryPage;
 import com.codingmon.api.problem.AdminProblemRepository.TestCase;
 import com.codingmon.api.problem.AdminProblemRepository.TestCaseInput;
 import com.codingmon.api.problem.AdminProblemRepository.ValidateResult;
@@ -84,7 +84,7 @@ class AdminProblemController {
     }
 
     @GetMapping
-    Page<Summary> list(@RequestParam(required = false) String keyword, @RequestParam(defaultValue = "0") int page,
+    SummaryPage list(@RequestParam(required = false) String keyword, @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "" + Page.MAX_SIZE) int size) {
         Page.check(page, size);
         return problems.list(keyword == null || keyword.isBlank() ? null : keyword.strip(), page, size);

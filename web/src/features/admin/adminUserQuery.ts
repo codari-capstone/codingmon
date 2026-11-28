@@ -56,6 +56,18 @@ export function paymentNeedsCancelCountQuery() {
   })
 }
 
+/** 정지 중인 회원 수 (ADM-12 대시보드 카드). 회원 목록의 탭 개수(`counts`)를 쓴다 */
+export function suspendedUserCountQuery() {
+  return queryOptions({
+    queryKey: [ADMIN_USERS_KEY, 'suspended-count'] as const,
+    queryFn: async () => {
+      const result = await api.GET('/api/admin/users', { params: { query: { size: 1 } } })
+      if (result.data === undefined) fail(result)
+      return result.data.counts.suspended
+    },
+  })
+}
+
 /** 회원 상세 (ADM-15). 정지 상태·사유와 오늘 AI 사용량까지 */
 export function adminUserQuery(id: number) {
   return queryOptions({

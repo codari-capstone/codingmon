@@ -66,14 +66,17 @@ function PlanCell({
 export function Component() {
   const [draft, setDraft] = useState('')
   // 탭·검색어·페이지를 한 상태로 둔다. 바꾸면 1페이지로 가야 하는데, 따로 두면 옛 조건으로 한 번 더 받는다
-  const [params, setParams] = useState<{ filter: AdminUserFilter; keyword: string; page: number }>({
-    filter: 'ALL',
-    keyword: '',
-    page: 1,
-  })
-  const { filter, keyword, page } = params
-  // 대시보드의 '취소·확인이 필요한 결제' 카드가 주소로 넘긴다(ADM-12)
+  // 대시보드 카드가 주소로 넘긴다(ADM-12). '결제 확인·취소가 필요한 회원'은 paymentNeedsCancel, '정지 중인 회원'은 status
   const [searchParams, setSearchParams] = useSearchParams()
+  // 정지 탭은 들어올 때 한 번만 읽는다. 그 뒤 탭은 상태로만 바뀐다(주소와 맞추지 않는다)
+  const [params, setParams] = useState<{ filter: AdminUserFilter; keyword: string; page: number }>(
+    () => ({
+      filter: searchParams.get('status') === 'SUSPENDED' ? 'SUSPENDED' : 'ALL',
+      keyword: '',
+      page: 1,
+    }),
+  )
+  const { filter, keyword, page } = params
   const needsCancel = searchParams.get('paymentNeedsCancel') === 'true'
   // ×뿐 아니라 헤더 링크·뒤로 가기로 주소만 바뀌어도 1페이지로 간다. 렌더 중에 맞춰 옛 페이지로 한 번 더 받지 않는다
   const [shownNeedsCancel, setShownNeedsCancel] = useState(needsCancel)

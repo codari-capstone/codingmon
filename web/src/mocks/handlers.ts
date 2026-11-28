@@ -1259,6 +1259,9 @@ export const handlers: RequestHandler[] = [
     return HttpResponse.json({
       content: matched.slice(page * size, page * size + size).map(adminSummary),
       totalElements: matched.length,
+      // 서버처럼 검색어를 반영한다(AdminProblemRepository.list)
+      unpublishedCount: matched.filter((item) => adminSummary(item).publishedVersionNo === null)
+        .length,
     })
   }),
 

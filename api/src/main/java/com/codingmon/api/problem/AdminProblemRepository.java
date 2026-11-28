@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.codingmon.api.Language;
-import com.codingmon.api.Page;
 import com.codingmon.api.problem.ProblemRepository.Difficulty;
 import com.codingmon.api.report.ReportRepository;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -42,6 +41,11 @@ class AdminProblemRepository {
 
     record Summary(long id, String slug, String title, Difficulty difficulty, int latestVersionNo, Status latestStatus,
             Integer publishedVersionNo) {
+    }
+
+    // unpublishedCount는 공개 중인 버전이 없는 문제 수다(작성 중·검증 중·비공개). 대시보드 카드가 쓴다(ADM-12).
+    // 목록과 같은 keyword를 반영한다. 공개된 버전 위에서 고치는 중인 문제는 학습자에게 보이므로 세지 않는다.
+    record SummaryPage(List<Summary> content, long totalElements, long unpublishedCount) {
     }
 
     record VersionSummary(int versionNo, Status status, Instant createdAt, Instant publishedAt) {
@@ -134,7 +138,7 @@ class AdminProblemRepository {
 
     // count와 목록이 같은 시점을 보게 묶는다(ProblemRepository.findPublished와 같다).
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    Page<Summary> list(String keyword, int page, int size) {
+    SummaryPage list(String keyword, int page, int size) {
         String from = " from problems p"
                 + " join lateral (select * from problem_versions where problem_id = p.id order by version_no desc limit 1) v on true"
                 + (keyword == null ? "" : " where v.title ilike :keyword escape '\\'");
@@ -142,7 +146,11 @@ class AdminProblemRepository {
         if (keyword != null) {
             params.put("keyword", "%" + ProblemRepository.escapeLike(keyword) + "%");
         }
-        long total = jdbc.sql("select count(*)" + from).params(params).query(Long.class).single();
+        long[] counts = jdbc.sql("select count(*) as total, count(*) filter (where not exists (select 1 from problem_versions"
+                + " where problem_id = p.id and status = 'PUBLISHED')) as unpublished" + from)
+                .params(params)
+                .query((rs, n) -> new long[] { rs.getLong("total"), rs.getLong("unpublished") })
+                .single();
         params.put("limit", size);
         params.put("offset", (long) page * size);
         List<Summary> content = jdbc.sql("select p.id, p.slug, v.title, v.difficulty, v.version_no, v.status,"
@@ -153,7 +161,7 @@ class AdminProblemRepository {
                         Difficulty.valueOf(rs.getString("difficulty")), rs.getInt("version_no"),
                         Status.valueOf(rs.getString("status")), rs.getObject("published_no", Integer.class)))
                 .list();
-        return new Page<>(content, total);
+        return new SummaryPage(content, counts[0], counts[1]);
     }
 
     // 버전 행을 읽는 중에 태그·언어·공개 조건을 조회하므로 한 연결에서 같은 시점을 보게 묶는다.
