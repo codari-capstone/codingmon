@@ -202,6 +202,39 @@ describe('CodeReviewPanel (AI-05)', () => {
     expect(await screen.findByRole('tooltip')).toBeInTheDocument()
   })
 
+  it.each([
+    [
+      '누른 채 밖으로 끌어 놓기',
+      (button: HTMLElement) => fireEvent.pointerLeave(button, { buttons: 1 }),
+    ],
+    ['컨텍스트 메뉴', (button: HTMLElement) => fireEvent.contextMenu(button)],
+  ])('click 없이 끝난 누르기(%s)는 다음 클릭에 남지 않는다', async (_, abort) => {
+    stored(review())
+    renderResult(ACCEPTED)
+    const button = await screen.findByRole('button', { name: '시간 설명' })
+    fireEvent.click(button, { detail: 1 })
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+
+    // 누르는 순간 Radix가 닫고, click은 오지 않는다
+    fireEvent.pointerDown(button, { buttons: 1 })
+    abort(button)
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+
+    fireEvent.click(button, { detail: 1 })
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+  })
+
+  it('click만으로 차례로 눌러도 마지막 설명 하나만 열려 있다', async () => {
+    stored(review())
+    renderResult(ACCEPTED)
+
+    fireEvent.click(await screen.findByRole('button', { name: '시간 설명' }), { detail: 1 })
+    fireEvent.click(screen.getByRole('button', { name: '공간 설명' }), { detail: 1 })
+
+    await waitFor(() => expect(screen.getAllByRole('tooltip')).toHaveLength(1))
+    expect(screen.getByRole('tooltip')).toHaveTextContent('메모리')
+  })
+
   it('만들지 못했으면 이유를 알리고 다시 시도할 수 있다 (AI-06)', async () => {
     stored(review({ status: 'FAILED', failureReason: 'BUSY', ...EMPTY }))
     renderResult(ACCEPTED)

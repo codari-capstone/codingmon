@@ -30,7 +30,15 @@ function Tooltip({
           onPointerDownCapture={() => {
             openBeforePress.current = open
           }}
+          // 아래 셋은 click 없이 끝나는 누르기다. 터치는 손을 뗀 뒤 click 전에도 pointerleave가
+          // 오므로(buttons 0), 누른 채 벗어날 때만 지운다
+          onPointerLeave={(event) => {
+            if (event.buttons !== 0) openBeforePress.current = null
+          }}
           onPointerCancel={() => {
+            openBeforePress.current = null
+          }}
+          onContextMenu={() => {
             openBeforePress.current = null
           }}
           onClick={
@@ -40,6 +48,9 @@ function Tooltip({
                   // 키보드(detail 0)나 보조 기술의 클릭은 pointerdown이 없어 지금 상태를 기준으로 한다
                   event.preventDefault()
                   const before = event.detail === 0 ? null : openBeforePress.current
+                  // click만 보내는 보조 기술이나 iOS Safari는 포커스를 옮기지 않는다. 옮겨야 앞서 연
+                  // 설명이 blur로 닫힌다. 포커스가 여는 것은 아래 setOpen이 덮는다
+                  event.currentTarget.focus()
                   openBeforePress.current = null
                   setOpen(!(before ?? open))
                 }
