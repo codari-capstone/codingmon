@@ -1,5 +1,6 @@
 import { invertedEffects } from '@codemirror/commands'
 import {
+  type ChangeDesc,
   Decoration,
   type EditorState,
   EditorView,
@@ -21,6 +22,18 @@ const gutterMark = new (class extends GutterMarker {
 })()
 
 /**
+ * 한 번의 삭제가 코드 시작부터 줄바꿈까지 가져갔는지. TrackDel은 삭제 범위 **안쪽** 자리만 지워졌다고
+ * 본다. 들여쓰기 없는 줄을 통째로 지우면 코드 시작이 범위의 첫 자리라 다음 줄로 옮겨 간다.
+ */
+function removesLine(changes: ChangeDesc, codeStart: number, lineEnd: number): boolean {
+  let removed = false
+  changes.iterChangedRanges((from, to) => {
+    if (from <= codeStart && to > lineEnd) removed = true
+  })
+  return removed
+}
+
+/**
  * AI가 의심한 줄의 노란 표시.
  *
  * 코드를 고치면 표시가 줄을 따라간다(위에 줄을 넣어도 같은 코드에 남는다). 그 줄 글자가 바뀌면 그 줄
@@ -29,8 +42,9 @@ const gutterMark = new (class extends GutterMarker {
 export const suspectField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(marks, tr) {
-    for (const effect of tr.effects) {
-      if (!effect.is(markSuspectLines)) continue
+    // 묶인 편집을 되돌리면 효과가 새 편집 것부터 옛 편집 것 순으로 함께 온다. 마지막이 묶음 전 상태다
+    const effect = tr.effects.filter((it) => it.is(markSuspectLines)).at(-1)
+    if (effect) {
       const { doc } = tr.state
       return Decoration.set(
         effect.value
@@ -55,7 +69,7 @@ export const suspectField = StateField.define<DecorationSet>({
       const before = tr.startState.doc.lineAt(it.from)
       const codeStart = before.from + (before.text.length - before.text.trimStart().length)
       const mapped = tr.changes.mapPos(codeStart, 1, MapMode.TrackDel)
-      if (mapped === null) continue
+      if (mapped === null || removesLine(tr.changes, codeStart, before.to)) continue
       const after = tr.state.doc.lineAt(mapped)
       const split = tr.state.doc.lineAt(tr.changes.mapPos(before.from, -1)).number !== after.number
       if (after.text === before.text || (split && after.text.trim() === before.text.trim())) {
@@ -79,7 +93,8 @@ export const suspectField = StateField.define<DecorationSet>({
 })
 
 const suspectTheme = EditorView.baseTheme({
-  '.cm-suspect-line': { backgroundColor: 'var(--warning-soft)' },
+  // 커서가 있는 줄은 다크 테마의 active line 배경이 덮는다. 두 클래스를 겹쳐 우선순위를 높인다
+  '.cm-suspect-line, .cm-activeLine.cm-suspect-line': { backgroundColor: 'var(--warning-soft)' },
   '.cm-gutterElement.cm-suspect-gutter': { color: 'var(--warning-text)', fontWeight: '700' },
 })
 
