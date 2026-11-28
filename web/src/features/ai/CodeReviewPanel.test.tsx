@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -144,6 +144,20 @@ describe('CodeReviewPanel (AI-05)', () => {
     act(() => button.focus())
 
     expect(await screen.findByRole('tooltip')).toHaveTextContent(text)
+  })
+
+  it('터치로 "?"를 누르면 설명이 열리고, 바깥을 누르면 닫힌다', async () => {
+    const user = userEvent.setup()
+    stored(review())
+    renderResult(ACCEPTED)
+    const button = await screen.findByRole('button', { name: '시간 설명' })
+
+    // 마우스로 흉내 내면 hover만으로 열려, 누르기가 안 돼도 통과한다
+    await user.pointer({ keys: '[TouchA]', target: button })
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+
+    await user.pointer({ keys: '[TouchA]', target: screen.getByText('비교 문장') })
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
   })
 
   it('만들지 못했으면 이유를 알리고 다시 시도할 수 있다 (AI-06)', async () => {

@@ -65,11 +65,12 @@ function ComplexityCell({
     <div className="flex min-w-0 flex-col gap-1.5 rounded-[14px] border px-4 py-[18px]">
       <dt className="text-muted-foreground flex items-center gap-1.5 text-[13px]">
         {name}
-        <Tooltip label={help}>
+        <Tooltip label={help} openOnClick>
+          {/* 보이는 크기는 16px 그대로, 손가락으로 누르는 범위만 after로 44px까지 넓힌다 */}
           <button
             type="button"
             aria-label={`${name} 설명`}
-            className="bg-muted inline-flex size-4 flex-none cursor-help items-center justify-center rounded-full text-[11px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid"
+            className="relative after:absolute after:-inset-3.5 bg-muted inline-flex size-4 flex-none cursor-help items-center justify-center rounded-full text-[11px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid"
           >
             ?
           </button>
