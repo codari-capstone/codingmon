@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SubmissionCodeReview } from '@/api/types'
 import { createQueryClient } from '@/app/queryClient'
@@ -65,6 +65,17 @@ function review(over: Partial<SubmissionCodeReview> = {}): SubmissionCodeReview 
 }
 
 const EMPTY = { summary: null, complexity: null, improvements: [], nextConcepts: [] }
+
+/**
+ * 이 버튼의 포커스를 키보드 포커스로 친다. jsdom의 :focus-visible은 앞 테스트의 입력에 따라 Tab으로
+ * 옮긴 포커스도 거짓이라 믿을 수 없다. 실제 판정은 e2e/tooltip.spec.ts가 브라우저에서 본다.
+ */
+function asKeyboardFocus(button: HTMLElement) {
+  const matches = button.matches.bind(button)
+  vi.spyOn(button, 'matches').mockImplementation(
+    (selector: string) => selector === ':focus-visible' || matches(selector),
+  )
+}
 
 function stored(value: SubmissionCodeReview) {
   server.use(http.get('*/api/submissions/:id/code-review', () => HttpResponse.json(value)))
@@ -141,6 +152,7 @@ describe('CodeReviewPanel (AI-05)', () => {
     renderResult(ACCEPTED)
 
     const button = await screen.findByRole('button', { name })
+    asKeyboardFocus(button)
     act(() => button.focus())
 
     expect(await screen.findByRole('tooltip')).toHaveTextContent(text)
@@ -202,26 +214,40 @@ describe('CodeReviewPanel (AI-05)', () => {
     expect(await screen.findByRole('tooltip')).toBeInTheDocument()
   })
 
-  it.each([
-    [
-      '누른 채 밖으로 끌어 놓기',
-      (button: HTMLElement) => fireEvent.pointerLeave(button, { buttons: 1 }),
-    ],
-    ['컨텍스트 메뉴', (button: HTMLElement) => fireEvent.contextMenu(button)],
-  ])('click 없이 끝난 누르기(%s)는 다음 클릭에 남지 않는다', async (_, abort) => {
+  // 밖으로 끌어 놓기·컨텍스트 메뉴·가운데 버튼은 누르기만 하고 click이 오지 않는다
+  it.each([0, 1, 2])(
+    'click 없이 끝난 누르기(button %i)는 열림 상태를 바꾸지 않는다',
+    async (pressed) => {
+      stored(review())
+      renderResult(ACCEPTED)
+      const button = await screen.findByRole('button', { name: '시간 설명' })
+      fireEvent.click(button, { detail: 1 })
+      expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+
+      fireEvent.pointerDown(button, { button: pressed })
+      // 바깥 누름 처리는 한 박자 늦게 돈다
+      await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+      expect(screen.getByRole('tooltip')).toBeInTheDocument()
+
+      fireEvent.click(button, { detail: 1 })
+      await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    },
+  )
+
+  it('포커스가 있는 "?"를 Enter로 열면 올려서 열린 다른 설명은 닫힌다', async () => {
+    const user = userEvent.setup()
     stored(review())
     renderResult(ACCEPTED)
-    const button = await screen.findByRole('button', { name: '시간 설명' })
-    fireEvent.click(button, { detail: 1 })
-    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+    const time = await screen.findByRole('button', { name: '시간 설명' })
 
-    // 누르는 순간 Radix가 닫고, click은 오지 않는다
-    fireEvent.pointerDown(button, { buttons: 1 })
-    abort(button)
-    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    asKeyboardFocus(time)
+    act(() => time.focus())
+    await user.hover(screen.getByRole('button', { name: '공간 설명' }))
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('메모리'))
+    expect(time).toHaveFocus()
+    await user.keyboard('{Enter}')
 
-    fireEvent.click(button, { detail: 1 })
-    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('실행 시간'))
   })
 
   it('click만으로 차례로 눌러도 마지막 설명 하나만 열려 있다', async () => {
