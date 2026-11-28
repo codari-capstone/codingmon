@@ -56,6 +56,21 @@ export function adminProblemListQuery({ keyword, page }: AdminProblemListParams)
 }
 
 /**
+ * 공개 안 된 문제 수 (ADM-12 대시보드 카드). 공개 중인 버전이 없는 문제만 센다(계약).
+ * 문제 목록 키 아래라 저장·공개·삭제 뒤 목록과 같이 새로 받는다.
+ */
+export function unpublishedProblemCountQuery() {
+  return queryOptions({
+    queryKey: ['admin-problems', 'unpublished-count'] as const,
+    queryFn: async () => {
+      const result = await api.GET('/api/admin/problems', { params: { query: { size: 1 } } })
+      if (result.data === undefined) fail(result)
+      return result.data.unpublishedCount
+    },
+  })
+}
+
+/**
  * 관리자 문제 상세 (ADM-02·03). 최신 버전의 내용과 못 채운 공개 조건이 온다.
  *
  * 계약: "화면은 저장할 때마다 이 API를 다시 불러 공개 조건 체크리스트를 갱신한다."

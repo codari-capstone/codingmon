@@ -83,7 +83,9 @@ describe('AdminDashboardPage (ADM-12)', () => {
     let asked: URLSearchParams | undefined
     server.use(
       http.get('*/api/admin/users', ({ request }) => {
-        asked = new URL(request.url).searchParams
+        // 정지 중인 회원 카드도 같은 주소를 부른다(#390). 결제 카드의 요청만 본다
+        const query = new URL(request.url).searchParams
+        if (query.has('paymentNeedsCancel')) asked = query
         return HttpResponse.json({
           content: [],
           totalElements: 2,
