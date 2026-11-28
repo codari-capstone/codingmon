@@ -2,10 +2,12 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { createMemoryRouter, matchRoutes, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
 
+import type { PageHandle } from '@/app/AppShell'
 import { createQueryClient } from '@/app/queryClient'
+import { router as appRouter } from '@/app/router'
 import { ME_QUERY_KEY } from '@/features/auth/authQuery'
 import { server } from '@/mocks/server'
 import { Component as AdminDashboardPage } from './AdminDashboardPage'
@@ -24,6 +26,15 @@ function renderPage() {
     </QueryClientProvider>,
   )
   return client
+}
+
+/**
+ * 그 주소가 앱의 실제 라우터에서 가 닿는 화면의 제목. 없는 주소면 '페이지를 찾을 수 없어요'다.
+ * 이 파일의 메모리 라우터는 대시보드만 알아, 링크 글자만 보면 없는 주소를 못 잡는다(#391 리뷰).
+ */
+function screenTitleAt(href: string | null) {
+  const matched = matchRoutes(appRouter.routes, href ?? '')
+  return (matched?.at(-1)?.route.handle as PageHandle | undefined)?.title
 }
 
 describe('AdminDashboardPage (ADM-12)', () => {
@@ -185,5 +196,41 @@ describe('AdminDashboardPage (ADM-12)', () => {
 
     expect(await screen.findByText('아직 들어온 신고가 없어요')).toBeInTheDocument()
     expect(screen.getByText('접수 0건 · 확인 중 0건')).toBeInTheDocument()
+  })
+
+  it('공개 안 된 문제 수와 정지 중인 회원 수를 카드로 보이고, 누르면 문제 목록과 회원 목록의 정지 탭으로 간다 (#390)', async () => {
+    server.use(
+      http.get('*/api/admin/problems', () =>
+        HttpResponse.json({ content: [], totalElements: 9, unpublishedCount: 4 }),
+      ),
+      http.get('*/api/admin/users', () =>
+        HttpResponse.json({
+          content: [],
+          totalElements: 0,
+          counts: { all: 6, active: 5, suspended: 1 },
+        }),
+      ),
+    )
+    renderPage()
+
+    const problems = screen.getByRole('region', { name: '공개 안 된 문제' })
+    expect(await within(problems).findByText('4')).toBeInTheDocument()
+    const toProblems = within(problems).getByRole('link').getAttribute('href')
+    expect(screenTitleAt(toProblems)).toBe('문제 관리')
+
+    const suspended = screen.getByRole('region', { name: '정지 중인 회원' })
+    expect(await within(suspended).findByText('1')).toBeInTheDocument()
+    const toMembers = within(suspended).getByRole('link').getAttribute('href')
+    expect(toMembers).toBe('/admin/members?status=SUSPENDED')
+    expect(screenTitleAt('/admin/members')).toBe('회원')
+  })
+
+  it('공개 안 된 문제 수를 받지 못하면 –로 보이고 오류를 알린다 (#390)', async () => {
+    server.use(http.get('*/api/admin/problems', () => HttpResponse.json({}, { status: 500 })))
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: '다시 시도' })).toBeInTheDocument()
+    const problems = screen.getByRole('region', { name: '공개 안 된 문제' })
+    expect(within(problems).getByText('–')).toBeInTheDocument()
   })
 })

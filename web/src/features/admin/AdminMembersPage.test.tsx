@@ -293,4 +293,11 @@ describe('AdminMembersPage (ADM-14)', () => {
     await firstCells()
     expect(screen.getByText(/가입일이 '—'인 회원은/)).toBeInTheDocument()
   })
+
+  it('대시보드의 정지 중인 회원 카드에서 들어오면 정지 탭으로 연다 (#390)', async () => {
+    renderPage('/admin/members?status=SUSPENDED')
+
+    expect(await firstCells()).toEqual(['8', '3'])
+    expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('정지')
+  })
 })
