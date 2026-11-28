@@ -62,7 +62,7 @@ const statusCount = (status: 'RECEIVED' | 'IN_PROGRESS') => ({
 })
 
 /**
- * 관리자 대시보드 (ADM-12). 할 일이 생기는 수 네 가지(처리 안 한 신고, 취소·확인이 필요한 결제,
+ * 관리자 대시보드 (ADM-12). 할 일이 생기는 수 네 가지(처리 안 한 신고, 결제 확인·취소가 필요한 회원,
  * 공개 안 된 문제, 정지 중인 회원)를 같은 크기의 카드로, 그 아래에 최근 신고를 보인다.
  * 전체 문제·회원·제출 수 같은 현황 숫자는 넣지 않는다(#222에서 정함).
  */
@@ -112,7 +112,7 @@ export function Component() {
   const paymentCardBody = (
     <>
       <CardText
-        label="취소·확인이 필요한 결제"
+        label="결제 확인·취소가 필요한 회원"
         count={cancelCount}
         unit="명"
         alert={cancelAlert}
@@ -168,7 +168,7 @@ export function Component() {
           다시 받기에 실패하면 캐시의 지난 수를 확정처럼 보이지 않게 '–'로 둔다(#380 리뷰)
         */}
         <section
-          aria-label="취소·확인이 필요한 결제"
+          aria-label="결제 확인·취소가 필요한 회원"
           className={cancelAlert ? undefined : cn(CARD, 'border')}
         >
           {cancelAlert ? (

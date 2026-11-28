@@ -66,7 +66,7 @@ function PlanCell({
 export function Component() {
   const [draft, setDraft] = useState('')
   // 탭·검색어·페이지를 한 상태로 둔다. 바꾸면 1페이지로 가야 하는데, 따로 두면 옛 조건으로 한 번 더 받는다
-  // 대시보드 카드가 주소로 넘긴다(ADM-12). '취소·확인이 필요한 결제'는 paymentNeedsCancel, '정지 중인 회원'은 status
+  // 대시보드 카드가 주소로 넘긴다(ADM-12). '결제 확인·취소가 필요한 회원'은 paymentNeedsCancel, '정지 중인 회원'은 status
   const [searchParams, setSearchParams] = useSearchParams()
   // 정지 탭은 들어올 때 한 번만 읽는다. 그 뒤 탭은 상태로만 바뀐다(주소와 맞추지 않는다)
   const [params, setParams] = useState<{ filter: AdminUserFilter; keyword: string; page: number }>(

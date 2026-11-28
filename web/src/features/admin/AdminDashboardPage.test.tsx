@@ -106,7 +106,7 @@ describe('AdminDashboardPage (ADM-12)', () => {
     )
     renderPage()
 
-    const card = screen.getByRole('region', { name: '취소·확인이 필요한 결제' })
+    const card = screen.getByRole('region', { name: '결제 확인·취소가 필요한 회원' })
     expect(await within(card).findByText('2')).toBeInTheDocument()
     expect(within(card).getByRole('link')).toHaveAttribute(
       'href',
@@ -143,14 +143,14 @@ describe('AdminDashboardPage (ADM-12)', () => {
 
     expect(screen.getByTestId('dashboard-cards')).toHaveClass('invisible')
     // 받기 전에도 결제 카드가 자리를 잡는다. 받은 뒤 끼어들면 좁은 화면에서 아래 목록이 밀린다(#380 리뷰)
-    const card = screen.getByRole('region', { name: '취소·확인이 필요한 결제' })
+    const card = screen.getByRole('region', { name: '결제 확인·취소가 필요한 회원' })
     expect(await within(card).findByText('1')).toBeInTheDocument()
     expect(screen.getByTestId('dashboard-cards')).not.toHaveClass('invisible')
   })
 
   it('결제 수를 다시 받다 실패하면 지난 0을 처리할 결제 없음으로 보이지 않는다 (#380 리뷰)', async () => {
     const client = renderPage()
-    const card = screen.getByRole('region', { name: '취소·확인이 필요한 결제' })
+    const card = screen.getByRole('region', { name: '결제 확인·취소가 필요한 회원' })
     // 받기 전에도 같은 문구가 감춰진 줄에 있다. 캐시에 0이 든 것을 기다려야 '지난 0'을 시험한다(#380 리뷰)
     await waitFor(() =>
       expect(client.getQueryData(paymentNeedsCancelCountQuery().queryKey)).toBe(0),
@@ -182,7 +182,7 @@ describe('AdminDashboardPage (ADM-12)', () => {
     await waitFor(() =>
       expect(client.getQueryData(paymentNeedsCancelCountQuery().queryKey)).toBe(0),
     )
-    const card = screen.getByRole('region', { name: '취소·확인이 필요한 결제' })
+    const card = screen.getByRole('region', { name: '결제 확인·취소가 필요한 회원' })
     expect(within(card).getByText('0')).toBeInTheDocument()
     expect(within(card).getByText('지금은 처리할 결제가 없어요.')).toBeInTheDocument()
     expect(within(card).queryByRole('link')).not.toBeInTheDocument()
