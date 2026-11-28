@@ -1418,6 +1418,75 @@ describe('풀이 화면 AI 힌트', () => {
     expect(screen.getByText(HINTS[1]!)).toBeInTheDocument()
   })
 
+  /** 응답을 테스트가 풀 때까지 붙잡는 힌트 열기. 보낸 횟수를 센다 */
+  function holdReveal(status = 200) {
+    const sent = { count: 0, release: () => {} }
+    const gate = new Promise<void>((resolve) => (sent.release = resolve))
+    server.use(
+      http.post('*/api/submissions/:id/analysis/hints', async () => {
+        sent.count += 1
+        await gate
+        return status === 200
+          ? HttpResponse.json(analysisOf(2))
+          : HttpResponse.json({ status, detail: '잠시 후 다시 시도해 주세요.' }, { status })
+      }),
+    )
+    return sent
+  }
+
+  it('좁은 화면에서 힌트를 기다리다 탭을 옮겨도 요청 상태와 오류가 남는다', async () => {
+    const user = userEvent.setup()
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    const sent = holdReveal(500)
+    retried()
+
+    await user.click(await screen.findByRole('button', { name: '2단계 방향 보기' }))
+    await user.click(screen.getByRole('tab', { name: '코드 작성' }))
+    await user.click(screen.getByRole('tab', { name: /힌트/ }))
+    expect(screen.getByRole('button', { name: '2단계 방향 보기' })).toBeDisabled()
+
+    await user.click(screen.getByRole('tab', { name: '코드 작성' }))
+    sent.release()
+    await user.click(screen.getByRole('tab', { name: /힌트/ }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(sent.count).toBe(1)
+  })
+
+  it('힌트를 기다리는 사이 화면 폭이 바뀌어도 같은 요청을 또 보낼 수 없다', async () => {
+    const user = userEvent.setup()
+    const media = { matches: false, change: () => {} }
+    const original = window.matchMedia.bind(window)
+    // CodeMirror도 matchMedia(print)에 리스너를 건다. 폭 쿼리만 바꾼다
+    vi.spyOn(window, 'matchMedia').mockImplementation((query) =>
+      query === '(min-width: 64rem)'
+        ? ({
+            get matches() {
+              return media.matches
+            },
+            addEventListener: (_: string, listener: () => void) => (media.change = listener),
+            removeEventListener: () => {},
+          } as unknown as MediaQueryList)
+        : original(query),
+    )
+    serveSubmission(CODE)
+    serveAnalysis(analysisOf(1))
+    const sent = holdReveal()
+    retried()
+    await user.click(await screen.findByRole('button', { name: '2단계 방향 보기' }))
+
+    act(() => {
+      media.matches = true
+      media.change()
+    })
+
+    expect(await screen.findByRole('region', { name: /AI 힌트/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '2단계 방향 보기' })).toBeDisabled()
+    expect(sent.count).toBe(1)
+    sent.release()
+    expect(await screen.findByText(HINTS[1]!)).toBeInTheDocument()
+  })
+
   it.each([
     ['분석을 받지 않음', null],
     ['분석 실패', analysisOf(0, { status: 'FAILED', failureReason: 'UNAVAILABLE' })],

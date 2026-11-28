@@ -156,6 +156,8 @@ export async function onAiRequestError(client: QueryClient, error: unknown) {
   }
 }
 
+export const revealHintKey = (submissionId: number) => ['reveal-hint', submissionId]
+
 /**
  * [n단계 보기] (AI-04). 다음 단계만 연다 — 계약이 건너뛰기를 409로 막는다.
  *
@@ -168,6 +170,7 @@ export async function onAiRequestError(client: QueryClient, error: unknown) {
 export function useRevealHint(submissionId: number) {
   const queryClient = useQueryClient()
   return useMutation({
+    mutationKey: revealHintKey(submissionId),
     mutationFn: async (level: number): Promise<SubmissionAnalysis> => {
       const result = await api.POST('/api/submissions/{id}/analysis/hints', {
         params: { path: { id: submissionId } },

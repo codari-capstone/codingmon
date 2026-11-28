@@ -1,3 +1,4 @@
+import { useIsMutating } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
@@ -7,7 +8,7 @@ import { HintBox } from '@/components/ui/hint-box'
 import { Stepper } from '@/components/ui/stepper'
 import { problemCode, problemMessage } from '@/features/auth/problemCode'
 import type { RetryState } from '@/features/solve/solvePath'
-import { hintPlanLocked, useRevealHint } from './analysisQuery'
+import { hintPlanLocked, revealHintKey, useRevealHint } from './analysisQuery'
 
 /** 단계 이름 (AI_FEATURES 4절). 순서가 곧 단계다. 힌트 상자와 버튼에 쓴다 */
 const HINT_STEPS = ['관찰', '방향', '원리'] as const
@@ -44,6 +45,9 @@ export function HintSteps({
   retryState?: RetryState
 }) {
   const reveal = useRevealHint(submissionId)
+  // 화면 폭이 바뀌면 이 부품이 다시 마운트돼 reveal은 보낸 요청을 모른다. 같은 요청을 또 보내지 않게
+  // 캐시에서 센다
+  const revealing = useIsMutating({ mutationKey: revealHintKey(submissionId) }) > 0
   // 단계는 셋뿐이다(계약: 길이 = revealedHintLevel ≤ 3). 넘쳐 와도 이름 없는 단계를 그리지 않는다
   const hints = analysis.hints.slice(0, HINT_STEPS.length)
   const revealed = hints.length
@@ -130,7 +134,7 @@ export function HintSteps({
           fullWidth
           className="min-h-11"
           ref={buttonRef}
-          disabled={reveal.isPending}
+          disabled={revealing}
           aria-describedby="hint-order"
           onClick={() =>
             reveal.mutate(next, {
