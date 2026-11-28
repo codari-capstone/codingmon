@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -158,6 +158,48 @@ describe('CodeReviewPanel (AI-05)', () => {
 
     await user.pointer({ keys: '[TouchA]', target: screen.getByText('비교 문장') })
     await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+  })
+
+  it('열린 "?"를 다시 누르면 닫히고, 또 누르면 열린다', async () => {
+    const user = userEvent.setup()
+    stored(review())
+    renderResult(ACCEPTED)
+    const button = await screen.findByRole('button', { name: '시간 설명' })
+    const tap = () => user.pointer({ keys: '[TouchA]', target: button })
+
+    await tap()
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+    await tap()
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    await tap()
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+
+    // 키보드는 pointerdown 없이 click만 온다
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    await user.keyboard('{Enter}')
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+  })
+
+  // 스크린리더 같은 보조 기술은 pointerdown 없이 detail 1인 click만 보낼 수 있다
+  it('pointerdown 없는 클릭도 누를 때마다 여닫는다', async () => {
+    const user = userEvent.setup()
+    stored(review())
+    renderResult(ACCEPTED)
+    const button = await screen.findByRole('button', { name: '시간 설명' })
+    const gone = () => waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+
+    fireEvent.click(button, { detail: 1 })
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+    fireEvent.click(button, { detail: 1 })
+    await gone()
+
+    // 앞서 터치로 눌렀던 상태가 다음 클릭에 남지 않는다
+    await user.pointer({ keys: '[TouchA]', target: button })
+    await user.pointer({ keys: '[TouchA]', target: button })
+    await gone()
+    fireEvent.click(button, { detail: 1 })
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
   })
 
   it('만들지 못했으면 이유를 알리고 다시 시도할 수 있다 (AI-06)', async () => {
