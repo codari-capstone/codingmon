@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -118,6 +118,121 @@ describe('CodeReviewPanel (AI-05)', () => {
     expect(screen.getByText('비교 문장')).toBeInTheDocument()
     expect(screen.getByText('개선점 하나')).toBeInTheDocument()
     expect(screen.getByText('배울 이유')).toBeInTheDocument()
+  })
+
+  it('근거 글은 제목이 있는 별도 섹션이다', async () => {
+    stored(review())
+    renderResult(ACCEPTED)
+
+    const heading = await screen.findByRole('heading', { name: '왜 이런 복잡도인가요?' })
+    expect(heading.parentElement).toHaveTextContent('근거 문장')
+    expect(heading.parentElement).not.toHaveTextContent('비교 문장')
+  })
+
+  it.each([
+    ['시간 설명', '입력이 커질 때 실행 시간이 얼마나 늘어나는지예요.'],
+    ['공간 설명', '입력이 커질 때 메모리를 얼마나 더 쓰는지예요.'],
+    [
+      '의도한 시간(추정) 설명',
+      '문제가 기대하는 빠르기를 AI가 어림한 값이에요. 문제에 적힌 값은 아니에요.',
+    ],
+  ])('복잡도 칸의 "%s" 버튼에 포커스하면 뜻을 알려 준다', async (name, text) => {
+    stored(review())
+    renderResult(ACCEPTED)
+
+    const button = await screen.findByRole('button', { name })
+    act(() => button.focus())
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(text)
+  })
+
+  it('터치로 "?"를 누르면 설명이 열리고, 바깥을 누르면 닫힌다', async () => {
+    const user = userEvent.setup()
+    stored(review())
+    renderResult(ACCEPTED)
+    const button = await screen.findByRole('button', { name: '시간 설명' })
+
+    // 마우스로 흉내 내면 hover만으로 열려, 누르기가 안 돼도 통과한다
+    await user.pointer({ keys: '[TouchA]', target: button })
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+
+    await user.pointer({ keys: '[TouchA]', target: screen.getByText('비교 문장') })
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+  })
+
+  it('열린 "?"를 다시 누르면 닫히고, 또 누르면 열린다', async () => {
+    const user = userEvent.setup()
+    stored(review())
+    renderResult(ACCEPTED)
+    const button = await screen.findByRole('button', { name: '시간 설명' })
+    const tap = () => user.pointer({ keys: '[TouchA]', target: button })
+
+    await tap()
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+    await tap()
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    await tap()
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+
+    // 키보드는 pointerdown 없이 click만 온다
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    await user.keyboard('{Enter}')
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+  })
+
+  // 스크린리더 같은 보조 기술은 pointerdown 없이 detail 1인 click만 보낼 수 있다
+  it('pointerdown 없는 클릭도 누를 때마다 여닫는다', async () => {
+    const user = userEvent.setup()
+    stored(review())
+    renderResult(ACCEPTED)
+    const button = await screen.findByRole('button', { name: '시간 설명' })
+    const gone = () => waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+
+    fireEvent.click(button, { detail: 1 })
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+    fireEvent.click(button, { detail: 1 })
+    await gone()
+
+    // 앞서 터치로 눌렀던 상태가 다음 클릭에 남지 않는다
+    await user.pointer({ keys: '[TouchA]', target: button })
+    await user.pointer({ keys: '[TouchA]', target: button })
+    await gone()
+    fireEvent.click(button, { detail: 1 })
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+  })
+
+  it.each([
+    [
+      '누른 채 밖으로 끌어 놓기',
+      (button: HTMLElement) => fireEvent.pointerLeave(button, { buttons: 1 }),
+    ],
+    ['컨텍스트 메뉴', (button: HTMLElement) => fireEvent.contextMenu(button)],
+  ])('click 없이 끝난 누르기(%s)는 다음 클릭에 남지 않는다', async (_, abort) => {
+    stored(review())
+    renderResult(ACCEPTED)
+    const button = await screen.findByRole('button', { name: '시간 설명' })
+    fireEvent.click(button, { detail: 1 })
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+
+    // 누르는 순간 Radix가 닫고, click은 오지 않는다
+    fireEvent.pointerDown(button, { buttons: 1 })
+    abort(button)
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+
+    fireEvent.click(button, { detail: 1 })
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+  })
+
+  it('click만으로 차례로 눌러도 마지막 설명 하나만 열려 있다', async () => {
+    stored(review())
+    renderResult(ACCEPTED)
+
+    fireEvent.click(await screen.findByRole('button', { name: '시간 설명' }), { detail: 1 })
+    fireEvent.click(screen.getByRole('button', { name: '공간 설명' }), { detail: 1 })
+
+    await waitFor(() => expect(screen.getAllByRole('tooltip')).toHaveLength(1))
+    expect(screen.getByRole('tooltip')).toHaveTextContent('메모리')
   })
 
   it('만들지 못했으면 이유를 알리고 다시 시도할 수 있다 (AI-06)', async () => {

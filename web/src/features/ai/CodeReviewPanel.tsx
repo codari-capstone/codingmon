@@ -8,15 +8,15 @@ import { ErrorState } from '@/components/ErrorState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { LoadingState } from '@/components/LoadingState'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip } from '@/components/ui/tooltip'
 import { forgetSessionIfUnauthorized } from '@/features/auth/session'
 import { isDeadEnd } from '@/features/result/resultQuery'
-import { cn } from '@/lib/utils'
 import { AiRequest } from './AiRequest'
 import { codeReviewQuery, useRequestCodeReview } from './codeReviewQuery'
 import { failureText } from './failureText'
 
 // 모델이 만든 문장이라 글자 그대로 보여 준다(계약). 긴 영단어·코드 조각이 칸을 넘지 않게 끊는다
-const VALUE = 'text-foreground min-w-0 font-mono font-semibold [overflow-wrap:anywhere]'
+const VALUE = 'text-foreground min-w-0 text-2xl font-bold [overflow-wrap:anywhere]'
 const PROSE =
   'text-body-foreground text-[15px] leading-[1.6] whitespace-pre-wrap [overflow-wrap:anywhere]'
 
@@ -30,11 +30,53 @@ function statusText(working: boolean, review: SubmissionCodeReview | null): stri
   return '리뷰를 마쳤어요.'
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// 섹션 제목 색. 이 화면에서만 써서 토큰을 만들지 않고 두 토큰을 섞는다(다크는 토큰을 따라간다)
+const SECTION_TITLE =
+  'text-base font-semibold text-[color-mix(in_srgb,var(--primary-text)_45%,var(--muted-foreground))]'
+
+function Section({
+  title,
+  titleClassName = SECTION_TITLE,
+  children,
+}: {
+  title: string
+  titleClassName?: string
+  children: React.ReactNode
+}) {
   return (
     <div className="flex flex-col gap-2.5">
-      <h3 className="text-muted-foreground text-sm font-semibold">{title}</h3>
+      <h3 className={titleClassName}>{title}</h3>
       {children}
+    </div>
+  )
+}
+
+/** 복잡도 한 칸: 이름 · 뜻을 알려 주는 "?" · 값. */
+function ComplexityCell({
+  name,
+  help,
+  children,
+}: {
+  name: string
+  help: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-[14px] border px-4 py-[18px]">
+      <dt className="text-muted-foreground flex items-center gap-1.5 text-[13px]">
+        {name}
+        <Tooltip label={help} openOnClick>
+          {/* 보이는 크기는 16px 그대로, 손가락으로 누르는 범위만 after로 44px까지 넓힌다 */}
+          <button
+            type="button"
+            aria-label={`${name} 설명`}
+            className="relative after:absolute after:-inset-3.5 bg-muted inline-flex size-4 flex-none cursor-help items-center justify-center rounded-full text-[11px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid"
+          >
+            ?
+          </button>
+        </Tooltip>
+      </dt>
+      <dd className="m-0 flex min-w-0 flex-wrap items-center gap-2">{children}</dd>
     </div>
   )
 }
@@ -51,25 +93,34 @@ function Review({ review }: { review: SubmissionCodeReview }) {
       ) : null}
 
       {complexity !== null ? (
-        <Section title="복잡도">
-          {/* 값은 모델이 쓴 O 표기라 공백 없이 길 수 있다. min-w-0으로 1fr이 줄어들게 하고 아무 데서나 끊는다(#273 리뷰) */}
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[15px]">
-            <dt className="text-muted-foreground">시간</dt>
-            <dd className={VALUE}>{complexity.time}</dd>
-            <dt className="text-muted-foreground">공간</dt>
-            <dd className={VALUE}>{complexity.space}</dd>
-            {/* 문제에 적힌 값이 아니라 AI의 어림이다(계약) */}
-            <dt className="text-muted-foreground">의도한 시간(추정)</dt>
-            <dd className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className={VALUE}>{complexity.intendedTime}</span>
-              <Badge tone={complexity.meetsIntended ? 'success' : 'warning'}>
-                {complexity.meetsIntended ? '의도한 만큼 빨라요' : '더 줄일 수 있어요'}
-              </Badge>
-            </dd>
-          </dl>
-          <p className={PROSE}>{complexity.comparison}</p>
-          <p className={cn(PROSE, 'text-muted-foreground text-sm')}>{complexity.basis}</p>
-        </Section>
+        <>
+          <Section title="복잡도" titleClassName="text-muted-foreground text-sm font-semibold">
+            {/* 패널은 넓은 화면에서도 반쪽 칸이라 화면 폭이 아니라 패널 폭(@)으로 나눈다.
+                값은 모델이 쓴 O 표기라 공백 없이 길 수 있다. min-w-0으로 칸이 줄고 아무 데서나 끊는다(#273 리뷰) */}
+            <dl className="m-0 grid grid-cols-1 gap-2.5 @lg:grid-cols-3">
+              <ComplexityCell name="시간" help="입력이 커질 때 실행 시간이 얼마나 늘어나는지예요.">
+                <span className={VALUE}>{complexity.time}</span>
+              </ComplexityCell>
+              <ComplexityCell name="공간" help="입력이 커질 때 메모리를 얼마나 더 쓰는지예요.">
+                <span className={VALUE}>{complexity.space}</span>
+              </ComplexityCell>
+              {/* 문제에 적힌 값이 아니라 AI의 어림이다(계약) */}
+              <ComplexityCell
+                name="의도한 시간(추정)"
+                help="문제가 기대하는 빠르기를 AI가 어림한 값이에요. 문제에 적힌 값은 아니에요."
+              >
+                <span className={VALUE}>{complexity.intendedTime}</span>
+                <Badge tone={complexity.meetsIntended ? 'success' : 'warning'}>
+                  {complexity.meetsIntended ? '의도한 만큼 빨라요' : '더 줄일 수 있어요'}
+                </Badge>
+              </ComplexityCell>
+            </dl>
+            <p className={PROSE}>{complexity.comparison}</p>
+          </Section>
+          <Section title="왜 이런 복잡도인가요?">
+            <p className={PROSE}>{complexity.basis}</p>
+          </Section>
+        </>
       ) : null}
 
       {review.improvements.length > 0 ? (
@@ -86,13 +137,17 @@ function Review({ review }: { review: SubmissionCodeReview }) {
 
       {review.nextConcepts.length > 0 ? (
         <Section title="다음에 배울 개념">
-          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+          <ul className="m-0 grid list-none grid-cols-1 gap-2.5 p-0 @lg:grid-cols-2">
             {review.nextConcepts.map((concept, index) => (
-              <li key={index} className="flex flex-col gap-1.5 rounded-[14px] border px-4 py-3.5">
+              // 홀수 개의 마지막 카드는 옆 칸이 비지 않게 한 줄을 다 쓴다
+              <li
+                key={index}
+                className="flex min-w-0 flex-col gap-1.5 rounded-[14px] border px-4 py-3.5 @lg:last:odd:col-span-2"
+              >
                 {/* 모델이 정한 이름이라 길 수 있다. 배지의 고정 높이·한 줄을 풀어 카드 안에서 줄을 바꾼다(#273 리뷰) */}
                 <Badge
-                  tone="brand"
-                  className="h-auto min-h-[26px] self-start py-1 whitespace-normal [overflow-wrap:anywhere]"
+                  tone="neutral"
+                  className="text-foreground font-bold h-auto min-h-[26px] self-start py-1 whitespace-normal [overflow-wrap:anywhere]"
                 >
                   {concept.name}
                 </Badge>
@@ -182,7 +237,11 @@ export function CodeReviewPanel({ submissionId }: { submissionId: number }) {
       {deadEnd ? <ErrorState problem={error} onRetry={() => void refetch()} /> : null}
       {!deadEnd && !loaded ? <ListSkeleton rows={2} /> : null}
       {loaded && working ? <LoadingState inPanel /> : null}
-      {done ? <Review review={data} /> : null}
+      {done ? (
+        <div className="@container flex min-w-0 flex-col gap-5">
+          <Review review={data} />
+        </div>
+      ) : null}
       <AiRequest
         result={data ?? null}
         request={request}
