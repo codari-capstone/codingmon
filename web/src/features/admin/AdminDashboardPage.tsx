@@ -148,7 +148,10 @@ export function Component() {
       {/* 결제 수를 받기 전에는 자리만 잡고 감춘다. 받은 뒤 카드가 끼어들며 신고 버튼이 옮겨지지 않게 */}
       <div
         data-testid="dashboard-cards"
-        className={cn('grid gap-6 lg:grid-cols-2', needsCancel.isPending && 'invisible')}
+        className={cn(
+          'grid gap-6 lg:auto-rows-fr lg:grid-cols-2',
+          needsCancel.isPending && 'invisible',
+        )}
       >
         <section aria-label="처리할 신고" className={cn(CARD, 'border')}>
           <CardText
