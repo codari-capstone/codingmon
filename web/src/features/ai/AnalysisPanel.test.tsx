@@ -1,0 +1,861 @@
+import { focusManager, QueryClientProvider } from '@tanstack/react-query'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
+import { createMemoryRouter, RouterProvider } from 'react-router'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import type { SubmissionAnalysis } from '@/api/types'
+import { createQueryClient, POLL_INTERVAL_MS } from '@/app/queryClient'
+import { ME_QUERY_KEY } from '@/features/auth/authQuery'
+import { Component as SubmissionResultPage } from '@/features/result/SubmissionResultPage'
+import { resetSubmissions } from '@/mocks/handlers'
+import { server } from '@/mocks/server'
+import { FAILING_INTERVAL_MS, submissionResultQuery } from '@/features/result/resultQuery'
+import { QUOTA_RECHECK_MS } from './AiRequest'
+import { analysisPollingInterval } from './analysisQuery'
+import { countLines } from './countLines'
+
+const USER = { id: 1, nickname: '코다리', role: 'USER' } as const
+
+/**
+ * 목 fixture의 지난 제출 (mocks/fixtures/history.ts). 23은 2번 문제의 틀렸습니다(Python 4줄),
+ * 11은 1번 문제의 맞았습니다다.
+ */
+const WRONG = 23
+const ACCEPTED = 11
+
+function renderResult(id: number) {
+  const client = createQueryClient()
+  client.setQueryData(ME_QUERY_KEY, USER)
+  const router = createMemoryRouter(
+    [{ path: '/submissions/:id', Component: SubmissionResultPage }],
+    {
+      initialEntries: [`/submissions/${id}`],
+    },
+  )
+  render(
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  )
+  return { client, router }
+}
+
+function analysis(over: Partial<SubmissionAnalysis> = {}): SubmissionAnalysis {
+  return {
+    submissionId: WRONG,
+    status: 'COMPLETED',
+    failureReason: null,
+    blocked: false,
+    maxHintLevel: 3,
+    summary: '요약 문장',
+    suspectLines: [2],
+    facts: ['확인된 사실'],
+    guesses: ['짐작한 원인'],
+    revealedHintLevel: 0,
+    hints: [],
+    createdAt: '2026-11-07T00:00:00Z',
+    completedAt: '2026-11-07T00:00:05Z',
+    quota: { plan: 'FREE', limit: 20, used: 1, remaining: 19, resetsAt: '2026-11-08T00:00:00Z' },
+    ...over,
+  }
+}
+
+const QUOTA = {
+  plan: 'FREE' as const,
+  limit: 20,
+  used: 0,
+  remaining: 20,
+  resetsAt: '2026-11-08T00:00:00Z',
+}
+
+/** 오늘 남은 횟수를 정해 둔다. 목의 조회는 토큰을 보는데 이 테스트는 토큰 없이 그린다. */
+function quotaLeft(remaining: number) {
+  server.use(
+    http.get('*/api/users/me/ai-quota', () =>
+      HttpResponse.json({ ...QUOTA, used: 20 - remaining, remaining }),
+    ),
+  )
+}
+
+/** 저장된 분석을 정해 둔다. 요청(POST)은 목 그대로다. */
+function stored(value: SubmissionAnalysis) {
+  server.use(http.get('*/api/submissions/:id/analysis', () => HttpResponse.json(value)))
+}
+
+describe('AnalysisPanel', () => {
+  afterEach(() => resetSubmissions())
+
+  it('countLines는 끝의 줄바꿈 하나를 줄로 세지 않는다', () => {
+    expect(countLines('a\nb\n')).toBe(2)
+    expect(countLines('a\r\nb\r\n')).toBe(2)
+    expect(countLines('a\nb')).toBe(2)
+    expect(countLines('')).toBe(1)
+  })
+
+  describe('AI 분석 요청 (AI-01·02)', () => {
+    it('정답이면 AI 분석 패널이 없다', async () => {
+      renderResult(ACCEPTED)
+      await screen.findByText('맞았습니다!!')
+
+      expect(screen.queryByRole('heading', { name: 'AI 분석' })).not.toBeInTheDocument()
+    })
+
+    it('누르면 만드는 동안 안내하고, 끝나면 원인 설명을 보여 준다', async () => {
+      const user = userEvent.setup()
+      renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+
+      // 목은 요청에 PENDING을 주고 다음 조회에 끝낸다 (handlers.ts).
+      expect(await screen.findByText('AI가 분석하고 있어요…')).toBeInTheDocument()
+      // 기다리는 동안 달리는 펭귄. 안내는 패널의 status 문구가 하므로 낭독기에는 숨긴다
+      expect(document.querySelector('[data-slot="loading-state"]')).toHaveAttribute(
+        'aria-hidden',
+        'true',
+      )
+      expect(screen.queryByRole('button', { name: 'AI 분석' })).not.toBeInTheDocument()
+      expect(
+        await screen.findByText('별 개수가 줄마다 줄어야 하는데 늘어나고 있어요.', undefined, {
+          timeout: 3000,
+        }),
+      ).toBeInTheDocument()
+      expect(document.querySelector('[data-slot="loading-state"]')).not.toBeInTheDocument()
+      // 끝난 분석은 다시 만들지 않는다(계약). 누를 것이 없다.
+      expect(screen.queryByRole('button', { name: /AI 분석|다시 시도/ })).not.toBeInTheDocument()
+    })
+
+    it('다시 들어오면 저장된 분석을 바로 보여 준다', async () => {
+      stored(analysis())
+      renderResult(WRONG)
+
+      expect(await screen.findByText('요약 문장')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'AI 분석' })).not.toBeInTheDocument()
+    })
+
+    it('만들지 못했으면 다시 시도할 수 있다', async () => {
+      const user = userEvent.setup()
+      stored(
+        analysis({
+          status: 'FAILED',
+          failureReason: 'UNAVAILABLE',
+          summary: null,
+          suspectLines: [],
+          facts: [],
+          guesses: [],
+        }),
+      )
+      let requests = 0
+      server.use(
+        http.post('*/api/submissions/:id/analysis', () => {
+          requests++
+          return HttpResponse.json(analysis())
+        }),
+      )
+      renderResult(WRONG)
+
+      expect(
+        await screen.findByText(
+          'AI 서버가 응답하지 않아 분석을 만들지 못했어요. 잠시 후 다시 시도해 주세요.',
+        ),
+      ).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: '다시 시도' }))
+
+      expect(await screen.findByText('요약 문장')).toBeInTheDocument()
+      expect(requests).toBe(1)
+    })
+
+    it('누르기 전에 오늘 남은 횟수를 보여 준다', async () => {
+      quotaLeft(19)
+      renderResult(WRONG)
+
+      await screen.findByRole('button', { name: 'AI 분석' })
+      expect(await screen.findByText('오늘 남은 AI 분석·리뷰 19 / 20회')).toBeInTheDocument()
+    })
+
+    it('관리자는 한도가 없어 남은 횟수 대신 한도 없음을 알리고 버튼을 켜 둔다 (#343)', async () => {
+      server.use(
+        http.get('*/api/users/me/ai-quota', () =>
+          HttpResponse.json({ ...QUOTA, limit: null, used: 25, remaining: null }),
+        ),
+      )
+      renderResult(WRONG)
+
+      expect(await screen.findByText('관리자는 AI 분석·리뷰를 한도 없이 써요')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled()
+    })
+
+    it('오늘 한도를 다 썼으면 버튼을 끄고 언제 다시 쓸 수 있는지 알린다', async () => {
+      quotaLeft(0)
+      renderResult(WRONG)
+
+      expect(await screen.findByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
+      expect(screen.getByText('틀렸습니다')).toBeInTheDocument()
+    })
+
+    describe('한도를 다 쓴 무료 사용자에게 요금제 안내 (AI-06, #321)', () => {
+      afterEach(() => focusManager.setFocused(undefined))
+
+      // 무료인지는 서버가 한도와 함께 주는 plan으로 안다. 안내와 '다 썼어요'는 같은 응답으로 함께 그려진다
+      function quota(plan: 'FREE' | 'PRO' | undefined, limit: number, remaining: number) {
+        server.use(
+          http.get('*/api/users/me/ai-quota', () =>
+            HttpResponse.json({ ...QUOTA, plan, limit, used: limit - remaining, remaining }),
+          ),
+        )
+      }
+
+      it('무료 한도를 다 썼으면 요금제 화면으로 가는 링크를 보인다', async () => {
+        quota('FREE', 3, 0)
+        renderResult(WRONG)
+
+        expect(await screen.findByRole('link', { name: '요금제 보기' })).toHaveAttribute(
+          'href',
+          '/pricing',
+        )
+        expect(screen.getByText(/프로는 하루 30회까지 쓸 수 있어요/)).toBeInTheDocument()
+      })
+
+      it('프로 한도를 다 썼으면 보이지 않는다', async () => {
+        quota('PRO', 30, 0)
+        renderResult(WRONG)
+
+        await screen.findByText(/오늘 AI 분석·리뷰 30회를 다 썼어요/)
+        expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
+      })
+
+      it('프로의 한도가 무료와 같은 숫자여도 보이지 않는다 (#369 리뷰)', async () => {
+        // 서버 전역 한도를 3으로 낮추면 프로도 3이다. 숫자로 요금제를 짐작하면 프로에게 안내가 뜬다
+        quota('PRO', 3, 0)
+        renderResult(WRONG)
+
+        await screen.findByText(/오늘 AI 분석·리뷰 3회를 다 썼어요/)
+        expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
+      })
+
+      it('plan을 주기 전 서버의 응답이면 보이지 않는다', async () => {
+        quota(undefined, 3, 0)
+        renderResult(WRONG)
+
+        await screen.findByText(/오늘 AI 분석·리뷰 3회를 다 썼어요/)
+        expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
+      })
+
+      it('무료 한도가 남았으면 보이지 않는다', async () => {
+        quota('FREE', 3, 1)
+        renderResult(WRONG)
+
+        await screen.findByText('오늘 남은 AI 분석·리뷰 1 / 3회')
+        expect(screen.queryByText(/프로는 하루 30회까지/)).not.toBeInTheDocument()
+      })
+
+      it('다 쓴 채로 다른 탭에서 결제하고 돌아오면 한도를 다시 받는다 (#369 리뷰)', async () => {
+        // 앱은 창 포커스에 다시 받지 않는다(queryClient). 다 썼으면 버튼이 꺼져 429로 바로잡을 수도 없다
+        quota('FREE', 3, 0)
+        renderResult(WRONG)
+        await screen.findByRole('link', { name: '요금제 보기' })
+
+        quota('PRO', 30, 30)
+        act(() => {
+          focusManager.setFocused(false)
+          focusManager.setFocused(true)
+        })
+
+        expect(await screen.findByText('오늘 남은 AI 분석·리뷰 30 / 30회')).toBeInTheDocument()
+        expect(screen.queryByRole('link', { name: '요금제 보기' })).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled()
+      })
+
+      it('남은 횟수가 있으면 돌아와도 다시 받지 않는다', async () => {
+        let asked = 0
+        server.use(
+          http.get('*/api/users/me/ai-quota', () => {
+            asked += 1
+            return HttpResponse.json({ ...QUOTA, plan: 'FREE', limit: 3, used: 1, remaining: 2 })
+          }),
+        )
+        renderResult(WRONG)
+        await screen.findByText('오늘 남은 AI 분석·리뷰 2 / 3회')
+        const before = asked
+
+        act(() => {
+          focusManager.setFocused(false)
+          focusManager.setFocused(true)
+        })
+
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(asked).toBe(before)
+      })
+    })
+
+    it('누른 뒤 한도 초과(429)를 받으면 버튼을 끄고 안내를 한 번만 보인다', async () => {
+      const user = userEvent.setup()
+      quotaLeft(1)
+      server.use(
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            {
+              status: 429,
+              code: 'AI_DAILY_LIMIT_EXCEEDED',
+              detail: '오늘 쓸 수 있는 AI 분석·리뷰 20회를 모두 썼어요.',
+              quota: { ...QUOTA, used: 20, remaining: 0 },
+            },
+            { status: 429 },
+          ),
+        ),
+      )
+      renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+
+      // 화면 낭독기가 읽도록 alert로 알리고, 같은 문장을 두 번 그리지 않는다(#272 리뷰)
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /오늘 AI 분석·리뷰 20회를 다 썼어요/,
+      )
+      expect(screen.getAllByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toHaveLength(1)
+      expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
+    })
+
+    it('한도 초과가 아닌 실패는 남은 횟수가 0으로 바뀌어도 그 실패를 알린다', async () => {
+      // 서버가 시도를 잡은 뒤 응답이 끊기면, 다시 받은 분석이 remaining 0을 싣는다(#272 리뷰)
+      const user = userEvent.setup()
+      quotaLeft(1)
+      server.use(
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            { status: 503, title: 'Service Unavailable', detail: '잠시 뒤 다시 시도해 주세요.' },
+            { status: 503 },
+          ),
+        ),
+      )
+      const { client } = renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+      await screen.findByRole('alert')
+      client.setQueryData(['ai-quota'], { ...QUOTA, used: 20, remaining: 0 })
+
+      // 캐시가 0으로 바뀐 뒤에도 503 안내(code가 없어 공통 문구)가 그대로다
+      await waitFor(() =>
+        expect(screen.getByText(/오늘 AI 분석·리뷰 20회를 다 썼어요/)).toBeVisible(),
+      )
+      expect(screen.getByRole('alert')).toHaveTextContent(/잠시 후 다시 시도해 주세요/)
+      expect(screen.getByRole('alert')).not.toHaveTextContent(/다 썼어요/)
+    })
+
+    it('한도가 풀리는 시각이 지나면 다시 받아 버튼을 켠다', async () => {
+      // 화면을 켜 둔 채 한도가 풀리면 꺼진 버튼과 지난 시각 안내가 남았다(#272 리뷰)
+      let calls = 0
+      server.use(
+        http.get('*/api/users/me/ai-quota', () => {
+          calls += 1
+          return calls === 1
+            ? HttpResponse.json({
+                ...QUOTA,
+                used: 20,
+                remaining: 0,
+                resetsAt: new Date(Date.now() + 300).toISOString(),
+              })
+            : HttpResponse.json({
+                ...QUOTA,
+                resetsAt: new Date(Date.now() + 86_400_000).toISOString(),
+              })
+        }),
+      )
+      renderResult(WRONG)
+
+      expect(await screen.findByRole('button', { name: 'AI 분석' })).toBeDisabled()
+      await waitFor(() => expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled(), {
+        timeout: 3000,
+      })
+      expect(screen.getByText('오늘 남은 AI 분석·리뷰 20 / 20회')).toBeInTheDocument()
+    })
+
+    it('429를 받은 뒤 한도가 풀리면 지난 안내를 거두고 남은 횟수를 보여 준다', async () => {
+      // 오류 코드만 보면 버튼은 켜졌는데 '다 썼어요'가 남았다(#298 리뷰)
+      const user = userEvent.setup()
+      const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString()
+      let calls = 0
+      server.use(
+        http.get('*/api/users/me/ai-quota', () => {
+          calls += 1
+          return calls === 1
+            ? HttpResponse.json({ ...QUOTA, used: 19, remaining: 1, resetsAt: tomorrow() })
+            : HttpResponse.json({ ...QUOTA, resetsAt: tomorrow() })
+        }),
+        // 거절한 순간 곧 풀리는 시각을 싣는다. 렌더 전에 정하면 느린 실행에서 누르기 전에 지나 버린다
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            {
+              status: 429,
+              code: 'AI_DAILY_LIMIT_EXCEEDED',
+              detail: '오늘 쓸 수 있는 AI 분석·리뷰 20회를 모두 썼어요.',
+              quota: {
+                ...QUOTA,
+                used: 20,
+                remaining: 0,
+                resetsAt: new Date(Date.now() + 500).toISOString(),
+              },
+            },
+            { status: 429 },
+          ),
+        ),
+      )
+      renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(/다 썼어요/)
+
+      expect(
+        await screen.findByText('오늘 남은 AI 분석·리뷰 20 / 20회', {}, { timeout: 3000 }),
+      ).toBeInTheDocument()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled()
+    })
+
+    it('시계가 빨라 일찍 다시 받았는데 그대로면 조금 뒤 다시 묻는다', async () => {
+      // 같은 resetsAt을 받으면 타이머가 다시 걸리지 않아 버튼이 꺼진 채 남았다(#298 리뷰)
+      vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        // 풀리는 시각은 첫 응답 때 정한다. 렌더 전에 정하면 느린 첫 실행에서 응답이 그 시각 뒤에 와,
+        // '지난 뒤 받은 값'으로 보고 30초를 기다린다
+        let resetsAt = ''
+        let calls = 0
+        server.use(
+          http.get('*/api/users/me/ai-quota', () => {
+            calls += 1
+            resetsAt ||= new Date(Date.now() + 200).toISOString()
+            // 두 번째까지는 서버가 아직 안 풀었다
+            return calls <= 2
+              ? HttpResponse.json({ ...QUOTA, used: 20, remaining: 0, resetsAt })
+              : HttpResponse.json({
+                  ...QUOTA,
+                  resetsAt: new Date(Date.now() + 86_400_000).toISOString(),
+                })
+          }),
+        )
+        renderResult(WRONG)
+
+        expect(await screen.findByRole('button', { name: 'AI 분석' })).toBeDisabled()
+        await waitFor(() => expect(calls).toBe(2), { timeout: 3000 })
+        expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
+
+        await vi.advanceTimersByTimeAsync(QUOTA_RECHECK_MS)
+        await waitFor(() => expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled())
+        expect(calls).toBe(3)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('리셋 시각에 다시 받기가 실패해도 조금 뒤 다시 묻는다', async () => {
+      // 실패하면 dataUpdatedAt이 그대로라 타이머가 다시 걸리지 않았다(#298 리뷰)
+      vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        let calls = 0
+        server.use(
+          http.get('*/api/users/me/ai-quota', () => {
+            calls += 1
+            if (calls === 1) {
+              // 풀리는 시각은 첫 응답 때 정한다(위 테스트와 같은 이유)
+              const resetsAt = new Date(Date.now() + 200).toISOString()
+              return HttpResponse.json({ ...QUOTA, used: 20, remaining: 0, resetsAt })
+            }
+            // 리셋 시각의 요청과 앱 기본 재시도 1회가 일시 장애로 실패한다
+            if (calls <= 3) {
+              return HttpResponse.json(
+                { status: 503, title: 'Service Unavailable' },
+                { status: 503 },
+              )
+            }
+            return HttpResponse.json({
+              ...QUOTA,
+              resetsAt: new Date(Date.now() + 86_400_000).toISOString(),
+            })
+          }),
+        )
+        renderResult(WRONG)
+
+        expect(await screen.findByRole('button', { name: 'AI 분석' })).toBeDisabled()
+        await waitFor(() => expect(calls).toBe(2))
+        // 재시도 지연(TanStack 기본 1초)을 실제로 기다리지 않는다. 부하가 걸리면 시간 제한을 넘겼다
+        await vi.advanceTimersByTimeAsync(1_000)
+        await waitFor(() => expect(calls).toBe(3))
+        expect(screen.getByRole('button', { name: 'AI 분석' })).toBeDisabled()
+
+        await vi.advanceTimersByTimeAsync(QUOTA_RECHECK_MS)
+        await waitFor(() => expect(screen.getByRole('button', { name: 'AI 분석' })).toBeEnabled())
+        expect(calls).toBe(4)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('마지막 1회로 요청한 분석이 만들다 실패하면 돌아온 횟수로 다시 시도할 수 있다', async () => {
+      // 계약: FAILED는 세지 않는다. 요청 응답의 remaining 0이 남으면 [다시 시도]가 꺼졌다(#272 리뷰)
+      const user = userEvent.setup()
+      quotaLeft(1)
+      const failed = analysis({
+        status: 'FAILED',
+        failureReason: 'UNAVAILABLE',
+        summary: null,
+        suspectLines: [],
+        facts: [],
+        guesses: [],
+        quota: { ...QUOTA, used: 19, remaining: 1 },
+      })
+      let gets = 0
+      server.use(
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            {
+              ...failed,
+              status: 'PENDING',
+              failureReason: null,
+              createdAt: new Date().toISOString(),
+              completedAt: null,
+              quota: { ...QUOTA, used: 20, remaining: 0 },
+            },
+            { status: 202 },
+          ),
+        ),
+        http.get('*/api/submissions/:id/analysis', () =>
+          ++gets === 1
+            ? HttpResponse.json({ status: 404, code: 'ANALYSIS_NOT_FOUND' }, { status: 404 })
+            : HttpResponse.json(failed),
+        ),
+      )
+      renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+
+      expect(
+        await screen.findByRole('button', { name: '다시 시도' }, { timeout: 3000 }),
+      ).toBeEnabled()
+      expect(screen.getByText('오늘 남은 AI 분석·리뷰 1 / 20회')).toBeInTheDocument()
+    })
+
+    it('처리 중에 서버가 내려가 실패한 분석은 한도를 다 썼어도 다시 시도할 수 있다', async () => {
+      // 계약: 이미 1회로 셌고 다시 요청해도 같은 결과라 막지 않는다. 이 경우만 completedAt이 null이다
+      quotaLeft(0)
+      stored(
+        analysis({
+          status: 'FAILED',
+          failureReason: 'UNAVAILABLE',
+          summary: null,
+          suspectLines: [],
+          facts: [],
+          guesses: [],
+          completedAt: null,
+          // 오늘(11-07) 만든 분석. 응답의 quota도 0회로 맞춰야 예외를 확인한다
+          quota: { ...QUOTA, used: 20, remaining: 0 },
+        }),
+      )
+      renderResult(WRONG)
+
+      expect(await screen.findByRole('button', { name: '다시 시도' })).toBeEnabled()
+      expect(screen.getByText('오늘 남은 AI 분석·리뷰 0 / 20회')).toBeInTheDocument()
+    })
+
+    it('어제 버려진 분석은 오늘 다시 요청하면 새 1회라 한도를 다 썼으면 막는다', async () => {
+      // 서버는 오늘(UTC) 만든 분석만 센다. QUOTA.resetsAt이 11-08 00시라 오늘은 11-07이다
+      quotaLeft(0)
+      stored(
+        analysis({
+          status: 'FAILED',
+          failureReason: 'UNAVAILABLE',
+          summary: null,
+          suspectLines: [],
+          facts: [],
+          guesses: [],
+          createdAt: '2026-11-06T12:00:00Z',
+          completedAt: null,
+          // 분석 응답의 quota도 캐시에 들어간다(adoptQuota). 같은 0회로 맞춘다
+          quota: { ...QUOTA, used: 20, remaining: 0 },
+        }),
+      )
+      renderResult(WRONG)
+
+      expect(await screen.findByRole('button', { name: '다시 시도' })).toBeDisabled()
+    })
+
+    it('버려진 분석을 다시 요청해 서버가 한도로 거절하면(429) 알리고 버튼을 끈다 (#371 리뷰)', async () => {
+      // 프로를 시작하기 전에 만든 분석은 프로 횟수에 없어 다시 요청하면 새 1회다. 화면은 구독 시작 시각을 모른다
+      const user = userEvent.setup()
+      const exhausted = { ...QUOTA, plan: 'PRO' as const, limit: 30, used: 30, remaining: 0 }
+      server.use(
+        http.get('*/api/users/me/ai-quota', () => HttpResponse.json(exhausted)),
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            {
+              status: 429,
+              code: 'AI_DAILY_LIMIT_EXCEEDED',
+              detail: '오늘 쓸 수 있는 AI 분석·리뷰 30회를 모두 썼어요.',
+              quota: exhausted,
+            },
+            { status: 429 },
+          ),
+        ),
+      )
+      stored(
+        analysis({
+          status: 'FAILED',
+          failureReason: 'UNAVAILABLE',
+          summary: null,
+          suspectLines: [],
+          facts: [],
+          guesses: [],
+          completedAt: null,
+          quota: exhausted,
+        }),
+      )
+      renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: '다시 시도' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /오늘 AI 분석·리뷰 30회를 다 썼어요/,
+      )
+      expect(screen.getByRole('button', { name: '다시 시도' })).toBeDisabled()
+    })
+
+    it('대기열이 차서 시작하지 못했으면 그 이유를 알린다', async () => {
+      stored(
+        analysis({
+          status: 'FAILED',
+          failureReason: 'BUSY',
+          summary: null,
+          suspectLines: [],
+          facts: [],
+          guesses: [],
+        }),
+      )
+      renderResult(WRONG)
+
+      expect(
+        await screen.findByText('지금 분석을 기다리는 제출이 많아요. 잠시 후 다시 시도해 주세요.'),
+      ).toBeInTheDocument()
+    })
+
+    it('요청이 거절되면 서버 문구를 보이고 채점 결과는 그대로 둔다 (AI-06)', async () => {
+      const user = userEvent.setup()
+      server.use(
+        http.post('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json(
+            {
+              status: 409,
+              code: 'ANALYSIS_NOT_AVAILABLE',
+              detail: '오답 판정을 받은 제출만 분석할 수 있어요',
+            },
+            { status: 409 },
+          ),
+        ),
+      )
+      renderResult(WRONG)
+
+      await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        '오답 판정을 받은 제출만 분석할 수 있어요',
+      )
+      expect(screen.getByText('틀렸습니다')).toBeInTheDocument()
+    })
+  })
+
+  it('힌트가 세 개를 넘어 와도 세 단계까지만 그린다', async () => {
+    // 계약은 길이 ≤ 3이다. 어기면 '힌트 4 · undefined'가 찍혔다(#268 리뷰)
+    stored(analysis({ revealedHintLevel: 3, hints: ['한나', '두나', '세나', '네나'] }))
+    renderResult(WRONG)
+
+    expect(await screen.findByText('세나')).toBeInTheDocument()
+    expect(screen.queryByText('네나')).not.toBeInTheDocument()
+    expect(screen.queryByText(/undefined/)).not.toBeInTheDocument()
+  })
+
+  describe('원인 설명 (AI-03)', () => {
+    it('근거를 [실행 결과] 칸 하나, [코드 분석] 칸 하나에 모으고 의심되는 줄을 보여 준다', async () => {
+      stored(analysis({ facts: ['사실 하나', '사실 둘'], guesses: ['짐작 하나', '짐작 둘'] }))
+      renderResult(WRONG)
+
+      // 문장마다 칸을 나누지 않는다. 종류마다 한 칸(배지 하나 + 목록 하나)이다
+      const items = (kind: string) =>
+        within(screen.getByRole('list', { name: kind }))
+          .getAllByRole('listitem')
+          .map((li) => li.textContent)
+      await screen.findByText('사실 하나')
+      expect(items('실행 결과')).toEqual(['사실 하나', '사실 둘'])
+      expect(items('코드 분석')).toEqual(['짐작 하나', '짐작 둘'])
+      const badges = screen.getAllByText(/^(실행 결과|코드 분석)$/)
+      expect(badges).toHaveLength(2)
+      // 종류는 목록 이름으로 읽히므로 배지는 낭독기에서 숨겨 두 번 읽히지 않게 한다(#352 리뷰)
+      for (const badge of badges) expect(badge.closest('[aria-hidden="true"]')).not.toBeNull()
+      expect(screen.getByText(/의심되는 줄/)).toHaveTextContent(/^의심되는 줄 · 2번$/)
+    })
+
+    it('한쪽 근거가 없으면 그 칸은 그리지 않는다', async () => {
+      stored(analysis({ facts: ['사실 하나'], guesses: [] }))
+      renderResult(WRONG)
+
+      await screen.findByText('사실 하나')
+      expect(screen.queryByText('코드 분석')).not.toBeInTheDocument()
+    })
+
+    /** 계약: 서버가 범위를 검사하기(#79) 전에 저장된 분석이 남아 있다. 제출 코드는 4줄이다. */
+    it('제출 코드의 줄 수를 넘는 줄 번호는 버린다', async () => {
+      stored(analysis({ suspectLines: [4, 5, 99] }))
+      renderResult(WRONG)
+
+      expect(await screen.findByText(/의심되는 줄/)).toHaveTextContent(/^의심되는 줄 · 4번$/)
+    })
+
+    it('0·음수·정수가 아닌 줄 번호는 버리고 겹치면 하나로 줄인다', async () => {
+      stored(analysis({ suspectLines: [0, -1, 2, 2, 1.5, 3] }))
+      renderResult(WRONG)
+
+      expect(await screen.findByText(/의심되는 줄/)).toHaveTextContent(/^의심되는 줄 · 2번, 3번$/)
+    })
+
+    it('제출한 코드에서 의심되는 줄을 칠한다. 범위 밖 번호는 칠하지 않는다', async () => {
+      // 패널 문구와 같은 목록(suspectLines)을 쓴다. 없는 줄을 칠하면 학생이 그 줄을 찾아 헤맨다
+      stored(analysis({ suspectLines: [2, 99] }))
+      renderResult(WRONG)
+
+      expect(
+        await screen.findByText('노란색으로 표시한 줄은 AI가 의심한 줄이에요.'),
+      ).toBeInTheDocument()
+      const marked = document.querySelectorAll('[data-highlighted]')
+      expect(marked).toHaveLength(1)
+      expect([...marked[0].parentElement!.children].indexOf(marked[0])).toBe(1)
+    })
+
+    it('남은 줄 번호가 없으면 줄 안내를 그리지 않는다', async () => {
+      stored(analysis({ suspectLines: [99] }))
+      renderResult(WRONG)
+
+      await screen.findByText('요약 문장')
+      expect(screen.queryByText(/의심되는 줄/)).not.toBeInTheDocument()
+    })
+
+    /** 모델이 만든 문장이라 HTML로 해석하지 않는다(계약). */
+    it('문장을 글자 그대로 보여 준다', async () => {
+      stored(analysis({ summary: '<b>굵게</b> & 끝' }))
+      renderResult(WRONG)
+
+      expect(await screen.findByText('<b>굵게</b> & 끝')).toBeInTheDocument()
+    })
+  })
+
+  describe('AI 사용 불가 (AI-06)', () => {
+    it('결과를 보여 줄 수 없는 분석이면 안내만 하고 다시 요청하지 못한다', async () => {
+      stored(analysis({ blocked: true, summary: null, suspectLines: [], facts: [], guesses: [] }))
+      renderResult(WRONG)
+
+      expect(await screen.findByText(/이 제출은 AI 분석을 보여 줄 수 없어요/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /AI 분석|다시 시도/ })).not.toBeInTheDocument()
+      expect(screen.getByText('틀렸습니다')).toBeInTheDocument()
+    })
+
+    it('저장된 분석을 불러오지 못하면 패널 안에서만 오류와 다시 시도를 보여 준다', async () => {
+      server.use(
+        http.get('*/api/submissions/:id/analysis', () => HttpResponse.json({}, { status: 500 })),
+      )
+      renderResult(WRONG)
+
+      expect(
+        await screen.findByRole('button', { name: '다시 시도' }, { timeout: 3000 }),
+      ).toBeInTheDocument()
+      expect(screen.getByText('틀렸습니다')).toBeInTheDocument()
+    })
+
+    /** 폴링이 멈추는 때와 오류를 띄우는 때가 같다(isDeadEnd). 어긋나면 '분석 중'에 갇힌다. */
+    it('만드는 중에 다시 물어도 소용없는 오류가 오면 분석 중에 머물지 않고 오류를 보여 준다', async () => {
+      let gets = 0
+      server.use(
+        http.get('*/api/submissions/:id/analysis', () =>
+          ++gets === 1
+            ? HttpResponse.json(
+                analysis({
+                  status: 'PENDING',
+                  summary: null,
+                  suspectLines: [],
+                  facts: [],
+                  guesses: [],
+                  createdAt: new Date().toISOString(),
+                  completedAt: null,
+                }),
+              )
+            : HttpResponse.json({ status: 403 }, { status: 403 }),
+        ),
+      )
+      renderResult(WRONG)
+
+      expect(await screen.findByText('AI가 분석하고 있어요…')).toBeInTheDocument()
+      expect(
+        await screen.findByRole('heading', { name: '권한이 없습니다' }, { timeout: 3000 }),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('AI가 분석하고 있어요…')).not.toBeInTheDocument()
+      expect(screen.getByText('틀렸습니다')).toBeInTheDocument()
+    })
+
+    it('세션이 끊겼으면 들고 있던 세션을 버린다', async () => {
+      server.use(
+        http.get('*/api/submissions/:id/analysis', () =>
+          HttpResponse.json({ status: 401 }, { status: 401 }),
+        ),
+      )
+      const { client } = renderResult(WRONG)
+
+      await waitFor(() => expect(client.getQueryData(ME_QUERY_KEY)).toBeNull())
+    })
+  })
+
+  /**
+   * 리뷰 지적: 같은 패널을 이어 쓰면 진행 중인 요청이 마지막 렌더의 onSuccess로 끝나, A의
+   * 분석이 B의 캐시에 들어갔다. 22는 2번 문제의 런타임 에러(오답)다.
+   */
+  it('요청 중에 다른 제출로 가도 응답은 요청한 제출의 캐시에 든다', async () => {
+    const user = userEvent.setup()
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    server.use(
+      http.post('*/api/submissions/:id/analysis', async () => {
+        await held
+        return HttpResponse.json(analysis({ submissionId: WRONG }))
+      }),
+    )
+    const { client, router } = renderResult(WRONG)
+    // B의 결과가 캐시에 있어야 로딩 화면 없이 같은 패널이 이어 쓰인다. 없으면 결과를 받는
+    // 동안 패널이 사라졌다 다시 생겨 이 경우를 지나친다.
+    await client.prefetchQuery(submissionResultQuery(22))
+
+    await user.click(await screen.findByRole('button', { name: 'AI 분석' }))
+    await router.navigate('/submissions/22')
+    await screen.findByText('제출 #22')
+    release()
+
+    await waitFor(() =>
+      expect(client.getQueryData(['analysis', WRONG])).toMatchObject({ submissionId: WRONG }),
+    )
+    expect(client.getQueryData(['analysis', 22])).toBeNull()
+  })
+})
+
+describe('analysisPollingInterval', () => {
+  const createdAt = '2026-11-07T00:00:00Z'
+  const at = (seconds: number) => Date.parse(createdAt) + seconds * 1000
+  const pending = analysis({ status: 'PENDING', createdAt })
+
+  it('만드는 중일 때만 묻고, 오래 걸릴수록 뜸하게 묻는다', () => {
+    expect(analysisPollingInterval(null, pending, at(5))).toBe(POLL_INTERVAL_MS)
+    expect(analysisPollingInterval(null, pending, at(30))).toBe(POLL_INTERVAL_MS * 3)
+    expect(analysisPollingInterval(null, pending, at(300))).toBe(POLL_INTERVAL_MS * 10)
+    expect(analysisPollingInterval(null, analysis(), at(5))).toBe(false)
+    expect(analysisPollingInterval(null, null, at(5))).toBe(false)
+  })
+
+  it('실패가 이어지면 늦추고, 다시 물어도 소용없으면 멈춘다', () => {
+    expect(analysisPollingInterval({ status: 500 }, pending, at(5))).toBe(FAILING_INTERVAL_MS)
+    expect(analysisPollingInterval({ status: 403 }, pending, at(5))).toBe(false)
+  })
+})

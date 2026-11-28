@@ -9,21 +9,39 @@
 .env
 .env.*
 !.env.example
+# 목 모드는 --mode mock으로 켠다. mock 전용 설정이 필요해지면 이 파일을 만들어 공유한다
+!.env.mock
 
-# Node / Next.js
+# Node
 node_modules/
-.next/
-out/
 coverage/
 *.tsbuildinfo
 npm-debug.log*
 pnpm-debug.log*
+
+# Vite / Playwright 산출물
+dist/
+dist-e2e/
+.vite/
+test-results/
+playwright-report/
+
+# Python (judge/ 스크립트)
+__pycache__/
 
 # Java / Gradle
 .gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
 *.class
+# IntelliJ 컴파일 출력
+out/
+
+# 개인 작업 기록 (팀 작업 추적은 GitHub Issues·Projects가 맡는다)
+/tasks/
 
 # 로그
 *.log
+
+# 디자인 원본(부품별 README·tokens.json·그림). 저장소에 올리지 않는다 (docs/frontend-stack.md)
+docs/design-handoff/

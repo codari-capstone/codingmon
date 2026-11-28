@@ -1,4 +1,61 @@
 # api
 
-백엔드 (Spring Boot 4, Java 21, JPA, Flyway, PostgreSQL 16). 1주차에 프로젝트를 생성한다.
+백엔드 (Spring Boot 4, Java 21, JPA, Flyway, PostgreSQL 18). 1주차에 프로젝트를 생성한다.
 API, 채점 처리기, AI 처리기, 리포트 계산을 패키지로 나눈 하나의 애플리케이션이다.
+
+## 채점 (Judge0)
+
+`JUDGE0_URL`과 `JUDGE0_AUTHN_TOKEN`을 주면 채점 처리기가 켜진다(`.env.example`). 비워 두면 제출과 예제 실행이 `QUEUED`로 남는다. 로컬 Judge0는 [`judge/README.md`](../judge/README.md)의 "맥(Apple Silicon)에서 실행"으로 띄운다.
+
+채점 통합 테스트(`JudgeWorkerIntegrationTest`)는 `JUDGE0_URL`이 있을 때만 돈다. 테스트 DB에 문제·제출을 만들었다가 지운다.
+
+학습자의 제출과 예제 실행은 미완료 작업 수를 함께 센다(`QUEUED`·`COMPILING`·`RUNNING`). 기본 상한은 사용자당 3개,
+전체 학습자 작업 100개이며 `JUDGE_USER_PENDING_LIMIT`·`JUDGE_PENDING_LIMIT`으로 조정한다. 상한에 닿으면 새 행을
+만들지 않고 429 `JUDGE_QUEUE_FULL`을 준다. 끝난 작업은 바로 몫을 돌려준다. 관리자 정답 검증은 이 접수 상한의 대상이 아니다.
+접수 트랜잭션은 PostgreSQL advisory lock으로 직렬화하므로 여러 연결에서 동시에 요청해도 같은 상한을 지킨다.
+`JUDGE0_URL` 없이 띄운 서버는 채점 처리기가 돌지 않아 작업이 끝나지 않으므로 이 상한을 적용하지 않는다.
+접수 테스트(`SubmissionAdmissionTest`)는 DB 전체의 미완료 수를 세므로 `JUDGE0_URL`이 있으면 건너뛰고(다른 테스트 컨텍스트의
+처리기가 행을 가져간다), 테스트 DB에 학습자의 미완료 제출이 남아 있으면 이유를 밝히고 실패한다.
+
+```bash
+DB_URL=... DB_USERNAME=... DB_PASSWORD=... JUDGE0_URL=http://127.0.0.1:2358 JUDGE0_AUTHN_TOKEN=... ./gradlew test
+```
+
+## 결제 (포트원 V2)
+
+프로 구독 결제(#332)는 포트원 V2 테스트 채널(토스페이먼츠)로 한다. 실제로 돈이 나가지 않는다. `PORTONE_STORE_ID`·`PORTONE_API_SECRET`·`PORTONE_WEBHOOK_SECRET`을 주면 켜지고(`.env.example`), 비워 두면 구독 시작이 503 `PAYMENT_PROVIDER_UNAVAILABLE`이고 스케줄러가 갱신 결제를 하지 않는다. 채널 키는 웹 설정이다.
+
+`SubscriptionService`가 구독 시작(빌링키 확인 → 사용자 행을 잠그고 결제 기록 `PENDING` 저장 → 결제 → 반영)을, `PaymentResolver`가 결제 결과 반영을 맡는다. 결제 시작·웹훅(`PortOneWebhookController`)·스케줄러가 같은 반영 코드를 쓴다. `SubscriptionScheduler`는 10분마다 기간이 끝난 구독의 갱신 결제, 결과 모름 결제 다시 조회, 끝난 해지 예정 정리, 빌링키 지우기를 한다. 결제 주기는 한 달(연간 1년)로 고정이라 갱신은 시연에서 기다릴 수 없다. 확인하려면 `subscriptions.current_period_end`를 지난 시각으로 바꾸거나 임시 테스트를 쓴다. 웹훅 주소는 포트원 콘솔에 배포 서버 하나만 둔다.
+
+## AI (LLM)
+
+팀 서버에 띄운 오픈 웨이트 모델을 OpenAI 호환 API(`/v1/chat/completions`)로 부른다. `LLM_URL`과 `LLM_MODEL`을 주면 켜지고, 비워 두면 AI 기능이 장애로 응답한다. 채점에는 영향이 없다. 나머지 값과 기본값은 `application.properties`의 `app.llm.*`에 있다.
+
+호출은 `AiWorker`가 채점 슬롯과 다른 스레드에서 처리한다. 동시 호출 수는 `LLM_WORKERS`로 정하고, 넘치는 요청은 `LLM_QUEUE_CAPACITY`까지 차례를 기다리며 그 뒤로는 바로 거절한다(`BUSY`). 한 사용자가 만드는 중인 분석·리뷰가 `LLM_USER_CONCURRENCY`개(기본 3)를 넘어도 같은 `BUSY`로 거절한다(`AiQuotaService`). 응답 원문은 요청에 넣은 JSON 스키마(`$schema`가 없으면 draft 2020-12)로 검증하고, 어기면 한 번 다시 요청한다. 타임아웃·5xx·429에는 다시 부르지 않는다(응답을 못 받은 호출은 모델이 아직 만들고 있을 수 있다). 호출당 요금이 없어 `ai_reviews`에는 토큰 수만 남기고 `cost_usd`는 비워 둔다.
+
+지금 모델은 `gemma4:12b`이고 서버 설정은 [`infra/README.md`](../infra/README.md)의 "LLM 서버"에 있다. 실제 모델로 호출하는 테스트(`OpenAiCompatibleLlmClientIntegrationTest`)는 `LLM_URL`과 `LLM_MODEL`이 있을 때만 돈다.
+
+```bash
+LLM_URL=http://127.0.0.1:11434 LLM_MODEL=gemma4:12b ./gradlew test --tests 'com.codingmon.api.ai.*'
+```
+
+오답 분석(F1·F2) 프롬프트는 `src/main/resources/prompts/analysis-<버전>/`에 있고 `AnalysisPrompt`가 읽는다. 버전은 `LLM_PROMPT_VERSION_ANALYSIS`(기본 `v1`)이며 `ai_reviews.prompt_version`에 그대로 남는다. 프롬프트를 고치면 폴더를 새 버전으로 복사해 고치고 이 값을 올린다. 그래야 이전 프롬프트로 만든 결과를 재사용하지 않는다.
+
+오답 분석은 `AnalysisService`가, 코드 리뷰는 `CodeReviewService`가 요청을 받으면 `ai_reviews`에 `PENDING` 행을 만들고 처리기에 넣는다. 처리기에 넣은 뒤의 흐름(정답 코드 검사, 걸리면 한 번 다시 만들기, 두 번 걸리면 차단 표시 저장, 통과하면 사실 검증)은 두 기능이 `AiReviewRunner`를 같이 쓴다. 끝나면 사실 검증(`FactCheck`)으로 고친 값과 검증 내역(`factCheck`)을 `content`에 담아 `COMPLETED`로, 실패하면 `FAILED`와 이유(`failure_reason`: `UNAVAILABLE`·`RATE_LIMITED`·`BUSY`·`INVALID_RESPONSE`·`INTERNAL`)로 바꾼다. 이유는 `LlmException.Kind`에서 오고, 모델과 상관없는 오류(입력 준비·결과 저장 실패)는 `INTERNAL`이다. 비공개 테스트 원문은 사실 검증에만 쓰고(`FactCheckRepository`) 모델 입력에는 넣지 않는다. 실제 모델 평가(`AnalysisPromptIntegrationTest`)는 응답마다 사실 검증이 무엇을 고쳤는지 `build/analysis-eval/summary.tsv`에 남긴다. 같은 제출·같은 프롬프트 버전의 결과는 다시 만들지 않는다. `FAILED`인 행과, 서버가 처리 중에 내려가 `PENDING`으로 남은 행은 다시 요청하면 같은 행으로 재시도한다. 남은 행은 시작하고 `LLM_PENDING_TIMEOUT`(기본 15분)이 지나면 실패로 보이는데, 이 서버의 대기열에 있거나 처리 중인 요청은 오래 걸려도 실패로 보지 않는다(`AiReviewRunner`가 처리 중인 행을 기억한다). 시각은 DB 시계로만 비교한다. 프롬프트 버전이 바뀌어 행이 여럿이면 요청·조회·힌트 열기가 같은 규칙(`AiReviewRepository.findShown`)으로 하나를 고른다. 결과는 그 시도를 시작한 `created_at`이 그대로일 때만 저장해, 늦게 끝난 이전 시도가 새 시도를 덮어쓰지 못한다.
+
+하루 한도는 `AiQuotaService`가 센다. 분석과 리뷰를 합쳐 사용자당 무료 `LLM_DAILY_LIMIT_FREE`(기본 3)회, 프로 `LLM_DAILY_LIMIT_PRO`(기본 30)회이고(요금제는 `Subscriptions.proSince`. 구독 한 행만 보고, 구독 조회와 달리 결과를 모르는 결제는 보지 않는다), 하루는 UTC 날짜다. 시도를 잡는 일(`AiReviewRepository.claim`)만 본인 제출 행과 사용자 행을 이 순서로 잠근 트랜잭션에서 하고(탈퇴·채점 완료와 같은 순서라 교착이 없다), 잡았으면 그 행까지 세어 넘으면 429 `AI_DAILY_LIMIT_EXCEEDED`를 던져 롤백한다. 같은 사용자의 요청이 잠금에서 줄을 서므로 동시에 눌러도 한도를 넘지 않는다. 처리기에는 이 트랜잭션이 커밋된 뒤에 넣는다. 커밋 전에 넣으면 처리기가 `PENDING` 행을 못 봐 결과를 버린다. 세는 기준은 [`docs/database-schema.md`](../docs/database-schema.md)에 있다.
+
+`AnalysisPromptIntegrationTest`는 판정별 오답 샘플(`AnalysisSamples`)을 실제 모델에 보내 스키마, 줄 번호 범위, 코드·정답 조각 유출, 마크다운·영어 값 이름이 섞였는지 본다. 응답 원문과 걸린 시간은 `build/analysis-eval/`에 남으니 힌트 내용은 사람이 읽고 평가한다.
+
+정답 코드 리뷰(F3) 프롬프트는 `src/main/resources/prompts/code-review-<버전>/`의 `system.md`(정답 코드 검사에 걸려 다시 만들 때는 뒤에 `retry.md`를 붙인다)이고 `CodeReviewPrompt`가 읽는다. 정답 제출만 리뷰하므로 판정별 지시는 없다. 버전은 `LLM_PROMPT_VERSION_CODE_REVIEW`(기본 `v1`)이고 고치는 방법은 오답 분석과 같다. 입력(`CodeReviewInput`)은 `AnalysisInput`에서 문제와 제출만 가져온다. 예제와 비공개 테스트는 모두 통과했으므로 보내지 않는다. `CodeReviewPromptIntegrationTest`는 정답 샘플 5개(`CodeReviewSamples`)를 실제 모델에 보내고 응답 원문과 `summary.tsv`(걸린 시간, 토큰, 복잡도, 기대한 `meetsIntended`, 정답 코드 검사 결과)를 `build/code-review-eval/`에 남긴다. 복잡도 추정, 개선점, 다음 개념은 사람이 읽고 평가한다.
+
+코드 리뷰를 저장할 때 다음 개념(`nextConcepts`)을 개념 태그와 맞춰 `ai_review_next_concepts`에 함께 저장한다(`ConceptTagMatcher`, 규칙은 [`docs/AI_FEATURES.md`](../docs/AI_FEATURES.md) 6절). 학습 리포트(#45)는 `NextConceptRepository.findRecent(userId, maxReviews)`로 사용자의 최근 리뷰 `maxReviews`개(1~100)가 권한 개념을 읽는다. 늦게 끝난 리뷰부터, 리뷰 안에서는 응답 순서다.
+
+```java
+List<NextConcept> concepts = nextConcepts.findRecent(userId, 20);
+// NextConcept(reviewId=12, submissionId=40, problemId=3, problemTitle="제곱수의 합", reviewedAt=…, ordinal=1,
+//             name="이진 탐색", reason="…", tag=Tag(id=5, slug="binary-search", name="이분 탐색"))
+// 맞는 태그가 없으면 tag는 null이고 name·reason은 원문 그대로다.
+```
+
+학습 리포트(F4) 프롬프트는 `src/main/resources/prompts/learning-report-<버전>/system.md`이고 `LearningReportPrompt`가 읽는다. 버전은 `LLM_PROMPT_VERSION_LEARNING_REPORT`(기본 `v1`)이다. 리포트에는 코드를 쓸 자리가 없어 정답 코드 검사와 `retry.md`가 없다. 입력(`LearningReportInput.of`)은 `LearningStatsRepository.find`의 통계, 추천 문제(`RecommendationRepository`의 순위·근거 태그에 문제 제목·난이도·풀이 여부를 붙인 것), `findRecent(userId, LearningReportInput.NEXT_CONCEPT_REVIEWS)`의 다음 개념이다. 응답 스키마는 입력마다 만들어(`LearningReportResult.schema`) 취약 개념·추천의 개수와 이름·순위를 묶는다. 리포트를 만들고 저장하는 흐름은 `LearningReportService`다(#85). 사용자당 하루(UTC) 1행이고(`LearningReportRepository`), 통계·추천을 저장한 뒤 `AiWorker`에 넣는다. 응답은 `alignedTo`로 순서를 맞추고 `ReportNumberCheck`로 문장 속 수치를 통계와 대조해 `learning_reports.content`에 저장한다. 대조 결과는 `report-number-check` 로그에 남는다. `LearningReportPromptIntegrationTest`는 더미 통계 3세트(`LearningReportSamples`)를 실제 모델에 `LLM_EVAL_RUNS`번(기본 1)씩 보내고 응답 원문과 `summary.tsv`(걸린 시간, 토큰, 순서, 입력에 없는 수치, 글 하나의 최대 수치 개수, 되풀이한 추천 이유 수)를 `build/learning-report-eval/`에 남긴다.

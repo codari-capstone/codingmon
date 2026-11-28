@@ -1,0 +1,440 @@
+import type { Language, SubmissionResult } from '@/api/types'
+
+/** 이 기능이 쓰는 모든 키의 앞머리. 로그아웃이 이걸로 골라 지운다. */
+const PREFIX = 'solve:'
+
+/**
+ * 로그아웃·탈퇴로 저장본을 지웠다고 다른 탭에 알리는 통로.
+ *
+ * 세션 종료 알림과 따로 둔다. 비밀번호 변경도 세션을 끝내지만 같은 사람이 바로 다시 로그인하므로
+ * 풀이 코드를 지우지 않는다(PasswordForm 주석).
+ */
+const clearChannel =
+  typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('codingmon-saved-code')
+
+/**
+ * 사용자·문제·언어별 임시 저장 키 (SOLVE-11).
+ *
+ * **사용자가 키에 들어가야 한다.** 없으면 공용 PC에서 A가 쓴 코드가 B의 에디터에 열리고,
+ * B가 한 글자만 쳐도 A의 저장본이 덮어써진다. 로그아웃은 react-query 캐시만 비우므로
+ * (useLogout) 저장소는 그 경로로 정리되지 않고, 세션이 조용히 끊긴 경우에는 로그아웃을
+ * 거치지도 않는다 — 지우는 것만으로는 부족하고 키가 갈려 있어야 한다.
+ *
+ * 언어도 키에 들어간다. 같은 문제를 Python으로 쓰다 C++로 바꿔도 각각 남아야 한다.
+ *
+ * sessionStorage에 둔다. 새로고침에는 남고 탭을 닫으면 사라진다. 화면을 떠날 때는
+ * `forgetProblemDrafts`가 지운다.
+ */
+export function savedCodeKey(userId: number, problemId: number, language: Language): string {
+  return `${PREFIX}${userId}:${problemId}:${language}`
+}
+
+/** 판정을 기다리는 제출 코드의 자리. 작성 중 코드와 달리 화면을 떠나도 지우지 않는다. */
+const HELD_PREFIX = `${PREFIX}held:`
+
+function heldKey(userId: number, problemId: number, language: Language): string {
+  return `${HELD_PREFIX}${userId}:${problemId}:${language}`
+}
+
+/**
+ * 보낸 코드 한 건. 언어마다 보낸 순서대로 목록으로 둔다.
+ *
+ * 제출 번호는 접수된 뒤에 안다. 번호가 없고 `sending`에도 없으면 응답을 영영 못 받은 코드다.
+ */
+interface HeldCode {
+  /** 요청 하나를 가리킨다. 코드가 같아도 요청은 다르다. */
+  token?: string
+  code: string
+  submissionId: number | null
+}
+
+/** 이 문서에서 접수 응답을 기다리는 요청. 문서가 바뀌면 응답을 받을 곳이 없어 메모리에 둔다. */
+const sending = new Set<string>()
+let requestCount = 0
+
+/** 문서가 내려가는 중이다. 이때 끊긴 요청은 접수 실패가 아니라 응답을 못 받은 것이다. */
+let documentLeaving = false
+
+/**
+ * 지금 화면에 보이는 에디터. 숨겨진 탭은 보이는 것이 아니다.
+ *
+ * `seen`은 **이 화면에서** 사용자가 본 요청이다. 떠났다 돌아오면 새로 센다. 같은 문제의 작성 중
+ * 코드가 있어도 그것이 이 요청을 고친 코드라는 보장은 없다.
+ */
+let onScreen: { key: string; draftKey: string; code: string | null; seen: Set<string> } | null =
+  null
+
+function isUnanswered(held: HeldCode): boolean {
+  return held.submissionId === null && !(held.token && sending.has(held.token))
+}
+
+/** 응답을 못 받은 코드 중 이 화면에서 본 것을 작성 중 코드로 넘긴다. 그 뒤로는 떠나면 지워진다. */
+function settleSeenCode(): void {
+  if (onScreen?.code == null) return
+  const { key, draftKey, code, seen } = onScreen
+  try {
+    const list = readHeld(key)
+    const kept = list.filter(
+      (held) =>
+        !isUnanswered(held) || !(held.code === code || (held.token && seen.has(held.token))),
+    )
+    if (kept.length === list.length) return
+    if (sessionStorage.getItem(draftKey) === null) sessionStorage.setItem(draftKey, code)
+    writeHeld(key, kept)
+  } catch {
+    // 저장소를 못 쓰는 브라우저에는 옮길 것도 없다.
+  }
+}
+
+function readHeld(key: string): HeldCode[] {
+  const raw = sessionStorage.getItem(key)
+  if (raw === null) return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    // 이전 버전은 한 건을 객체로 저장했다
+    const list = (Array.isArray(parsed) ? parsed : [parsed]) as (Partial<HeldCode> | null)[]
+    return list.flatMap((held) =>
+      typeof held?.code === 'string'
+        ? [{ token: held.token, code: held.code, submissionId: held.submissionId ?? null }]
+        : [],
+    )
+  } catch {
+    return []
+  }
+}
+
+function writeHeld(key: string, list: HeldCode[]): void {
+  if (list.length > 0) sessionStorage.setItem(key, JSON.stringify(list))
+  else sessionStorage.removeItem(key)
+}
+
+/**
+ * 저장된 코드. 없으면 null.
+ *
+ * `userId`가 없으면(세션을 아직 모르거나 비로그인) 읽지 않는다. 누구의 것인지 모르는
+ * 저장본을 여는 것이 바로 위 주석이 막으려는 유출이다.
+ *
+ * 사생활 보호 모드나 사이트 데이터가 막힌 브라우저에서는 접근 자체가 던진다 — 그때는
+ * 저장이 없던 것으로 보고 시작 코드로 연다 (theme.ts의 readStoredTheme과 같은 처리).
+ */
+export function readSavedCode(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+): string | null {
+  if (userId === undefined) return null
+  try {
+    return (
+      sessionStorage.getItem(savedCodeKey(userId, problemId, language)) ??
+      readHeld(heldKey(userId, problemId, language)).at(-1)?.code ??
+      null
+    )
+  } catch {
+    return null
+  }
+}
+
+/** 사용자가 쓰던 코드만. [다시 풀기]가 고른 제출보다 먼저 여는 것은 이쪽뿐이다. */
+export function readDraftCode(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+): string | null {
+  if (userId === undefined) return null
+  try {
+    return sessionStorage.getItem(savedCodeKey(userId, problemId, language))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * [다시 풀기]의 제출을 받지 못했을 때 열 코드. 쓰던 코드, 없으면 **그 제출의** 판정 대기 코드다.
+ * 다른 제출의 판정 대기 코드를 고른 제출인 것처럼 열지 않는다.
+ */
+export function readMissedRetryCode(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+  submissionId: number,
+): string | null {
+  const draft = readDraftCode(userId, problemId, language)
+  if (draft !== null || userId === undefined) return draft
+  try {
+    const list = readHeld(heldKey(userId, problemId, language))
+    return list.find((held) => held.submissionId === submissionId)?.code ?? null
+  } catch {
+    return null
+  }
+}
+
+export function storeSavedCode(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+  code: string,
+): void {
+  if (userId === undefined) return
+  try {
+    sessionStorage.setItem(savedCodeKey(userId, problemId, language), code)
+  } catch {
+    // 저장이 안 되면 이 방문에만 남는다. 화면은 그대로 동작한다. 용량이 찼을 때도
+    // 여기로 온다 — 다른 문제의 저장을 지우러 나서지 않는다. 지울 것을 고르는 규칙이
+    // 틀리면 사용자가 쓰던 코드를 우리가 지우는 셈이 된다.
+  }
+}
+
+/**
+ * 판정이 난 코드의 작성 중 저장본을 지운다. 판정이 난 제출은 제출 기록에서 코드를 볼 수 있다.
+ *
+ * 저장본이 낸 코드와 같을 때만 지운다. 채점을 기다리는 사이 더 친 글자는 제출 기록에 없어서
+ * 지우면 되찾을 수 없다. 같은 이유로 다른 언어의 저장본도 건드리지 않는다.
+ */
+export function forgetSubmittedCode(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+  submitted: string,
+): void {
+  if (userId === undefined) return
+  try {
+    const key = savedCodeKey(userId, problemId, language)
+    if (sessionStorage.getItem(key) === submitted) sessionStorage.removeItem(key)
+  } catch {
+    // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
+  }
+}
+
+/** 보낸 요청 하나의 결과를 알린다. 코드가 같은 다른 요청과 섞이지 않게 요청에 묶여 있다. */
+export interface HeldRequest {
+  /** 접수됐다. 번호를 적고, 그보다 앞서 접수된 항목을 치운다. 못 본 코드는 남긴다. */
+  accept: (submissionId: number) => void
+  /** 접수되지 않았다. */
+  release: () => void
+}
+
+const NO_REQUEST: HeldRequest = { accept: () => {}, release: () => {} }
+
+/**
+ * 보내는 코드를 판정이 날 때까지 잡아 둔다.
+ *
+ * 채점 불가로 끝난 제출은 제출 기록에 나오지 않아(계약 getMyProblemHistory) 여기 없으면 되찾을
+ * 길이 없다. 응답 전에 새로고침해도 남도록 보내기 전에 쓴다. 작성 중 코드와 자리가 달라,
+ * 풀이 화면을 다시 열었다 나가도 지워지지 않는다.
+ *
+ * 접수가 실패하면 그 코드는 서버에도 없다. 이 화면에서 본 코드면 작성 중 코드로 넘기고, 아니면
+ * 사용자가 실패를 못 본 것이라 다시 열어 볼 때까지 이 자리에 둔다(`showViewedCode`).
+ */
+export function keepUntilJudged(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+  code: string,
+): HeldRequest {
+  if (userId === undefined) return NO_REQUEST
+  const key = heldKey(userId, problemId, language)
+  try {
+    const token = `${Date.now()}-${++requestCount}`
+    writeHeld(key, [...readHeld(key), { token, code, submissionId: null }])
+    sending.add(token)
+    if (onScreen?.key === key && onScreen.code === code) onScreen.seen.add(token)
+    return {
+      accept: (submissionId) => {
+        sending.delete(token)
+        try {
+          const list = readHeld(key)
+          const index = list.findIndex((held) => held.token === token)
+          if (index < 0) return
+          writeHeld(
+            key,
+            list.flatMap((held, i) => {
+              if (i === index) return [{ code, submissionId }]
+              return i < index && held.submissionId !== null ? [] : [held]
+            }),
+          )
+          // 같은 코드의 작성 중 사본을 없앤다. 남으면 '쓰던 코드'로 보여 [다시 풀기]가 고른 제출을 가린다
+          forgetSubmittedCode(userId, problemId, language, code)
+        } catch {
+          // 저장이 막힌 브라우저에는 잡아 둔 코드도 없다.
+        }
+      },
+      release: () => {
+        sending.delete(token)
+        if (!documentLeaving) settleSeenCode()
+      },
+    }
+  } catch {
+    return NO_REQUEST
+  }
+}
+
+/** 에디터가 화면에 보이기 시작할 때 부른다. 돌려준 함수로 끝낸다. */
+export function openCodeView(
+  userId: number | undefined,
+  problemId: number,
+  language: Language,
+): () => void {
+  if (userId === undefined) return () => {}
+  const view = {
+    key: heldKey(userId, problemId, language),
+    draftKey: savedCodeKey(userId, problemId, language),
+    code: null,
+    seen: new Set<string>(),
+  }
+  onScreen = view
+  return () => {
+    if (onScreen === view) onScreen = null
+  }
+}
+
+/**
+ * 보이는 에디터의 코드가 정해지거나 바뀔 때 부른다.
+ *
+ * 응답을 못 받은 코드가 실제로 보이면 작성 중 코드로 옮긴다. 보이기 전에는 유일한 사본일 수 있어
+ * 어떤 정리로도 지우지 않는다. 응답을 기다리는 같은 코드는 본 것으로 적어 둔다.
+ */
+export function showViewedCode(code: string): void {
+  if (!onScreen) return
+  onScreen.code = code
+  try {
+    for (const held of readHeld(onScreen.key)) {
+      if (held.token && held.code === code && sending.has(held.token)) onScreen.seen.add(held.token)
+    }
+  } catch {
+    // 저장소를 못 읽는 브라우저에는 적을 것도 없다.
+  }
+  settleSeenCode()
+}
+
+/**
+ * 판정이 났으면 그 코드의 저장본을 지운다. 채점 중과 채점 불가는 남긴다.
+ *
+ * 판정 대기 코드는 **그 제출의 판정으로만** 지운다. 코드만 비교하면 기록에서 연 옛 제출이 같은
+ * 코드로 다시 낸 새 제출의 사본을 지운다. 응답을 영영 못 받아 번호가 없는 코드만 코드로 비교한다.
+ * 같은 코드가 판정됐으니 제출 기록에서 되찾을 수 있다.
+ */
+export function forgetJudgedCode(
+  userId: number | undefined,
+  result: Pick<SubmissionResult, 'id' | 'status' | 'problemId' | 'language' | 'sourceCode'>,
+): void {
+  if (result.status !== 'COMPLETED' || typeof result.sourceCode !== 'string') return
+  forgetSubmittedCode(userId, result.problemId, result.language, result.sourceCode)
+  if (userId === undefined) return
+  try {
+    const key = heldKey(userId, result.problemId, result.language)
+    const list = readHeld(key)
+    writeHeld(
+      key,
+      list.filter(
+        (held) =>
+          held.submissionId !== result.id &&
+          !(isUnanswered(held) && held.code === result.sourceCode),
+      ),
+    )
+  } catch {
+    // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
+  }
+}
+
+/**
+ * 저장된 코드를 전부 지운다. 로그아웃이 부른다.
+ *
+ * 키에 사용자가 들어가 있어 B가 A의 코드를 볼 일은 없지만, 로그아웃은 "이 사람의
+ * 데이터를 전부 잊는다"는 뜻이다(useLogout 주석). 공용 컴퓨터에서 로그아웃한 사람의
+ * 코드가 디스크에 남아 있으면 그 약속이 사실이 아니게 된다.
+ *
+ * localStorage도 함께 지운다. 예전 버전이 그쪽에 저장해 둔 코드가 디스크에 남아 있을 수 있다.
+ * 저장소가 탭마다 따로라 다른 탭에도 지우라고 알린다.
+ */
+export function clearSavedCode(): void {
+  clearThisTab()
+  clearChannel?.postMessage('clear')
+}
+
+function clearThisTab(): void {
+  try {
+    removeKeys(sessionStorage, PREFIX)
+    removeKeys(localStorage, PREFIX)
+  } catch {
+    // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
+  }
+}
+
+/**
+ * 풀이 화면을 떠날 때 그 문제의 작성 중 코드를 모든 언어에서 지운다 (SOLVE-11).
+ *
+ * 보낸 코드는 판정 대기 자리에 따로 있어 여기서 지워지지 않는다.
+ */
+export function forgetProblemDrafts(userId: number | undefined, problemId: number): void {
+  if (userId === undefined) return
+  try {
+    removeKeys(sessionStorage, `${PREFIX}${userId}:${problemId}:`)
+  } catch {
+    // 저장소를 못 읽는 브라우저에는 지울 것도 없다.
+  }
+}
+
+/**
+ * 문서를 새로 불러왔을 때 저장본을 정리한다.
+ *
+ * 주소창으로 옮기면 React cleanup이 돌지 않으므로 다음 문서가 '화면을 떠남'을 대신 처리한다.
+ * 새로고침과 뒤로 가기는 그대로 두고, GitHub 로그인 복귀는 세션이 끊겨 다녀온 길이라 남긴다.
+ * 예전 버전의 localStorage 저장본은 새로고침일 때만 옮기고 어느 경우든 지운다.
+ * 판정 대기 코드는 여기서 건드리지 않는다. 응답을 못 받은 코드도 다시 열어 볼 때까지 남긴다.
+ */
+export function settleSavedCodeOnLoad(navigationType: string | undefined, pathname: string): void {
+  try {
+    if (navigationType === 'reload') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (!key?.startsWith(PREFIX) || sessionStorage.getItem(key) !== null) continue
+        sessionStorage.setItem(key, localStorage.getItem(key) ?? '')
+      }
+    }
+    removeKeys(localStorage, PREFIX)
+    if (navigationType === 'navigate' && pathname !== '/login/github') {
+      removeKeys(sessionStorage, PREFIX, (key) => !key.startsWith(HELD_PREFIX))
+    }
+    sending.clear()
+  } catch {
+    // 저장소를 못 읽는 브라우저에는 정리할 것도 없다.
+  }
+}
+
+/**
+ * 앱이 시작될 때 한 번 부른다(main.tsx).
+ *
+ * 저장소가 탭마다 따로라, 다른 탭의 로그아웃·탈퇴 알림을 받아 이 탭의 코드도 지운다(MY-04).
+ * 받은 탭은 다시 알리지 않는다(서로 알리면 고리가 된다).
+ */
+export function startSavedCodeSync(): void {
+  const entry = performance.getEntriesByType('navigation')[0] as
+    PerformanceNavigationTiming | undefined
+  settleSavedCodeOnLoad(entry?.type, window.location.pathname)
+  clearChannel?.addEventListener('message', (event: MessageEvent) => {
+    if (event.data === 'clear') clearThisTab()
+  })
+  window.addEventListener('pagehide', () => {
+    documentLeaving = true
+  })
+  // 뒤로 가기 캐시에서 살아 돌아온 문서는 다시 정상 동작한다
+  window.addEventListener('pageshow', () => {
+    documentLeaving = false
+    // React는 다시 마운트되지 않는다. 내려가 있는 동안 실패한 요청을 여기서 정리한다
+    settleSeenCode()
+  })
+}
+
+/** 지우기 전에 키를 다 모은다. 지우면서 순회하면 인덱스가 밀려 건너뛰는 키가 생긴다. */
+function removeKeys(
+  storage: Storage,
+  prefix: string,
+  matches: (key: string) => boolean = () => true,
+): void {
+  const keys: string[] = []
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i)
+    if (key?.startsWith(prefix) && matches(key)) keys.push(key)
+  }
+  for (const key of keys) storage.removeItem(key)
+}

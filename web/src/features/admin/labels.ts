@@ -1,0 +1,228 @@
+import type {
+  AdminUserDetail,
+  ProblemVersionStatus,
+  PublishCondition,
+  ReportStatus,
+  SolutionStatus,
+  Subscription,
+} from '@/api/types'
+import type { BadgeTone } from '@/components/ui/badge'
+import { CYCLE_NAME } from '@/features/pricing/plans'
+import { fromBillingCycle } from '@/features/subscription/subscriptionQuery'
+
+/**
+ * 요금제 이름 (ADM-14·15). 결제 실패는 계약(`Subscription.cycle`)대로 실패한 갱신 결제의 주기를 남겨
+ * '프로 월간'이다(옆에 [결제 실패] 배지). 구독이 없으면 '무료'
+ */
+export function planName({ plan, status, cycle }: Subscription) {
+  return cycle && (plan === 'PRO' || status === 'PAYMENT_FAILED')
+    ? `프로 ${CYCLE_NAME[fromBillingCycle(cycle)]}`
+    : '무료'
+}
+
+// 정지(ADM-16)할 때 서버(Subscriptions.onSuspend)는 구독 상태만 해지 예정으로 바꾸고, 이미 보낸 갱신 결제는 그대로 둔다.
+// 그래서 결과를 모르는 갱신 결제가 있으면 '다음 결제가 나가지 않는다'고 단정하지 않는다(MY-06 해지 창과 같다)
+
+/** 정지 확인 창에 덧붙일 구독 안내. 진행 중인 구독만 바뀐다 */
+export function suspendNote(s: Subscription) {
+  if (s.status !== 'ACTIVE') return ''
+  return s.paymentPending
+    ? ' 프로 구독은 해지 예정으로 바뀌어요. 결과를 확인하고 있는 갱신 결제는 그대로라, 결제되면 그 기간까지 프로로 써요.'
+    : ' 프로 구독은 해지 예정으로 바뀌어 다음 결제가 나가지 않아요.'
+}
+
+/** 정지 배너에 덧붙일 구독 안내. 정지 전에 회원이 해지해 둔 경우도 있어 '바뀌어'라고 하지 않는다 */
+export function suspendedNote(s: Subscription) {
+  if (s.status !== 'CANCEL_SCHEDULED') return ''
+  return s.paymentPending
+    ? ' 프로 구독은 해지 예정이에요. 결과를 확인하고 있는 갱신 결제가 결제되면 그 기간까지 프로로 써요.'
+    : ' 프로 구독은 해지 예정이라 다음 결제가 나가지 않아요.'
+}
+
+/** 구독 상태 배지 (ADM-15). 구독 화면(MY-06)과 같은 말이다 */
+export const SUBSCRIPTION_STATUS: Record<
+  Subscription['status'],
+  { label: string; tone: BadgeTone }
+> = {
+  NONE: { label: '무료', tone: 'neutral' },
+  ACTIVE: { label: '진행 중', tone: 'success' },
+  CANCEL_SCHEDULED: { label: '해지 예정', tone: 'warning' },
+  PAYMENT_FAILED: { label: '결제 실패', tone: 'danger' },
+}
+
+/** 결제 기록 한 건의 결과 배지 (ADM-15, 결제-구독-화면 문서의 결제 상태 표시) */
+export const PAYMENT_STATUS: Record<
+  AdminUserDetail['payments'][number]['status'],
+  { label: string; tone: BadgeTone }
+> = {
+  PAID: { label: '결제 완료', tone: 'success' },
+  FAILED: { label: '실패', tone: 'danger' },
+  CANCELLED: { label: '취소', tone: 'neutral' },
+  PENDING: { label: '결과 모름', tone: 'info' },
+}
+
+/** 버전 하나의 상태. 기능명세 ADM-01의 '작성 중·검증 중·공개' 문구를 쓴다. */
+export const VERSION_STATUS_LABEL: Record<ProblemVersionStatus, string> = {
+  DRAFT: '작성 중',
+  VALIDATING: '검증 중',
+  PUBLISHED: '공개',
+  RETIRED: '비공개',
+}
+
+/**
+ * 목록에 보여 줄 문제 상태 (ADM-01).
+ *
+ * **상태가 둘일 수 있다.** 공개 중인 버전을 두고 그 위에 새 초안을 쓰는 중이면, 사용자는
+ * 옛 버전을 풀고 관리자는 새 버전을 고치고 있다. 둘 중 하나만 보여 주면 "공개했는데 왜
+ * 수정이 안 보이나" 또는 "작성 중인데 왜 사용자에게 보이나"가 된다. 계약이 이 합성을
+ * 화면 몫으로 정하고 예시까지 적어 뒀다 — `DRAFT` + `publishedVersionNo`가 2면
+ * "공개 v2 · 수정 중".
+ *
+ * 그래서 `DRAFT`의 문구가 두 가지다. 공개된 버전이 없으면 처음 쓰는 것이라 '작성 중',
+ * 있으면 이미 있는 것을 고치는 것이라 '수정 중'이다.
+ */
+export function problemStateLabel(
+  latestStatus: ProblemVersionStatus,
+  publishedVersionNo: number | null,
+): string {
+  // 최신 버전이 공개 중이면 더 얹을 작업이 없다. publishedVersionNo는 같은 번호다.
+  if (latestStatus === 'PUBLISHED') return VERSION_STATUS_LABEL.PUBLISHED
+
+  if (publishedVersionNo === null) return VERSION_STATUS_LABEL[latestStatus]
+
+  const work = latestStatus === 'DRAFT' ? '수정 중' : VERSION_STATUS_LABEL[latestStatus]
+  return `공개 v${publishedVersionNo} · ${work}`
+}
+
+/**
+ * 문제 상태 배지의 색 (디자인 AdminProblems). 공개 초록, 작성 중 회색, 검증 중 파랑, 비공개 테두리.
+ * 공개된 버전 위에서 작업 중이면 둘이 겹친 상태라 브랜드색으로 따로 보인다(problemStateLabel과 같은 갈래).
+ */
+export function problemStateTone(
+  latestStatus: ProblemVersionStatus,
+  publishedVersionNo: number | null,
+): BadgeTone {
+  if (latestStatus === 'PUBLISHED') return 'success'
+  if (publishedVersionNo !== null) return 'brand'
+  return WORK_TONE[latestStatus]
+}
+
+const WORK_TONE = {
+  DRAFT: 'neutral',
+  VALIDATING: 'info',
+  RETIRED: 'outline',
+} as const satisfies Record<Exclude<ProblemVersionStatus, 'PUBLISHED'>, BadgeTone>
+
+/**
+ * 저장이 어느 버전에 들어갔는지 알리는 문구 (ADM-07).
+ *
+ * **이 문구가 필요한 까닭이 정책이 바뀌었기 때문이다.** 모든 수정이 새 버전을 만들지
+ * 않는다 — 글만 고치면 최신 버전을 그 자리에서 고치고, 그 버전이 공개 중이면 **사용자
+ * 화면에 바로 반영된다**(#33). 관리자가 그걸 모르고 공개된 지문을 고치면 안 되므로,
+ * 저장 응답의 `versionNo`·`status`로 어느 경우였는지 알려 준다.
+ */
+export function savedVersionNotice(
+  saved: { versionNo: number; status: ProblemVersionStatus },
+  /** 저장 전 상태. 새로 만든 문제면 null이다. */
+  before: { latestVersionNo: number; publishedVersionNo: number | null } | null,
+): string {
+  if (before === null) return `문제를 만들었어요. 초안 v${saved.versionNo}입니다`
+
+  if (saved.status === 'PUBLISHED') {
+    return `공개 중인 v${saved.versionNo}에 바로 반영했어요. 사용자 화면에 지금 보여요`
+  }
+
+  if (saved.versionNo > before.latestVersionNo) {
+    const published = before.publishedVersionNo
+    const made = `채점 기준이 바뀌어 새 초안 v${saved.versionNo}을 만들었어요`
+    return published === null ? made : `${made}. 공개하기 전까지 사용자는 v${published}를 풀어요`
+  }
+
+  // 내렸던 버전을 그 자리에서 고친 경우다. '초안'이라고 하면 없는 초안이 있는 것처럼
+  // 알리게 된다 — 공개를 내린 버전이라 사용자에게는 보이지 않는다.
+  if (saved.status === 'RETIRED') {
+    return `비공개 상태인 v${saved.versionNo}에 저장했어요. 사용자에게는 보이지 않아요`
+  }
+
+  return `초안 v${saved.versionNo}에 저장했어요`
+}
+
+/**
+ * 정답 코드 하나의 검증 상태 (ADM-05).
+ *
+ * `JUDGE_ERROR`를 '검증 실패'로 적지 않는다. 계약이 "채점이 실패해도(채점 불가)"를 따로
+ * 둔 것은 코드가 틀린 게 아니라 채점 서버가 못 돌린 경우라서다 — '실패'로 적으면 멀쩡한
+ * 코드를 뜯어보게 된다.
+ */
+export const SOLUTION_STATUS_LABEL: Record<SolutionStatus, string> = {
+  NOT_VALIDATED: '검증 전',
+  VALIDATING: '검증 중',
+  PASSED: '검증 통과',
+  FAILED: '검증 실패',
+  JUDGE_ERROR: '채점 불가',
+}
+
+/**
+ * 못 채운 공개 조건을 사람 말로 (ADM-06).
+ *
+ * 조건은 **서버가 세고 화면은 받아 적는다**(상세의 `unmetConditions`, 공개 거절 409의
+ * `unmetConditions`). 그래서 여기에는 수치를 다시 적지 않는다 — 계약이 "2개 이상"을
+ * 바꾸는 날 화면 문구와 실제 판정이 갈라진다. 무엇을 해야 하는지만 적는다.
+ *
+ * `tab`은 그 조건을 고칠 수 있는 탭이다. 조건만 보여 주고 고칠 곳을 알려 주지 않으면
+ * 관리자가 네 탭을 뒤져야 한다.
+ */
+export const PUBLISH_CONDITION_LABEL: Record<
+  PublishCondition,
+  { text: string; tab: 'basic' | 'statement' | 'cases' | 'solutions'; tabLabel: string }
+> = {
+  SAMPLE_COUNT: { text: '공개 예제가 모자라요', tab: 'cases', tabLabel: '테스트케이스' },
+  HIDDEN_COUNT: { text: '비공개 테스트케이스가 모자라요', tab: 'cases', tabLabel: '테스트케이스' },
+  TAG_COUNT: { text: '개념 태그를 1~3개 골라 주세요', tab: 'basic', tabLabel: '기본 정보' },
+  SOURCE: { text: '출처를 입력해 주세요', tab: 'basic', tabLabel: '기본 정보' },
+  LANGUAGES: { text: 'Python·C++ 제한을 둘 다 설정해 주세요', tab: 'statement', tabLabel: '지문' },
+  SOLUTIONS_VERIFIED: {
+    text: 'Python·C++ 정답 코드가 둘 다 검증을 통과해야 해요',
+    tab: 'solutions',
+    tabLabel: '정답 코드',
+  },
+}
+
+/** 신고 상태 (ADM-13). 시안 AdminReports의 문구다 */
+export const REPORT_STATUS_LABEL: Record<ReportStatus, string> = {
+  RECEIVED: '접수',
+  IN_PROGRESS: '확인 중',
+  RESOLVED: '처리 완료',
+  REJECTED: '반려',
+  PROBLEM_DELETED: '문제 삭제됨',
+}
+
+/** 신고 상태 배지의 색 (시안 AdminReports). 처리할 것일수록 눈에 띈다 */
+export const REPORT_STATUS_TONE: Record<ReportStatus, BadgeTone> = {
+  RECEIVED: 'danger',
+  IN_PROGRESS: 'warning',
+  RESOLVED: 'success',
+  REJECTED: 'neutral',
+  PROBLEM_DELETED: 'outline',
+}
+
+/** 신고 상세의 상태 고르기 설명 (시안 AdminReportDetail) */
+export const REPORT_STATUS_HINT: Record<Exclude<ReportStatus, 'PROBLEM_DELETED'>, string> = {
+  RECEIVED: '아직 보지 않음',
+  IN_PROGRESS: '살펴보는 중',
+  RESOLVED: '문제를 고쳤어요',
+  REJECTED: '고칠 게 없어요',
+}
+
+/** 처리 안 한 신고. 메뉴 숫자와 목록 머리가 센다(계약 listAdminReports) */
+export const UNRESOLVED_REPORT_STATUSES: ReportStatus[] = ['RECEIVED', 'IN_PROGRESS']
+
+// en-CA는 2026-11-03 모양이다(시안). 받은 시각은 UTC라 한국 날짜로 바꾼다
+const KST_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' })
+
+/** 회원 가입일 (ADM-14·15). 기록하기 전에 가입한 회원은 null이고 '—'로 보인다(계약) */
+export function formatJoinedOn(iso: string | null) {
+  if (iso === null) return '—'
+  const at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? '—' : KST_DATE.format(at)
+}

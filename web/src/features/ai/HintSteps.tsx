@@ -1,0 +1,179 @@
+import { useIsMutating } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
+
+import type { SubmissionAnalysis } from '@/api/types'
+import { Button } from '@/components/ui/button'
+import { HintBox } from '@/components/ui/hint-box'
+import { Stepper } from '@/components/ui/stepper'
+import { problemCode, problemMessage } from '@/features/auth/problemCode'
+import type { RetryState } from '@/features/solve/solvePath'
+import { hintPlanLocked, revealHintKey, useRevealHint } from './analysisQuery'
+
+/** 단계 이름 (AI_FEATURES 4절). 순서가 곧 단계다. 힌트 상자와 버튼에 쓴다 */
+const HINT_STEPS = ['관찰', '방향', '원리'] as const
+
+/**
+ * 단계 표시(Stepper) 아래 글자. 처음 보는 사람이 순서를 바로 알도록 이름 대신 번호로 적는다(#327).
+ * 원 안 번호와 겹쳐 보이지만 의도한 모양이다 — 뜻(관찰·방향·원리)은 아래 힌트 상자가 알려 준다
+ */
+const STEPPER_LABELS = HINT_STEPS.map((_, index) => ({ label: `${index + 1}단계` }))
+
+/**
+ * 단계별 힌트 (AI-04)와 다시 제출하러 가는 길.
+ *
+ * 연 단계는 힌트 상자로, 다음 단계는 버튼 하나로, 진행은 단계 표시로 보인다. 서버가 연
+ * 단계까지만 힌트를 주므로(계약) 화면이 미리 받아 둔 글은 없다.
+ *
+ * 버튼을 누르면 새 힌트가 버튼 위에 열린다. 포커스가 버튼에 남아 있으면 무엇이 열렸는지 모르므로
+ * 방금 연 힌트로 옮긴다 — 키보드·스크린 리더 사용자가 무엇이 열렸는지 바로 읽는다.
+ */
+export function HintSteps({
+  submissionId,
+  analysis,
+  retryPath,
+  retryState,
+}: {
+  submissionId: number
+  analysis: SubmissionAnalysis
+  /**
+   * 다시 풀기와 같은 주소 (solvePath). 풀이 화면은 이미 고치는 자리라 넘기지 않는다 — 없으면
+   * [코드 고치러 가기]를 그리지 않고, 화면을 떠나는 링크는 새 탭으로 연다.
+   */
+  retryPath?: string
+  /** 풀이 화면에 넘길 제출 번호. 힌트를 보고 그 코드를 고치러 간다. */
+  retryState?: RetryState
+}) {
+  const reveal = useRevealHint(submissionId)
+  // 화면 폭이 바뀌면 이 부품이 다시 마운트돼 reveal은 보낸 요청을 모른다. 같은 요청을 또 보내지 않게
+  // 캐시에서 센다
+  const revealing = useIsMutating({ mutationKey: revealHintKey(submissionId) }) > 0
+  // 단계는 셋뿐이다(계약: 길이 = revealedHintLevel ≤ 3). 넘쳐 와도 이름 없는 단계를 그리지 않는다
+  const hints = analysis.hints.slice(0, HINT_STEPS.length)
+  const revealed = hints.length
+  const next = revealed + 1
+  const planLocked = hintPlanLocked(analysis)
+
+  /*
+    응답을 기다리는 사이 다른 곳으로 옮겼으면 포커스를 뺏지 않는다. 풀이 화면은 바로 옆에 에디터가 있어,
+    누르고 에디터로 돌아가 치던 글자가 힌트 문단으로 사라진다. 누른 버튼에 그대로 있거나, 버튼이 비활성·사라져
+    body로 떨어졌을 때만 옮긴다.
+  */
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const focusUnlessMoved = (target: HTMLElement | null) => {
+    const active = document.activeElement
+    if (active === null || active === document.body || active === buttonRef.current) target?.focus()
+  }
+
+  const [justOpened, setJustOpened] = useState<number | null>(null)
+  const openedRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    if (justOpened !== null && justOpened <= revealed) focusUnlessMoved(openedRef.current)
+  }, [justOpened, revealed])
+
+  // 누른 버튼이 403으로 잠금 안내로 바뀌면 포커스가 body로 떨어진다. 안내로 옮겨 무슨 일인지 읽게 한다(#377 리뷰)
+  const [lockedByClick, setLockedByClick] = useState(false)
+  const lockRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    if (lockedByClick && planLocked) focusUnlessMoved(lockRef.current)
+  }, [lockedByClick, planLocked])
+
+  return (
+    <section aria-labelledby="hints-heading" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 id="hints-heading" className="text-muted-foreground text-sm font-semibold">
+          단계별 힌트
+        </h3>
+        {/* 다 열면 current가 3이라 세 단계 모두 완료로 보인다 */}
+        <Stepper steps={STEPPER_LABELS} current={revealed} className="w-[300px] max-w-full" />
+      </div>
+
+      {/* 연 단계만 글로 보인다. 서버가 연 단계까지만 힌트를 준다(계약) */}
+      {revealed > 0 ? (
+        <ol className="m-0 flex list-none flex-col gap-3 p-0">
+          {hints.map((hint, index) => {
+            const level = index + 1
+            return (
+              <li key={level}>
+                <HintBox step={`힌트 ${level} · ${HINT_STEPS[index]}`}>
+                  <p
+                    ref={level === justOpened ? openedRef : undefined}
+                    tabIndex={-1}
+                    className="whitespace-pre-wrap outline-none [overflow-wrap:anywhere]"
+                  >
+                    {hint}
+                  </p>
+                </HintBox>
+              </li>
+            )
+          })}
+        </ol>
+      ) : null}
+
+      {/* 다음 단계 하나만 누를 수 있다. 그 뒤 단계는 위 단계 표시가 보여 준다 */}
+      {planLocked ? (
+        <div className="bg-muted flex flex-wrap items-center justify-between gap-3 rounded-lg px-4 py-3">
+          <p ref={lockRef} tabIndex={-1} className="text-sm break-keep outline-none">
+            다음 단계 힌트는 프로에서 열 수 있어요
+          </p>
+          <Button asChild variant="soft" size="sm" className="min-h-11">
+            {retryPath ? (
+              <Link to="/pricing">프로 시작하기</Link>
+            ) : (
+              // 풀이 화면이다. 떠나면 고치던 코드를 지우므로(SOLVE-11) 새 탭으로 연다
+              <Link to="/pricing" target="_blank" rel="noreferrer">
+                프로 시작하기<span className="sr-only"> (새 탭)</span>
+              </Link>
+            )}
+          </Button>
+        </div>
+      ) : next <= HINT_STEPS.length ? (
+        <Button
+          type="button"
+          variant="soft"
+          fullWidth
+          className="min-h-11"
+          ref={buttonRef}
+          disabled={revealing}
+          aria-describedby="hint-order"
+          onClick={() =>
+            reveal.mutate(next, {
+              onSuccess: () => setJustOpened(next),
+              onError: (error) => setLockedByClick(problemCode(error) === 'HINT_PLAN_REQUIRED'),
+            })
+          }
+        >
+          {`${next}단계 ${HINT_STEPS[next - 1]} 보기`}
+        </Button>
+      ) : null}
+
+      {revealed < HINT_STEPS.length ? (
+        <p id="hint-order" className="text-muted-foreground text-[13px]">
+          힌트는 앞 단계부터 하나씩 열 수 있어요. 연 단계는 기록에 남아요.
+        </p>
+      ) : (
+        // 3단계가 마지막이다(AI_FEATURES 4절). 정답 코드 보기는 없다.
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          3단계가 마지막 힌트예요. 코드를 고쳐 다시 제출하고, 그래도 틀리면 새로 AI 분석을 받아
+          보세요.
+        </p>
+      )}
+
+      {/* 잠금 안내가 403의 뜻을 대신한다. 잠금이 풀린 뒤(다른 탭에서 결제)에도 지난 403을 다시 띄우지 않는다(#377 리뷰) */}
+      {reveal.isError && !planLocked && problemCode(reveal.error) !== 'HINT_PLAN_REQUIRED' ? (
+        <p role="alert" className="text-destructive-text text-sm">
+          {problemMessage(reveal.error)}
+        </p>
+      ) : null}
+
+      {/* 패널의 주 동작이다. 힌트를 보고 고치러 가는 것이 이 화면의 마지막 걸음이다 */}
+      {retryPath ? (
+        <Button asChild size="lg" fullWidth className="mt-2">
+          <Link to={retryPath} state={retryState}>
+            코드 고치러 가기
+          </Link>
+        </Button>
+      ) : null}
+    </section>
+  )
+}

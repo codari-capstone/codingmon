@@ -1,0 +1,173 @@
+package com.codingmon.api.auth;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.HexFormat;
+import java.util.UUID;
+
+import jakarta.persistence.EntityManager;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.ErrorResponseException;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.codingmon.api.user.User;
+import com.codingmon.api.user.UserRepository;
+
+@Service
+public class AuthTokenService {
+
+    static final Duration ACCESS_TOKEN_TTL = Duration.ofMinutes(30);
+    static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(7);
+    // 정지된 계정의 로그인 거절 code. GitHub 콜백은 이 code로 결과 주소를 suspended로 바꾼다.
+    static final String SUSPENDED = "ACCOUNT_SUSPENDED";
+    // 여러 탭이 같은 refresh token으로 동시에 갱신해도 탈취로 보지 않는 시간
+    static final Duration REUSE_GRACE = Duration.ofSeconds(10);
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private final JwtEncoder jwtEncoder;
+    private final RefreshTokenRepository refreshTokens;
+    private final UserRepository users;
+    private final EntityManager entityManager;
+
+    AuthTokenService(JwtEncoder jwtEncoder, RefreshTokenRepository refreshTokens, UserRepository users,
+            EntityManager entityManager) {
+        this.jwtEncoder = jwtEncoder;
+        this.refreshTokens = refreshTokens;
+        this.users = users;
+        this.entityManager = entityManager;
+    }
+
+    public record IssuedTokens(String accessToken, String refreshToken) {
+    }
+
+    /** 로그인에 성공한 사용자에게 새 토큰 묶음을 발급한다. */
+    // 비밀번호를 비교하는 사이 재설정됐으면 token_version이 달라 발급하지 않는다(401).
+    // 재설정과 같은 사용자 행을 잠가, 먼저 발급된 토큰은 재설정의 폐기에 함께 걸린다.
+    @Transactional
+    public IssuedTokens issue(User user) {
+        // 부른 쪽이 같은 요청에서 이미 읽은 User면 JPA가 같은 객체를 돌려주므로, 잠근 뒤 refresh로 DB 값을 다시 읽는다.
+        // 그래야 잠금을 기다리는 사이 커밋된 재설정·정지를 본다. user와 current가 같은 객체일 수 있어 비교할 값은 먼저 담는다.
+        int expectedVersion = user.getTokenVersion();
+        User current = users.findForUpdateById(user.getId()).orElseThrow();
+        entityManager.refresh(current);
+        if (current.getTokenVersion() != expectedVersion) {
+            throw unauthorized();
+        }
+        // 모든 로그인(이메일·GitHub)이 여기서 토큰을 받으므로 정지 검사를 한곳에 둔다(ADM-16).
+        // 행을 잠그고 다시 읽은 뒤라 같은 순간의 정지와 차례로 실행된다. 정지가 뒤면 정지가 token_version을 올리고 refresh token을 폐기한다.
+        if (current.getSuspendedAt() != null) {
+            throw AuthErrors.error(HttpStatus.FORBIDDEN, SUSPENDED, "계정이 정지되었습니다");
+        }
+        return new IssuedTokens(accessToken(current), saveRefreshToken(current.getId(), UUID.randomUUID()).raw());
+    }
+
+    // 실패해도 묶음 폐기는 남겨야 하므로 예외로 롤백하지 않는다.
+    @Transactional(noRollbackFor = ResponseStatusException.class)
+    public IssuedTokens refresh(String rawRefreshToken) {
+        Instant now = Instant.now();
+        String tokenHash = hash(rawRefreshToken);
+        Long userId = refreshTokens.findUserIdByTokenHash(tokenHash).orElseThrow(AuthTokenService::unauthorized);
+        // 같은 사용자의 갱신을 한 번에 하나씩 처리한다. 묶음 폐기 중에 새 토큰이 생겨 폐기에서 빠지지 않게 한다.
+        // 탈퇴하면 토큰 행도 함께 지워지므로 사용자는 항상 있다.
+        User user = users.findForUpdateById(userId).orElseThrow(AuthTokenService::unauthorized);
+        entityManager.refresh(user);
+        // 정지할 때 refresh token을 모두 폐기하지만, 그와 겹쳐 발급된 토큰이 남아도 여기서 막는다(ADM-16).
+        // 401이라 화면은 로그인 화면으로 가고, 다시 로그인하면 issue가 403 ACCOUNT_SUSPENDED를 준다.
+        if (user.getSuspendedAt() != null) {
+            throw unauthorized();
+        }
+        RefreshToken current = refreshTokens.findByTokenHash(tokenHash).orElseThrow(AuthTokenService::unauthorized);
+        if (current.isReplaced()) {
+            // 방금 교체된 토큰이면 다른 탭의 동시 요청으로 보고 401만 준다. 프런트는 새 쿠키로 한 번 다시 시도한다.
+            // 그보다 오래된 토큰이 다시 왔다면 탈취로 보고 같은 묶음을 모두 폐기한다.
+            if (current.isReplacedBefore(now.minus(REUSE_GRACE))) {
+                refreshTokens.revokeFamily(current.getFamilyId(), now);
+            }
+            throw unauthorized();
+        }
+        if (current.isRevoked() || current.isExpired(now)) {
+            throw unauthorized();
+        }
+        NewRefreshToken next = saveRefreshToken(user.getId(), current.getFamilyId());
+        current.replaceWith(next.token(), now);
+        return new IssuedTokens(accessToken(user), next.raw());
+    }
+
+    // 이 기기의 로그인만 끝낸다(COM-03). 모르는 토큰이면 할 일이 없다.
+    @Transactional
+    public void logout(String rawRefreshToken) {
+        String tokenHash = hash(rawRefreshToken);
+        refreshTokens.findUserIdByTokenHash(tokenHash).ifPresent(userId -> {
+            // 갱신과 마찬가지로 사용자 행을 잠근 뒤 묶음을 폐기한다.
+            users.findForUpdateById(userId);
+            refreshTokens.findByTokenHash(tokenHash)
+                    .ifPresent(token -> refreshTokens.revokeFamily(token.getFamilyId(), Instant.now()));
+        });
+    }
+
+    // 만료된 토큰은 어차피 거절되므로 매일 새벽에 행만 지운다.
+    @Scheduled(cron = "0 0 4 * * *")
+    @Transactional
+    public void deleteExpiredRefreshTokens() {
+        refreshTokens.deleteExpired(Instant.now());
+    }
+
+    private String accessToken(User user) {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .subject(user.getId().toString())
+                .issuedAt(now)
+                .expiresAt(now.plus(ACCESS_TOKEN_TTL))
+                .claim(JwtConfig.ROLE_CLAIM, user.getRole().name())
+                .claim(JwtConfig.TOKEN_VERSION_CLAIM, user.getTokenVersion())
+                .build();
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+    }
+
+    private record NewRefreshToken(RefreshToken token, String raw) {
+    }
+
+    private NewRefreshToken saveRefreshToken(Long userId, UUID familyId) {
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        RefreshToken token = refreshTokens.save(
+                new RefreshToken(userId, hash(raw), familyId, Instant.now().plus(REFRESH_TOKEN_TTL)));
+        return new NewRefreshToken(token, raw);
+    }
+
+    // 원문은 저장하지 않는다. 무작위 32바이트라 솔트 없는 SHA-256으로 충분하다.
+    private static String hash(String raw) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static ResponseStatusException unauthorized() {
+        return new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+    }
+
+    static boolean isSuspended(RuntimeException e) {
+        return e instanceof ErrorResponseException error && error.getBody().getProperties() != null
+                && SUSPENDED.equals(error.getBody().getProperties().get("code"));
+    }
+}

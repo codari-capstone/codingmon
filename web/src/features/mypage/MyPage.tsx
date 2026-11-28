@@ -1,0 +1,297 @@
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
+
+import type { CurrentUser, UserActivity } from '@/api/types'
+import { ErrorState } from '@/components/ErrorState'
+import { ListSkeleton } from '@/components/ListSkeleton'
+import { Avatar } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
+import { Select } from '@/components/ui/select'
+import { StatCard } from '@/components/ui/stat-card'
+import { forgetSessionIfUnauthorized } from '@/features/auth/session'
+import { useAuth } from '@/features/auth/useAuth'
+import { DIFFICULTY_LABEL } from '@/features/problems/labels'
+import { cn } from '@/lib/utils'
+import { buildWeeks, grassLevel, monthLabels } from './grass'
+import { MY_CARD as CARD, MyLayout } from './MyLayout'
+import { activityQuery, FIRST_ACTIVITY_YEAR } from './myPageQuery'
+
+const LOGIN_METHOD_LABEL: Record<CurrentUser['loginMethod'], string> = {
+  EMAIL: '이메일',
+  GITHUB: 'GitHub',
+}
+
+/** 계정 정보 (MY-01). `/api/users/me`는 헤더가 이미 받아 둔 값이라 따로 부르지 않는다. */
+function AccountInfo({ user }: { user: CurrentUser }) {
+  return (
+    <section aria-label="계정 정보" className={cn(CARD, 'flex-row flex-wrap items-center gap-5')}>
+      <Avatar src={user.avatarUrl ?? undefined} name={user.nickname} size={64} />
+      <div className="flex min-w-[200px] flex-1 flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <p className="text-foreground text-[22px] font-bold tracking-[-0.02em]">
+            {user.nickname}
+          </p>
+          {/*
+            세 값은 계약상 늘 오지만(값이 없으면 null) 예전 서버는 보내지 않았다(#185). 빠진
+            값(undefined)도 '없음'으로 보고 뺀다 — 서버가 필드를 빼먹는 회귀가 와도 빈 칸 대신 빠질 뿐이다.
+          */}
+          {user.loginMethod ? (
+            <Badge tone="outline">{`${LOGIN_METHOD_LABEL[user.loginMethod]} 로그인`}</Badge>
+          ) : null}
+        </div>
+        {/* 가린 이메일이다(계약). GitHub 가입자는 null이라 대신 GitHub 아이디를 둔다 */}
+        {user.email != null ? (
+          <p className="text-muted-foreground text-[15px]">{user.email}</p>
+        ) : null}
+        {user.githubUsername != null ? (
+          <p className="text-muted-foreground text-[15px]">
+            GitHub <span className="text-body-foreground">{user.githubUsername}</span>
+          </p>
+        ) : null}
+      </div>
+      <Button asChild variant="secondary" size="sm">
+        <Link to="/me/account">프로필 수정</Link>
+      </Button>
+    </section>
+  )
+}
+
+/** 잔디가 보여 주는 해. 응답의 `from`(그 해 1월 1일)에서 읽는다 — 고르는 중에도 그려진 데이터와 맞는다. */
+function yearOf(activity: UserActivity): number {
+  return Number(activity.from.slice(0, 4))
+}
+
+/**
+ * 맞힌·틀린 수와 활동한 날 (MY-05). 가장 자랑할 숫자(활동한 날)만 남색이다(StatCard 규칙).
+ * 맞힌·틀린 수는 전체 기간, 활동한 날은 고른 해 안에서 센다(계약). 그래서 활동한 날에만 해를 붙인다.
+ */
+function Stats({ activity, busy }: { activity: UserActivity; busy: boolean }) {
+  return (
+    // 해를 바꾸는 동안 잔디처럼 흐리게 둔다. 그대로 두면 '2027년 활동한 날'이 드롭다운의 다른 해와 함께 확정값처럼 보인다(#307 리뷰)
+    <div
+      aria-busy={busy || undefined}
+      className={cn(
+        'grid gap-4 transition-opacity motion-reduce:transition-none sm:grid-cols-3',
+        busy && 'opacity-60',
+      )}
+    >
+      <StatCard label="맞힌 문제" value={activity.solvedCount} unit="개" icon="check" />
+      <StatCard label="틀린 문제" value={activity.wrongCount} unit="개" icon="x" />
+      <StatCard
+        label={`${yearOf(activity)}년 활동한 날`}
+        value={activity.totalActiveDays}
+        unit="일"
+        icon="calendar"
+        tone="inverse"
+      />
+    </div>
+  )
+}
+
+/** 난이도별 맞힌 수 (MY-05). 막대의 기준은 그 난이도의 공개 중인 문제 수다(#339). */
+function ByDifficulty({ activity }: { activity: UserActivity }) {
+  return (
+    <section aria-labelledby="difficulty-heading" className={cn(CARD, 'gap-5')}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="difficulty-heading" className="text-foreground text-lg font-semibold">
+          난이도별 맞힌 문제
+        </h2>
+        {/* 명세 MY-05: 내 학습·제출 기록으로 가는 링크. 디자인에는 리포트 링크만 있지만 명세를 따른다(#274 리뷰) */}
+        <div className="flex flex-wrap gap-4">
+          <Link
+            to="/submissions"
+            className="text-primary-text text-sm font-semibold hover:underline"
+          >
+            제출 기록 보기 →
+          </Link>
+          <Link to="/me/report" className="text-primary-text text-sm font-semibold hover:underline">
+            학습 리포트 보기 →
+          </Link>
+        </div>
+      </div>
+      <div className="grid gap-6 sm:grid-cols-3 sm:gap-8">
+        {(['EASY', 'MEDIUM', 'HARD'] as const).map((level) => (
+          <Progress
+            key={level}
+            label={DIFFICULTY_LABEL[level]}
+            value={activity.solvedByDifficulty[level]}
+            // 계약상 늘 오지만 웹이 API보다 먼저 배포되면 빠질 수 있다. 영역이 깨지지 않게 0으로 본다(#185와 같은 이유)
+            max={activity.problemCountByDifficulty?.[level] ?? 0}
+            showValue
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// 0단계(제출 없는 날)는 bg-muted가 아니라 bg-border다. muted(#f4f6fb)는 흰 카드 위 1.08:1이라 칸이 사라진다.
+// border는 1.24:1(다크 1.32:1)로 옛 muted(1.23:1) 수준이다. 격자 모양이 보여야 '쉰 날'도 읽힌다
+const LEVEL_CLASS = ['bg-border', 'bg-primary/25', 'bg-primary/50', 'bg-primary/75', 'bg-primary']
+
+/**
+ * 고른 해의 잔디 (MY-05). 1월 1일~12월 31일을 늘 다 그리고, 오늘 뒤 칸은 제출 없는 날과 같다.
+ * 365칸을 하나하나 읽게 하면 화면 낭독기 사용자가 지나갈 수 없어 그림 하나로 묶고 요약을 이름으로
+ * 준다. 칸마다 날짜·제출 수는 마우스를 올리면 보인다.
+ */
+function Grass({ activity }: { activity: UserActivity }) {
+  const weeks = buildWeeks(activity)
+  const labels = monthLabels(weeks)
+  return (
+    <figure className="m-0 flex flex-col gap-2.5">
+      {/*
+        디자인처럼 카드 폭을 채운다: 주 열을 1fr로 나누고 칸은 정사각형이다. 좁으면 칸이 너무 작아지지 않게
+        최소 폭에서 멈추고 가로로 스크롤한다. rtl은 스크롤이 오른쪽 끝(최근)에서 시작하게 하려는 것이고,
+        안쪽은 ltr로 되돌려 날짜 순서는 그대로다.
+      */}
+      <div dir="rtl" className="overflow-x-auto pb-1">
+        <div
+          dir="ltr"
+          role="img"
+          aria-label={`${yearOf(activity)}년에 ${activity.totalActiveDays}일 제출했어요`}
+          className="grid w-full min-w-[560px] grid-flow-col gap-[3px]"
+          style={{ gridTemplateRows: 'auto repeat(7, auto)', gridAutoColumns: 'minmax(0, 1fr)' }}
+        >
+          {weeks.map((week, w) => (
+            <div key={w} className="contents">
+              {/* 폭을 0으로 둬서 글자는 옆 칸 위로 넘친다. 글자 폭만큼 그 주가 넓어지지 않게 한다. */}
+              <span
+                aria-hidden="true"
+                className="text-muted-foreground mb-1 h-4 w-0 overflow-visible text-xs leading-4 whitespace-nowrap"
+              >
+                {labels[w]}
+              </span>
+              {Array.from({ length: 7 }, (_, d) => {
+                const cell = week[d]
+                if (!cell || cell.date === null) return <span key={d} aria-hidden="true" />
+                return (
+                  <span
+                    key={d}
+                    aria-hidden="true"
+                    title={`${cell.date} 제출 ${cell.count}회`}
+                    className={cn(
+                      'aspect-square w-full rounded-[3px]',
+                      LEVEL_CLASS[grassLevel(cell.count)],
+                    )}
+                  />
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      <figcaption className="text-muted-foreground flex items-center justify-end gap-1 text-xs font-medium">
+        <span className="mr-1">적음</span>
+        {LEVEL_CLASS.map((cls) => (
+          <span key={cls} aria-hidden="true" className={cn('size-3.5 rounded-[4px]', cls)} />
+        ))}
+        <span className="ml-1">많음</span>
+      </figcaption>
+    </figure>
+  )
+}
+
+/** 풀이 요약·활동 기록 (MY-05). */
+function Activity() {
+  // 고른 해. undefined는 올해다 — 서버가 한국 시각으로 정한 해를 그대로 쓴다(계약)
+  const [year, setYear] = useState<number>()
+  // 고를 수 있는 마지막 해는 year 없이 받은 응답의 해다. 브라우저 시각으로 정하면 연말·연초에 400이 난다
+  const current = useQuery(activityQuery())
+  // 해를 바꾸는 동안 이전 해를 흐리게 둔다. 스켈레톤으로 바꾸면 드롭다운이 사라져 포커스를 잃는다
+  const picked = useQuery({ ...activityQuery(year), placeholderData: keepPreviousData })
+  const { data, isPlaceholderData } = picked
+  const error = picked.error ?? current.error
+  const lastYear = current.data ? yearOf(current.data) : undefined
+
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    forgetSessionIfUnauthorized(queryClient, error)
+  }, [queryClient, error])
+
+  if (error) {
+    // 오류는 두 질의를 합쳐 보이니 다시 시도도 둘 다 한다. 고른 해만 받으면 올해의 오류가 남는다(#307 리뷰)
+    const retry = () => void queryClient.refetchQueries({ queryKey: ['activity'], type: 'active' })
+    return <ErrorState problem={error} onRetry={retry} />
+  }
+  // 오류는 위에서 거른다. 고른 해의 error와 올해의 error를 합쳐 봐서 data가 좁혀지지 않는다
+  if (data === undefined) return <ListSkeleton rows={3} />
+
+  const shown = yearOf(data)
+  return (
+    <>
+      <Stats activity={data} busy={isPlaceholderData} />
+      <section
+        aria-labelledby="activity-heading"
+        aria-busy={isPlaceholderData || undefined}
+        className={cn(CARD, 'gap-4')}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <h2 id="activity-heading" className="text-foreground text-lg font-semibold">
+            활동 기록
+          </h2>
+          <div className="flex items-center gap-3">
+            <span className="text-muted-foreground text-sm">
+              총 <strong className="text-foreground font-bold">{data.totalActiveDays}일</strong>
+            </span>
+            {/* 해가 하나뿐이어도 보인다. 무엇을 기준으로 센 숫자인지 알려 준다(#253) */}
+            {lastYear !== undefined ? (
+              <Select
+                aria-label="잔디 연도"
+                className="w-32"
+                value={year ?? lastYear}
+                onChange={(event) => {
+                  const next = Number(event.target.value)
+                  setYear(next === lastYear ? undefined : next)
+                }}
+              >
+                {Array.from({ length: lastYear - FIRST_ACTIVITY_YEAR + 1 }, (_, i) => {
+                  const option = lastYear - i
+                  return (
+                    <option key={option} value={option}>
+                      {option}년
+                    </option>
+                  )
+                })}
+              </Select>
+            ) : null}
+          </div>
+        </div>
+        {/*
+          제출이 없어도 숫자는 0, 잔디는 빈 칸으로 그린다(명세 MY-05). 잔디는 고른 해,
+          맞힌·틀린 수는 전체 기간이라 둘을 함께 본다 — 다른 해에만 푼 사람에게 '맞힌 문제 7'과
+          '아직 제출한 문제가 없어요'가 같이 나오면 안 된다.
+        */}
+        {data.days.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            {data.solvedCount === 0 && data.wrongCount === 0
+              ? '아직 제출한 문제가 없어요.'
+              : `${shown}년에는 제출한 날이 없어요.`}
+          </p>
+        ) : null}
+        <div
+          className={cn(
+            'transition-opacity motion-reduce:transition-none',
+            isPlaceholderData && 'opacity-60',
+          )}
+        >
+          <Grass activity={data} />
+        </div>
+      </section>
+      <ByDifficulty activity={data} />
+    </>
+  )
+}
+
+/** 마이페이지 · 프로필 · 학습 요약 (MY-01·05). 계정 설정·탈퇴는 메뉴의 각 화면이다(#243). */
+export function Component() {
+  const { user } = useAuth()
+  return (
+    <MyLayout title="프로필 · 학습 요약">
+      {user ? <AccountInfo user={user} /> : null}
+      <Activity />
+    </MyLayout>
+  )
+}

@@ -1,0 +1,9 @@
+# codingmon.tech
+# Cloudflare가 이 파일 앞에 관리형 규칙(학습용 AI 크롤러 차단, Content-Signal)을 붙인다.
+# 여기서는 사이트맵 주소만 알린다.
+#
+# 로그인이 필요한 화면(/me, /submissions, /admin 등)은 Disallow로 막지 않는다.
+# 막으면 크롤러가 화면을 읽지 못해 로그인 화면으로 돌려보내는 것과 noindex를 보지 못하고,
+# 다른 곳에 걸린 링크만 보고 주소를 색인할 수 있다.
+
+Sitemap: https://codingmon.tech/sitemap.xml
