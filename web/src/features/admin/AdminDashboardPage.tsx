@@ -185,7 +185,7 @@ export function Component() {
 
         {/* 공개 중인 버전이 없는 문제만 센다(계약). 문제 목록에는 공개 여부 필터가 없어 목록 그대로 보낸다 */}
         <section aria-label="공개 안 된 문제">
-          <Link to="/admin/problems" className={cn(CARD, 'hover:bg-muted/40 border')}>
+          <Link to="/admin" className={cn(CARD, 'hover:bg-muted/40 border')}>
             <CardText
               label="공개 안 된 문제"
               count={unpublished.error ? undefined : unpublished.data}
