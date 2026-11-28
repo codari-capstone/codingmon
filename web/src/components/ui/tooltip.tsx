@@ -45,7 +45,8 @@ function Tooltip({
         {/*
           openOnClick은 누를 때마다 여닫는다. Radix는 누르는 순간(pointerdown) 닫으므로, 열려 있으면
           preventDefault로 막는다(아래 onPointerDownOutside도 같다). 그러면 click 때의 open이 누르기 전
-          상태이고, click 없이 끝난 누르기(끌어 놓기·가운데 버튼)는 아무것도 바꾸지 않는다
+          상태이고, click 없이 끝난 누르기(끌어 놓기·가운데 버튼)는 아무것도 바꾸지 않는다.
+          닫는 click은 막지 않고 Radix에 맡긴다. 그래야 남은 hover 열기 타이머도 지워져 다시 열리지 않는다
         */}
         <TooltipPrimitive.Trigger
           ref={triggerRef}
@@ -69,9 +70,14 @@ function Tooltip({
           onClick={
             openOnClick
               ? (event) => {
-                  // Radix의 '누르면 닫기'를 막는다
+                  if (open) {
+                    // 위 pointerdown에서 기본 동작을 막아 포커스가 따라오지 않았다. 누른 버튼으로 옮긴다
+                    event.currentTarget.focus()
+                    return
+                  }
+                  // 여는 click은 Radix의 '누르면 닫기'를 막는다
                   event.preventDefault()
-                  change(!open)
+                  change(true)
                 }
               : undefined
           }

@@ -139,6 +139,12 @@ describe('suspectHighlight', () => {
     expect(markedLines(state.update({ changes }).state)).toEqual([])
   })
 
+  it('의심 줄부터 바꿔 넣었어도 그 줄이 그대로면 표시를 남긴다', () => {
+    const state = start([1], 'a()\nb()')
+    const next = state.update({ changes: { from: 0, to: state.doc.length, insert: 'a()\nc()' } })
+    expect(markedLines(next.state)).toEqual([1])
+  })
+
   it('처음 칠한 것은 되돌리기 기록에 남지 않는다', () => {
     const state = start([4])
     expect(undo({ state, dispatch: () => {} })).toBe(false)

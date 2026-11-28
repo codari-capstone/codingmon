@@ -27,8 +27,9 @@ const gutterMark = new (class extends GutterMarker {
  */
 function removesLine(changes: ChangeDesc, codeStart: number, lineEnd: number): boolean {
   let removed = false
-  changes.iterChangedRanges((from, to) => {
-    if (from <= codeStart && to > lineEnd) removed = true
+  changes.iterChangedRanges((from, to, fromB, toB) => {
+    // 넣은 글자가 없는 순수 삭제만 본다. 바꿔 넣기는 그 줄이 남았는지 아래의 줄 비교가 가린다
+    if (fromB === toB && from <= codeStart && to > lineEnd) removed = true
   })
   return removed
 }

@@ -1480,6 +1480,9 @@ describe('풀이 화면 AI 힌트', () => {
       media.change()
     })
 
+    // 넓은 배치에만 접기 버튼이 있다. 이게 없으면 다시 마운트되지 않아 아래 단언이 거저 통과한다
+    expect(await screen.findByRole('button', { name: /접기/ })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: '코드 작성' })).not.toBeInTheDocument()
     expect(await screen.findByRole('region', { name: /AI 힌트/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '2단계 방향 보기' })).toBeDisabled()
     expect(sent.count).toBe(1)

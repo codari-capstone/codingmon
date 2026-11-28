@@ -250,6 +250,40 @@ describe('CodeReviewPanel (AI-05)', () => {
     await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('실행 시간'))
   })
 
+  it('hover 대기 중에 두 번 눌러 닫으면 남은 hover 타이머가 다시 열지 않는다', async () => {
+    stored(review())
+    renderResult(ACCEPTED)
+    const button = await screen.findByRole('button', { name: '시간 설명' })
+
+    // 올리면 300ms 뒤에 여는 타이머가 걸린다. 그 안에 열고 닫는다
+    fireEvent.pointerMove(button, { pointerType: 'mouse' })
+    fireEvent.click(button, { detail: 1 })
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument()
+    fireEvent.click(button, { detail: 1 })
+    await act(() => new Promise((resolve) => setTimeout(resolve, 450)))
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+  })
+
+  it('열린 "?"를 눌러 닫으면 포커스는 누른 버튼으로 온다', async () => {
+    const user = userEvent.setup()
+    stored(review())
+    renderResult(ACCEPTED)
+    const time = await screen.findByRole('button', { name: '시간 설명' })
+    const space = screen.getByRole('button', { name: '공간 설명' })
+    asKeyboardFocus(time)
+    act(() => time.focus())
+    await user.hover(space)
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('메모리'))
+
+    // 열려 있으면 pointerdown의 기본 동작(포커스 이동)을 막는다
+    fireEvent.pointerDown(space)
+    fireEvent.click(space, { detail: 1 })
+
+    expect(space).toHaveFocus()
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+  })
+
   it('click만으로 차례로 눌러도 마지막 설명 하나만 열려 있다', async () => {
     stored(review())
     renderResult(ACCEPTED)
