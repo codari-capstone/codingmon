@@ -1,4 +1,4 @@
-import { history, insertNewlineAndIndent, undo } from '@codemirror/commands'
+import { history, insertNewlineAndIndent, redo, undo } from '@codemirror/commands'
 import { python } from '@codemirror/lang-python'
 import { EditorSelection, EditorState, type StateCommand } from '@uiw/react-codemirror'
 import { describe, expect, it } from 'vitest'
@@ -100,6 +100,49 @@ describe('suspectHighlight', () => {
     undo({ state: typed, dispatch: (tr) => (undone = tr.state) })
     expect(undone.doc.toString()).toBe(CODE)
     expect(markedLines(undone)).toEqual([4])
+  })
+
+  it('묶인 편집을 한 번에 되돌리고 다시 해도 표시는 그 코드에 남는다', () => {
+    const doc = 'n = 1\n\n\nprint(n)'
+    let state = start([4], doc)
+    // 빈 3번 줄 맨 앞에서 Backspace 두 번. 붙어 있는 delete.*라 기록이 한 묶음이 된다
+    for (const at of [state.doc.line(3).from, state.doc.line(3).from - 1]) {
+      state = state.update({
+        changes: { from: at - 1, to: at },
+        selection: EditorSelection.cursor(at - 1),
+        userEvent: 'delete.backward',
+      }).state
+    }
+    expect(markedLines(state)).toEqual([2])
+
+    const dispatch = (tr: { state: EditorState }) => (state = tr.state)
+    undo({ state, dispatch })
+    expect(state.doc.toString()).toBe(doc) // 한 번에 다 돌아와야 묶인 것이다
+    expect(markedLines(state)).toEqual([4])
+
+    redo({ state, dispatch })
+    expect(markedLines(state)).toEqual([2])
+  })
+
+  // deleteLine(Shift+Ctrl+K)이 지우는 범위: 줄과 뒤 줄바꿈, 마지막 줄이면 앞 줄바꿈
+  it.each([
+    ['첫 줄', 'cin >> a;\ncin >> a;\nx', 1],
+    ['가운데 줄', 'x\ncin >> a;\ncin >> a;', 2],
+    ['마지막 줄', 'cin >> a;\ncin >> a;', 2],
+  ])('들여쓰기 없는 의심 줄(%s)을 통째로 지우면 같은 코드 줄로 옮겨 가지 않는다', (_, doc, n) => {
+    const state = start([n], doc)
+    const line = state.doc.line(n)
+    const changes =
+      line.to < state.doc.length
+        ? { from: line.from, to: line.to + 1 }
+        : { from: line.from - 1, to: line.to }
+    expect(markedLines(state.update({ changes }).state)).toEqual([])
+  })
+
+  it('의심 줄부터 바꿔 넣었어도 그 줄이 그대로면 표시를 남긴다', () => {
+    const state = start([1], 'a()\nb()')
+    const next = state.update({ changes: { from: 0, to: state.doc.length, insert: 'a()\nc()' } })
+    expect(markedLines(next.state)).toEqual([1])
   })
 
   it('처음 칠한 것은 되돌리기 기록에 남지 않는다', () => {

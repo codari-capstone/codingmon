@@ -390,7 +390,8 @@ function Workspace({
           </TabsList>
           <TabsContent value="statement">{statement}</TabsContent>
           {analysis ? (
-            <TabsContent value="hints">
+            // 아래 에디터처럼 탭을 옮겨도 살려 둔다. 언마운트하면 힌트 열기의 오류 문구를 잃는다
+            <TabsContent value="hints" forceMount className="data-[state=inactive]:hidden">
               <SolveHints problemId={problem.id} analysis={analysis} lines={remaining} />
             </TabsContent>
           ) : null}
