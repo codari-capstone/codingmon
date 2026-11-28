@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -118,6 +118,32 @@ describe('CodeReviewPanel (AI-05)', () => {
     expect(screen.getByText('비교 문장')).toBeInTheDocument()
     expect(screen.getByText('개선점 하나')).toBeInTheDocument()
     expect(screen.getByText('배울 이유')).toBeInTheDocument()
+  })
+
+  it('근거 글은 제목이 있는 별도 섹션이다', async () => {
+    stored(review())
+    renderResult(ACCEPTED)
+
+    const heading = await screen.findByRole('heading', { name: '왜 이런 복잡도인가요?' })
+    expect(heading.parentElement).toHaveTextContent('근거 문장')
+    expect(heading.parentElement).not.toHaveTextContent('비교 문장')
+  })
+
+  it.each([
+    ['시간 설명', '입력이 커질 때 실행 시간이 얼마나 늘어나는지예요.'],
+    ['공간 설명', '입력이 커질 때 메모리를 얼마나 더 쓰는지예요.'],
+    [
+      '의도한 시간(추정) 설명',
+      '문제가 기대하는 빠르기를 AI가 어림한 값이에요. 문제에 적힌 값은 아니에요.',
+    ],
+  ])('복잡도 칸의 "%s" 버튼에 포커스하면 뜻을 알려 준다', async (name, text) => {
+    stored(review())
+    renderResult(ACCEPTED)
+
+    const button = await screen.findByRole('button', { name })
+    act(() => button.focus())
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(text)
   })
 
   it('만들지 못했으면 이유를 알리고 다시 시도할 수 있다 (AI-06)', async () => {
